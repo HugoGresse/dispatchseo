@@ -56,6 +56,32 @@ function GripIcon() {
   );
 }
 
+// One-step reorder control for the mobile card list (the desktop grid uses the
+// drag grip instead). 36px square so it clears the touch-target floor.
+function MoveButton({
+  dir,
+  disabled,
+  onClick,
+}: {
+  dir: "up" | "down";
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={dir === "up" ? "Move up in the queue" : "Move down in the queue"}
+      className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-800 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-neutral-200 disabled:pointer-events-none disabled:opacity-30"
+    >
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
+        <path d={dir === "up" ? "M8 13V3M4 7l4-4 4 4" : "M8 3v10M4 9l4 4 4-4"} />
+      </svg>
+    </button>
+  );
+}
+
 function arrayMove<T>(list: T[], from: number, to: number): T[] {
   const next = [...list];
   const [item] = next.splice(from, 1);
@@ -249,6 +275,25 @@ export function DraggableQueue({
               {/* A build already running can't be unpicked - mirrors the grid's actions cell. */}
               {r.status !== "in_progress" ? (
                 <div className="mt-3 flex items-center justify-end gap-1.5">
+                  {/* Reorder, touch edition. Drag needs pointer precision a
+                      card list can't give, but the queue's ORDER is the whole
+                      point of this screen - it decides what publishes next -
+                      so mobile gets the same one-step moves the grip's arrow
+                      keys already do, through the same commit(). */}
+                  {movable && shown.length > 1 ? (
+                    <span className="mr-auto flex items-center gap-1">
+                      <MoveButton
+                        dir="up"
+                        disabled={index === 0}
+                        onClick={() => commit(arrayMove(shown, index, index - 1))}
+                      />
+                      <MoveButton
+                        dir="down"
+                        disabled={index === shown.length - 1}
+                        onClick={() => commit(arrayMove(shown, index, index + 1))}
+                      />
+                    </span>
+                  ) : null}
                   {r.status === "pending" ? (
                     <QueueApproveButton id={r.id} auto={autoApproved} />
                   ) : null}

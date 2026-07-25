@@ -105,7 +105,7 @@ export default async function ResearchPage() {
     <div className="space-y-6">
       <PageHeader
         title="Content queue"
-        hint="Approved ideas waiting for the automated builders, in build order - top row builds next. Drag a row to reorder, or add your own idea."
+        hint="Approved ideas waiting for the automated builders, in build order - the top one builds next. Reorder with the arrows (or drag a row on a wider screen), or add your own idea."
       />
 
       {active.length > 0 || shippedCount > 0 ? (
@@ -143,7 +143,7 @@ export default async function ResearchPage() {
 
       <div className="grid gap-8 xl:grid-cols-2">
         <section className="space-y-3">
-          <SectionTitle sub="one ships each morning, top row first - drag to reorder">
+          <SectionTitle sub="one ships each morning, top of the queue first">
             Guide queue
           </SectionTitle>
           {opportunities.length === 0 ? (

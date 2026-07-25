@@ -41,10 +41,16 @@ export function Mono({ children }: { children: React.ReactNode }) {
 // The shared grid every row of stat tiles sits in - same gaps and breakpoints
 // on every screen so stat rows never drift apart. Literal class strings per
 // column count because Tailwind can't see dynamic names.
+//
+// [&>*]:min-w-0 on every variant: these stay 2-up even at 390px, and a grid
+// child defaults to `min-width: auto`, so one long unbroken value (a
+// six-figure tabular-nums count, a URL) sizes the whole track to its content
+// and pushes the page into horizontal scroll. This exact bug blew Home out to
+// 2259px. Fixing it on the container means no call site has to remember.
 const STAT_COLS = {
-  2: "grid grid-cols-2 gap-4",
-  3: "grid grid-cols-2 gap-4 sm:grid-cols-3",
-  4: "grid grid-cols-2 gap-4 xl:grid-cols-4",
+  2: "grid grid-cols-2 gap-4 [&>*]:min-w-0",
+  3: "grid grid-cols-2 gap-4 [&>*]:min-w-0 sm:grid-cols-3",
+  4: "grid grid-cols-2 gap-4 [&>*]:min-w-0 xl:grid-cols-4",
 } as const;
 
 export function StatRow({

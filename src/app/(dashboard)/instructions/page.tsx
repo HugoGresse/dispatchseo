@@ -33,7 +33,10 @@ function scheduleFor(automationId: string): string | null {
 
 function FactGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-2.5">
+    // flex-wrap + min-w-0: a group with enough children (a themed site can
+    // report a dozen colour tokens) has to be able to break onto a second line
+    // rather than run off the right edge of a 360px screen.
+    <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5">
       <span className="text-[10px] font-medium uppercase tracking-wide text-neutral-600">
         {label}
       </span>
@@ -48,7 +51,7 @@ function FactsStrip({ data, updatedAt }: { data: ConventionsData; updatedAt: str
     <div className="flex flex-wrap items-center gap-x-8 gap-y-3 rounded-xl bg-neutral-900/60 px-4 py-3">
       {tokens.length ? (
         <FactGroup label="Theme">
-          <span className="flex items-center gap-1">
+          <span className="flex flex-wrap items-center gap-1">
             {tokens.map((t) => (
               <span
                 key={t.name}

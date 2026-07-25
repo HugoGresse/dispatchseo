@@ -685,7 +685,7 @@ export default async function Home() {
         <SectionTitle sub="everything needed to run this hands-off - cards watch live data, update to 'done, waiting' on their own, and disappear once each step truly completes">
           Initial setup
         </SectionTitle>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 [&>*]:min-w-0 md:grid-cols-2 xl:grid-cols-3">
           {needsDataforseo ? (
             <SetupStep
               title="Connect DataForSEO"
@@ -1103,7 +1103,7 @@ export default async function Home() {
             {/* Ideas waiting on a decision - queue or skip. Collapsed by
                 default; same IdeaCard the Trends page renders. */}
             {shownIdeas.length > 0 ? (
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-2">
                 {shownIdeas.map((s) => (
                   <IdeaCard
                     key={s.id}
@@ -1137,7 +1137,7 @@ export default async function Home() {
         {allClear ? (
           <EmptyState>All clear. Nothing needs a decision right now.</EmptyState>
         ) : (
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 [&>*]:min-w-0 lg:grid-cols-2">
             {showBalanceNudge ? (
               <div className="rounded-xl bg-neutral-900 p-4 text-sm text-amber-300 sm:p-5 lg:col-span-2">
                 DataForSEO balance is ${balance?.toFixed(2)} - top up before the daily rank checks run dry.
@@ -1324,7 +1324,7 @@ export default async function Home() {
         </div>
         <div className="space-y-4 rounded-xl bg-neutral-900 p-4 sm:p-5">
           <ProgressMeter done={playbookDoneCount} total={playbookItems.length} />
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-6 [&>*]:min-w-0 lg:grid-cols-2">
             <PlaybookColumn
               heading="Free"
               items={playbookNextFree}
@@ -1344,7 +1344,7 @@ export default async function Home() {
         <SectionTitle sub="what your SEO manager has been doing, without you asking">
           Activity
         </SectionTitle>
-        <div className="grid items-start gap-4 lg:grid-cols-2">
+        <div className="grid items-start gap-4 [&>*]:min-w-0 lg:grid-cols-2">
           <ActivityCard
             title="Done today"
             lines={activity.today}

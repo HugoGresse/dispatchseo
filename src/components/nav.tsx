@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { DispatchMark } from "@/components/logo";
 
 // Vercel-style navigation: an icon sidebar on desktop (Sidebar), a slide-out
@@ -340,6 +341,11 @@ export function Sidebar({ billing = false }: { billing?: boolean }) {
 export function MobileNav({ billing = false }: { billing?: boolean }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  // The overlay is portaled to <body>, so it can't render during SSR.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Navigating closes the drawer. Keyed on pathname rather than an onClick per
   // link so it also closes for a tap on the already-active route (which fires
@@ -376,8 +382,14 @@ export function MobileNav({ billing = false }: { billing?: boolean }) {
         <MenuIcon className="h-5 w-5" />
       </button>
 
-      {open ? (
-        <div className="fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label="Navigation">
+      {/* Portaled to <body>, NOT rendered in place. The topbar this lives in
+          has `backdrop-blur`, and a backdrop-filter makes an element the
+          containing block for its fixed-position descendants - so an in-place
+          overlay sized itself to the 390x56 header instead of the viewport,
+          clipping the whole drawer to a strip. */}
+      {open && mounted
+        ? createPortal(
+        <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
           <button
             type="button"
             aria-label="Close navigation menu"
@@ -425,8 +437,10 @@ export function MobileNav({ billing = false }: { billing?: boolean }) {
               <LogoutLink />
             </div>
           </div>
-        </div>
-      ) : null}
+        </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
