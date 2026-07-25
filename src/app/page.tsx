@@ -6,6 +6,7 @@ import { FeatureShowcase } from "./feature-showcase";
 import { DomainCta } from "./domain-cta";
 import { PixelDispatcher } from "@/components/pixel-dispatcher";
 import { WhyCard } from "@/components/why-card";
+import { dashboardAuth, maybeSignedIn } from "@/lib/auth-gate";
 import "./landing.css";
 
 // Public landing page - cloud deployment only. Self-hosted installs never set
@@ -29,8 +30,23 @@ export const metadata: Metadata = {
     "Claude Code researches keywords, writes guides, builds interactive tools, and tracks your ranks automatically. Every piece is a pull request you approve. Open source, free to self-host.",
 };
 
-export default async function LandingPage() {
+export default async function LandingPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   if (process.env.LANDING_ENABLED !== "true") redirect("/dashboard");
+
+  // Signed-in customers get their dashboard, not the brochure - "/" is a
+  // bookmark and a browser autocomplete target, so an existing user typing
+  // "dispatchseo.com" means "take me in". The cheap cookie hint runs first so
+  // anonymous search traffic never pays the session-verify round-trip.
+  // ?home=1 opts out (the footer/legal pages link back here for pricing + FAQ,
+  // and those must stay readable while signed in).
+  const params = await searchParams;
+  if (params.home === undefined && (await maybeSignedIn()) && (await dashboardAuth())) {
+    redirect("/dashboard");
+  }
 
   return (
     <div className={`ld ${jakarta.variable} ${dmSans.variable}`}>
