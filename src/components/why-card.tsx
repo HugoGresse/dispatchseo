@@ -4,13 +4,23 @@ import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { PixelDispatcher } from "@/components/pixel-dispatcher";
 
-// Floating "Why DispatchSEO?" mascot explainer for the public landing page.
+// "Why DispatchSEO?" mascot explainer for the public landing page.
 //
 // Deliberately NOT a round chat launcher: bottom-right + a circle bubble reads
 // as Intercom/live-chat and baits the visitor. Instead the resting state is a
 // tilted speech-note with the pixel agent peeking over its edge and a visible
 // "Why DispatchSEO?" label, so it's unmistakably a mascot aside. Opening it
 // pops a card whose star is the full PixelDispatcher scene, animated.
+//
+// Two placements, one component, chosen by CSS rather than JS so neither can
+// flash or shift after hydration:
+//   - desktop  (>980px): <WhyCard />        floats bottom-right, as before
+//   - phone   (<=980px): <WhyCard inline /> sits in the hero, in normal flow
+// A tab that tracks the scroll on a phone is both annoying and expensive (a
+// fixed layer repainting over a backdrop-filtered sticky nav), so below the
+// breakpoint the aside scrolls away with the hero like any other element.
+// Whichever placement is hidden is `display: none`, so it costs no paint and
+// is out of the accessibility tree.
 
 // The clay agent's front face - the exact BODY_OPEN grid from the pixel
 // dispatcher, minus the headset. Same character as the animation, drawn as
@@ -96,22 +106,21 @@ const POINTS: Array<{ icon: ReactNode; lead: string; body: string }> = [
   },
 ];
 
-export function WhyCard() {
+export function WhyCard({ inline }: { inline?: boolean }) {
   const [open, setOpen] = useState(false);
   const [nearFooter, setNearFooter] = useState(false);
-  const [overCta, setOverCta] = useState(true);
-  // null until the media query has been read on the client: the mobile CSS
-  // keeps the tab invisible until then, so it never flashes over the hero.
+  // null until the media query has been read on the client. It no longer
+  // gates any paint - it only picks the sheet-vs-popover behaviour (modal
+  // semantics, scrim, scroll lock), so a null first render is harmless.
   const [compact, setCompact] = useState<boolean | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const prevOpen = useRef(false);
 
-  // Phones and tablets get the sheet treatment: a smaller resting tab, a
-  // bottom sheet instead of an anchored popover (which could overflow the top
-  // of a short viewport), and the whole thing steps aside while either CTA
-  // block owns the screen. Desktop keeps the anchored note exactly as-is.
+  // Phones and tablets get the sheet treatment: a bottom sheet instead of an
+  // anchored popover, which could otherwise overflow the top of a short
+  // viewport. Fires only when the breakpoint is crossed, never on scroll.
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 980px)");
     const sync = () => setCompact(mq.matches);
@@ -145,7 +154,11 @@ export function WhyCard() {
   }, [open]);
 
   // Get out of the way of the footer so the floating note never overlaps it.
+  // The inline placement scrolls with the page, so it needs no observer at
+  // all - one fewer scroll-driven state flip on the device that can least
+  // afford it.
   useEffect(() => {
+    if (inline) return;
     const footer = document.querySelector(".ld footer");
     if (!footer) return;
     const io = new IntersectionObserver(
@@ -154,27 +167,9 @@ export function WhyCard() {
     );
     io.observe(footer);
     return () => io.disconnect();
-  }, []);
+  }, [inline]);
 
-  // On a phone the tab sits right where the hero and final CTA buttons are, so
-  // it only surfaces between them - the aside is for undecided scrollers, not
-  // for people already looking at a "start" button.
-  useEffect(() => {
-    const targets = document.querySelectorAll(".ld .hero, .ld .final");
-    if (!targets.length) return;
-    const seen = new Set<Element>();
-    const io = new IntersectionObserver((entries) => {
-      for (const e of entries) {
-        if (e.isIntersecting) seen.add(e.target);
-        else seen.delete(e.target);
-      }
-      setOverCta(seen.size > 0);
-    });
-    targets.forEach((t) => io.observe(t));
-    return () => io.disconnect();
-  }, []);
-
-  const hidden = nearFooter || (compact === true && overCta);
+  const hidden = !inline && nearFooter;
 
   useEffect(() => {
     if (hidden) setOpen(false);
@@ -193,7 +188,7 @@ export function WhyCard() {
   return (
     <div
       ref={rootRef}
-      className={`why-fab${compact === null ? "" : " is-armed"}${hidden ? " is-hidden" : ""}${open ? " is-open" : ""}`}
+      className={`${inline ? "why-inline" : "why-fab"}${hidden ? " is-hidden" : ""}${open ? " is-open" : ""}`}
     >
       {open && compact && (
         <div className="why-scrim" onClick={() => setOpen(false)} aria-hidden="true" />
@@ -236,23 +231,40 @@ export function WhyCard() {
         </div>
       )}
 
-      <button
-        ref={triggerRef}
-        type="button"
-        className="why-tab"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        aria-label="Why DispatchSEO? Open the explainer"
-      >
-        <MascotFace className="why-tab-face" />
-        <span className="why-tab-text">
-          <span className="why-tab-eyebrow">psst -</span>
-          <span className="why-tab-title">Why DispatchSEO?</span>
-        </span>
-        <svg className="why-tab-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="m9 18 6-6-6-6" />
-        </svg>
-      </button>
+      {/* In the hero the full pixel scene is already a few hundred pixels up,
+          so the trigger drops the note, the tail and the chevron and keeps
+          only what makes it the mascot's aside rather than another nav link:
+          the face, and the question a visitor is actually asking. */}
+      {inline ? (
+        <button
+          ref={triggerRef}
+          type="button"
+          className="why-inline-btn"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+        >
+          <MascotFace className="why-inline-face" />
+          <span>Why DispatchSEO?</span>
+        </button>
+      ) : (
+        <button
+          ref={triggerRef}
+          type="button"
+          className="why-tab"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-label="Why DispatchSEO? Open the explainer"
+        >
+          <MascotFace className="why-tab-face" />
+          <span className="why-tab-text">
+            <span className="why-tab-eyebrow">psst -</span>
+            <span className="why-tab-title">Why DispatchSEO?</span>
+          </span>
+          <svg className="why-tab-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m9 18 6-6-6-6" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }

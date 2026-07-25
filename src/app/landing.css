@@ -33,7 +33,13 @@
   font-size: 17px;
   -webkit-font-smoothing: antialiased;
 }
+/* Smooth anchor scrolling is a pointer-device nicety. On touch it is a known
+   irritant - iOS animates the jump while the finger is still on the glass, and
+   the animation fights momentum - so coarse pointers get an instant jump,
+   which lands on the same place (scroll-margin-top does the offset either way)
+   without a second scroll fighting the first. */
 html:has(.ld) { scroll-behavior: smooth; }
+@media (hover: none) { html:has(.ld) { scroll-behavior: auto; } }
 .ld * { margin: 0; padding: 0; box-sizing: border-box; }
 .ld h1, .ld h2, .ld h3 { font-family: var(--disp); line-height: 1.12; letter-spacing: -0.02em; color: #fff; }
 .ld a { color: inherit; }
@@ -270,31 +276,61 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .ca-pill svg { width: 16px; height: 16px; color: var(--vio2); flex-shrink: 0; }
 
 /* ---------- pricing: founding offer ---------- */
-/* Colour carries the meaning here: violet is the product (the "Most popular"
-   cap, the checkmarks), clay is Neo - the mascot's colour, and the founding
-   offer is a personal capacity promise, not a product feature. That split is
-   also why the two markers never fight on the Growth card. */
-.ld .found { text-align: center; max-width: 640px; margin: -22px auto 46px; }
-.ld .found-h { font-family: var(--disp); font-weight: 800; font-size: clamp(20px, 2.5vw, 27px); line-height: 1.28; letter-spacing: -0.02em; color: #fff; text-wrap: balance; }
-/* Echoes the hero's highlight on "Claude Code", in clay instead of violet -
-   the same hand, a different voice. Dark text on clay for contrast. */
-.ld .found-nb { white-space: nowrap; }
-.ld .found-hl { position: relative; z-index: 0; display: inline-block; color: var(--bg); margin: 0 0.08em; }
-.ld .found-hl::before { content: ""; position: absolute; z-index: -1; top: 0.11em; bottom: 0.04em; left: -0.09em; right: -0.09em; background: var(--clay); border-radius: 0.07em; }
-.ld .found-b { font-size: 15.5px; line-height: 1.6; color: var(--mut); margin-top: 12px; text-wrap: balance; }
-.ld .found-m { display: inline-flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 9px; margin-top: 16px; font-size: 13.5px; color: var(--dim); }
-.ld .found-m b { color: var(--txt); font-weight: 600; }
-.ld .found-ic { width: 15px; height: 15px; flex-shrink: 0; color: var(--clay2); margin-right: -3px; }
-.ld .found-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--line3); flex-shrink: 0; }
+/* A dispatch ticket with a tear-off stub. The offer is two facts - the deal
+   and its deadline - so the perforation separates them and the structure says
+   what a third sentence used to. One accent, deliberately: the page's violet.
+   An earlier pass used the mascot's clay to mark the offer as "Neo speaking,
+   not the product", but a second hue in the pricing block read as noise.
+   Clay stays the mascot's alone. */
+.ld .found { position: relative; display: flex; align-items: stretch; max-width: 660px; margin: 4px auto 46px; border: 1px solid var(--line2); border-radius: 14px; background: radial-gradient(120% 150% at 0% 0%, rgba(139, 92, 246, 0.14), transparent 60%), var(--card2); box-shadow: 0 18px 44px -30px rgba(139, 92, 246, 0.7); text-align: left; }
+.ld .found-main { flex: 1; min-width: 0; padding: 19px 24px 21px; }
+.ld .found-k { display: block; font-family: var(--disp); font-size: 11.5px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--vio2); }
+.ld .found-v { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 13px; margin-top: 10px; font-family: var(--disp); font-weight: 800; font-size: clamp(29px, 3.6vw, 40px); line-height: 1.04; letter-spacing: -0.035em; color: #fff; }
+/* The same highlight the hero puts behind "Claude Code", same violet - the
+   offer reads as part of the page rather than a promo sticker on top of it. */
+.ld .found-hl { position: relative; z-index: 0; display: inline-block; white-space: nowrap; color: #fff; margin-left: 0.06em; }
+.ld .found-hl::before { content: ""; position: absolute; z-index: -1; top: 0.11em; bottom: 0.04em; left: -0.09em; right: -0.09em; background: var(--vio); border-radius: 0.07em; }
+/* The promise, kept to a caption: the padlock carries "locked" so the words
+   only have to say for how long. */
+.ld .found-note { display: inline-flex; align-items: center; gap: 5px; font-family: var(--body); font-size: 13.5px; font-weight: 500; letter-spacing: 0; color: var(--mut); }
+.ld .found-lock { width: 12px; height: 12px; flex-shrink: 0; color: var(--dim); }
+
+/* The stub. Its left border IS the perforation, so the two punched notches
+   position off it - no magic offset to keep in sync with the stub's width. */
+.ld .found-stub { position: relative; flex-shrink: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 18px 22px; border-left: 1px dashed var(--line3); }
+/* --mut, not --dim: at 10.5px uppercase the dimmer grey drops under 4.5:1 on
+   the card, and this label is one of only two words on the stub. */
+.ld .found-stub-k { font-size: 10.5px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--mut); }
+.ld .found-stub-v { font-family: var(--disp); font-size: 15.5px; font-weight: 700; letter-spacing: -0.015em; color: var(--txt); white-space: nowrap; }
+/* Only rendered past 15 seats sold, so the stub is designed to work without it. */
+.ld .found-stub-n { font-size: 12.5px; color: var(--mut); white-space: nowrap; }
+/* Punched, not printed: the hole is filled with the page behind it, which is
+   also why the ticket sits on --card2 rather than the plans' --card - against
+   the darker canvas the notch reads as a bite out of the edge instead of a
+   dot drawn on the line. */
+.ld .found-notch { position: absolute; left: 0; width: 14px; height: 14px; border-radius: 50%; background: var(--bg); }
+.ld .found-notch.n-a { top: 0; transform: translate(-50%, -50%); }
+.ld .found-notch.n-b { bottom: 0; transform: translate(-50%, 50%); }
+
+/* The dispatcher, off-shift, sitting on the ticket's top edge with its legs
+   over the front. Absolutely positioned so it costs the banner no width, and
+   parked at the stub end so it doesn't crowd the slab.
+   Clay, like the hero scene and the why-card tab: the offer's ACCENT is
+   violet (slab, strike, labels), but the character keeps its own colour -
+   recolouring it would read as a different mascot. */
+.ld .found-px { position: absolute; top: -27px; right: 30px; width: 36px; height: 33px; }
+.ld .found-px .px-b { fill: var(--clay); }
+.ld .found-px .px-s { fill: #b0563a; } /* the shared sprite palette's clay shade */
+.ld .found-px .px-e { fill: #1a1a1e; }
 
 /* The old price, struck by hand. The page's doodles are round-capped angled
    strokes, so this is one too rather than a text-decoration hairline - a pen
    through the number, not a spreadsheet cell. */
 .ld .p-was, .ld .pm-was { position: relative; text-decoration: none; font-family: var(--disp); font-weight: 700; color: var(--dim); letter-spacing: -0.02em; }
-.ld .p-was::after, .ld .pm-was::after { content: ""; position: absolute; left: -7%; right: -7%; top: 47%; border-radius: 2px; background: var(--clay); transform: rotate(-7deg); }
+.ld .p-was::after, .ld .pm-was::after { content: ""; position: absolute; left: -7%; right: -7%; top: 47%; border-radius: 2px; background: var(--vio2); transform: rotate(-7deg); }
 .ld .p-was { font-size: 20px; margin-right: 11px; }
 .ld .p-was::after { height: 2px; }
-.ld .plan .p-found { display: inline-flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 12.5px; font-weight: 700; letter-spacing: 0.005em; color: var(--clay2); }
+.ld .plan .p-found { display: inline-flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 12.5px; font-weight: 700; letter-spacing: 0.005em; color: var(--vio2); }
 .ld .plan .p-found svg { width: 12px; height: 12px; flex-shrink: 0; }
 
 /* ---------- pricing: mobile compare scoreboard (<=980px) ---------- */
@@ -374,6 +410,12 @@ html:has(.ld) { scroll-behavior: smooth; }
    Three tiers: <=980 (tablet + phone), <=600 (phone), <=380 (small phone). */
 @media (max-width: 980px) {
   .ld { --nav-h: 58px; --pad: 22px; --navpad: 22px; }
+  /* Solid, not frosted: a backdrop-filter on a sticky bar makes the browser
+     re-blur the strip behind it on every scrolled frame, which is one of the
+     more reliable ways to lose frames on a phone GPU. Over a near-black page
+     the frosted look buys almost nothing, so mobile pays a flat fill instead.
+     Desktop keeps the blur. */
+  .ld nav { background: var(--bg); backdrop-filter: none; }
   .ld section { padding: 76px 0; scroll-margin-top: calc(var(--nav-h) + 12px); }
   .ld section#features { padding-top: 88px; }
   .ld .steps { grid-template-columns: repeat(2, 1fr); }
@@ -416,7 +458,7 @@ html:has(.ld) { scroll-behavior: smooth; }
 
   /* showcase: arrows come onto the frame, dots get a real touch target */
   .ld .show-head { margin-bottom: 24px; }
-  .ld .show-title { font-size: clamp(22px, 5.6vw, 34px); white-space: normal; }
+  .ld .show-title { font-size: clamp(20px, 5.6vw, 34px); white-space: normal; }
   .ld .show-cap { font-size: 14px; }
   .ld .show-stage { display: block; position: relative; }
   /* the violet glow bleeds 6% past the frame; with no desktop margins left to
@@ -441,11 +483,16 @@ html:has(.ld) { scroll-behavior: smooth; }
   /* pricing: swap the three-column desktop grid for the compare scoreboard */
   .ld .plans { display: none; }
   .ld .plans-m { display: block; }
-  /* founding offer sits closer to the header and gives the table its air back */
-  .ld .found { max-width: 470px; margin: -14px auto 32px; }
-  .ld .found-b { font-size: 15px; margin-top: 10px; }
-  .ld .found-m { margin-top: 14px; gap: 8px; font-size: 12.5px; }
-  .ld .found-ic { width: 14px; height: 14px; }
+  /* founding offer: the ticket tears the other way. Side by side, the stub
+     would squeeze the number to nothing on a phone, so the perforation goes
+     horizontal and the two notches move to its ends. */
+  .ld .found { max-width: 470px; margin: 22px auto 32px; flex-direction: column; }
+  .ld .found-main { padding: 17px 20px 18px; }
+  .ld .found-v { margin-top: 8px; }
+  .ld .found-stub { flex-direction: row; justify-content: flex-start; align-items: baseline; flex-wrap: wrap; gap: 3px 9px; padding: 12px 20px 14px; border-left: 0; border-top: 1px dashed var(--line3); }
+  .ld .found-notch.n-a { top: 0; bottom: auto; transform: translate(-50%, -50%); }
+  .ld .found-notch.n-b { top: 0; bottom: auto; left: auto; right: 0; transform: translate(50%, -50%); }
+  .ld .found-px { top: -25px; right: 22px; width: 33px; height: 30px; }
   .ld .plan li { white-space: normal; }
   /* the three pills repeat rows that live in "On every plan" below */
   .ld .cloud-adds { display: none; }
@@ -502,6 +549,30 @@ html:has(.ld) { scroll-behavior: smooth; }
   .ld .foot-grid { gap: 30px 16px; }
 }
 
+/* ---------- showcase header: a rotating text slot needs a fixed box ----------
+   The nine titles cycle every few seconds. Below ~520px three of them wrap to
+   a second line, which changed the header's height by up to 45px - and the
+   showcase sits near the top of the page, so those ticks were resizing content
+   ABOVE wherever the reader had scrolled to. Chrome papers over that with
+   scroll anchoring; Safari has no scroll anchoring at all, so on an iPhone the
+   whole document jumped ~25px under the thumb every few seconds. That is the
+   "sometimes it goes back while I'm scrolling" report, and it is the reason
+   this reserve exists - not aesthetics.
+   The arithmetic: two title lines (h3 line-height is 1.12) + the title's 10px
+   margin + one 14px/1.6 caption line, +2px of rounding slack. 520px is where
+   the longest title stops wrapping (measured), so tablets and up need nothing.
+   Re-measure both numbers if the slide copy changes. */
+@media (max-width: 519px) {
+  .ld .show-head { min-height: calc(2.24 * clamp(20px, 5.6vw, 34px) + 34px); display: grid; align-content: center; }
+}
+/* At 320-329px the longest caption takes a second line as well. Rather than
+   reserve another 22px of empty space on the narrowest screen there is, the
+   title carries the slide alone and the box gets smaller, not bigger. */
+@media (max-width: 329px) {
+  .ld .show-cap { display: none; }
+  .ld .show-head { min-height: calc(2.24 * clamp(20px, 5.6vw, 34px) + 12px); }
+}
+
 @media (max-width: 380px) {
   .ld { --pad: 16px; --navpad: 16px; }
   .ld .logo { font-size: 17px; gap: 8px; }
@@ -509,17 +580,23 @@ html:has(.ld) { scroll-behavior: smooth; }
   .ld .pm-table th, .ld .pm-table td { padding: 9px 3px; }
   .ld .pm-table tfoot .btn { font-size: 12.5px; padding: 10px 2px; }
   .ld .pm-was { font-size: 11.5px; }
-  .ld .found-b { font-size: 14.5px; }
+  .ld .found-main { padding: 15px 17px 16px; }
+  .ld .found-stub { padding: 11px 17px 13px; }
+  .ld .found-note { font-size: 13px; }
   .ld .who-card { padding: 26px 20px 28px; }
 }
 
-/* ---------- floating "why us" mascot explainer ---------- */
+/* ---------- "why us" mascot explainer ---------- */
 /* Bottom-right, but deliberately NOT a round chat launcher (which reads as
    live chat and baits the visitor): the resting state is a tilted speech-note
    with the pixel agent peeking over its edge and a visible "Why DispatchSEO?"
    label, so it's unmistakably a mascot aside. z-index sits above the sticky
-   nav (50). */
+   nav (50).
+   Which of the two placements is live is decided HERE, not in JS: the page
+   renders both and each breakpoint display:none's the one it doesn't want, so
+   nothing appears, moves or reflows after hydration. */
 .ld .why-fab { position: fixed; right: 22px; bottom: 22px; z-index: 60; display: flex; flex-direction: column; align-items: flex-end; }
+.ld .why-inline { display: none; }
 .ld .why-fab.is-hidden { opacity: 0; pointer-events: none; transform: translateY(12px); transition: opacity 0.3s ease, transform 0.3s ease; }
 
 /* resting tab: a slightly-tilted note with a speech tail */
@@ -542,7 +619,9 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .why-tab:hover .why-tab-chev { color: var(--clay); transform: translateX(2px); }
 
 /* the popped card */
-.ld .why-pop { position: absolute; bottom: calc(100% + 16px); right: 0; width: min(342px, calc(100vw - 32px)); background: var(--card); border: 1px solid var(--line2); border-radius: 20px; overflow: hidden; box-shadow: 0 30px 70px -24px rgba(0, 0, 0, 0.85); transform-origin: bottom right; animation: why-pop-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
+/* text-align is explicit so the card reads the same from either trigger - the
+   inline one lives inside the centred hero and would otherwise inherit it. */
+.ld .why-pop { text-align: left; position: absolute; bottom: calc(100% + 16px); right: 0; width: min(342px, calc(100vw - 32px)); background: var(--card); border: 1px solid var(--line2); border-radius: 20px; overflow: hidden; box-shadow: 0 30px 70px -24px rgba(0, 0, 0, 0.85); transform-origin: bottom right; animation: why-pop-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
 @keyframes why-pop-in { from { opacity: 0; transform: translateY(10px) scale(0.94); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .ld .why-pop { animation: none; } }
 
@@ -575,26 +654,28 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .why-cta svg { width: 15px; height: 15px; transition: transform 0.14s ease; }
 .ld .why-cta:hover svg { transform: translateX(2px); }
 
-/* Mobile: the anchored popover becomes a bottom sheet. Anchoring it to a
-   fixed tab meant `bottom: calc(100% + 16px)` could run off the top of a short
-   phone viewport, and a 342px card nearly fills the screen anyway - so on a
-   phone it behaves like what it already is, a full-width sheet. The resting
-   tab shrinks and, per the JS, only appears between the hero and final CTA. */
+/* Mobile: the tab stops floating and the anchored popover becomes a bottom
+   sheet. A fixed tab that tracks the scroll on a phone is both an annoyance
+   and a cost (a fixed layer repainting over the backdrop-filtered nav on
+   every scroll), and `bottom: calc(100% + 16px)` could run off the top of a
+   short viewport anyway - so the trigger joins the hero and the card behaves
+   like what it already is, a full-width sheet. */
 @media (max-width: 980px) {
-  .ld .why-fab { right: 14px; bottom: 14px; }
-  /* stays invisible until the client has read the media query, so it can
-     never flash over the hero on first paint */
-  .ld .why-fab:not(.is-armed) { opacity: 0; pointer-events: none; }
-  .ld .why-fab.is-open .why-tab { display: none; }
+  .ld .why-fab { display: none; }
+  .ld .why-inline { display: flex; justify-content: center; margin-top: 12px; }
+  /* Flat on purpose: the hero already has one button that matters, and a
+     second bordered box under it would read as a competing CTA. */
+  .ld .why-inline-btn { display: inline-flex; align-items: center; gap: 9px; min-height: 44px; padding: 10px 12px; border: 0; background: transparent; cursor: pointer; font-family: var(--body); font-size: 14.5px; font-weight: 600; color: var(--mut); -webkit-tap-highlight-color: transparent; }
+  .ld .why-inline-btn span { border-bottom: 1px solid var(--line3); padding-bottom: 2px; transition: color 0.14s ease, border-color 0.14s ease; }
+  .ld .why-inline-btn:active span { color: #fff; border-color: var(--clay); }
+  .ld .why-inline-btn:focus-visible { outline: 2px solid var(--vio2); outline-offset: 2px; border-radius: 10px; }
+  .ld .why-inline-face { width: 21px; height: auto; flex-shrink: 0; }
 
-  .ld .why-tab { gap: 9px; padding: 9px 12px 9px 11px; border-radius: 14px 14px 4px 14px; }
-  .ld .why-tab-face { width: 26px; }
-  .ld .why-tab-eyebrow { display: none; }
-  .ld .why-tab-title { font-size: 13px; }
-  .ld .why-tab-chev { width: 14px; height: 14px; }
-
-  .ld .why-scrim { position: fixed; inset: 0; background: rgba(6, 6, 8, 0.7); backdrop-filter: blur(3px); animation: why-scrim-in 0.2s ease both; }
-  .ld .why-pop { position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: auto; max-height: 86dvh; overflow-y: auto; overscroll-behavior: contain; border-radius: 22px 22px 0 0; border-left: 0; border-right: 0; border-bottom: 0; transform-origin: bottom center; animation: why-sheet-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; padding-bottom: env(safe-area-inset-bottom); }
+  .ld .why-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(6, 6, 8, 0.7); backdrop-filter: blur(3px); animation: why-scrim-in 0.2s ease both; }
+  /* z-index is explicit here because the inline trigger, unlike the fixed
+     tab, creates no stacking context of its own - without it the sheet would
+     open underneath the sticky nav (z 50). */
+  .ld .why-pop { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 61; width: auto; max-height: 86dvh; overflow-y: auto; overscroll-behavior: contain; border-radius: 22px 22px 0 0; border-left: 0; border-right: 0; border-bottom: 0; transform-origin: bottom center; animation: why-sheet-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; padding-bottom: env(safe-area-inset-bottom); }
   .ld .why-stage { max-width: 320px; margin: 0 auto; }
   .ld .why-x { width: 36px; height: 36px; }
   .ld .why-body { padding: 18px 20px 24px; }

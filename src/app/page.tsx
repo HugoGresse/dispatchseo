@@ -59,6 +59,46 @@ function LockIc({ className }: { className?: string }) {
   );
 }
 
+// The dispatcher, sitting on the top edge of the founding banner with its legs
+// hanging over the front. Same 12x11 grid as the animated hero scene
+// (components/pixel-dispatcher.tsx), redrawn as static rects: a canvas is
+// pointless for a single frame, and this keeps the banner a server component.
+// Colours live in landing.css (.found-px) - clay, same character as the hero.
+const SPRITE = [
+  "...bbbbbb...",
+  "..bbbbbbbb..",
+  ".bbbbbbbbbb.",
+  ".bbbbbbbbbb.",
+  ".bbbbebbbeb.",
+  ".bbbbebbbeb.",
+  ".bbbbbbbbbb.",
+  ".bssssssssb.",
+  "..ssssssss..",
+  "..ss....ss..",
+  "..ss....ss..",
+];
+
+function FoundingMascot() {
+  return (
+    <svg
+      className="found-px"
+      viewBox="0 0 12 11"
+      shapeRendering="crispEdges"
+      aria-hidden="true"
+    >
+      {SPRITE.flatMap((row, r) =>
+        row
+          .split("")
+          .map((ch, c) =>
+            ch === "." ? null : (
+              <rect key={`${r}-${c}`} className={`px-${ch}`} x={c} y={r} width="1" height="1" />
+            ),
+          ),
+      )}
+    </svg>
+  );
+}
+
 // Desktop plan card price. One component for all three cards so the founding
 // price can never drift between them - and so "no offer" is a single branch,
 // not three places to forget.
@@ -174,6 +214,10 @@ export default async function LandingPage({
           <div className="cta-row" id="get-started">
             <DomainCta />
           </div>
+          {/* Phone-only placement of the mascot aside - CSS-hidden above
+              980px, where the floating copy at the end of the page takes
+              over. See the note at the top of why-card.tsx. */}
+          <WhyCard inline />
         </div>
       </header>
 
@@ -250,53 +294,36 @@ export default async function LandingPage({
             <h2>Pick your plan</h2>
             <p>Starter comes with a 7-day free trial; Growth and Scale start today. Unlimited articles on every plan - the writing runs on your own Claude, so we never meter content.</p>
           </div>
-          {/* The offer, stated once. The price cards carry the numbers; this
-              carries the reason and the deadline. No box, no ribbon - it reads
-              as the second half of the section header. */}
+          {/* The offer as a dispatch ticket: the deal on the body, the deadline
+              on a tear-off stub. The perforation does the work a third sentence
+              used to do, so the banner carries two facts and no paragraph. The
+              "why only 50" reasoning moved to the getting-started FAQ below. */}
           {founding ? (
             <div className="found">
-              <p className="found-h">
-                {/* The comma is glued to the highlight: a break opportunity
-                    exists after an inline-block, and a line starting with ","
-                    is the one wrap this headline must never make. */}
-                Founding price:{" "}
-                <span className="found-nb">
-                  <span className="found-hl">{founding.discountPct}% off</span>,
-                </span>{" "}
-                locked for life.
-              </p>
-              {/* One template literal, not interpolated JSX text: SWC strips the
-                  leading space of a text chunk that wraps to the next line, which
-                  silently produced "at 50because". */}
-              <p className="found-b">
-                {`I'm capping this at ${founding.cap} because that's how many sites I can personally onboard and support while still building. When it's full, it's full.`}
-              </p>
-              <p className="found-m">
-                <svg
-                  className="found-ic"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M12 7v5l3.5 2" />
-                </svg>
-                <span>
-                  Ends <b>{founding.endsAtLabel}</b>
-                </span>
+              <FoundingMascot />
+              <div className="found-main">
+                <span className="found-k">Founding price</span>
+                <p className="found-v">
+                  <span className="found-hl">{founding.discountPct}% off</span>
+                  <span className="found-note">
+                    <LockIc className="found-lock" />
+                    locked for life
+                  </span>
+                </p>
+              </div>
+              <div className="found-stub">
+                {/* Punched holes at the ends of the perforation - children of
+                    the stub so they track its border, not a hardcoded offset. */}
+                <span className="found-notch n-a" aria-hidden="true" />
+                <span className="found-notch n-b" aria-hidden="true" />
+                <span className="found-stub-k">Ends</span>
+                <b className="found-stub-v">{founding.endsAtLabel}</b>
                 {founding.showCount ? (
-                  <>
-                    <i className="found-dot" aria-hidden="true" />
-                    <span>
-                      <b>{`${founding.remaining} of ${founding.cap} left`}</b>
-                    </span>
-                  </>
+                  <span className="found-stub-n">
+                    {`${founding.remaining} of ${founding.cap} left`}
+                  </span>
                 ) : null}
-              </p>
+              </div>
             </div>
           ) : null}
           <div className="cloud-adds">
@@ -514,7 +541,7 @@ export default async function LandingPage({
             </details>
             <details>
               <summary>How do I get started on cloud?</summary>
-              <div className="a">Sign up and start your 7-day free trial on Starter - you enter a card at checkout, nothing is charged until the trial ends, and you can cancel in one click before then. The setup wizard walks you through connecting your site, about ten minutes end to end. Need more sites right away? Pick Growth or Scale at checkout (billed today), or upgrade anytime.{founding ? <> Right now the first {founding.cap} sites get the founding price: {founding.discountPct}% off, locked for life, so Starter is {foundingPriceLabel("starter")}/mo instead of {listPriceLabel("starter")}. It ends {founding.endsAtLabel}.</> : null}</div>
+              <div className="a">Sign up and start your 7-day free trial on Starter - you enter a card at checkout, nothing is charged until the trial ends, and you can cancel in one click before then. The setup wizard walks you through connecting your site, about ten minutes end to end. Need more sites right away? Pick Growth or Scale at checkout (billed today), or upgrade anytime.{founding ? <> Right now the first {founding.cap} sites get the founding price: {founding.discountPct}% off, locked for life, so Starter is {foundingPriceLabel("starter")}/mo instead of {listPriceLabel("starter")}. It ends {founding.endsAtLabel}. I&apos;m capping it at {founding.cap} because that&apos;s how many sites I can personally onboard and support while still building. When it&apos;s full, it&apos;s full.</> : null}</div>
             </details>
           </div>
         </div>

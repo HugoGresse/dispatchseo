@@ -58,11 +58,10 @@ function Check({ className }: { className?: string }) {
   );
 }
 
-// Clay (#d97757 fill / #e08a68 text) is the mascot's colour and, on both
-// pricing surfaces, the founding offer's. Violet stays the product's - so
-// "Most popular" and "Founding price" read as two different kinds of claim
-// instead of competing for the same accent. Written as literals because
-// Tailwind's scanner can't see a runtime constant.
+// The founding offer runs on the page's violet, same as everything else here.
+// An earlier pass gave it the mascot's clay to separate "Neo speaking" from
+// "the product", but a second hue in a pricing block reads as noise - the
+// offer is carried by weight and the struck price instead.
 function Lock({ className }: { className?: string }) {
   return (
     <svg
@@ -77,24 +76,6 @@ function Lock({ className }: { className?: string }) {
     >
       <rect x="4" y="10.5" width="16" height="10.5" rx="2.5" />
       <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
-    </svg>
-  );
-}
-
-function Clock({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      className={className}
-    >
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3.5 2" />
     </svg>
   );
 }
@@ -141,36 +122,49 @@ export default async function PlansPage() {
             trial &mdash; cancel anytime.
           </p>
 
-          {/* The offer, stated once. The cards carry the numbers. */}
+          {/* The offer as a dispatch ticket, same device as the landing page:
+              the deal on the body, the deadline on a tear-off stub, no
+              paragraph. No mascot here - the animated one is right above it. */}
           {founding ? (
-            <div className="mt-8 max-w-xl border-t border-neutral-800/80 pt-7">
-              <p className="text-lg font-semibold tracking-tight text-white sm:text-xl">
-                Founding price:{" "}
-                <span className="rounded-[4px] bg-[#d97757] px-1.5 pb-0.5 text-neutral-950">
-                  {founding.discountPct}% off
+            <div className="mt-8 flex w-full max-w-xl flex-col rounded-2xl border border-neutral-800 bg-neutral-900/40 text-left sm:flex-row sm:items-stretch">
+              <div className="flex-1 px-5 py-4 sm:px-6 sm:py-5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.13em] text-violet-300">
+                  Founding price
                 </span>
-                , locked for life.
-              </p>
-              {/* Template literal, not interpolated JSX text - SWC strips the
-                  leading space of a text chunk that wraps to the next line. */}
-              <p className="mt-2.5 text-sm leading-relaxed text-neutral-400">
-                {`I'm capping this at ${founding.cap} because that's how many sites I can personally onboard and support while still building. When it's full, it's full.`}
-              </p>
-              <p className="mt-3.5 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 text-xs text-neutral-500">
-                <Clock className="h-3.5 w-3.5 text-[#e08a68]" />
-                <span>
-                  Ends{" "}
-                  <b className="font-semibold text-neutral-300">{founding.endsAtLabel}</b>
+                <p className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <span className="rounded-[4px] bg-violet-500 px-1.5 pb-0.5 text-3xl font-semibold tracking-tight text-white">
+                    {founding.discountPct}% off
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 text-[13px] text-neutral-400">
+                    <Lock className="h-3 w-3 shrink-0 text-neutral-500" />
+                    locked for life
+                  </span>
+                </p>
+              </div>
+              {/* The stub. Its dashed border IS the perforation, and the two
+                  punched holes sit on its ends - top edge on a phone, left
+                  edge once the ticket turns side by side. */}
+              <div className="relative flex shrink-0 flex-wrap items-baseline gap-x-2.5 gap-y-1 border-t border-dashed border-neutral-700 px-5 py-3 sm:flex-col sm:justify-center sm:gap-1 sm:border-l sm:border-t-0 sm:px-6 sm:py-5">
+                <span
+                  aria-hidden="true"
+                  className="absolute left-0 top-0 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-neutral-950 sm:top-0"
+                />
+                <span
+                  aria-hidden="true"
+                  className="absolute right-0 top-0 h-3 w-3 translate-x-1/2 -translate-y-1/2 rounded-full bg-neutral-950 sm:bottom-0 sm:left-0 sm:right-auto sm:top-auto sm:-translate-x-1/2 sm:translate-y-1/2"
+                />
+                <span className="text-[10px] font-semibold uppercase tracking-[0.13em] text-neutral-400">
+                  Ends
                 </span>
+                <b className="whitespace-nowrap text-[15px] font-semibold tracking-tight text-neutral-200">
+                  {founding.endsAtLabel}
+                </b>
                 {founding.showCount ? (
-                  <>
-                    <span aria-hidden="true" className="h-1 w-1 rounded-full bg-neutral-700" />
-                    <b className="font-semibold text-neutral-300">
-                      {`${founding.remaining} of ${founding.cap} left`}
-                    </b>
-                  </>
+                  <span className="whitespace-nowrap text-xs text-neutral-400">
+                    {`${founding.remaining} of ${founding.cap} left`}
+                  </span>
                 ) : null}
-              </p>
+              </div>
             </div>
           ) : null}
         </div>
@@ -213,7 +207,7 @@ export default async function PlansPage() {
                     "$149 $74.50 /mo" on one row. */}
                 {founding ? (
                   <p className="mt-5 text-sm font-semibold tabular-nums text-neutral-600">
-                    <s className="decoration-[#d97757] decoration-2">
+                    <s className="decoration-violet-400 decoration-2">
                       <span className="sr-only">Regular price </span>
                       {listPriceLabel(tier)}
                     </s>
@@ -228,7 +222,7 @@ export default async function PlansPage() {
                   <span className="text-sm text-neutral-500">/mo</span>
                 </div>
                 {founding ? (
-                  <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-[#e08a68]">
+                  <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-violet-300">
                     <Lock className="h-3.5 w-3.5 shrink-0" />
                     Founding price
                   </p>
