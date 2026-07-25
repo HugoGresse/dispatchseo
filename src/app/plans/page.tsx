@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { requireDashboard } from "@/lib/auth-gate";
 import { isCloudMode } from "@/lib/cloud";
 import { getSubscription, isActive, polarConfigured, TIER_LIMITS, type Tier } from "@/lib/billing";
+import { foundingOffer, foundingPriceLabel, listPriceLabel } from "@/lib/founding";
 import { DispatchMark } from "@/components/logo";
 import { PixelDispatcher } from "@/components/pixel-dispatcher";
 
@@ -57,12 +58,56 @@ function Check({ className }: { className?: string }) {
   );
 }
 
+// Clay (#d97757 fill / #e08a68 text) is the mascot's colour and, on both
+// pricing surfaces, the founding offer's. Violet stays the product's - so
+// "Most popular" and "Founding price" read as two different kinds of claim
+// instead of competing for the same accent. Written as literals because
+// Tailwind's scanner can't see a runtime constant.
+function Lock({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
+      <rect x="4" y="10.5" width="16" height="10.5" rx="2.5" />
+      <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
+    </svg>
+  );
+}
+
+function Clock({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3.5 2" />
+    </svg>
+  );
+}
+
 export default async function PlansPage() {
   const auth = await requireDashboard();
   if (!isCloudMode() || !auth.user) redirect("/dashboard");
   const sub = await getSubscription(auth.user.id);
   if (isActive(sub)) redirect("/onboarding?new=1");
 
+  // null = offer over (or billing unconfigured); every branch below then
+  // renders the plain list price with nothing left dangling.
+  const founding = await foundingOffer();
   const tiers = Object.keys(TIER_LIMITS) as Tier[];
 
   return (
@@ -95,6 +140,39 @@ export default async function PlansPage() {
             Pick a plan to put your site&apos;s SEO on autopilot. Starter includes a 7-day free
             trial &mdash; cancel anytime.
           </p>
+
+          {/* The offer, stated once. The cards carry the numbers. */}
+          {founding ? (
+            <div className="mt-8 max-w-xl border-t border-neutral-800/80 pt-7">
+              <p className="text-lg font-semibold tracking-tight text-white sm:text-xl">
+                Founding price:{" "}
+                <span className="rounded-[4px] bg-[#d97757] px-1.5 pb-0.5 text-neutral-950">
+                  {founding.discountPct}% off
+                </span>
+                , locked for life.
+              </p>
+              {/* Template literal, not interpolated JSX text - SWC strips the
+                  leading space of a text chunk that wraps to the next line. */}
+              <p className="mt-2.5 text-sm leading-relaxed text-neutral-400">
+                {`I'm capping this at ${founding.cap} because that's how many sites I can personally onboard and support while still building. When it's full, it's full.`}
+              </p>
+              <p className="mt-3.5 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 text-xs text-neutral-500">
+                <Clock className="h-3.5 w-3.5 text-[#e08a68]" />
+                <span>
+                  Ends{" "}
+                  <b className="font-semibold text-neutral-300">{founding.endsAtLabel}</b>
+                </span>
+                {founding.showCount ? (
+                  <>
+                    <span aria-hidden="true" className="h-1 w-1 rounded-full bg-neutral-700" />
+                    <b className="font-semibold text-neutral-300">
+                      {`${founding.remaining} of ${founding.cap} left`}
+                    </b>
+                  </>
+                ) : null}
+              </p>
+            </div>
+          ) : null}
         </div>
 
         {!polarConfigured() ? (
@@ -130,12 +208,31 @@ export default async function PlansPage() {
                 </div>
                 <p className="mt-1 text-sm text-neutral-400">{copy.tagline}</p>
 
-                <div className="mt-5 flex items-baseline gap-1">
+                {/* Struck list price sits on its own line above the number, not
+                    beside it: at the sm breakpoint a third of 640px cannot hold
+                    "$149 $74.50 /mo" on one row. */}
+                {founding ? (
+                  <p className="mt-5 text-sm font-semibold tabular-nums text-neutral-600">
+                    <s className="decoration-[#d97757] decoration-2">
+                      <span className="sr-only">Regular price </span>
+                      {listPriceLabel(tier)}
+                    </s>
+                  </p>
+                ) : null}
+                <div
+                  className={`flex flex-wrap items-baseline gap-x-1 ${founding ? "mt-0.5" : "mt-5"}`}
+                >
                   <span className="text-4xl font-semibold tracking-tight tabular-nums text-white">
-                    ${limits.price}
+                    {founding ? foundingPriceLabel(tier) : listPriceLabel(tier)}
                   </span>
                   <span className="text-sm text-neutral-500">/mo</span>
                 </div>
+                {founding ? (
+                  <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-[#e08a68]">
+                    <Lock className="h-3.5 w-3.5 shrink-0" />
+                    Founding price
+                  </p>
+                ) : null}
                 {tier === "starter" ? (
                   <p className="mt-1.5 text-xs font-medium text-emerald-300">7-day free trial</p>
                 ) : (

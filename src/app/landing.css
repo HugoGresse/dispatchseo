@@ -269,6 +269,34 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .ca-pill { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: var(--mut); background: var(--card); border: 1px solid var(--line2); border-radius: 8px; padding: 8px 14px; }
 .ld .ca-pill svg { width: 16px; height: 16px; color: var(--vio2); flex-shrink: 0; }
 
+/* ---------- pricing: founding offer ---------- */
+/* Colour carries the meaning here: violet is the product (the "Most popular"
+   cap, the checkmarks), clay is Neo - the mascot's colour, and the founding
+   offer is a personal capacity promise, not a product feature. That split is
+   also why the two markers never fight on the Growth card. */
+.ld .found { text-align: center; max-width: 640px; margin: -22px auto 46px; }
+.ld .found-h { font-family: var(--disp); font-weight: 800; font-size: clamp(20px, 2.5vw, 27px); line-height: 1.28; letter-spacing: -0.02em; color: #fff; text-wrap: balance; }
+/* Echoes the hero's highlight on "Claude Code", in clay instead of violet -
+   the same hand, a different voice. Dark text on clay for contrast. */
+.ld .found-nb { white-space: nowrap; }
+.ld .found-hl { position: relative; z-index: 0; display: inline-block; color: var(--bg); margin: 0 0.08em; }
+.ld .found-hl::before { content: ""; position: absolute; z-index: -1; top: 0.11em; bottom: 0.04em; left: -0.09em; right: -0.09em; background: var(--clay); border-radius: 0.07em; }
+.ld .found-b { font-size: 15.5px; line-height: 1.6; color: var(--mut); margin-top: 12px; text-wrap: balance; }
+.ld .found-m { display: inline-flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 9px; margin-top: 16px; font-size: 13.5px; color: var(--dim); }
+.ld .found-m b { color: var(--txt); font-weight: 600; }
+.ld .found-ic { width: 15px; height: 15px; flex-shrink: 0; color: var(--clay2); margin-right: -3px; }
+.ld .found-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--line3); flex-shrink: 0; }
+
+/* The old price, struck by hand. The page's doodles are round-capped angled
+   strokes, so this is one too rather than a text-decoration hairline - a pen
+   through the number, not a spreadsheet cell. */
+.ld .p-was, .ld .pm-was { position: relative; text-decoration: none; font-family: var(--disp); font-weight: 700; color: var(--dim); letter-spacing: -0.02em; }
+.ld .p-was::after, .ld .pm-was::after { content: ""; position: absolute; left: -7%; right: -7%; top: 47%; border-radius: 2px; background: var(--clay); transform: rotate(-7deg); }
+.ld .p-was { font-size: 20px; margin-right: 11px; }
+.ld .p-was::after { height: 2px; }
+.ld .plan .p-found { display: inline-flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 12.5px; font-weight: 700; letter-spacing: 0.005em; color: var(--clay2); }
+.ld .plan .p-found svg { width: 12px; height: 12px; flex-shrink: 0; }
+
 /* ---------- pricing: mobile compare scoreboard (<=980px) ---------- */
 /* Desktop shows three full plan columns; a phone would show sixty near-identical
    rows, so below 981px the plans collapse to the four things that actually
@@ -281,6 +309,13 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .pm-name { display: block; font-family: var(--disp); font-size: 13px; font-weight: 700; color: var(--mut); letter-spacing: 0.01em; }
 .ld .pm-price { display: block; font-family: var(--disp); font-size: clamp(22px, 6.4vw, 30px); font-weight: 800; letter-spacing: -0.03em; color: #fff; margin-top: 2px; }
 .ld .pm-price small { font-family: var(--body); font-size: 11px; font-weight: 600; color: var(--dim); letter-spacing: 0; }
+/* Founding variant: was / now / per stack on three lines. Inline "$74.50/mo"
+   overflows a third of a 320px screen, so /mo drops to its own line and the
+   number steps down a notch to buy back the two extra glyphs. */
+.ld .pm-was { display: inline-block; font-size: 12.5px; }
+.ld .pm-was::after { height: 1.5px; }
+.ld .pm-price-f { font-size: clamp(19px, 5.4vw, 26px); margin-top: 0; }
+.ld .pm-per { display: block; font-family: var(--body); font-size: 10.5px; font-weight: 600; color: var(--dim); margin-top: 1px; }
 /* Flat marker for the recommended column - a violet cap on the column plus
    small caps, deliberately not a floating pill. */
 .ld .pm-flag { display: block; font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--vio2); margin-bottom: 5px; }
@@ -406,6 +441,11 @@ html:has(.ld) { scroll-behavior: smooth; }
   /* pricing: swap the three-column desktop grid for the compare scoreboard */
   .ld .plans { display: none; }
   .ld .plans-m { display: block; }
+  /* founding offer sits closer to the header and gives the table its air back */
+  .ld .found { max-width: 470px; margin: -14px auto 32px; }
+  .ld .found-b { font-size: 15px; margin-top: 10px; }
+  .ld .found-m { margin-top: 14px; gap: 8px; font-size: 12.5px; }
+  .ld .found-ic { width: 14px; height: 14px; }
   .ld .plan li { white-space: normal; }
   /* the three pills repeat rows that live in "On every plan" below */
   .ld .cloud-adds { display: none; }
@@ -468,6 +508,8 @@ html:has(.ld) { scroll-behavior: smooth; }
   .ld .logo-mark { height: 24px; }
   .ld .pm-table th, .ld .pm-table td { padding: 9px 3px; }
   .ld .pm-table tfoot .btn { font-size: 12.5px; padding: 10px 2px; }
+  .ld .pm-was { font-size: 11.5px; }
+  .ld .found-b { font-size: 14.5px; }
   .ld .who-card { padding: 26px 20px 28px; }
 }
 

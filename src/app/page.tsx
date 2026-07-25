@@ -8,6 +8,13 @@ import { LandingNav } from "./landing-nav";
 import { PixelDispatcher } from "@/components/pixel-dispatcher";
 import { WhyCard } from "@/components/why-card";
 import { dashboardAuth, maybeSignedIn } from "@/lib/auth-gate";
+import {
+  foundingOffer,
+  foundingPriceLabel,
+  listPriceLabel,
+  type FoundingOffer,
+} from "@/lib/founding";
+import type { Tier } from "@/lib/billing";
 import "./landing.css";
 
 // Public landing page - cloud deployment only. Self-hosted installs never set
@@ -31,6 +38,81 @@ export const metadata: Metadata = {
     "Claude Code researches keywords, writes guides, builds interactive tools, and tracks your ranks automatically. Every piece is a pull request you approve. Open source, free to self-host.",
 };
 
+// A padlock, drawn in the same round-capped outline language as the doodles.
+// It carries "locked for life" visually so the label beside it only has to
+// name the number.
+function LockIc({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="4" y="10.5" width="16" height="10.5" rx="2.5" />
+      <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
+    </svg>
+  );
+}
+
+// Desktop plan card price. One component for all three cards so the founding
+// price can never drift between them - and so "no offer" is a single branch,
+// not three places to forget.
+function PlanPrice({ tier, founding }: { tier: Tier; founding: FoundingOffer | null }) {
+  if (!founding) {
+    return (
+      <div className="p-price">
+        {listPriceLabel(tier)}
+        <small>/mo</small>
+      </div>
+    );
+  }
+  return (
+    <>
+      <div className="p-price">
+        <s className="p-was">
+          <span className="ld-sr">Regular price </span>
+          {listPriceLabel(tier)}
+        </s>
+        {foundingPriceLabel(tier)}
+        <small>/mo</small>
+      </div>
+      <div className="p-found">
+        <LockIc />
+        Founding price
+      </div>
+    </>
+  );
+}
+
+// The same price, sized for a third of a phone screen. The founding variant
+// stacks (was / now / per) because "$74.50/mo" on one line overflows a 320px
+// three-column table.
+function PmPrice({ tier, founding }: { tier: Tier; founding: FoundingOffer | null }) {
+  if (!founding) {
+    return (
+      <span className="pm-price">
+        {listPriceLabel(tier)}
+        <small>/mo</small>
+      </span>
+    );
+  }
+  return (
+    <>
+      <s className="pm-was">
+        <span className="ld-sr">Regular price </span>
+        {listPriceLabel(tier)}
+      </s>
+      <span className="pm-price pm-price-f">{foundingPriceLabel(tier)}</span>
+      <span className="pm-per">/mo</span>
+    </>
+  );
+}
+
 export default async function LandingPage({
   searchParams,
 }: {
@@ -48,6 +130,11 @@ export default async function LandingPage({
   if (params.home === undefined && (await maybeSignedIn()) && (await dashboardAuth())) {
     redirect("/dashboard");
   }
+
+  // null = no offer (self-host, billing unconfigured, past the end date, or
+  // the 50 seats are gone). Every founding surface below is gated on it, so
+  // expiry leaves plain list prices and no orphaned struck-through text.
+  const founding = await foundingOffer();
 
   return (
     <div className={`ld ${jakarta.variable} ${dmSans.variable}`}>
@@ -163,6 +250,55 @@ export default async function LandingPage({
             <h2>Pick your plan</h2>
             <p>Starter comes with a 7-day free trial; Growth and Scale start today. Unlimited articles on every plan - the writing runs on your own Claude, so we never meter content.</p>
           </div>
+          {/* The offer, stated once. The price cards carry the numbers; this
+              carries the reason and the deadline. No box, no ribbon - it reads
+              as the second half of the section header. */}
+          {founding ? (
+            <div className="found">
+              <p className="found-h">
+                {/* The comma is glued to the highlight: a break opportunity
+                    exists after an inline-block, and a line starting with ","
+                    is the one wrap this headline must never make. */}
+                Founding price:{" "}
+                <span className="found-nb">
+                  <span className="found-hl">{founding.discountPct}% off</span>,
+                </span>{" "}
+                locked for life.
+              </p>
+              {/* One template literal, not interpolated JSX text: SWC strips the
+                  leading space of a text chunk that wraps to the next line, which
+                  silently produced "at 50because". */}
+              <p className="found-b">
+                {`I'm capping this at ${founding.cap} because that's how many sites I can personally onboard and support while still building. When it's full, it's full.`}
+              </p>
+              <p className="found-m">
+                <svg
+                  className="found-ic"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 7v5l3.5 2" />
+                </svg>
+                <span>
+                  Ends <b>{founding.endsAtLabel}</b>
+                </span>
+                {founding.showCount ? (
+                  <>
+                    <i className="found-dot" aria-hidden="true" />
+                    <span>
+                      <b>{`${founding.remaining} of ${founding.cap} left`}</b>
+                    </span>
+                  </>
+                ) : null}
+              </p>
+            </div>
+          ) : null}
           <div className="cloud-adds">
             <span className="ca-label">Every plan includes</span>
             <span className="ca-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18" /><path d="M7 21v-5" /><path d="M12 21V9" /><path d="M17 21v-8" /></svg>bundled SERP + volume data, one bill</span>
@@ -172,7 +308,7 @@ export default async function LandingPage({
           <div className="plans">
             <div className="plan">
               <h3>Starter</h3>
-              <div className="p-price">$49<small>/mo</small></div>
+              <PlanPrice tier="starter" founding={founding} />
               <div className="p-sub">One site on autopilot</div>
               <ul>
                 <li>1 site</li>
@@ -201,7 +337,7 @@ export default async function LandingPage({
             <div className="plan hero-plan">
               <span className="p-badge">Most popular</span>
               <h3>Growth</h3>
-              <div className="p-price">$99<small>/mo</small></div>
+              <PlanPrice tier="growth" founding={founding} />
               <div className="p-sub">For a small portfolio</div>
               <ul>
                 <li>3 sites</li>
@@ -230,7 +366,7 @@ export default async function LandingPage({
             </div>
             <div className="plan">
               <h3>Scale</h3>
-              <div className="p-price">$149<small>/mo</small></div>
+              <PlanPrice tier="scale" founding={founding} />
               <div className="p-sub">Portfolios and agencies</div>
               <ul>
                 <li>10 sites</li>
@@ -272,16 +408,16 @@ export default async function LandingPage({
                 <tr>
                   <th scope="col">
                     <span className="pm-name">Starter</span>
-                    <span className="pm-price">$49<small>/mo</small></span>
+                    <PmPrice tier="starter" founding={founding} />
                   </th>
                   <th scope="col" className="pm-pick">
                     <span className="pm-flag">Most popular</span>
                     <span className="pm-name">Growth</span>
-                    <span className="pm-price">$99<small>/mo</small></span>
+                    <PmPrice tier="growth" founding={founding} />
                   </th>
                   <th scope="col">
                     <span className="pm-name">Scale</span>
-                    <span className="pm-price">$149<small>/mo</small></span>
+                    <PmPrice tier="scale" founding={founding} />
                   </th>
                 </tr>
               </thead>
@@ -378,7 +514,7 @@ export default async function LandingPage({
             </details>
             <details>
               <summary>How do I get started on cloud?</summary>
-              <div className="a">Sign up and start your 7-day free trial on Starter - you enter a card at checkout, nothing is charged until the trial ends, and you can cancel in one click before then. The setup wizard walks you through connecting your site, about ten minutes end to end. Need more sites right away? Pick Growth or Scale at checkout (billed today), or upgrade anytime.</div>
+              <div className="a">Sign up and start your 7-day free trial on Starter - you enter a card at checkout, nothing is charged until the trial ends, and you can cancel in one click before then. The setup wizard walks you through connecting your site, about ten minutes end to end. Need more sites right away? Pick Growth or Scale at checkout (billed today), or upgrade anytime.{founding ? <> Right now the first {founding.cap} sites get the founding price: {founding.discountPct}% off, locked for life, so Starter is {foundingPriceLabel("starter")}/mo instead of {listPriceLabel("starter")}. It ends {founding.endsAtLabel}.</> : null}</div>
             </details>
           </div>
         </div>
