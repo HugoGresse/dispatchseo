@@ -11,6 +11,8 @@ import {
 } from "@/lib/metrics";
 import {
   BigStatTile,
+  CardList,
+  DataCard,
   EmptyState,
   PageHeader,
   SectionTitle,
@@ -35,6 +37,41 @@ type PageRow = PublishedPage & {
 
 function shortDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+// Same Google status ladder the desktop table renders inline (kept there
+// untouched) - pulled out here only so the mobile card's `right` slot isn't a
+// three-way conditional inlined in JSX.
+function googleStatusBadge(p: PageRow, impressions: number) {
+  if (impressions > 0 || p.indexed_at) {
+    return (
+      <span
+        className="text-emerald-400"
+        title={
+          impressions > 0
+            ? "Showing in Google search results"
+            : `Confirmed indexed by the URL Inspection API ${shortDate(p.indexed_at!)}`
+        }
+      >
+        Indexed
+      </span>
+    );
+  }
+  if (p.index_requested_at) {
+    return (
+      <span
+        className="text-sky-400"
+        title={`Indexing requested in Search Console ${shortDate(p.index_requested_at)} - Google usually follows within a day or two`}
+      >
+        Requested
+      </span>
+    );
+  }
+  return (
+    <span className="text-amber-300" title="Run the Get-it-on-Google card on Home to request indexing">
+      Not requested
+    </span>
+  );
 }
 
 export default async function ToolsPage() {
@@ -117,24 +154,19 @@ export default async function ToolsPage() {
           and the merged page lands here automatically.
         </EmptyState>
       ) : (
-        <TableShell>
-          <THead>
-            <Th>Tool</Th>
-            <Th className="hidden lg:table-cell">Target keyword</Th>
-            <Th>Google</Th>
-            <Th className="hidden sm:table-cell">Bing</Th>
-            <Th className="hidden text-right md:table-cell">Clicks</Th>
-            <Th className="hidden text-right md:table-cell">Impressions</Th>
-            <Th>Published</Th>
-          </THead>
-          <tbody>
+        <>
+          {/* Below sm: stacked cards. Bing gets no column here - every merged
+              page is auto-pinged via IndexNow, so it's a constant, not a
+              per-page signal worth the card space. */}
+          <CardList>
             {pages.map((p) => {
               const t = traffic.get(normalizePageUrl(p.url));
               const impressions = t?.impressions ?? 0;
               const clicks = t?.clicks ?? 0;
               return (
-                <Tr key={p.id}>
-                  <Td>
+                <DataCard
+                  key={p.id}
+                  title={
                     <a
                       href={p.url}
                       target="_blank"
@@ -142,62 +174,99 @@ export default async function ToolsPage() {
                     >
                       {p.title ?? p.url}
                     </a>
-                    <span className="ml-2 text-xs text-neutral-500 lg:hidden">{p.primary_keyword}</span>
-                  </Td>
-                  <Td className="hidden text-neutral-300 lg:table-cell">{p.primary_keyword}</Td>
-                  {/* Google: impressions prove indexing, and so does a URL
-                      Inspection PASS (indexed_at, stamped by the hourly cron);
-                      otherwise all we know is whether indexing was requested. */}
-                  <Td className="whitespace-nowrap">
-                    {impressions > 0 || p.indexed_at ? (
-                      <span
-                        className="text-emerald-400"
-                        title={
-                          impressions > 0
-                            ? "Showing in Google search results"
-                            : `Confirmed indexed by the URL Inspection API ${shortDate(p.indexed_at!)}`
-                        }
-                      >
-                        Indexed
-                      </span>
-                    ) : p.index_requested_at ? (
-                      <span
-                        className="text-sky-400"
-                        title={`Indexing requested in Search Console ${shortDate(p.index_requested_at)} - Google usually follows within a day or two`}
-                      >
-                        Requested
-                      </span>
-                    ) : (
-                      <span
-                        className="text-amber-300"
-                        title="Run the Get-it-on-Google card on Home to request indexing"
-                      >
-                        Not requested
-                      </span>
-                    )}
-                  </Td>
-                  {/* Bing: every merged page is pinged via IndexNow automatically,
-                      so "requested" is a given; Bing shares no per-page metrics. */}
-                  <Td className="hidden whitespace-nowrap sm:table-cell">
-                    <span
-                      className="text-neutral-400"
-                      title="IndexNow pinged Bing and Yandex automatically when this page merged"
-                    >
-                      Pinged (auto)
-                    </span>
-                  </Td>
-                  <Td className="hidden whitespace-nowrap text-right tabular-nums md:table-cell">
-                    {clicks.toLocaleString()}
-                  </Td>
-                  <Td className="hidden whitespace-nowrap text-right tabular-nums text-neutral-300 md:table-cell">
-                    {impressions.toLocaleString()}
-                  </Td>
-                  <Td className="whitespace-nowrap text-neutral-400">{shortDate(p.created_at)}</Td>
-                </Tr>
+                  }
+                  meta={`${p.primary_keyword} · ${shortDate(p.created_at)}`}
+                  right={googleStatusBadge(p, impressions)}
+                  stats={[
+                    { label: "Clicks", value: clicks.toLocaleString() },
+                    { label: "Impressions", value: impressions.toLocaleString() },
+                  ]}
+                />
               );
             })}
-          </tbody>
-        </TableShell>
+          </CardList>
+          <TableShell className="hidden sm:block">
+            <THead>
+              <Th>Tool</Th>
+              <Th className="hidden lg:table-cell">Target keyword</Th>
+              <Th>Google</Th>
+              <Th className="hidden sm:table-cell">Bing</Th>
+              <Th className="hidden text-right md:table-cell">Clicks</Th>
+              <Th className="hidden text-right md:table-cell">Impressions</Th>
+              <Th>Published</Th>
+            </THead>
+            <tbody>
+              {pages.map((p) => {
+                const t = traffic.get(normalizePageUrl(p.url));
+                const impressions = t?.impressions ?? 0;
+                const clicks = t?.clicks ?? 0;
+                return (
+                  <Tr key={p.id}>
+                    <Td>
+                      <a
+                        href={p.url}
+                        target="_blank"
+                        className="text-sky-400 underline underline-offset-2 hover:text-sky-300"
+                      >
+                        {p.title ?? p.url}
+                      </a>
+                      <span className="ml-2 text-xs text-neutral-500 lg:hidden">{p.primary_keyword}</span>
+                    </Td>
+                    <Td className="hidden text-neutral-300 lg:table-cell">{p.primary_keyword}</Td>
+                    {/* Google: impressions prove indexing, and so does a URL
+                        Inspection PASS (indexed_at, stamped by the hourly cron);
+                        otherwise all we know is whether indexing was requested. */}
+                    <Td className="whitespace-nowrap">
+                      {impressions > 0 || p.indexed_at ? (
+                        <span
+                          className="text-emerald-400"
+                          title={
+                            impressions > 0
+                              ? "Showing in Google search results"
+                              : `Confirmed indexed by the URL Inspection API ${shortDate(p.indexed_at!)}`
+                          }
+                        >
+                          Indexed
+                        </span>
+                      ) : p.index_requested_at ? (
+                        <span
+                          className="text-sky-400"
+                          title={`Indexing requested in Search Console ${shortDate(p.index_requested_at)} - Google usually follows within a day or two`}
+                        >
+                          Requested
+                        </span>
+                      ) : (
+                        <span
+                          className="text-amber-300"
+                          title="Run the Get-it-on-Google card on Home to request indexing"
+                        >
+                          Not requested
+                        </span>
+                      )}
+                    </Td>
+                    {/* Bing: every merged page is pinged via IndexNow automatically,
+                        so "requested" is a given; Bing shares no per-page metrics. */}
+                    <Td className="hidden whitespace-nowrap sm:table-cell">
+                      <span
+                        className="text-neutral-400"
+                        title="IndexNow pinged Bing and Yandex automatically when this page merged"
+                      >
+                        Pinged (auto)
+                      </span>
+                    </Td>
+                    <Td className="hidden whitespace-nowrap text-right tabular-nums md:table-cell">
+                      {clicks.toLocaleString()}
+                    </Td>
+                    <Td className="hidden whitespace-nowrap text-right tabular-nums text-neutral-300 md:table-cell">
+                      {impressions.toLocaleString()}
+                    </Td>
+                    <Td className="whitespace-nowrap text-neutral-400">{shortDate(p.created_at)}</Td>
+                  </Tr>
+                );
+              })}
+            </tbody>
+          </TableShell>
+        </>
       )}
 
       {done.length > 0 ? (

@@ -20,6 +20,11 @@
   --up: #4ade80;
   --disp: var(--font-jakarta), system-ui, sans-serif;
   --body: var(--font-dm), system-ui, sans-serif;
+  /* Nav height and gutter are variables so the mobile overrides below can
+     retune the whole rhythm from one place. Desktop values are unchanged. */
+  --nav-h: 68px;
+  --pad: 24px;
+  --navpad: 32px;
 
   font-family: var(--body);
   color: var(--txt);
@@ -33,7 +38,8 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld h1, .ld h2, .ld h3 { font-family: var(--disp); line-height: 1.12; letter-spacing: -0.02em; color: #fff; }
 .ld a { color: inherit; }
 .ld ::selection { background: var(--vio); color: #fff; }
-.ld .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+.ld .wrap { max-width: 1120px; margin: 0 auto; padding: 0 var(--pad); }
+.ld .ld-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .ld section { padding: 96px 0; scroll-margin-top: 90px; }
 .ld #waitlist { scroll-margin-top: 96px; }
 
@@ -46,8 +52,8 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld nav { position: sticky; top: 0; z-index: 50; background: rgba(10, 10, 11, 0.82); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
 /* Wider than .wrap on purpose: pushes the logo and the CTA cluster toward
    the screen edges so the centered links get room to breathe. */
-.ld .nav-wrap { max-width: 1400px; margin: 0 auto; padding: 0 32px; }
-.ld .nav-in { display: flex; align-items: center; height: 68px; position: relative; }
+.ld .nav-wrap { max-width: 1400px; margin: 0 auto; padding: 0 var(--navpad); }
+.ld .nav-in { display: flex; align-items: center; height: var(--nav-h); position: relative; }
 .ld .logo { font-family: var(--disp); font-weight: 800; font-size: 19px; color: #fff; text-decoration: none; display: flex; align-items: center; gap: 10px; }
 .ld .logo-mark { height: 28px; width: auto; display: block; }
 .ld .nav-links { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; gap: 40px; }
@@ -64,11 +70,46 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .btn-ghost:hover { background: var(--card2); }
 .ld .btn-sm { padding: 8px 16px; font-size: 14px; border-radius: 8px; }
 
+/* ---------- mobile nav: burger + slide-down sheet ---------- */
+/* Hidden entirely on desktop; the sheet itself is portalled to the .ld root
+   (nav's backdrop-filter would otherwise trap position: fixed inside the bar). */
+.ld .nav-burger { display: none; margin-left: auto; width: 44px; height: 44px; margin-right: -10px; place-items: center; background: transparent; border: 0; color: var(--txt); cursor: pointer; }
+.ld .nav-burger:focus-visible { outline: 2px solid var(--vio2); outline-offset: -4px; border-radius: 10px; }
+.ld .burger-box { display: block; position: relative; width: 22px; height: 14px; }
+.ld .burger-box i { position: absolute; left: 0; width: 100%; height: 2px; border-radius: 2px; background: currentColor; transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.14s linear, width 0.22s ease; }
+.ld .burger-box i:nth-child(1) { top: 0; }
+.ld .burger-box i:nth-child(2) { top: 6px; width: 16px; }
+.ld .burger-box i:nth-child(3) { top: 12px; }
+.ld .nav-burger.is-open .burger-box i:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+.ld .nav-burger.is-open .burger-box i:nth-child(2) { opacity: 0; }
+.ld .nav-burger.is-open .burger-box i:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+
+.ld .nav-scrim { position: fixed; left: 0; right: 0; bottom: 0; top: var(--nav-h); z-index: 44; background: rgba(6, 6, 8, 0.62); backdrop-filter: blur(2px); animation: nav-fade-in 0.18s ease both; }
+.ld .nav-panel { position: fixed; left: 0; right: 0; top: var(--nav-h); z-index: 45; max-height: calc(100dvh - var(--nav-h)); overflow-y: auto; overscroll-behavior: contain; background: var(--bg2); border-bottom: 1px solid var(--line2); box-shadow: 0 26px 50px -22px rgba(0, 0, 0, 0.9); padding: 8px var(--navpad) 22px; animation: nav-slide-in 0.24s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.ld .nav-panel:focus { outline: none; }
+.ld .nav-panel-links { display: flex; flex-direction: column; }
+.ld .nav-panel-links a { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 12px 2px; font-family: var(--disp); font-size: 21px; font-weight: 700; letter-spacing: -0.02em; color: #fff; text-decoration: none; border-bottom: 1px solid var(--line); transition: color 0.12s; }
+.ld .nav-panel-links a:last-child { border-bottom: 0; }
+.ld .nav-panel-links a:active { color: var(--vio2); }
+.ld .nav-panel-links a:focus-visible { outline: 2px solid var(--vio2); outline-offset: 2px; border-radius: 8px; }
+.ld .nav-panel-links svg { width: 15px; height: 15px; color: var(--dim); flex-shrink: 0; }
+.ld .nav-panel-cta { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+.ld .nav-panel-cta .btn { width: 100%; min-height: 50px; font-size: 16px; }
+@keyframes nav-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes nav-slide-in { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .ld .nav-scrim, .ld .nav-panel { animation: none; }
+  .ld .burger-box i { transition: none; }
+}
+
 /* ---------- hero ---------- */
 /* Fills the first viewport. Top padding is sized so the description paragraph
    sits at the vertical center of the window (50vh minus the 68px nav, the
    title block, and half the paragraph). */
-.ld .hero { min-height: calc(100vh - 68px); display: flex; flex-direction: column; justify-content: flex-start; padding: max(28px, calc(50vh - 470px)) 0 60px; text-align: center; position: relative; }
+/* svh, not vh: on iOS/Android the dynamic browser chrome makes 100vh taller
+   than what you can actually see, which pushed the CTA below the fold on
+   first paint. vh stays as the fallback for anything without svh support. */
+.ld .hero { min-height: calc(100vh - var(--nav-h)); min-height: calc(100svh - var(--nav-h)); display: flex; flex-direction: column; justify-content: flex-start; padding: max(28px, calc(50vh - 470px)) 0 60px; text-align: center; position: relative; }
 
 /* pixel dispatcher scene above the title */
 .ld .pixel-stage { width: min(460px, 92vw); margin: 0 auto 18px; }
@@ -228,6 +269,35 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .ca-pill { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: var(--mut); background: var(--card); border: 1px solid var(--line2); border-radius: 8px; padding: 8px 14px; }
 .ld .ca-pill svg { width: 16px; height: 16px; color: var(--vio2); flex-shrink: 0; }
 
+/* ---------- pricing: mobile compare scoreboard (<=980px) ---------- */
+/* Desktop shows three full plan columns; a phone would show sixty near-identical
+   rows, so below 981px the plans collapse to the four things that actually
+   differ plus one shared list. Hidden here, switched on in the media query. */
+.ld .plans-m { display: none; }
+.ld .pm-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+.ld .pm-table th, .ld .pm-table td { padding: 10px 6px; text-align: center; vertical-align: middle; border-bottom: 1px solid var(--line); }
+.ld .pm-table thead th { padding: 16px 6px 14px; border-bottom: 1px solid var(--line2); vertical-align: bottom; }
+.ld .pm-table tfoot td { border-bottom: 0; padding: 16px 5px 0; }
+.ld .pm-name { display: block; font-family: var(--disp); font-size: 13px; font-weight: 700; color: var(--mut); letter-spacing: 0.01em; }
+.ld .pm-price { display: block; font-family: var(--disp); font-size: clamp(22px, 6.4vw, 30px); font-weight: 800; letter-spacing: -0.03em; color: #fff; margin-top: 2px; }
+.ld .pm-price small { font-family: var(--body); font-size: 11px; font-weight: 600; color: var(--dim); letter-spacing: 0; }
+/* Flat marker for the recommended column - a violet cap on the column plus
+   small caps, deliberately not a floating pill. */
+.ld .pm-flag { display: block; font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--vio2); margin-bottom: 5px; }
+.ld .pm-table .pm-pick { background: rgba(139, 92, 246, 0.07); }
+.ld .pm-table thead .pm-pick { box-shadow: inset 0 3px 0 var(--vio); border-radius: 4px 4px 0 0; }
+.ld .pm-table tfoot .pm-pick { background: transparent; }
+.ld .pm-table tbody td { font-size: 12.5px; line-height: 1.35; color: var(--mut); }
+.ld .pm-table tbody td b { display: block; font-family: var(--disp); font-size: 17px; font-weight: 800; color: var(--txt); letter-spacing: -0.02em; }
+.ld .pm-table tbody .pm-off { color: var(--line3); font-size: 15px; }
+.ld .pm-table tfoot .btn { width: 100%; padding: 11px 4px; min-height: 46px; font-size: 13.5px; border-radius: 9px; }
+.ld .pm-table tfoot td:not(.pm-pick) .btn { background: transparent; color: var(--txt); border-color: var(--line3); }
+.ld .pm-all { margin-top: 30px; border-top: 1px solid var(--line); padding-top: 22px; }
+.ld .pm-all h3 { font-size: 11.5px; font-weight: 700; letter-spacing: 0.11em; text-transform: uppercase; color: var(--dim); margin-bottom: 14px; }
+.ld .pm-all ul { list-style: none; column-gap: 20px; }
+.ld .pm-all li { break-inside: avoid; font-size: 13.5px; line-height: 1.4; color: var(--mut); padding: 5px 0 5px 20px; position: relative; }
+.ld .pm-all li::before { content: "✓"; position: absolute; left: 0; top: 5px; font-size: 13px; font-weight: 700; color: var(--vio2); }
+
 /* ---------- faq ---------- */
 .ld .faq-list { max-width: 760px; margin: 0 auto; }
 .ld details { border: 1px solid var(--line); border-radius: 12px; background: var(--card); margin-bottom: 12px; overflow: hidden; }
@@ -264,23 +334,141 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .foot-made a { transition: color 0.12s; }
 .ld .foot-made a:hover { color: var(--vio2); }
 
-/* ---------- responsive ---------- */
+/* ---------- responsive ----------
+   Everything below 981px is the mobile/tablet design; >=981px is untouched.
+   Three tiers: <=980 (tablet + phone), <=600 (phone), <=380 (small phone). */
 @media (max-width: 980px) {
+  .ld { --nav-h: 58px; --pad: 22px; --navpad: 22px; }
+  .ld section { padding: 76px 0; scroll-margin-top: calc(var(--nav-h) + 12px); }
+  .ld section#features { padding-top: 88px; }
   .ld .steps { grid-template-columns: repeat(2, 1fr); }
-  .ld .plans { grid-template-columns: repeat(2, 1fr); }
   .ld .who { grid-template-columns: 1fr; }
   .ld .oss-in { grid-template-columns: 1fr; gap: 44px; }
   .ld .nav-links { display: none; }
+  .ld .nav-cta { display: none; }
+  .ld .nav-burger { display: grid; }
   .ld .doodle { display: none; }
+  .ld .br-desk { display: none; }
+
+  /* hero: sized off the visible viewport, headline free to reflow */
+  .ld .hero { justify-content: center; padding: 24px 0 56px; }
+  .ld .hero h1 { font-size: clamp(30px, 7vw, 54px); margin-bottom: 18px; text-wrap: balance; }
+  .ld .hero .sub { font-size: clamp(16px, 3.4vw, 20px); line-height: 1.4; margin-bottom: 28px; }
+  .ld .pixel-stage { width: min(380px, 84vw); margin-bottom: 14px; }
+  .ld .domain-cta { width: min(340px, 100%); gap: 10px; }
+  .ld .domain-cta .btn { padding: 14px 18px; min-height: 50px; font-size: 16px; }
+  .ld .domain-group { padding: 5px 5px 5px 14px; }
+  .ld .domain-group input { padding: 12px 8px; font-size: 16px; }
+
+  /* section headers */
+  .ld .sec-h { margin-bottom: 44px; }
+  .ld .sec-h h2 { font-size: clamp(26px, 5.4vw, 40px); margin-bottom: 14px; }
+  .ld .sec-h p { font-size: 16px; }
+
+  /* how it works: number chip moves inline with the title so each card is a
+     compact three-line block instead of a tall stack */
+  .ld .step { display: grid; grid-template-columns: 32px 1fr; column-gap: 13px; padding: 22px 20px; border-radius: 14px; }
+  .ld .step .num { width: 32px; height: 32px; font-size: 14px; margin-bottom: 0; }
+  .ld .step h3 { grid-column: 2; align-self: center; margin-bottom: 0; font-size: 18px; }
+  .ld .step p { grid-column: 2; margin-top: 8px; }
+
+  /* who */
+  .ld .who { margin-top: 40px; gap: 16px; }
+  .ld .who-card { padding: 30px 24px 32px; border-radius: 18px; }
+  .ld .who-doodle { width: 54px; height: 54px; margin-bottom: 20px; }
+  .ld .who-card h3 { font-size: 21px; margin-bottom: 10px; }
+  .ld .who-card p { font-size: 15.5px; }
+
+  /* showcase: arrows come onto the frame, dots get a real touch target */
+  .ld .show-head { margin-bottom: 24px; }
+  .ld .show-title { font-size: clamp(22px, 5.6vw, 34px); white-space: normal; }
+  .ld .show-cap { font-size: 14px; }
+  .ld .show-stage { display: block; position: relative; }
+  /* the violet glow bleeds 6% past the frame; with no desktop margins left to
+     absorb it that was the page's last horizontal scroll */
+  .ld .show-frame-wrap::before { inset: -8% 0; }
+  .ld .show-arrow { position: absolute; top: 50%; transform: translateY(-50%); z-index: 3; width: 40px; height: 40px; opacity: 1; background: rgba(10, 10, 12, 0.62); backdrop-filter: blur(6px); border-color: rgba(255, 255, 255, 0.18); color: #fff; }
+  .ld .show-arrow svg { width: 20px; height: 20px; }
+  .ld .show-arrow-prev { left: 8px; }
+  .ld .show-arrow-next { right: 8px; }
+  /* dots carry the position: 44px-tall targets, and the active one stretches
+     into a short bar so "where am I in nine" is readable at a glance */
+  .ld .show-dots { gap: 0; margin-top: 14px; }
+  .ld .show-dot { width: 30px; height: 44px; background: transparent; display: grid; place-items: center; }
+  .ld .show-dot i { display: block; width: 7px; height: 7px; border-radius: 999px; background: var(--line3); transition: width 0.2s ease, background 0.2s ease; }
+  .ld .show-dot.active { background: transparent; transform: none; }
+  .ld .show-dot.active i { width: 20px; background: var(--vio); }
+  .ld .show-dot:focus-visible { outline-offset: -4px; border-radius: 10px; }
+  @media (prefers-reduced-motion: reduce) { .ld .show-dot i { transition: none; } }
+  .ld .show-chrome { padding: 10px 13px; }
+  .ld .show-chrome i { width: 8px; height: 8px; }
+
+  /* pricing: swap the three-column desktop grid for the compare scoreboard */
+  .ld .plans { display: none; }
+  .ld .plans-m { display: block; }
+  .ld .plan li { white-space: normal; }
+  /* the three pills repeat rows that live in "On every plan" below */
+  .ld .cloud-adds { display: none; }
+
+  /* faq */
+  .ld summary { padding: 17px 18px; font-size: 15.5px; gap: 12px; }
+  .ld details .a { padding: 0 18px 20px; font-size: 15px; }
+
+  /* final cta */
+  .ld .final h2 { font-size: clamp(27px, 6.2vw, 44px); text-wrap: balance; }
+  .ld .final p { font-size: 16px; margin-bottom: 28px; }
+  .ld .final .btn { width: min(340px, 100%); min-height: 50px; font-size: 16px; }
+
+  /* footer: brand gets its own full-width row, links pair off below it */
+  .ld footer { padding: 56px 0 32px; }
+  .ld .foot-grid { grid-template-columns: 1fr 1fr; gap: 34px 20px; margin-bottom: 36px; }
+  .ld .foot-brand { grid-column: 1 / -1; }
+  .ld .foot-brand p { max-width: 420px; }
+  .ld .foot-col h4 { margin-bottom: 10px; }
+  .ld .foot-col a { padding: 11px 0; }
+  /* the third link column would otherwise sit alone on row two with an empty
+     cell beside it - span it and split its own links instead */
+  .ld .foot-grid > .foot-col:last-child { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; column-gap: 20px; }
+  .ld .foot-grid > .foot-col:last-child h4 { grid-column: 1 / -1; }
+  .ld .foot-bottom { flex-direction: column; align-items: flex-start; gap: 12px; padding-top: 22px; }
+
+  /* touch targets */
+  .ld .btn-sm { min-height: 44px; padding: 10px 16px; }
+  .ld .btn { min-height: 44px; }
 }
+
+@media (min-width: 420px) and (max-width: 980px) {
+  .ld .pm-all ul { column-count: 2; }
+}
+
 @media (max-width: 600px) {
-  .ld section { padding: 64px 0; }
-  .ld section#features { padding-top: 80px; }
-  .ld .hero { justify-content: center; padding: 32px 0 64px; }
-  .ld .steps, .ld .plans { grid-template-columns: 1fr; }
-  .ld .foot-grid { grid-template-columns: 1fr 1fr; }
+  .ld { --pad: 20px; --navpad: 20px; }
+  .ld section { padding: 58px 0; }
+  .ld section#features { padding-top: 66px; }
+  .ld .sec-h { margin-bottom: 34px; }
+  .ld .steps { grid-template-columns: 1fr; gap: 12px; }
+  .ld .who { margin-top: 32px; }
+  /* On a phone the frame is too narrow to spend on arrow overlays - swipe and
+     the dot rail take over. Tablets keep them; there the frame is wide enough
+     that a 40px button at the edge covers nothing that matters. */
+  .ld .show-arrow { display: none; }
+  /* Same reasoning for the frame itself: the native 2.2:1 is a ~120px sliver
+     on a phone. A 16:10 crop off the top-centre trades ~27% of the width for a
+     1.4x bigger, legible screenshot. Tablets are wide enough to skip it. */
+  .ld .show-stack { aspect-ratio: 16 / 10; }
+  .ld .show-slide img { object-position: center top; }
   .ld .email-group { flex-direction: column; gap: 8px; border-radius: 14px; }
   .ld .email-group input[type="email"] { padding: 10px 14px; }
+  .ld .foot-grid { gap: 30px 16px; }
+}
+
+@media (max-width: 380px) {
+  .ld { --pad: 16px; --navpad: 16px; }
+  .ld .logo { font-size: 17px; gap: 8px; }
+  .ld .logo-mark { height: 24px; }
+  .ld .pm-table th, .ld .pm-table td { padding: 9px 3px; }
+  .ld .pm-table tfoot .btn { font-size: 12.5px; padding: 10px 2px; }
+  .ld .who-card { padding: 26px 20px 28px; }
 }
 
 /* ---------- floating "why us" mascot explainer ---------- */
@@ -345,7 +533,33 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .why-cta svg { width: 15px; height: 15px; transition: transform 0.14s ease; }
 .ld .why-cta:hover svg { transform: translateX(2px); }
 
-@media (max-width: 600px) {
+/* Mobile: the anchored popover becomes a bottom sheet. Anchoring it to a
+   fixed tab meant `bottom: calc(100% + 16px)` could run off the top of a short
+   phone viewport, and a 342px card nearly fills the screen anyway - so on a
+   phone it behaves like what it already is, a full-width sheet. The resting
+   tab shrinks and, per the JS, only appears between the hero and final CTA. */
+@media (max-width: 980px) {
   .ld .why-fab { right: 14px; bottom: 14px; }
-  .ld .why-tab-title { font-size: 14px; }
+  /* stays invisible until the client has read the media query, so it can
+     never flash over the hero on first paint */
+  .ld .why-fab:not(.is-armed) { opacity: 0; pointer-events: none; }
+  .ld .why-fab.is-open .why-tab { display: none; }
+
+  .ld .why-tab { gap: 9px; padding: 9px 12px 9px 11px; border-radius: 14px 14px 4px 14px; }
+  .ld .why-tab-face { width: 26px; }
+  .ld .why-tab-eyebrow { display: none; }
+  .ld .why-tab-title { font-size: 13px; }
+  .ld .why-tab-chev { width: 14px; height: 14px; }
+
+  .ld .why-scrim { position: fixed; inset: 0; background: rgba(6, 6, 8, 0.7); backdrop-filter: blur(3px); animation: why-scrim-in 0.2s ease both; }
+  .ld .why-pop { position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: auto; max-height: 86dvh; overflow-y: auto; overscroll-behavior: contain; border-radius: 22px 22px 0 0; border-left: 0; border-right: 0; border-bottom: 0; transform-origin: bottom center; animation: why-sheet-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; padding-bottom: env(safe-area-inset-bottom); }
+  .ld .why-stage { max-width: 320px; margin: 0 auto; }
+  .ld .why-x { width: 36px; height: 36px; }
+  .ld .why-body { padding: 18px 20px 24px; }
+  .ld .why-cta { padding: 13px 18px; font-size: 15px; }
+}
+@keyframes why-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes why-sheet-in { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .ld .why-scrim, .ld .why-pop { animation: none; }
 }

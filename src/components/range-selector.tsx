@@ -21,13 +21,21 @@ export function RangeSelector({
   className?: string; // track background - darker when the selector sits on a card
 }) {
   return (
-    <div className={`flex rounded-lg p-0.5 text-xs ${className}`} role="group" aria-label={label}>
+    // overflow-x-auto is a fallback, not the primary layout: at 390px the
+    // four pills already fit the track, but a caller embedding this in a
+    // narrower card (or a longer options list later) scrolls instead of
+    // squeezing labels unreadable.
+    <div
+      className={`flex overflow-x-auto rounded-lg p-0.5 text-xs ${className}`}
+      role="group"
+      aria-label={label}
+    >
       {options.map((r) => (
         <button
           key={r.key}
           onClick={() => onChange(r.key)}
           aria-pressed={active === r.key}
-          className={`rounded-md px-2.5 py-1 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 ${
+          className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 ${
             active === r.key
               ? "bg-neutral-800 text-neutral-100"
               : "text-neutral-400 hover:text-neutral-200"

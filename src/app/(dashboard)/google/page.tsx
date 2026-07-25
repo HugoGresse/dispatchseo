@@ -115,7 +115,7 @@ export default async function GooglePage({
         </div>
       ) : (
         <>
-          <div className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900/50 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-800 bg-neutral-900/50 p-5">
             <p className="text-sm text-emerald-300">
               Connected. DispatchSEO can read Search Console data for the properties below.
             </p>
@@ -138,17 +138,23 @@ export default async function GooglePage({
                 </SectionTitle>
                 <ul className="space-y-1.5 text-sm text-neutral-300">
                   {sites.map((s) => (
-                    <li key={s.siteUrl} className="flex items-center gap-2 font-mono text-xs">
-                      {s.siteUrl}{" "}
-                      <span className="text-neutral-500">({s.permissionLevel})</span>
+                    // Property URLs are unbounded and the row has three more
+                    // fixed-width siblings - min-w-0 + break-all so a long
+                    // one wraps in place instead of blowing out the row.
+                    <li
+                      key={s.siteUrl}
+                      className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs"
+                    >
+                      <span className="min-w-0 break-all">{s.siteUrl}</span>{" "}
+                      <span className="shrink-0 text-neutral-500">({s.permissionLevel})</span>
                       {s.siteUrl === project.gsc_site_url ? (
-                        <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-sans text-emerald-300">
+                        <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-sans text-emerald-300">
                           tracked
                         </span>
                       ) : (
-                        <form action={useProperty}>
+                        <form action={useProperty} className="shrink-0">
                           <input type="hidden" name="siteUrl" value={s.siteUrl} />
-                          <button className="rounded border border-neutral-700 px-1.5 py-0.5 text-[11px] font-sans text-neutral-300 hover:border-neutral-500">
+                          <button className="rounded border border-neutral-700 px-2 py-1 text-xs font-sans text-neutral-300 hover:border-neutral-500 sm:px-1.5 sm:py-0.5 sm:text-[11px]">
                             use this property
                           </button>
                         </form>
@@ -167,26 +173,31 @@ export default async function GooglePage({
                     {sample.totals.clicks.toLocaleString()} clicks ·{" "}
                     {sample.totals.impressions.toLocaleString()} impressions
                   </p>
-                  <table className="w-full text-left text-sm">
-                    <thead className="text-xs text-neutral-500">
-                      <tr>
-                        <th className="py-1 pr-4 font-normal">Query</th>
-                        <th className="py-1 pr-4 font-normal">Clicks</th>
-                        <th className="py-1 pr-4 font-normal">Impressions</th>
-                        <th className="py-1 font-normal">Position</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-neutral-300">
-                      {sample.topQueries.map((q) => (
-                        <tr key={q.query} className="border-t border-neutral-800/60">
-                          <td className="py-1.5 pr-4">{q.query}</td>
-                          <td className="py-1.5 pr-4">{q.clicks}</td>
-                          <td className="py-1.5 pr-4">{q.impressions}</td>
-                          <td className="py-1.5">{q.position}</td>
+                  {/* Query text is unbounded (a real search phrase) - a
+                      horizontal scroll fallback so a long one can't force
+                      the page wider on a 390px screen. */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="text-xs text-neutral-500">
+                        <tr>
+                          <th className="py-1 pr-4 font-normal">Query</th>
+                          <th className="py-1 pr-4 font-normal">Clicks</th>
+                          <th className="py-1 pr-4 font-normal">Impressions</th>
+                          <th className="py-1 font-normal">Position</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="text-neutral-300">
+                        {sample.topQueries.map((q) => (
+                          <tr key={q.query} className="border-t border-neutral-800/60">
+                            <td className="py-1.5 pr-4">{q.query}</td>
+                            <td className="py-1.5 pr-4">{q.clicks}</td>
+                            <td className="py-1.5 pr-4">{q.impressions}</td>
+                            <td className="py-1.5">{q.position}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               ) : null}
             </>

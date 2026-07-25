@@ -148,26 +148,31 @@ export function KeywordSourceSettings({
         {current === "gsc" ? (
           <span className="text-xs text-emerald-400">active</span>
         ) : confirmGsc ? (
-          <span className="flex items-center gap-2">
+          // Warning text + two buttons, unwrapped, was wider than a 390px
+          // row on its own - flex-wrap lets the text take its own line while
+          // the buttons stay paired together on theirs.
+          <span className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-neutral-400">
               Rank checks drop to Search Console data only - switch?
             </span>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => startTransition(() => chooseGscOnly())}
-              className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-neutral-950 transition-colors hover:bg-emerald-400 disabled:opacity-50"
-            >
-              {pending ? "Switching..." : "Yes, GSC only"}
-            </button>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => setConfirmGsc(false)}
-              className={ghostBtn}
-            >
-              Cancel
-            </button>
+            <span className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => startTransition(() => chooseGscOnly())}
+                className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-neutral-950 transition-colors hover:bg-emerald-400 disabled:opacity-50"
+              >
+                {pending ? "Switching..." : "Yes, GSC only"}
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => setConfirmGsc(false)}
+                className={ghostBtn}
+              >
+                Cancel
+              </button>
+            </span>
           </span>
         ) : (
           <button

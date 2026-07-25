@@ -92,6 +92,38 @@
   }
 }
 
+/* Mobile nav drawer: the panel slides in from the left, the scrim fades. On
+   a phone the 14-link sidebar can't be pinned, so it lives behind the topbar
+   hamburger instead of the horizontal scroller it replaced. */
+@keyframes dispatch-slide-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.dispatch-slide-in {
+  animation: dispatch-slide-in 0.2s ease-out;
+}
+@keyframes dispatch-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.dispatch-fade-in {
+  animation: dispatch-fade-in 0.2s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dispatch-slide-in,
+  .dispatch-fade-in {
+    animation: none;
+  }
+}
+
 /* Spinner for the switcher button (replaces the chevron while pending). */
 @keyframes dispatch-spin {
   to {

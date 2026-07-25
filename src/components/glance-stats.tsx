@@ -73,7 +73,11 @@ export function GlanceSection({
 
   return (
     <section className="space-y-3">
-      <div className="flex justify-end">
+      {/* overflow-x-auto: 5 range pills at once are right at the edge of a
+          390px screen (font rendering varies enough that they can clip) -
+          scroll the strip itself rather than clip the last one or blow out
+          the page. */}
+      <div className="flex justify-end overflow-x-auto">
         <RangeSelector
           options={ranges}
           active={active.key}
@@ -81,36 +85,48 @@ export function GlanceSection({
         />
       </div>
       <StatRow>
-        <BigStatTile
-          title="Clicks"
-          value={clicks}
-          pill={<DeltaPill delta={clicksDelta} title={deltaTitle} />}
-          sub={gscSub}
-        />
-        <BigStatTile
-          title="Impressions"
-          value={impressions}
-          pill={<DeltaPill delta={imprsDelta} title={deltaTitle} />}
-          sub={gscSub}
-        />
-        <BigStatTile
-          title={
-            <Link href="/keywords" className="hover:underline hover:underline-offset-4">
-              Keywords tracked
-            </Link>
-          }
-          value={keywordsTracked}
-          sub={<NextUpdate live />}
-        />
-        <BigStatTile
-          title={
-            <Link href="/pages" className="hover:underline hover:underline-offset-4">
-              Guides published
-            </Link>
-          }
-          value={guidesPublished}
-          sub={<NextUpdate live />}
-        />
+        {/* min-w-0 on every tile: same grid-blowout risk as the already-fixed
+            PlaybookColumn - a big tabular-nums count (e.g. 128,470 clicks) is
+            one unbroken run of characters, so without this the grid track
+            grows to fit it instead of letting the number sit in its column. */}
+        <div className="min-w-0">
+          <BigStatTile
+            title="Clicks"
+            value={clicks}
+            pill={<DeltaPill delta={clicksDelta} title={deltaTitle} />}
+            sub={gscSub}
+          />
+        </div>
+        <div className="min-w-0">
+          <BigStatTile
+            title="Impressions"
+            value={impressions}
+            pill={<DeltaPill delta={imprsDelta} title={deltaTitle} />}
+            sub={gscSub}
+          />
+        </div>
+        <div className="min-w-0">
+          <BigStatTile
+            title={
+              <Link href="/keywords" className="hover:underline hover:underline-offset-4">
+                Keywords tracked
+              </Link>
+            }
+            value={keywordsTracked}
+            sub={<NextUpdate live />}
+          />
+        </div>
+        <div className="min-w-0">
+          <BigStatTile
+            title={
+              <Link href="/pages" className="hover:underline hover:underline-offset-4">
+                Guides published
+              </Link>
+            }
+            value={guidesPublished}
+            sub={<NextUpdate live />}
+          />
+        </div>
       </StatRow>
     </section>
   );

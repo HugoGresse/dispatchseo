@@ -210,7 +210,7 @@ export function HouseRulesEditor({ prefs: saved }: { prefs: ContentPrefs }) {
             type="button"
             onClick={save}
             disabled={pending}
-            className="rounded-lg bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-900 transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="rounded-lg bg-neutral-100 px-3 py-2 text-xs font-medium text-neutral-900 transition-opacity hover:opacity-90 disabled:opacity-50 sm:py-1.5"
           >
             {pending ? "Saving…" : "Save house rules"}
           </button>

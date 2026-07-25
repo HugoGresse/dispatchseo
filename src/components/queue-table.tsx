@@ -15,6 +15,7 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { reorderQueue } from "@/app/actions";
 import { QueueApproveButton, QueueBuildNowButton, QueueRemoveButton } from "@/components/client";
+import { CardList, DataCard } from "@/components/ui";
 
 export type QueueRow = {
   id: string;
@@ -212,7 +213,65 @@ export function DraggableQueue({
 
   return (
     <div>
-      <div className="overflow-x-auto rounded-xl bg-neutral-900">
+      {/* Card fallback for <sm: the grid's seven fixed-width tracks (grip, #,
+          keyword, vol, KD, status, actions) leave the keyword column ~70px
+          wide, wrapping a real title to four lines - unlike a plain table,
+          minmax(0,1fr) shrinks that track instead of the row scrolling. Cards
+          render the same `shown` order; reordering itself stays sm+ only
+          (drag needs pointer precision a touch card list can't give), but
+          the order still displays correctly and Approve/Build now/Remove all
+          still work. */}
+      <CardList>
+        {shown.map((id, index) => {
+          const r = byId.get(id);
+          if (!r) return null;
+          const movable = r.status === "approved";
+          return (
+            <DataCard
+              key={r.id}
+              title={kind === "guide" ? (r.primary_keyword ?? r.title) : r.title}
+              meta={kind === "guide" ? `#${index + 1} in the build queue` : r.primary_keyword}
+              right={<StatusLabel status={r.status} autoApproved={autoApproved} />}
+              stats={
+                kind === "guide"
+                  ? [
+                      { label: "Volume", value: r.keyword_volume ?? "-" },
+                      { label: "Difficulty", value: r.keyword_difficulty ?? "-" },
+                    ]
+                  : [
+                      {
+                        label: "Vol / KD",
+                        value: `${r.keyword_volume ?? "-"}/${r.keyword_difficulty ?? "-"}`,
+                      },
+                    ]
+              }
+            >
+              {/* A build already running can't be unpicked - mirrors the grid's actions cell. */}
+              {r.status !== "in_progress" ? (
+                <div className="mt-3 flex items-center justify-end gap-1.5">
+                  {r.status === "pending" ? (
+                    <QueueApproveButton id={r.id} auto={autoApproved} />
+                  ) : null}
+                  {kind === "tool" && movable ? <QueueBuildNowButton id={r.id} /> : null}
+                  <QueueRemoveButton
+                    id={r.id}
+                    onRemoved={() => setGone((prev) => new Set(prev).add(r.id))}
+                    onRestored={() =>
+                      setGone((prev) => {
+                        const next = new Set(prev);
+                        next.delete(r.id);
+                        return next;
+                      })
+                    }
+                  />
+                </div>
+              ) : null}
+            </DataCard>
+          );
+        })}
+      </CardList>
+
+      <div className="hidden overflow-x-auto rounded-xl bg-neutral-900 sm:block">
         <div className={`grid w-full text-left text-sm ${template} ${drag ? "select-none" : ""}`}>
           {/* micro-header, same voice as THead */}
           <div className="col-span-full grid grid-cols-subgrid text-xs font-medium text-neutral-500">

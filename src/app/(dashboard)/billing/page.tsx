@@ -53,7 +53,7 @@ export default async function BillingPage({
       />
 
       {success ? (
-        <div className="flex items-center justify-between gap-4 rounded-lg border border-emerald-900 bg-emerald-950/40 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-emerald-900 bg-emerald-950/40 px-4 py-3">
           <p className="text-sm text-emerald-300">
             Payment received - your plan is active. Welcome aboard.
           </p>

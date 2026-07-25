@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { SLIDES } from "@/lib/showcase-slides";
 
 const AUTOPLAY_MS = 3000;
+// Past this the gesture is a deliberate horizontal swipe, not a wobbly scroll.
+const SWIPE_PX = 44;
 
 function ChevronIcon({ direction }: { direction: "left" | "right" }) {
   const d = direction === "left" ? "m15 6-6 6 6 6" : "m9 6 6 6-6 6";
@@ -47,6 +49,28 @@ export function FeatureShowcase() {
   const goPrev = () => setActive((i) => (i - 1 + SLIDES.length) % SLIDES.length);
   const goNext = () => setActive((i) => (i + 1) % SLIDES.length);
 
+  // Touch swipe: on phones the arrows move onto the frame and shrink, so the
+  // gesture is the primary control. Vertical intent wins ties so a swipe past
+  // the reel never hijacks page scroll.
+  const touch = useRef<{ x: number; y: number } | null>(null);
+  function onTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    touch.current = { x: t.clientX, y: t.clientY };
+    setPaused(true);
+  }
+  function onTouchEnd(e: React.TouchEvent) {
+    const start = touch.current;
+    touch.current = null;
+    setPaused(false);
+    if (!start) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (Math.abs(dx) < SWIPE_PX || Math.abs(dx) < Math.abs(dy)) return;
+    if (dx < 0) goNext();
+    else goPrev();
+  }
+
   return (
     <div
       className="showcase"
@@ -58,8 +82,16 @@ export function FeatureShowcase() {
         <p className="show-cap">{slide.caption}</p>
       </div>
 
-      <div className="show-stage">
-        <button type="button" className="show-arrow" aria-label="Previous slide" onClick={goPrev}>
+      <div
+        className="show-stage"
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={() => {
+          touch.current = null;
+          setPaused(false);
+        }}
+      >
+        <button type="button" className="show-arrow show-arrow-prev" aria-label="Previous slide" onClick={goPrev}>
           <ChevronIcon direction="left" />
         </button>
         <BrowserFrame>
@@ -77,7 +109,7 @@ export function FeatureShowcase() {
             ))}
           </div>
         </BrowserFrame>
-        <button type="button" className="show-arrow" aria-label="Next slide" onClick={goNext}>
+        <button type="button" className="show-arrow show-arrow-next" aria-label="Next slide" onClick={goNext}>
           <ChevronIcon direction="right" />
         </button>
       </div>
@@ -91,7 +123,9 @@ export function FeatureShowcase() {
             aria-label={s.title}
             aria-current={active === i}
             onClick={() => setActive(i)}
-          />
+          >
+            <i aria-hidden="true" />
+          </button>
         ))}
       </div>
     </div>

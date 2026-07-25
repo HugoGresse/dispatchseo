@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { DispatchMark } from "@/components/logo";
 import { FeatureShowcase } from "./feature-showcase";
 import { DomainCta } from "./domain-cta";
+import { LandingNav } from "./landing-nav";
 import { PixelDispatcher } from "@/components/pixel-dispatcher";
 import { WhyCard } from "@/components/why-card";
 import { dashboardAuth, maybeSignedIn } from "@/lib/auth-gate";
@@ -66,6 +67,7 @@ export default async function LandingPage({
             <a className="btn btn-ghost btn-sm" href="/login">Log in</a>
             <a className="btn btn-solid btn-sm" href="/signup">Start for free</a>
           </div>
+          <LandingNav githubUrl={GITHUB_URL} docsUrl={DOCS_URL} />
         </div>
       </nav>
 
@@ -77,7 +79,9 @@ export default async function LandingPage({
 
         <div className="wrap">
           <PixelDispatcher />
-          <h1>Automate your SEO<br />with <span className="hl">Claude Code</span></h1>
+          {/* .br-desk: the composed two-line break is a desktop luxury - phones
+              drop it so the headline reflows to whatever fits. */}
+          <h1>Automate your SEO<br className="br-desk" /> with <span className="hl">Claude Code</span></h1>
           <p className="sub">The agent that built your product now runs your SEO: keyword research, guides, interactive tools, rank tracking - all automatic.</p>
 
           <div className="cta-row" id="get-started">
@@ -97,7 +101,7 @@ export default async function LandingPage({
       <section id="how">
         <div className="wrap">
           <div className="sec-h">
-            <h2>Connect it once,<br />then watch it work</h2>
+            <h2>Connect it once,<br className="br-desk" /> then watch it work</h2>
             <p>One pipeline, four steps. The agent thinks, the backend remembers, you decide.</p>
           </div>
           <div className="steps">
@@ -254,6 +258,90 @@ export default async function LandingPage({
               <a className="btn btn-solid" href="/signup">Choose Scale</a>
             </div>
           </div>
+
+          {/* Mobile pricing (<=980px). The three plans differ in exactly four
+              things, so a phone gets a compare scoreboard plus one shared
+              feature list instead of three near-identical twenty-row columns.
+              Nothing is dropped: every feature above appears either as a
+              compare row or in "On every plan". The .plans grid above is the
+              desktop presentation and is hidden here. */}
+          <div className="plans-m">
+            <table className="pm-table">
+              <caption className="ld-sr">Compare plans</caption>
+              <thead>
+                <tr>
+                  <th scope="col">
+                    <span className="pm-name">Starter</span>
+                    <span className="pm-price">$49<small>/mo</small></span>
+                  </th>
+                  <th scope="col" className="pm-pick">
+                    <span className="pm-flag">Most popular</span>
+                    <span className="pm-name">Growth</span>
+                    <span className="pm-price">$99<small>/mo</small></span>
+                  </th>
+                  <th scope="col">
+                    <span className="pm-name">Scale</span>
+                    <span className="pm-price">$149<small>/mo</small></span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><b>1</b> site</td>
+                  <td className="pm-pick"><b>3</b> sites</td>
+                  <td><b>10</b> sites</td>
+                </tr>
+                <tr>
+                  <td><b>100</b> keywords</td>
+                  <td className="pm-pick"><b>300</b> keywords</td>
+                  <td><b>1,000</b> keywords</td>
+                </tr>
+                <tr>
+                  <td className="pm-off">
+                    <span aria-hidden="true">&mdash;</span>
+                    <span className="ld-sr">No weekly digest</span>
+                  </td>
+                  <td className="pm-pick">Weekly digest</td>
+                  <td>Weekly digest</td>
+                </tr>
+                <tr>
+                  <td>Email support</td>
+                  <td className="pm-pick">Email support</td>
+                  <td>Priority support</td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td><a className="btn btn-solid" href="/signup">Start free</a></td>
+                  <td className="pm-pick"><a className="btn btn-solid" href="/signup">Choose</a></td>
+                  <td><a className="btn btn-solid" href="/signup">Choose</a></td>
+                </tr>
+              </tfoot>
+            </table>
+
+            <div className="pm-all">
+              <h3>On every plan</h3>
+              <ul>
+                <li>Unlimited articles</li>
+                <li>Unlimited AI-built tools</li>
+                <li>SERP + search volume data</li>
+                <li>Daily rank tracking</li>
+                <li>AI Overview tracking</li>
+                <li>One-click Search Console</li>
+                <li>Hourly Search Console sync</li>
+                <li>Index status monitoring</li>
+                <li>Domain rating tracking</li>
+                <li>Backlink prospecting</li>
+                <li>Trending topic scans</li>
+                <li>Content quality checks</li>
+                <li>Approve or full-auto mode</li>
+                <li>Everything ships as PRs</li>
+                <li>Drive it from Claude Code</li>
+                <li>Managed schedules</li>
+                <li>Failure alerts by email</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -301,7 +389,7 @@ export default async function LandingPage({
         <svg className="doodle doodle-f1" viewBox="0 0 48 56" aria-hidden="true"><path d="M10 7 L30 7 L38 15 L38 49 L10 49 Z M30 7 L30 15 L38 15 M17 27 L31 27 M17 35 L27 35" /></svg>
         <svg className="doodle doodle-f2" viewBox="0 0 64 64" aria-hidden="true"><path d="M8 52 L24 38 L34 46 L56 20 M56 20 L45 22 M56 20 L55 32" /></svg>
         <div className="wrap">
-          <h2>Give your agent the keys.<br />Keep the lock.<span className="caret" /></h2>
+          <h2>Give your agent the keys.<br className="br-desk" /> Keep the lock.<span className="caret" /></h2>
           <p>Starter starts with a 7-day free trial. Setup takes about ten minutes.</p>
           <div className="cta-row">
             <a className="btn btn-solid" href="/signup">Start your free trial</a>

@@ -46,12 +46,15 @@ export function AutomationToggle({
   }
 
   return (
+    // before:-inset-2 pads the tap target out to ~36x52px on touch without
+    // changing the switch's visible size - the pill alone reads under the
+    // ~32px minimum for a row's primary action.
     <button
       type="button"
       role="switch"
       aria-checked={on}
       onClick={flip}
-      className={`flex h-5 w-9 shrink-0 items-center rounded-full px-0.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 ${
+      className={`relative flex h-5 w-9 shrink-0 items-center rounded-full px-0.5 transition-colors before:absolute before:-inset-2 before:content-[''] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 ${
         on ? "bg-emerald-500/80" : "bg-neutral-700"
       }`}
     >

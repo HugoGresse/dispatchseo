@@ -187,12 +187,15 @@ function SecondaryStrip() {
       {SECONDARY.map((row, i) => (
         <div
           key={row.workflow}
-          className={`flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 ${
+          // Below sm the name gets its own line - a fixed w-44 name column
+          // next to the step chain left almost no room for it on a 390px
+          // row, so the chain rendered as little more than an ellipsis.
+          className={`flex flex-col gap-1 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-1 ${
             i > 0 ? "border-t border-neutral-800/70" : ""
           }`}
         >
-          <p className="w-44 shrink-0 text-sm font-medium text-neutral-100">{row.name}</p>
-          <p className="min-w-0 flex-1 truncate text-xs text-neutral-400">
+          <p className="text-sm font-medium text-neutral-100 sm:w-44 sm:shrink-0">{row.name}</p>
+          <p className="min-w-0 truncate text-xs text-neutral-400 sm:flex-1">
             {WORKFLOW_STEPS[row.workflow].map((s) => s.title).join(" → ")}
           </p>
           <p className="text-xs text-neutral-600">{row.schedule}</p>

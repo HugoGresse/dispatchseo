@@ -99,10 +99,26 @@ const POINTS: Array<{ icon: ReactNode; lead: string; body: string }> = [
 export function WhyCard() {
   const [open, setOpen] = useState(false);
   const [nearFooter, setNearFooter] = useState(false);
+  const [overCta, setOverCta] = useState(true);
+  // null until the media query has been read on the client: the mobile CSS
+  // keeps the tab invisible until then, so it never flashes over the hero.
+  const [compact, setCompact] = useState<boolean | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const prevOpen = useRef(false);
+
+  // Phones and tablets get the sheet treatment: a smaller resting tab, a
+  // bottom sheet instead of an anchored popover (which could overflow the top
+  // of a short viewport), and the whole thing steps aside while either CTA
+  // block owns the screen. Desktop keeps the anchored note exactly as-is.
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 980px)");
+    const sync = () => setCompact(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   // Escape + click-outside to dismiss.
   useEffect(() => {
@@ -140,14 +156,50 @@ export function WhyCard() {
     return () => io.disconnect();
   }, []);
 
+  // On a phone the tab sits right where the hero and final CTA buttons are, so
+  // it only surfaces between them - the aside is for undecided scrollers, not
+  // for people already looking at a "start" button.
   useEffect(() => {
-    if (nearFooter) setOpen(false);
-  }, [nearFooter]);
+    const targets = document.querySelectorAll(".ld .hero, .ld .final");
+    if (!targets.length) return;
+    const seen = new Set<Element>();
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) seen.add(e.target);
+        else seen.delete(e.target);
+      }
+      setOverCta(seen.size > 0);
+    });
+    targets.forEach((t) => io.observe(t));
+    return () => io.disconnect();
+  }, []);
+
+  const hidden = nearFooter || (compact === true && overCta);
+
+  useEffect(() => {
+    if (hidden) setOpen(false);
+  }, [hidden]);
+
+  // The sheet owns the screen while it's up, so the page behind it holds still.
+  useEffect(() => {
+    if (!open || !compact) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open, compact]);
 
   return (
-    <div ref={rootRef} className={`why-fab${nearFooter ? " is-hidden" : ""}`}>
+    <div
+      ref={rootRef}
+      className={`why-fab${compact === null ? "" : " is-armed"}${hidden ? " is-hidden" : ""}${open ? " is-open" : ""}`}
+    >
+      {open && compact && (
+        <div className="why-scrim" onClick={() => setOpen(false)} aria-hidden="true" />
+      )}
       {open && (
-        <div className="why-pop" role="dialog" aria-modal="false" aria-label="Why DispatchSEO?">
+        <div className="why-pop" role="dialog" aria-modal={compact === true} aria-label="Why DispatchSEO?">
           <button ref={closeRef} type="button" className="why-x" onClick={() => setOpen(false)} aria-label="Close">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M18 6 6 18M6 6l12 12" />

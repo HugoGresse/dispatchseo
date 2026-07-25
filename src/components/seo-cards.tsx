@@ -259,8 +259,12 @@ export function TrafficByPage({
       {/* Bucket strip: where the clicks come from, reconciling to the site
           total. Numbers only - no share bar, no per-bucket colors. */}
       <div className="rounded-xl bg-neutral-900 p-4 sm:p-5">
+        {/* One column below sm - a busy site's click count is a big
+            tabular-nums number with no spaces to wrap on, so a squeezed 2-up
+            grid at 390px let it bleed past its box. A full-width row never
+            needs to shrink a number to fit. */}
         <div
-          className={`grid grid-cols-2 gap-4 ${
+          className={`grid grid-cols-1 gap-4 ${
             showUnattributed ? "sm:grid-cols-5" : "sm:grid-cols-4"
           }`}
         >

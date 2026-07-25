@@ -55,7 +55,10 @@ export default async function AiVisibilitySection({ project }: { project: Projec
               block is already the one clickable card. */}
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
             {sortEngines(visibility.engines).map((e) => (
-              <div key={e.engine}>
+              // min-w-0: this is a 2-up grid at the base breakpoint (unlike
+              // most sections here, which stack to 1 column below sm) - same
+              // grid-blowout risk as the already-fixed PlaybookColumn.
+              <div key={e.engine} className="min-w-0">
                 <p className="text-xs text-neutral-400">{e.label}</p>
                 <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">
                   <EngineValue e={e} />

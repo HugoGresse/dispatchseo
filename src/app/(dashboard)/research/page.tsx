@@ -8,6 +8,8 @@ import { AddIdeaCard, RestoreButton } from "@/components/client";
 import { DraggableQueue, type QueueRow } from "@/components/queue-table";
 import {
   BigStatTile,
+  CardList,
+  DataCard,
   EmptyState,
   Mono,
   PageHeader,
@@ -177,7 +179,49 @@ export default async function ResearchPage() {
           <SectionTitle sub="everything already decided - shipped to the site or rejected">
             History
           </SectionTitle>
-          <TableShell>
+
+          {/* Six columns (keyword, type, vol/kd, published, outcome, restore)
+              don't fit 390px without crushing the keyword text - cards below
+              sm, the unchanged table at sm and up. */}
+          <CardList>
+            {history.map((s) => (
+              <DataCard
+                key={s.id}
+                title={s.primary_keyword ?? s.title}
+                meta={s.type}
+                right={
+                  s.status === "done" && s.result_pr_url ? (
+                    <a
+                      href={s.result_pr_url}
+                      className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300"
+                    >
+                      shipped
+                    </a>
+                  ) : s.status === "done" ? (
+                    <span className="text-emerald-400">shipped</span>
+                  ) : (
+                    <span className="text-neutral-500">rejected</span>
+                  )
+                }
+                stats={[
+                  {
+                    label: "Vol / KD",
+                    value: `${s.keyword_volume ?? "-"}/${s.keyword_difficulty ?? "-"}`,
+                  },
+                  { label: "Published", value: fmtHistoryDate(s) },
+                ]}
+              >
+                {/* Only rejections can change their mind - shipped is shipped. */}
+                {s.status === "rejected" ? (
+                  <div className="mt-3 flex justify-end">
+                    <RestoreButton id={s.id} />
+                  </div>
+                ) : null}
+              </DataCard>
+            ))}
+          </CardList>
+
+          <TableShell className="hidden sm:block">
             <THead>
               <Th>Keyword / idea</Th>
               <Th>Type</Th>

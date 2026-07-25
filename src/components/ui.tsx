@@ -187,9 +187,15 @@ export function Sparkline({
 
 // ---------- table grammar ----------
 
-export function TableShell({ children }: { children: React.ReactNode }) {
+export function TableShell({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <div className="overflow-x-auto rounded-xl bg-neutral-900">
+    <div className={`overflow-x-auto rounded-xl bg-neutral-900 ${className}`}>
       <table className="w-full text-left text-sm">{children}</table>
     </div>
   );
@@ -213,6 +219,61 @@ export function Tr({ children }: { children: React.ReactNode }) {
 
 export function Td({ children, className = "" }: { children?: React.ReactNode; className?: string }) {
   return <td className={`px-4 py-3 ${className}`}>{children}</td>;
+}
+
+// ---------- mobile card grammar ----------
+// A six-column table has nowhere to go on a 390px screen: either the last
+// columns fall off the right edge with no hint they exist, or the primary
+// column crushes to six wrapped lines. So every dense table screen renders
+// twice - this stacked card list below `sm`, the real table above it:
+//
+//   <CardList>{rows.map(r => <DataCard ... />)}</CardList>
+//   <TableShell className="hidden sm:block"> ...unchanged... </TableShell>
+//
+// Duplicated row markup is the price; the payoff is that desktop stays
+// pixel-identical and each surface gets the shape that actually suits it.
+
+export function CardList({ children }: { children: React.ReactNode }) {
+  return <div className="space-y-2 sm:hidden">{children}</div>;
+}
+
+// One record as a card: a title that wraps freely (the whole point), a quiet
+// meta line, an optional right-aligned status/action, and a stat strip.
+export function DataCard({
+  title,
+  meta,
+  right,
+  stats,
+  children,
+}: {
+  title: React.ReactNode;
+  meta?: React.ReactNode;
+  right?: React.ReactNode;
+  stats?: Array<{ label: string; value: React.ReactNode }>;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl bg-neutral-900 p-3.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium text-neutral-100">{title}</div>
+          {meta ? <div className="mt-1 text-xs text-neutral-500">{meta}</div> : null}
+        </div>
+        {right ? <div className="shrink-0 text-xs">{right}</div> : null}
+      </div>
+      {stats && stats.length > 0 ? (
+        <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-2 border-t border-neutral-800/70 pt-3">
+          {stats.map((s) => (
+            <div key={s.label}>
+              <dt className="text-[11px] uppercase tracking-wide text-neutral-600">{s.label}</dt>
+              <dd className="mt-0.5 text-sm tabular-nums text-neutral-200">{s.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      {children}
+    </div>
+  );
 }
 
 // ---------- GSC chart ----------

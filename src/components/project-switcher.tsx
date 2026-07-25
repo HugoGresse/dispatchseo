@@ -95,7 +95,7 @@ export function ProjectSwitcher({
           <div className="dispatch-sweep h-full w-1/3 rounded-r-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]" />
         </div>
       ) : null}
-      <div ref={ref} className="relative flex items-center gap-1.5">
+      <div ref={ref} className="relative flex min-w-0 items-center gap-1.5">
       {/* Separator after the brand - the brand only renders in the topbar on
           mobile (desktop shows it in the sidebar), so hide the slash on md+. */}
       <span aria-hidden="true" className="text-neutral-700 md:hidden">
@@ -106,15 +106,17 @@ export function ProjectSwitcher({
         aria-haspopup="menu"
         aria-expanded={open}
         disabled={pending}
-        className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-neutral-400 transition-colors hover:bg-neutral-900 hover:text-neutral-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 disabled:opacity-50"
+        className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1.5 text-xs text-neutral-400 transition-colors hover:bg-neutral-900 hover:text-neutral-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 disabled:opacity-50"
       >
         {active ? <Favicon domain={active.domain} name={active.name} size="sm" /> : null}
-        {active?.domain ?? "select project"}
+        {/* The domain is the one flexible thing in the mobile topbar - it
+            truncates so a long one can't push the mode switch off-screen. */}
+        <span className="truncate">{active?.domain ?? "select project"}</span>
         {pending ? (
           <svg
             aria-hidden="true"
             viewBox="0 0 16 16"
-            className="dispatch-spin h-3 w-3 text-emerald-400"
+            className="dispatch-spin h-3 w-3 shrink-0 text-emerald-400"
             fill="none"
             stroke="currentColor"
             strokeWidth="1.5"
@@ -125,7 +127,7 @@ export function ProjectSwitcher({
           <svg
             aria-hidden="true"
             viewBox="0 0 16 16"
-            className={`h-3 w-3 text-neutral-600 transition-transform ${open ? "rotate-180" : ""}`}
+            className={`h-3 w-3 shrink-0 text-neutral-600 transition-transform ${open ? "rotate-180" : ""}`}
             fill="none"
             stroke="currentColor"
             strokeWidth="1.5"

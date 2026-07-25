@@ -12,6 +12,8 @@ import {
 import { isLive, refreshPageLiveness } from "@/lib/page-liveness";
 import {
   BigStatTile,
+  CardList,
+  DataCard,
   EmptyState,
   Mono,
   PageHeader,
@@ -40,6 +42,51 @@ type PageRow = PublishedPage & {
 
 function shortDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+// Same Google status ladder the desktop table renders inline (kept there
+// untouched) - pulled out here only so the mobile card's `right` slot isn't a
+// four-way conditional inlined in JSX.
+function googleStatusBadge(p: PageRow, live: boolean, impressions: number) {
+  if (!live) {
+    return (
+      <span
+        className="text-amber-300"
+        title="The PR hasn't merged (or the deploy hasn't finished) - this URL doesn't serve yet. It flips to live automatically once it does."
+      >
+        Awaiting publish
+      </span>
+    );
+  }
+  if (impressions > 0 || p.indexed_at) {
+    return (
+      <span
+        className="text-emerald-400"
+        title={
+          impressions > 0
+            ? "Showing in Google search results"
+            : `Confirmed indexed by the URL Inspection API ${shortDate(p.indexed_at!)}`
+        }
+      >
+        Indexed
+      </span>
+    );
+  }
+  if (p.index_requested_at) {
+    return (
+      <span
+        className="text-sky-400"
+        title={`Indexing requested in Search Console ${shortDate(p.index_requested_at)} - Google usually follows within a day or two`}
+      >
+        Requested
+      </span>
+    );
+  }
+  return (
+    <span className="text-amber-300" title="Run the Get-it-on-Google card on Home to request indexing">
+      Not requested
+    </span>
+  );
 }
 
 export default async function PagesPage() {
@@ -141,27 +188,22 @@ export default async function PagesPage() {
           merged page lands here automatically.
         </EmptyState>
       ) : (
-        <TableShell>
-          <THead>
-            <Th>Guide</Th>
-            <Th className="hidden lg:table-cell">Target keyword</Th>
-            <Th>Google</Th>
-            <Th className="hidden sm:table-cell">Bing</Th>
-            <Th className="hidden text-right md:table-cell">Clicks</Th>
-            <Th className="hidden text-right md:table-cell">Impressions</Th>
-            <Th>Published</Th>
-          </THead>
-          <tbody>
+        <>
+          {/* Below sm: stacked cards. Bing gets no column here - every merged
+              page is auto-pinged via IndexNow, so it's a constant, not a
+              per-page signal worth the card space. */}
+          <CardList>
             {pages.map((p) => {
               const t = traffic.get(normalizePageUrl(p.url));
               const impressions = t?.impressions ?? 0;
               const clicks = t?.clicks ?? 0;
               const live = isRowLive(p);
               return (
-                <Tr key={p.id}>
-                  <Td>
-                    {/* A pending page's URL doesn't serve yet - send the
-                        owner to the PR (the thing that actually exists). */}
+                <DataCard
+                  key={p.id}
+                  title={
+                    // A pending page's URL doesn't serve yet - send the owner
+                    // to the PR (the thing that actually exists).
                     <a
                       href={live ? p.url : (p.pr_url ?? p.url)}
                       target="_blank"
@@ -169,81 +211,135 @@ export default async function PagesPage() {
                     >
                       {p.title ?? p.url}
                     </a>
-                    <span className="ml-2 text-xs text-neutral-500 lg:hidden">{p.primary_keyword}</span>
-                  </Td>
-                  <Td className="hidden text-neutral-300 lg:table-cell">{p.primary_keyword}</Td>
-                  {/* Google: impressions prove indexing, and so does a URL
-                      Inspection PASS (indexed_at, stamped by the hourly cron);
-                      otherwise all we know is whether indexing was requested. */}
-                  <Td className="whitespace-nowrap">
-                    {!live ? (
-                      <span
-                        className="text-amber-300"
-                        title="The PR hasn't merged (or the deploy hasn't finished) - this URL doesn't serve yet. It flips to live automatically once it does."
-                      >
-                        Awaiting publish
-                      </span>
-                    ) : impressions > 0 || p.indexed_at ? (
-                      <span
-                        className="text-emerald-400"
-                        title={
-                          impressions > 0
-                            ? "Showing in Google search results"
-                            : `Confirmed indexed by the URL Inspection API ${shortDate(p.indexed_at!)}`
-                        }
-                      >
-                        Indexed
-                      </span>
-                    ) : p.index_requested_at ? (
-                      <span
-                        className="text-sky-400"
-                        title={`Indexing requested in Search Console ${shortDate(p.index_requested_at)} - Google usually follows within a day or two`}
-                      >
-                        Requested
-                      </span>
-                    ) : (
-                      <span
-                        className="text-amber-300"
-                        title="Run the Get-it-on-Google card on Home to request indexing"
-                      >
-                        Not requested
-                      </span>
-                    )}
-                  </Td>
-                  {/* Bing: every merged page is pinged via IndexNow automatically,
-                      so "requested" is a given; Bing shares no per-page metrics. */}
-                  <Td className="hidden whitespace-nowrap sm:table-cell">
-                    {live ? (
-                      <span
-                        className="text-neutral-400"
-                        title="IndexNow pinged Bing and Yandex automatically when this page merged"
-                      >
-                        Pinged (auto)
-                      </span>
-                    ) : (
-                      <span className="text-neutral-500">—</span>
-                    )}
-                  </Td>
-                  <Td className="hidden whitespace-nowrap text-right tabular-nums md:table-cell">
-                    {clicks.toLocaleString()}
-                  </Td>
-                  <Td className="hidden whitespace-nowrap text-right tabular-nums text-neutral-300 md:table-cell">
-                    {impressions.toLocaleString()}
-                  </Td>
-                  <Td className="whitespace-nowrap text-neutral-400">
-                    {live ? (
-                      shortDate(p.created_at)
-                    ) : (
-                      <span className="text-amber-300/80" title="Logged when its PR opened - publishes when the PR merges">
-                        PR open
-                      </span>
-                    )}
-                  </Td>
-                </Tr>
+                  }
+                  meta={
+                    <>
+                      {p.primary_keyword} ·{" "}
+                      {live ? (
+                        shortDate(p.created_at)
+                      ) : (
+                        <span
+                          className="text-amber-300/80"
+                          title="Logged when its PR opened - publishes when the PR merges"
+                        >
+                          PR open
+                        </span>
+                      )}
+                    </>
+                  }
+                  right={googleStatusBadge(p, live, impressions)}
+                  stats={[
+                    { label: "Clicks", value: clicks.toLocaleString() },
+                    { label: "Impressions", value: impressions.toLocaleString() },
+                  ]}
+                />
               );
             })}
-          </tbody>
-        </TableShell>
+          </CardList>
+          <TableShell className="hidden sm:block">
+            <THead>
+              <Th>Guide</Th>
+              <Th className="hidden lg:table-cell">Target keyword</Th>
+              <Th>Google</Th>
+              <Th className="hidden sm:table-cell">Bing</Th>
+              <Th className="hidden text-right md:table-cell">Clicks</Th>
+              <Th className="hidden text-right md:table-cell">Impressions</Th>
+              <Th>Published</Th>
+            </THead>
+            <tbody>
+              {pages.map((p) => {
+                const t = traffic.get(normalizePageUrl(p.url));
+                const impressions = t?.impressions ?? 0;
+                const clicks = t?.clicks ?? 0;
+                const live = isRowLive(p);
+                return (
+                  <Tr key={p.id}>
+                    <Td>
+                      {/* A pending page's URL doesn't serve yet - send the
+                          owner to the PR (the thing that actually exists). */}
+                      <a
+                        href={live ? p.url : (p.pr_url ?? p.url)}
+                        target="_blank"
+                        className="text-sky-400 underline underline-offset-2 hover:text-sky-300"
+                      >
+                        {p.title ?? p.url}
+                      </a>
+                      <span className="ml-2 text-xs text-neutral-500 lg:hidden">{p.primary_keyword}</span>
+                    </Td>
+                    <Td className="hidden text-neutral-300 lg:table-cell">{p.primary_keyword}</Td>
+                    {/* Google: impressions prove indexing, and so does a URL
+                        Inspection PASS (indexed_at, stamped by the hourly cron);
+                        otherwise all we know is whether indexing was requested. */}
+                    <Td className="whitespace-nowrap">
+                      {!live ? (
+                        <span
+                          className="text-amber-300"
+                          title="The PR hasn't merged (or the deploy hasn't finished) - this URL doesn't serve yet. It flips to live automatically once it does."
+                        >
+                          Awaiting publish
+                        </span>
+                      ) : impressions > 0 || p.indexed_at ? (
+                        <span
+                          className="text-emerald-400"
+                          title={
+                            impressions > 0
+                              ? "Showing in Google search results"
+                              : `Confirmed indexed by the URL Inspection API ${shortDate(p.indexed_at!)}`
+                          }
+                        >
+                          Indexed
+                        </span>
+                      ) : p.index_requested_at ? (
+                        <span
+                          className="text-sky-400"
+                          title={`Indexing requested in Search Console ${shortDate(p.index_requested_at)} - Google usually follows within a day or two`}
+                        >
+                          Requested
+                        </span>
+                      ) : (
+                        <span
+                          className="text-amber-300"
+                          title="Run the Get-it-on-Google card on Home to request indexing"
+                        >
+                          Not requested
+                        </span>
+                      )}
+                    </Td>
+                    {/* Bing: every merged page is pinged via IndexNow automatically,
+                        so "requested" is a given; Bing shares no per-page metrics. */}
+                    <Td className="hidden whitespace-nowrap sm:table-cell">
+                      {live ? (
+                        <span
+                          className="text-neutral-400"
+                          title="IndexNow pinged Bing and Yandex automatically when this page merged"
+                        >
+                          Pinged (auto)
+                        </span>
+                      ) : (
+                        <span className="text-neutral-500">—</span>
+                      )}
+                    </Td>
+                    <Td className="hidden whitespace-nowrap text-right tabular-nums md:table-cell">
+                      {clicks.toLocaleString()}
+                    </Td>
+                    <Td className="hidden whitespace-nowrap text-right tabular-nums text-neutral-300 md:table-cell">
+                      {impressions.toLocaleString()}
+                    </Td>
+                    <Td className="whitespace-nowrap text-neutral-400">
+                      {live ? (
+                        shortDate(p.created_at)
+                      ) : (
+                        <span className="text-amber-300/80" title="Logged when its PR opened - publishes when the PR merges">
+                          PR open
+                        </span>
+                      )}
+                    </Td>
+                  </Tr>
+                );
+              })}
+            </tbody>
+          </TableShell>
+        </>
       )}
 
       {done.length > 0 ? (
