@@ -23,6 +23,12 @@ const PUBLIC_FILES = new Set([
   "/icon.png",
   "/apple-icon.png",
   "/opengraph-image.png",
+  // The brand mark, rendered by <DispatchMark> in the landing nav/footer and
+  // on every auth page - all of which are, by definition, viewed logged-out.
+  // Without this the gate 307s the <img> to /login and the logo renders as a
+  // broken-image placeholder for every anonymous visitor (it only looked fine
+  // in-browser because the developer had a session cookie).
+  "/dispatch-mark.png",
 ]);
 
 export function proxy(req: NextRequest) {
