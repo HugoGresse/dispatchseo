@@ -19,6 +19,7 @@ import {
   indexingQueue,
   type IndexingPageRow,
 } from "@/lib/indexing";
+import { CHANGELOG, LATEST } from "@/lib/changelog";
 import { browserCommand, resolveField } from "@/lib/playbook";
 import { FREE_BACKLINKS, PAID_BACKLINKS, PLAYBOOK_RESEARCHED } from "@/lib/playbook-data";
 import { loadConventions, saveConventions } from "@/lib/conventions";
@@ -1657,6 +1658,33 @@ const mcpHandler = createMcpHandler(
         const result = await mergePr(p, number);
         if (!result.ok) return fail(result.message);
         return ok(result);
+      },
+    );
+
+    // ---- product changelog -------------------------------------------------
+    // Parity with the dashboard's /changelog page: same list, same source
+    // (src/lib/changelog.ts), so an agent can answer "what changed in
+    // DispatchSEO lately?" without the owner opening the dashboard.
+    server.registerTool(
+      "get_changelog",
+      {
+        title: "Get changelog",
+        description:
+          "What shipped in DispatchSEO itself, newest first - the same release " +
+          "log the dashboard shows at /changelog. This is about the PRODUCT, not " +
+          "this project's site: for the site's own activity use get_activity. " +
+          "Pass limit to trim the list.",
+        inputSchema: {
+          limit: z.number().int().min(1).max(50).optional(),
+        },
+      },
+      async ({ limit }) => {
+        const entries = CHANGELOG.slice(0, limit ?? 10);
+        return ok({
+          latest_version: LATEST?.version ?? null,
+          dashboard_url: "/changelog",
+          entries,
+        });
       },
     );
 

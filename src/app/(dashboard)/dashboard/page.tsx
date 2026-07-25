@@ -111,7 +111,7 @@ function SetupStep({
 }) {
   return (
     <div className="space-y-2 rounded-xl bg-neutral-900 p-4 sm:p-5">
-      <div className="flex items-baseline justify-between gap-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
         <p className={`font-medium ${coming ? "text-neutral-400" : ""}`}>{title}</p>
         {coming ? <span className="text-xs text-neutral-500">coming</span> : null}
         {state ? (
@@ -189,7 +189,10 @@ function PlaybookColumn({
   allDone: string;
 }) {
   return (
-    <div className="space-y-2">
+    // min-w-0: without it this grid child sizes to the widest `truncate` line
+    // below (nowrap counts as min-content), which blew the whole page out to
+    // 2259px on a 390px screen.
+    <div className="min-w-0 space-y-2">
       <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">{heading}</p>
       {items.length === 0 ? (
         <p className="py-2 text-sm text-emerald-400">{allDone}</p>
@@ -321,11 +324,15 @@ export default async function Home() {
   // operator-owned global jobs entirely - a tenant can't act on those.
   // "Pipeline update available" reports split off into their own quiet
   // notice: an update waiting is the normal state after any backend deploy
-  // that ships a new pack, not a job failure worth a red banner.
+  // that ships a new pack, not a job failure worth a red banner. On cloud it
+  // isn't even news - the backend pushes the pack through the GitHub App on
+  // its own (see the deploy-check report handler), so there is nothing for the
+  // customer to know or do and the notice stays hidden entirely. Self-host has
+  // no App, so there it stays: applying the pack is the owner's job.
   const jobIssues = cronHealth
     .filter((h) => !isCloudMode() || h.job.includes(`--${project.slug}`))
     .filter((h) => !h.ok || h.stale);
-  const updateNotices = jobIssues.filter((h) => h.update_available);
+  const updateNotices = isCloudMode() ? [] : jobIssues.filter((h) => h.update_available);
   const cronIssues = jobIssues.filter((h) => !h.update_available);
 
   // One-line version of the same trouble for the AgentStatus pill - the
@@ -606,7 +613,7 @@ export default async function Home() {
             <ul className="mt-1 space-y-0.5 text-red-300/90">
               {cronIssues.map((h) => (
                 <li key={h.job}>
-                  <span className="font-mono">{h.job}</span>{" "}
+                  <span className="break-words font-mono">{h.job}</span>{" "}
                   {!h.ok
                     ? `failed on its last run${h.errors[0] ? ` - ${h.errors[0]}` : ""}`
                     : `hasn't run since ${new Date(h.last_run_at).toUTCString()}`}{" "}
@@ -633,42 +640,27 @@ export default async function Home() {
         {updateNotices.length > 0 ? (
           <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm">
             <p className="font-medium text-sky-200">Pipeline update available</p>
-            {isCloudMode() ? (
-              // Cloud hosts the pipeline: the backend pushes the pack update
-              // through the GitHub App automatically (see the deploy-check
-              // report handler). No customer action - just a heads-up that it's
-              // happening; the notice clears itself after the next check.
-              <p className="mt-1 text-sky-300/90">
-                The SEO workflows in{" "}
-                <span className="font-mono">{project.github_repo ?? "your site repo"}</span> are a
-                version behind - we&apos;re applying the update for you automatically through the
-                DispatchSEO GitHub App. Nothing to do; this clears after the next check.
+            <p className="mt-1 text-sky-300/90">
+              The SEO workflows in{" "}
+              <span className="break-words font-mono">{project.github_repo ?? "your site repo"}</span> are a
+              version behind this backend. Everything keeps publishing on the current version -
+              apply the update whenever convenient.
+              {updateNotices.map((h) => (
+                <span key={h.job} className="ml-2 whitespace-nowrap">
+                  <CronFixedButton job={h.job} label="mark applied" tone="sky" />
+                </span>
+              ))}
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <CopyButton
+                text={buildPipelineUpdatePrompt(project)}
+                label="Copy update prompt for Claude Code"
+              />
+              <p className="text-xs text-sky-300/70">
+                Paste it into Claude Code in the site repo - it applies the current pack, and this
+                notice clears after the next nightly check.
               </p>
-            ) : (
-              <>
-                <p className="mt-1 text-sky-300/90">
-                  The SEO workflows in{" "}
-                  <span className="font-mono">{project.github_repo ?? "your site repo"}</span> are a
-                  version behind this backend. Everything keeps publishing on the current version -
-                  apply the update whenever convenient.
-                  {updateNotices.map((h) => (
-                    <span key={h.job} className="ml-2 whitespace-nowrap">
-                      <CronFixedButton job={h.job} label="mark applied" tone="sky" />
-                    </span>
-                  ))}
-                </p>
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <CopyButton
-                    text={buildPipelineUpdatePrompt(project)}
-                    label="Copy update prompt for Claude Code"
-                  />
-                  <p className="text-xs text-sky-300/70">
-                    Paste it into Claude Code in the site repo - it applies the current pack, and
-                    this notice clears after the next nightly check.
-                  </p>
-                </div>
-              </>
-            )}
+            </div>
           </div>
         ) : null}
       </div>
@@ -1022,7 +1014,7 @@ export default async function Home() {
 
       {/* ---------- TREND RADAR (high on purpose - hype decays by the day) ---------- */}
       <section className="space-y-3">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
           <SectionTitle
             sub={
               <>
@@ -1319,7 +1311,7 @@ export default async function Home() {
 
       {/* ---------- BACKLINK PLAYBOOK ---------- */}
       <section className="space-y-3">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
           <SectionTitle sub={`${playbookDoneCount} of ${playbookItems.length} done`}>
             Backlink playbook
           </SectionTitle>

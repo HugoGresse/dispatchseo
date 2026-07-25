@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { DispatchMark } from "@/components/logo";
 
-// Vercel-style navigation: an icon sidebar on desktop (Sidebar), a horizontal
-// scroller on mobile (MobileNav), and the centered current-page title shown in
-// the topbar (PageTitle). All three share the same LINKS source of truth.
+// Vercel-style navigation: an icon sidebar on desktop (Sidebar), a slide-out
+// drawer behind a hamburger on mobile (MobileNav), and the centered
+// current-page title shown in the topbar (PageTitle). All three share the same
+// LINKS source of truth.
 
 type IconProps = { className?: string };
 
@@ -129,11 +131,38 @@ function SearchConsoleIcon({ className }: IconProps) {
   );
 }
 
+// A megaphone for the product changelog - announcements, not settings.
+function WhatsNewIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M3 11v2a1 1 0 0 0 1 1h2.5L13 18.5v-13L6.5 10H4a1 1 0 0 0-1 1Z" />
+      <path d="M17 9.5a3.5 3.5 0 0 1 0 5" />
+      <path d="M6.5 14v4a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-2.2" />
+    </svg>
+  );
+}
+
 function SettingsIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
       <circle cx="12" cy="12" r="3" />
       <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z" />
+    </svg>
+  );
+}
+
+function MenuIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M4 7h16M4 12h16M4 17h16" />
+    </svg>
+  );
+}
+
+function CloseIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18" />
     </svg>
   );
 }
@@ -188,6 +217,7 @@ const GROUPS: NavGroup[] = [
       { href: "/automations", label: "Automations", Icon: AutomationsIcon },
       { href: "/instructions", label: "Instructions", Icon: InstructionsIcon },
       { href: "/google", label: "Search Console", Icon: SearchConsoleIcon },
+      { href: "/changelog", label: "What's new", Icon: WhatsNewIcon },
     ],
   },
 ];
@@ -246,16 +276,8 @@ function SidebarLink({ link, pathname }: { link: NavLink; pathname: string }) {
 // the user out, and <Link> would PREFETCH it - logging them out on hover. A
 // full navigation is also what we want here (drops the client router cache
 // after sign-out). No active state - it's an action, not a page.
-function LogoutLink({ compact = false }: { compact?: boolean }) {
-  return compact ? (
-    <a
-      href="/logout"
-      className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm text-neutral-400 transition-colors hover:bg-neutral-900 hover:text-neutral-200"
-    >
-      <LogoutIcon className="h-4 w-4" />
-      Log out
-    </a>
-  ) : (
+function LogoutLink() {
+  return (
     <a
       href="/logout"
       className="flex items-center gap-3.5 rounded-lg px-3.5 py-2.5 text-[15px] text-neutral-400 transition-colors hover:bg-neutral-900 hover:text-neutral-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400"
@@ -309,32 +331,103 @@ export function Sidebar({ billing = false }: { billing?: boolean }) {
   );
 }
 
-// Small screens can't fit a fixed sidebar - fall back to a horizontal
-// scroller under the topbar with the same links and icons.
+// Small screens can't fit a fixed sidebar. The previous fallback was a
+// horizontal scroller under the topbar, but sixteen links meant swiping most
+// of a screen-width to reach Settings, and it ate a second header row on the
+// shortest viewports. Instead: a hamburger in the topbar opening a drawer that
+// keeps the desktop sidebar's grouping, so the two navigations teach the same
+// map of the app.
 export function MobileNav({ billing = false }: { billing?: boolean }) {
   const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+
+  // Navigating closes the drawer. Keyed on pathname rather than an onClick per
+  // link so it also closes for a tap on the already-active route (which fires
+  // no navigation at all).
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  // While the drawer owns the screen: Escape closes it, and the page behind it
+  // stops scrolling (otherwise a drag on the scrim scrolls the dashboard).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
   return (
-    <nav className="-mx-1 flex items-center gap-1 overflow-x-auto px-1 pb-2 md:hidden">
-      {[...LINKS, ...(billing ? [BILLING] : []), SETTINGS].map((l) => {
-        const active = isActive(l.href, pathname);
-        return (
-          <Link
-            key={l.href}
-            href={l.href}
-            aria-current={active ? "page" : undefined}
-            className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm transition-colors ${
-              active
-                ? "bg-neutral-800 font-medium text-white"
-                : "text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200"
-            }`}
-          >
-            <l.Icon className="h-4 w-4" />
-            {l.label}
-          </Link>
-        );
-      })}
-      <LogoutLink compact />
-    </nav>
+    <div className="md:hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Open navigation menu"
+        aria-expanded={open}
+        className="-ml-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-neutral-300 transition-colors hover:bg-neutral-900 hover:text-neutral-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400"
+      >
+        <MenuIcon className="h-5 w-5" />
+      </button>
+
+      {open ? (
+        <div className="fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label="Navigation">
+          <button
+            type="button"
+            aria-label="Close navigation menu"
+            onClick={() => setOpen(false)}
+            className="dispatch-fade-in absolute inset-0 h-full w-full cursor-default bg-black/60 backdrop-blur-[1px]"
+          />
+          <div className="dispatch-slide-in absolute inset-y-0 left-0 flex w-[17rem] max-w-[85vw] flex-col border-r border-neutral-800 bg-neutral-950 shadow-2xl shadow-black/60">
+            <div className="flex h-14 shrink-0 items-center justify-between gap-2 px-4">
+              <Link href="/dashboard" className="flex items-center gap-2">
+                <DispatchMark className="h-7 w-auto" />
+                <span className="font-semibold tracking-tight">DispatchSEO</span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Close navigation menu"
+                className="-mr-1.5 flex h-9 w-9 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-900 hover:text-neutral-200"
+              >
+                <CloseIcon className="h-5 w-5" />
+              </button>
+            </div>
+            {/* Same groups as the desktop sidebar, and Settings likewise pinned
+                outside the scroll area so it can't be clipped off the bottom. */}
+            <nav className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-1">
+              {GROUPS.map((group, i) => (
+                <div key={group.label ?? "top"} className="flex flex-col gap-1.5">
+                  {group.label ? (
+                    <p
+                      className={`px-3.5 pb-1 text-[11px] font-medium uppercase tracking-wider text-neutral-600 ${
+                        i > 0 ? "pt-5" : ""
+                      }`}
+                    >
+                      {group.label}
+                    </p>
+                  ) : null}
+                  {group.links.map((l) => (
+                    <SidebarLink key={l.href} link={l} pathname={pathname} />
+                  ))}
+                </div>
+              ))}
+            </nav>
+            <div className="shrink-0 border-t border-neutral-800/80 px-3 py-3">
+              {billing ? <SidebarLink link={BILLING} pathname={pathname} /> : null}
+              <SidebarLink link={SETTINGS} pathname={pathname} />
+              <LogoutLink />
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

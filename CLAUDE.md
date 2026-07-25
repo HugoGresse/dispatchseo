@@ -197,5 +197,11 @@ re-snapshot.
   its uniqueness constraints scoped per-project — see `0004_projects.sql`.
 - Server-only modules (`db.ts`, anything touching the service role or secrets)
   must never end up in a client component bundle.
+- **User-visible releases get a changelog entry.** Prepend to `CHANGELOG` in
+  `src/lib/changelog.ts` (owner's language, not the commit subject) — that one
+  list feeds the dashboard's "DispatchSEO has been updated" banner, the
+  `/changelog` page, and the `get_changelog` MCP tool. Versions are anchor ids
+  and cookie values: never reuse or reorder one. Internal-only work ships
+  without an entry.
 - Deferred/out-of-scope ideas go in `LATER.md`, not into code. The ethos is
   "working > pretty", single-user, no over-engineering.

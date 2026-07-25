@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { MobileNav, PageTitle, Sidebar } from "@/components/nav";
+import { ChangelogBanner } from "@/components/changelog-banner";
+import { CHANGELOG_COOKIE, unseenRelease } from "@/lib/changelog";
 import { DispatchMark } from "@/components/logo";
 import { ProjectSwitcher } from "@/components/project-switcher";
 import { ModeSwitch } from "@/components/mode-switch";
@@ -24,7 +27,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // is null for a cloud account with no projects yet - the page itself
   // redirects to the wizard (getActiveProject), the layout just renders a
   // chrome without switcher/mode for that one request.
-  const [projects, active] = await Promise.all([scopedProjects(), getActiveProjectOrNull()]);
+  const [projects, active, jar] = await Promise.all([
+    scopedProjects(),
+    getActiveProjectOrNull(),
+    cookies(),
+  ]);
 
   const billing = isCloudMode();
   // Cloud unlocks the dashboard as soon as a repo is connected (onboarding-gate),
@@ -59,16 +66,26 @@ export default async function DashboardLayout({ children }: { children: React.Re
     (installedAt != null
       ? Date.now() - installedAt < POST_INSTALL_WINDOW
       : setupStartedAt != null && Date.now() - setupStartedAt < SETUP_WINDOW);
+  // "DispatchSEO has been updated" - the newest release this browser hasn't
+  // acknowledged yet. Silent for projects created after it shipped (nothing is
+  // "new" to an owner who never saw the old version).
+  const release = unseenRelease(jar.get(CHANGELOG_COOKIE)?.value, active?.created_at);
   return (
     <div className="flex min-h-screen bg-neutral-950 text-neutral-100">
       <Sidebar billing={billing} />
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* One row on every size. Desktop keeps the three-up grid (switcher /
+            centered title / mode). Mobile can't: at 390px the centered title
+            landed on top of the project domain, so it drops out there - the
+            page's own h1 already names the screen - and the hamburger takes
+            its place on the left. The wordmark also goes; the mark alone links
+            home and the drawer carries the full brand. */}
         <header className="sticky top-0 z-20 border-b border-neutral-800/80 bg-neutral-950/90 backdrop-blur">
-          <div className="grid h-14 grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6">
-            <div className="flex min-w-0 items-center gap-2">
-              <Link href="/dashboard" className="flex shrink-0 items-center gap-2 md:hidden">
+          <div className="flex h-14 items-center gap-2 px-4 sm:px-6 md:grid md:grid-cols-[1fr_auto_1fr]">
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 md:flex-none md:gap-2">
+              <MobileNav billing={billing} />
+              <Link href="/dashboard" className="shrink-0 md:hidden" aria-label="DispatchSEO home">
                 <DispatchMark className="h-7 w-auto" />
-                <span className="font-semibold tracking-tight">DispatchSEO</span>
               </Link>
               {active && (
                 <ProjectSwitcher
@@ -77,23 +94,26 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 />
               )}
             </div>
-            <PageTitle />
-            <div className="flex items-center justify-end">
+            <div className="hidden md:block">
+              <PageTitle />
+            </div>
+            <div className="flex shrink-0 items-center justify-end">
               {active && <ModeSwitch mode={active.mode} />}
             </div>
           </div>
-          <div className="px-4 sm:px-6">
-            <MobileNav billing={billing} />
-          </div>
         </header>
-        {setupInProgress && active && (
+        {setupInProgress && active ? (
           <SetupProgressBanner
             slug={active.slug}
             repo={active.github_repo}
             since={active.github_app_installed_at}
             installed={active.pipeline_installed_at != null}
           />
-        )}
+        ) : release ? (
+          // Only when setup ISN'T running: two stacked banners is one too many,
+          // and mid-setup the owner has something better to watch.
+          <ChangelogBanner version={release.version} summary={release.summary} />
+        ) : null}
         <main className="min-w-0 flex-1 px-4 py-8 sm:px-6 lg:px-8">{children}</main>
       </div>
     </div>
