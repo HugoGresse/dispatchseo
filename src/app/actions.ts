@@ -28,7 +28,6 @@ import {
   type AutomationFlags,
 } from "@/lib/projects";
 import { markCronFixed } from "@/lib/cron-alerts";
-import { CHANGELOG_COOKIE, isVersionString } from "@/lib/changelog";
 import { saveContentPrefs } from "@/lib/content-prefs-store";
 import { encryptSecret } from "@/lib/crypto";
 import { validateSerpapiKey } from "@/lib/serp";
@@ -707,25 +706,6 @@ export async function switchProject(slug: string) {
   await assertProjectOwned(project.id);
   const jar = await cookies();
   jar.set(PROJECT_COOKIE, project.slug, {
-    path: "/",
-    httpOnly: true,
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 365,
-  });
-  revalidatePath("/", "layout");
-}
-
-// ---- what's new ------------------------------------------------------------
-
-// Dismiss the release banner: remember the version this browser has now seen.
-// Purely a display preference (no DB row, no tenant data), so it only needs
-// the auth check - and the version is echoed from the client, so it gets a
-// shape check before it becomes a cookie value.
-export async function dismissChangelog(version: string) {
-  await assertAuthed();
-  if (!isVersionString(version)) throw new Error("Bad version");
-  const jar = await cookies();
-  jar.set(CHANGELOG_COOKIE, version, {
     path: "/",
     httpOnly: true,
     sameSite: "lax",

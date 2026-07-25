@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { useState, useTransition } from "react";
-import { dismissChangelog } from "@/app/actions";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { anchorFor } from "@/lib/changelog";
 
 // The release heads-up: one quiet line under the topbar saying DispatchSEO
@@ -10,35 +9,46 @@ import { anchorFor } from "@/lib/changelog";
 // Deliberately understated - neutral, not the violet the setup banner owns,
 // because this is news, not work waiting on the owner.
 //
-// Dismissal hides it immediately and remembers the version in a cookie (the
-// dismissChangelog action), so it stays gone until the NEXT release. Following
-// the link counts as dismissing too - you've seen it.
+// The link opens in a NEW TAB: reading the changelog is a detour, not a
+// destination, so the owner closes the tab and is back where they were with
+// the dashboard untouched behind it.
+//
+// Dismissal hides the row immediately and records the version through
+// /api/whats-new/seen with keepalive - the browser delivers that even if the
+// page is navigating or closing, which a server action inside a transition is
+// not guaranteed to survive. Once recorded, it stays gone until the NEXT
+// release. Following the link counts as dismissing: you've seen it.
 
 export function ChangelogBanner({ version, summary }: { version: string; summary: string }) {
   const [hidden, setHidden] = useState(false);
-  const [, start] = useTransition();
+  const router = useRouter();
 
   if (hidden) return null;
 
-  // Optimistic: the row disappears on click and the cookie write rides along
-  // behind it. If the write fails the banner simply returns on the next load -
-  // an unremembered dismissal is not worth an error state.
   function dismiss() {
     setHidden(true);
-    start(async () => {
-      try {
-        await dismissChangelog(version);
-      } catch {
+    void fetch("/api/whats-new/seen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ version }),
+      keepalive: true,
+    })
+      // The router cache can still hold an RSC payload with the banner in it,
+      // so a later back-navigation would flash it again even though the cookie
+      // is set. Refreshing drops that copy.
+      .then(() => router.refresh())
+      .catch(() => {
         /* it'll ask again next load */
-      }
-    });
+      });
   }
 
   return (
     <div className="border-b border-neutral-800/80 bg-neutral-900/40 px-4 py-2 sm:px-6">
       <div className="mx-auto flex max-w-6xl items-center gap-3 text-sm">
-        <Link
+        <a
           href={`/changelog#${anchorFor(version)}`}
+          target="_blank"
+          rel="noopener noreferrer"
           onClick={dismiss}
           className="group flex min-w-0 flex-1 items-center gap-2.5 text-neutral-400 hover:text-neutral-200"
         >
@@ -53,7 +63,7 @@ export function ChangelogBanner({ version, summary }: { version: string; summary
           <span className="shrink-0 whitespace-nowrap font-medium text-neutral-300 underline-offset-2 group-hover:underline">
             What&apos;s new →
           </span>
-        </Link>
+        </a>
         <button
           onClick={dismiss}
           aria-label="Dismiss update notice"

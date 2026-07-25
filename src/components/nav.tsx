@@ -182,6 +182,9 @@ type NavLink = {
   href: string;
   label: string;
   Icon: (props: IconProps) => React.ReactNode;
+  // Opens in its own tab and never reads as the current page - for surfaces
+  // that live outside the dashboard (the public changelog).
+  external?: boolean;
 };
 
 // Plain-English groups (PostHog-style): the label names what the pages are
@@ -218,7 +221,7 @@ const GROUPS: NavGroup[] = [
       { href: "/automations", label: "Automations", Icon: AutomationsIcon },
       { href: "/instructions", label: "Instructions", Icon: InstructionsIcon },
       { href: "/google", label: "Search Console", Icon: SearchConsoleIcon },
-      { href: "/changelog", label: "What's new", Icon: WhatsNewIcon },
+      { href: "/changelog", label: "What's new", Icon: WhatsNewIcon, external: true },
     ],
   },
 ];
@@ -257,6 +260,34 @@ function isActive(href: string, pathname: string) {
 
 function SidebarLink({ link, pathname }: { link: NavLink; pathname: string }) {
   const active = isActive(link.href, pathname);
+  // External: a plain <a> in a new tab. No <Link> (nothing to prefetch off the
+  // dashboard's router) and no active state - you never "are" on this page
+  // while looking at the sidebar, since it lives in another tab.
+  if (link.external) {
+    return (
+      <a
+        href={link.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-3.5 rounded-lg px-3.5 py-2.5 text-[15px] text-neutral-400 transition-colors hover:bg-neutral-900 hover:text-neutral-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400"
+      >
+        <link.Icon className="h-5 w-5 shrink-0 text-neutral-500" />
+        {link.label}
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="ml-auto h-3.5 w-3.5 text-neutral-600"
+          aria-hidden="true"
+        >
+          <path d="M7 17 17 7M9 7h8v8" />
+        </svg>
+      </a>
+    );
+  }
   return (
     <Link
       href={link.href}

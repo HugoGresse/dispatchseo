@@ -62,6 +62,10 @@ export function proxy(req: NextRequest) {
     // Google-data usage page: written for the OAuth branding reviewers, who
     // open it logged-out (linked from the homepage footer + FAQ).
     pathname === "/google-data" ||
+    // Product release notes. Public by design: it describes DispatchSEO
+    // itself, never a tenant's data, it opens in its own tab from the
+    // dashboard banner, and a linkable changelog is worth having.
+    pathname === "/changelog" ||
     // Plain app-description page: set as the OAuth consent screen's
     // "Application home page", so Google's branding checker opens it
     // logged-out.
