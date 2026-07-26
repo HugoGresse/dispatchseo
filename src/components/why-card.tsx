@@ -78,8 +78,8 @@ const POINTS: Array<{ icon: ReactNode; lead: string; body: string }> = [
         <polyline points="8 6 2 12 8 18" />
       </svg>
     ),
-    lead: "No scraping.",
-    body: "It reads your actual repo, so what it writes fits your product - not a homepage-crawl guess.",
+    lead: "Maximize your agent.",
+    body: "Your Claude Code is no longer just a coding agent. It's also your personal SEO manager.",
   },
   {
     icon: (

@@ -95,6 +95,7 @@ export function LandingNav({ githubUrl, docsUrl }: Props) {
               aria-label="Menu"
             >
               <div className="nav-panel-links">
+                <a href="#demo" onClick={close}>Demo</a>
                 <a href="#pricing" onClick={close}>Pricing</a>
                 <a href="#faq" onClick={close}>FAQ</a>
                 <a href="/blog" onClick={close}>Blog</a>

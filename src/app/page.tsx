@@ -3,6 +3,7 @@ import { DM_Sans, Plus_Jakarta_Sans } from "next/font/google";
 import { redirect } from "next/navigation";
 import { DispatchMark } from "@/components/logo";
 import { FeatureShowcase } from "./feature-showcase";
+import { DemoVideo } from "./demo-video";
 import { DomainCta } from "./domain-cta";
 import { LandingNav } from "./landing-nav";
 import { PixelDispatcher } from "@/components/pixel-dispatcher";
@@ -216,6 +217,7 @@ export default async function LandingPage({
             DispatchSEO
           </a>
           <div className="nav-links">
+            <a href="#demo">Demo</a>
             <a href="#pricing">Pricing</a>
             <a href="#faq">FAQ</a>
             <a href="/blog">Blog</a>
@@ -260,35 +262,13 @@ export default async function LandingPage({
         </div>
       </section>
 
-      {/* ==================== HOW IT WORKS ==================== */}
-      <section id="how">
+      {/* ==================== DEMO VIDEO ==================== */}
+      <section id="demo">
         <div className="wrap">
           <div className="sec-h">
-            <h2>Connect it once,<br className="br-desk" /> then watch it work</h2>
-            <p>One pipeline, four steps. The agent thinks, the backend remembers, you decide.</p>
+            <h2>See it running</h2>
           </div>
-          <div className="steps">
-            <div className="step">
-              <div className="num">1</div>
-              <h3>Connect</h3>
-              <p>Add the MCP server to Claude Code and point it at your site&apos;s repo. The agent reads your site and writes its own brief.</p>
-            </div>
-            <div className="step">
-              <div className="num">2</div>
-              <h3>Research</h3>
-              <p>It mines Search Console and SERP data for keywords you can actually win, then queues article ideas with the reasoning attached.</p>
-            </div>
-            <div className="step">
-              <div className="num">3</div>
-              <h3>Approve, or automate</h3>
-              <p>Approve each idea from the dashboard or chat, or flip on auto mode and let the pipeline ship on schedule, with PRs as the audit trail.</p>
-            </div>
-            <div className="step">
-              <div className="num">4</div>
-              <h3>Ship and track</h3>
-              <p>Approved ideas come back as pull requests to your repo. Merge, publish, and watch ranks move on the same dashboard.</p>
-            </div>
-          </div>
+          <DemoVideo />
         </div>
       </section>
 
@@ -297,7 +277,6 @@ export default async function LandingPage({
         <div className="wrap">
           <div className="sec-h">
             <h2>Who is DispatchSEO for?</h2>
-            <p>Every other AI SEO tool learns about you from a homepage crawl. Your agent has the repo: the features, the docs, the decisions, probably its own commits.</p>
           </div>
           <div className="who">
             <div className="who-card">
@@ -324,7 +303,6 @@ export default async function LandingPage({
         <div className="wrap">
           <div className="sec-h">
             <h2>Pick your plan</h2>
-            <p>Starter comes with a 7-day free trial; Growth and Scale start today. Unlimited articles on every plan - the writing runs on your own Claude, so we never meter content.</p>
           </div>
           {/* One bar, two facts: the deal on the left, the deadline past a
               dashed rule on the right. The divider does the work a third
@@ -601,7 +579,7 @@ export default async function LandingPage({
             </div>
             <div className="foot-col">
               <h4>Product</h4>
-              <a href="#how">How it works</a>
+              <a href="#demo">Demo</a>
               <a href="#features">Features</a>
               <a href="#pricing">Pricing</a>
               <a href="#faq">FAQ</a>
