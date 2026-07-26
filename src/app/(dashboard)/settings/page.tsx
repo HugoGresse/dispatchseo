@@ -198,7 +198,7 @@ export default async function SettingsPage() {
           <SectionTitle sub="the token builds run on - rotate it here whenever it expires or gets revoked">
             Claude Code token
           </SectionTitle>
-          <ClaudeTokenConnect connected={claudeTokenSet} />
+          <ClaudeTokenConnect connected={claudeTokenSet} slug={project.slug} />
         </section>
       ) : null}
 

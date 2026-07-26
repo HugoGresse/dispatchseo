@@ -1301,7 +1301,13 @@ export async function chooseGithubRepo(
   if (!isCloudMode()) return { error: "Self-host connects the repo in step 1 instead." };
   const repo = String(formData.get("repo") ?? "").trim();
   if (!repo) return { error: "Pick a repository." };
-  const project = await getActiveProject();
+  // Explicit slug, like runPipelineInstall and connectClaudeToken: this is the
+  // step that pairs a site with a repository, and every later write follows
+  // that pairing, so a guessed project here misdirects everything downstream.
+  const slug = String(formData.get("slug") ?? "");
+  if (!slug) return { error: "No site specified - reload the page and try again." };
+  const project = await getProjectBySlug(slug);
+  if (!project) return { error: "Unknown project." };
   await assertProjectOwned(project.id);
   if (!project.github_installation_id) {
     return { error: "Install the DispatchSEO GitHub App first." };
@@ -1347,7 +1353,14 @@ export async function connectClaudeToken(
         "That doesn't look like a Claude Code token (they start with sk-ant-oat). Run `claude setup-token` and copy its whole output.",
     };
   }
-  const project = await getActiveProject();
+  // Explicit slug, same reasoning as runPipelineInstall - and with more at
+  // stake: this puts the owner's Claude credential into a repository as an
+  // Actions secret, so resolving the target from a forgiving active-project
+  // lookup could plant it in a repo they never chose.
+  const slug = String(formData.get("slug") ?? "");
+  if (!slug) return { error: "No site specified - reload the page and try again." };
+  const project = await getProjectBySlug(slug);
+  if (!project) return { error: "Unknown project." };
   await assertProjectOwned(project.id);
   const { setRepoSecret } = await import("@/lib/github-app-secrets");
   const res = await setRepoSecret(project, "CLAUDE_CODE_OAUTH_TOKEN", token);
@@ -1414,12 +1427,25 @@ export async function connectBuilderToken(
 // Idempotent - c5 re-fires it on every mount/resume and each step tolerates
 // having already happened (an up-to-date repo skips straight to the setup
 // dispatch).
-export async function runPipelineInstall(): Promise<
+//
+// Takes the slug EXPLICITLY rather than reading getActiveProject(). This
+// writes to a customer's repository, and active-project resolution is
+// deliberately forgiving: getActiveProjectOrNull falls back to the owner's
+// first project when the dash_project cookie doesn't match one, so a stale or
+// missing cookie silently retargets it. Forgiving is right for rendering a
+// dashboard and wrong for committing files - a caller that cannot say which
+// project it means must fail, not guess. The wizard always knows: it is
+// mid-flow for exactly one project (2026-07-26).
+export async function runPipelineInstall(
+  slug: string,
+): Promise<
   { ok: true; mode: string; pr_url?: string; setup_dispatched: boolean } | { error: string }
 > {
   await assertAuthed();
   if (!isCloudMode()) return { error: "Self-host installs via the terminal setup command." };
-  const project = await getActiveProject();
+  if (!slug) return { error: "No project specified for the install." };
+  const project = await getProjectBySlug(slug);
+  if (!project) return { error: "Unknown project." };
   await assertProjectOwned(project.id);
   if (project.pipeline_installed_at) {
     return { ok: true, mode: "already-installed", setup_dispatched: false };

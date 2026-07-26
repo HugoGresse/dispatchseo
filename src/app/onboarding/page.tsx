@@ -83,20 +83,32 @@ async function buildCloudResume(): Promise<CloudWizardResume | null> {
   } catch {
     savedScreen = null;
   }
+  // Default to c1, NOT c5. The finale auto-fires runPipelineInstall on mount
+  // (cloud-onboarding-wizard.tsx), which commits the pipeline pack into the
+  // project's repo, writes the SEO_MCP_API_KEY secret, and dispatches a
+  // workflow - so "we don't know which screen this project was on" used to
+  // resolve to the single most destructive one. Any project that never went
+  // through THIS wizard has a null onboarding_screen: every self-host-era
+  // project, every row created before screen persistence, every project added
+  // outside the wizard. Loading /onboarding then wrote into its repo without
+  // anyone pressing a button - it tried to commit into a live clockedcode.com
+  // repo and was saved only by that project having no GitHub App installed
+  // (2026-07-26). c5 is now reachable only when it was EXPLICITLY saved, i.e.
+  // when someone actually walked the wizard to the end.
   const saved =
     savedScreen && (CLOUD_WIZARD_SCREENS as readonly string[]).includes(savedScreen)
       ? (savedScreen as CloudWizardResume["screen"])
-      : "c5";
+      : "c1";
   let screen = saved === "c0" ? "c1" : saved;
 
-  // c5 (the finale) fires runPipelineInstall, which hard-requires a connected
-  // repo, and c2-c4 are only ever reachable AFTER a repo is chosen. So with no
-  // github_repo the only honest resume is c1 - the Connect-GitHub / pick-a-repo
-  // screen. This is the safety net for lost screen persistence: the "Install
-  // the App" link is a full-page navigation that can cancel the in-flight
-  // setWizardScreen("c1") POST, leaving onboarding_screen null -> defaulting to
-  // c5 -> a finale that instantly errors "no repo connected" (the gh=pick_repo
-  // bounce when the owner picks "all repositories"). Seen 2026-07-23.
+  // Same reasoning from the other direction, kept as a second gate: c5 requires
+  // a connected repo and c2-c4 are only reachable after one is chosen, so with
+  // no github_repo the only honest resume is c1. Originally the safety net for
+  // lost screen persistence - the "Install the App" link is a full-page
+  // navigation that can cancel the in-flight setWizardScreen("c1") POST,
+  // leaving onboarding_screen null -> a finale that instantly errored "no repo
+  // connected" (2026-07-23). The default above now covers that case too; this
+  // stays because a saved c2-c5 on a repo-less project must still land at c1.
   if (!project.github_repo) screen = "c1";
 
   let installationRepos: string[] | null = null;

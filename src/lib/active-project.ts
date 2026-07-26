@@ -41,7 +41,22 @@ export const getActiveProjectOrNull = cache(async (): Promise<Project | null> =>
   if (isCloudMode()) {
     const mine = await scopedProjects();
     if (mine.length === 0) return null;
-    return mine.find((p) => p.slug === slug) ?? mine[0];
+    const picked = mine.find((p) => p.slug === slug);
+    if (picked) return picked;
+    // Falling back to the first project. Intentional for RENDERING - a stale
+    // or deleted slug must never blank the dashboard - but it means the screen
+    // can be showing a different project than the cookie asked for, and that
+    // silence has already cost us once: /onboarding resolved to the wrong
+    // project and aimed a repo write at it (2026-07-26). Actions with external
+    // side effects take an explicit slug instead of calling this. Logged
+    // because the trigger is still unexplained: a cookie naming a project the
+    // owner demonstrably has should not miss.
+    if (slug) {
+      console.warn(
+        `[active-project] dash_project cookie "${slug}" matched none of ${mine.length} owned projects; falling back to "${mine[0].slug}"`,
+      );
+    }
+    return mine[0];
   }
   if (slug) {
     const p = await getProjectBySlug(slug);

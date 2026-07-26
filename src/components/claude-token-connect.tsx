@@ -10,7 +10,17 @@ import { CopyBox, ErrorLine, inputClass } from "@/components/wizard-ui";
 // when the token expires or was revoked. `connected` reflects whether a token
 // is already stored on the repo, so an already-set-up owner sees "you're done,
 // this is only for rotating" instead of a box that looks like a required redo.
-export function ClaudeTokenConnect({ connected }: { connected?: boolean }) {
+export function ClaudeTokenConnect({
+  connected,
+  // Which project's repo the secret lands on. Required: connectClaudeToken
+  // takes the target explicitly rather than resolving it from the active
+  // project, precisely so a credential can't be written into a repo the owner
+  // didn't choose - which means every caller has to name it, this one included.
+  slug,
+}: {
+  connected?: boolean;
+  slug: string;
+}) {
   const [state, action, pending] = useActionState<ConnectClaudeState, FormData>(
     connectClaudeToken,
     null,
@@ -61,6 +71,7 @@ export function ClaudeTokenConnect({ connected }: { connected?: boolean }) {
         <div className="space-y-3">
           <CopyBox text="claude setup-token" />
           <form action={action} className="flex gap-2.5">
+            <input type="hidden" name="slug" value={slug} />
             <input
               type="password"
               name="token"

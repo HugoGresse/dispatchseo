@@ -30,6 +30,25 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-26.4",
+    date: "2026-07-26",
+    title: "Setup can't touch the wrong site",
+    summary:
+      "Opening the setup page no longer starts installing into a site you didn't pick.",
+    changes: [
+      {
+        kind: "fixed",
+        text:
+          "Opening the setup page could start installing the pipeline into whichever site DispatchSEO happened to think was active - committing files and writing a secret to that site's repo without anyone pressing a button. It happened because a site with no saved setup progress landed straight on the final screen, which starts the install by itself. Setup now opens on the Connect GitHub step instead, and only reaches the finish line if you actually walked there.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Choosing a repo, saving your Claude token, and installing the pipeline now each name the site they're for. Before, they used whichever site was active, so a stale browser session could have pointed your token or your repo at the wrong one.",
+      },
+    ],
+  },
+  {
     version: "2026-07-26.3",
     date: "2026-07-26",
     title: "Deleting a site now actually ends it",

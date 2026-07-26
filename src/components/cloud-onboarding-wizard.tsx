@@ -194,8 +194,17 @@ export function CloudOnboardingWizard(props: {
   const [installPending, startInstall] = useTransition();
   const installedOnce = useRef(false);
   function fireInstall() {
+    // The wizard names the project it is installing into. Without a slug there
+    // is nothing safe to do: the action used to fall back to "whatever project
+    // is active", which is how a page load once aimed an install at a repo
+    // nobody had selected. Say so instead of guessing.
+    if (!created?.slug) {
+      setInstallResult({ error: "Lost track of which site this is - reload and pick it again." });
+      return;
+    }
+    const slug = created.slug;
     startInstall(async () => {
-      setInstallResult(await runPipelineInstall());
+      setInstallResult(await runPipelineInstall(slug));
     });
   }
   useEffect(() => {
@@ -411,6 +420,10 @@ export function CloudOnboardingWizard(props: {
             ) : installationId ? (
               <form action={repoAction} className="space-y-2.5">
                 {repoState && "error" in repoState ? <ErrorLine msg={repoState.error} /> : null}
+                {/* Which site this repo is being bound to. Everything the
+                    pipeline later writes follows from this pairing, so it must
+                    not be inferred from the active-project cookie. */}
+                <input type="hidden" name="slug" value={created?.slug ?? ""} />
                 <p className="text-base font-medium text-neutral-200">
                   Pick the repo DispatchSEO should publish into
                 </p>
@@ -501,6 +514,10 @@ export function CloudOnboardingWizard(props: {
             </p>
             <form action={claudeAction} className="mt-3.5 space-y-2.5">
               {claudeState && "error" in claudeState ? <ErrorLine msg={claudeState.error} /> : null}
+              {/* Name the target project: this writes the pasted token into a
+                  repo as an Actions secret, and resolving "which repo" from the
+                  active-project cookie can silently land on the wrong one. */}
+              <input type="hidden" name="slug" value={created?.slug ?? ""} />
               <input
                 name="token"
                 type="password"
