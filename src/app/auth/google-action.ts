@@ -30,7 +30,15 @@ export async function googleSignIn(formData: FormData) {
   const supabase = await supabaseAuth();
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: `${proto}://${host}/auth/callback` },
+    options: {
+      redirectTo: `${proto}://${host}/auth/callback`,
+      // Without prompt=select_account Google silently reuses whichever
+      // account the browser last authorised, so a second person (or a
+      // second test account) on the same computer clicks "Continue with
+      // Google" and lands in the FIRST account's dashboard with no chooser
+      // and no way to tell it happened. Always ask which account.
+      queryParams: { prompt: "select_account" },
+    },
   });
   if (error || !data?.url) redirect("/login?error=1");
   redirect(data.url);
