@@ -175,6 +175,28 @@ export default async function LandingPage({
   // ?home=1 opts out (the footer/legal pages link back here for pricing + FAQ,
   // and those must stay readable while signed in).
   const params = await searchParams;
+
+  // An auth link that lands HERE still carries a live credential: Supabase
+  // sends the visitor to the project's Site URL ("/") whenever the caller
+  // forgot emailRedirectTo, and older confirmation emails already in inboxes
+  // were minted that way. Rendering the brochure would silently drop the
+  // sign-in, so hand it to the one route that can spend it. Signup now sets
+  // emailRedirectTo (src/lib/origin.ts), which makes this the safety net
+  // rather than the main path.
+  const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  const code = first(params.code);
+  const tokenHash = first(params.token_hash);
+  if (code || tokenHash) {
+    const forward = new URLSearchParams();
+    if (code) forward.set("code", code);
+    if (tokenHash) forward.set("token_hash", tokenHash);
+    const type = first(params.type);
+    if (type) forward.set("type", type);
+    const next = first(params.next);
+    if (next) forward.set("next", next);
+    redirect(`/auth/callback?${forward.toString()}`);
+  }
+
   if (params.home === undefined && (await maybeSignedIn()) && (await dashboardAuth())) {
     redirect("/dashboard");
   }

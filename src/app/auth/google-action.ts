@@ -1,9 +1,10 @@
 "use server";
 
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { supabaseAuth } from "@/lib/cloud-auth";
 import { cleanDomain, isValidDomain } from "@/lib/domain";
+import { authCallbackUrl } from "@/lib/origin";
 
 // "Continue with Google" for CLOUD_MODE login/signup. Supabase Auth runs the
 // OAuth dance (PKCE verifier lands in a cookie here, the code comes back on
@@ -24,14 +25,11 @@ export async function googleSignIn(formData: FormData) {
       sameSite: "lax",
     });
   }
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
-  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const supabase = await supabaseAuth();
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: `${proto}://${host}/auth/callback`,
+      redirectTo: await authCallbackUrl(),
       // Without prompt=select_account Google silently reuses whichever
       // account the browser last authorised, so a second person (or a
       // second test account) on the same computer clicks "Continue with

@@ -8,6 +8,7 @@ import { FormPending } from "@/components/dispatching";
 import { ResendConfirmation, type ResendResult } from "@/components/resend-confirmation";
 import { isCloudMode } from "@/lib/cloud";
 import { supabaseAuth } from "@/lib/cloud-auth";
+import { authCallbackUrl } from "@/lib/origin";
 import { cleanDomain, isValidDomain } from "@/lib/domain";
 
 export const dynamic = "force-dynamic";
@@ -51,7 +52,15 @@ async function signup(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   if (!email || password.length < 8) redirect(`/signup?error=weak${back}`);
   const supabase = await supabaseAuth();
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  // Without emailRedirectTo, Supabase sends the confirmed visitor to the
+  // project's Site URL, which is "/" - the landing page, which has no idea what
+  // to do with the credential in the query string. The link then "works" and
+  // signs nobody in. Point it at the one route that exchanges it.
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo: await authCallbackUrl() },
+  });
   if (error) {
     redirect(
       error.message.toLowerCase().includes("already")
@@ -106,7 +115,11 @@ async function resendConfirmation(): Promise<ResendResult> {
     };
   }
   const supabase = await supabaseAuth();
-  const { error } = await supabase.auth.resend({ type: "signup", email });
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email,
+    options: { emailRedirectTo: await authCallbackUrl() },
+  });
   if (!error) return { ok: true, message: "Sent. Give it a minute, then check spam too." };
   const status = (error as { status?: number }).status;
   const code = (error as { code?: string }).code ?? "";
