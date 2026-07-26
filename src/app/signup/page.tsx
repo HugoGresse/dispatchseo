@@ -5,6 +5,7 @@ import { DispatchMark } from "@/components/logo";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-signin";
 import { AuthShell } from "@/components/auth-shell";
 import { FormPending } from "@/components/dispatching";
+import { ResendConfirmation, type ResendResult } from "@/components/resend-confirmation";
 import { isCloudMode } from "@/lib/cloud";
 import { supabaseAuth } from "@/lib/cloud-auth";
 import { cleanDomain, isValidDomain } from "@/lib/domain";
@@ -23,6 +24,12 @@ export const dynamic = "force-dynamic";
 // the visitor should never have to type their domain twice.
 
 const DOMAIN_COOKIE = "pending_domain";
+// Which address the confirmation went to. The check-your-inbox screen needs it
+// to name the address back to the user and to drive "send it again" - the
+// redirect there carries no state, and putting an email in the URL would park
+// it in history and in the Referer header. Short-lived: it is only useful
+// during the confirm window.
+const EMAIL_COOKIE = "pending_email";
 
 async function stashDomain(formData: FormData): Promise<string | null> {
   const domain = cleanDomain(String(formData.get("domain") ?? ""));
@@ -52,8 +59,61 @@ async function signup(formData: FormData) {
         : `/signup?error=1${back}`,
     );
   }
-  if (!data.session) redirect("/signup?sent=1");
+  // Supabase answers a signup for an address that ALREADY has an account with
+  // a success, not an error: an obfuscated user, no session, and - this is the
+  // part that bites - no email. That is deliberate (it stops signup being used
+  // to discover who has an account here), and it also happens when the address
+  // first signed up through Google. Left alone it renders as "check your inbox"
+  // for a link that is never coming, which is the worst possible answer: the
+  // person waits, checks spam, and retries forever.
+  //
+  // The obfuscated user is identifiable by an empty identities array, so say
+  // the true thing instead. This does let someone probe which addresses have
+  // accounts - but the error path below already tells them exactly that
+  // whenever enumeration protection is off, so it is a line this signup form
+  // has always been on the near side of.
+  const identities = data.user?.identities;
+  if (!data.session && Array.isArray(identities) && identities.length === 0) {
+    redirect(`/signup?error=exists${back}`);
+  }
+  if (!data.session) {
+    (await cookies()).set(EMAIL_COOKIE, email, {
+      path: "/",
+      maxAge: 60 * 60,
+      httpOnly: true,
+      sameSite: "lax",
+    });
+    redirect("/signup?sent=1");
+  }
   redirect("/onboarding?new=1");
+}
+
+// "Send it again" from the check-your-inbox screen.
+//
+// Worth knowing when reading the result: Supabase deliberately does NOT send
+// anything when the address already belongs to an account (it returns an
+// obfuscated success so an attacker cannot use signup to discover who has an
+// account here). The same is true when the address first signed up through
+// Google. So "sent" honestly means "sent if there was anything to send" - which
+// is why the screen also points at Sign in rather than only promising an email.
+async function resendConfirmation(): Promise<ResendResult> {
+  "use server";
+  const email = (await cookies()).get(EMAIL_COOKIE)?.value;
+  if (!email) {
+    return {
+      ok: false,
+      message: "That sign-up expired. Enter your email again to start over.",
+    };
+  }
+  const supabase = await supabaseAuth();
+  const { error } = await supabase.auth.resend({ type: "signup", email });
+  if (!error) return { ok: true, message: "Sent. Give it a minute, then check spam too." };
+  const status = (error as { status?: number }).status;
+  const code = (error as { code?: string }).code ?? "";
+  if (status === 429 || code.includes("rate_limit")) {
+    return { ok: false, message: "Too many requests in a row. Wait a few minutes and try again." };
+  }
+  return { ok: false, message: "That didn't go through. Wait a moment and try again." };
 }
 
 const inputCls =
@@ -70,6 +130,7 @@ export default async function SignupPage({
   const domain = isValidDomain(cleaned) ? cleaned : null;
 
   if (sent) {
+    const pendingEmail = (await cookies()).get(EMAIL_COOKIE)?.value ?? null;
     return (
       <AuthShell>
         <Link href="/" className="flex items-center gap-2.5 text-lg font-semibold text-white">
@@ -94,25 +155,38 @@ export default async function SignupPage({
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight text-white">Check your inbox</h1>
           <p className="text-[15px] leading-relaxed text-neutral-400">
-            We sent a confirmation link to your email. Click it to verify your address and pick your
-            plan - the link expires in 24 hours.
+            We sent a confirmation link to{" "}
+            {pendingEmail ? (
+              <span className="font-medium text-neutral-200">{pendingEmail}</span>
+            ) : (
+              "your email"
+            )}
+            . Click it to verify your address and pick your plan - the link expires in 24 hours.
           </p>
         </div>
-        <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 px-4 py-3 text-sm text-neutral-500">
-          Didn&apos;t get it within a minute? Check your spam folder, or{" "}
+        <div className="space-y-3 rounded-xl border border-neutral-800 bg-neutral-900/50 px-4 py-4">
+          <p className="text-sm text-neutral-500">
+            Nothing after a minute? Check your spam folder first.
+          </p>
+          <ResendConfirmation action={resendConfirmation} />
+        </div>
+        <p className="text-sm leading-relaxed text-neutral-500">
+          Still nothing? If this address already has an account - including one you made with
+          Google - we don&apos;t send a second link.{" "}
           <Link
-            href="/signup"
+            href="/login"
             className="text-violet-400 underline underline-offset-2 hover:text-violet-300"
           >
-            try again
+            Sign in
+          </Link>{" "}
+          instead, or{" "}
+          <Link
+            href="/forgot-password"
+            className="text-violet-400 underline underline-offset-2 hover:text-violet-300"
+          >
+            reset the password
           </Link>
           .
-        </div>
-        <p className="text-sm text-neutral-500">
-          Already confirmed?{" "}
-          <Link href="/login" className="text-neutral-300 underline">
-            Sign in
-          </Link>
         </p>
       </AuthShell>
     );
@@ -160,13 +234,30 @@ export default async function SignupPage({
           {error === "weak" ? (
             <p className="text-sm text-red-400">Use a valid email and at least 8 characters.</p>
           ) : error === "exists" ? (
-            <p className="text-sm text-red-400">
-              That email already has an account -{" "}
-              <Link href="/login" className="underline">
-                sign in
-              </Link>
-              .
-            </p>
+            // Amber, not red: the person did nothing wrong, they already have
+            // what they were trying to make. The point is to hand them the way
+            // in, including the Google case, which is the one that confuses.
+            <div className="space-y-1.5 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3.5 py-3 text-sm">
+              <p className="font-medium text-amber-200">
+                That address already has an account, so we didn&apos;t send a new confirmation
+                link.
+              </p>
+              <p className="leading-relaxed text-amber-200/75">
+                <Link
+                  href="/login"
+                  className="font-medium underline underline-offset-2 hover:text-white"
+                >
+                  Sign in
+                </Link>{" "}
+                instead. If you created it with Google, use the Google button above.{" "}
+                <Link
+                  href="/forgot-password"
+                  className="underline underline-offset-2 hover:text-white"
+                >
+                  Forgot your password?
+                </Link>
+              </p>
+            </div>
           ) : error ? (
             <p className="text-sm text-red-400">Could not create the account. Try again.</p>
           ) : null}

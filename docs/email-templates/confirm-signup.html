@@ -1,0 +1,289 @@
+<!--
+  ============================================================================
+  DispatchSEO - "Confirm signup" transactional email
+  ============================================================================
+
+  WHAT THIS IS
+    The HTML body for the account-confirmation email a new cloud signup gets.
+    It replaces Supabase's unstyled default template.
+
+  WHERE IT GOES
+    Supabase dashboard -> Authentication -> Email Templates -> "Confirm signup".
+    Paste the whole block below (everything after this comment) into the
+    message body field. The template variable {{ .ConfirmationURL }} is
+    rendered by Supabase's Go templating, so the link mechanics are unchanged.
+
+  NOT LOADED BY THE APP
+    Nothing in this repo reads this file at runtime. It lives here as the
+    source of truth for what is pasted into Supabase, so the markup is
+    reviewable and diffable instead of only existing in a dashboard textarea.
+    Editing this file does NOT change the live email - re-paste it.
+
+  SUGGESTED SUBJECT LINE
+    Welcome to DispatchSEO - confirm your email address
+
+  RENDERING NOTES
+    - Table layout, all CSS inline. The <style> block is progressive
+      enhancement only (dark-mode repaint); stripping it changes nothing
+      load-bearing.
+    - Light canvas on purpose. The app is dark-only, but Gmail force-inverts
+      dark emails with its own algorithm and the result is unpredictable
+      (muddy violets, ghosted borders). A light neutral canvas with dark text
+      inverts cleanly in every direction, so the email is legible whether the
+      client leaves it alone, honors prefers-color-scheme, or inverts it.
+    - The button fill is violet-600 (#7c3aed) rather than violet-500 so white
+      button text clears 4.5:1 (5.7:1) on light clients and stays readable if
+      a client shifts the hue.
+    - The only image is https://dispatchseo.com/dispatch-mark.png (verified
+      200, PNG with alpha). It is decorative: the wordmark next to it carries
+      the branding, so blocked images cost nothing.
+  ============================================================================
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="supported-color-schemes" content="light dark" />
+    <title>Confirm your email address</title>
+    <!--
+      Progressive enhancement only. Clients that honor prefers-color-scheme
+      (Apple Mail, iOS Mail) get the app's near-black surfaces; everyone else
+      keeps the inline light styles, which are complete on their own.
+    -->
+    <style>
+      @media (prefers-color-scheme: dark) {
+        .ds-canvas { background-color: #0a0a0a !important; }
+        .ds-card { background-color: #171717 !important; border-color: #262626 !important; }
+        .ds-head { color: #ffffff !important; }
+        .ds-body { color: #a3a3a3 !important; }
+        .ds-quiet { color: #737373 !important; }
+        .ds-rule { background-color: #262626 !important; }
+        .ds-url { background-color: #1f1a2e !important; border-color: #3b3169 !important; }
+        .ds-link { color: #c4b5fd !important; }
+      }
+      @media only screen and (max-width: 480px) {
+        .ds-pad { padding-left: 24px !important; padding-right: 24px !important; }
+        .ds-h1 { font-size: 24px !important; }
+      }
+    </style>
+  </head>
+  <body
+    class="ds-canvas"
+    style="margin: 0; padding: 0; width: 100%; background-color: #f4f4f5; -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;"
+  >
+    <!-- Inbox preview line. Hidden in the body, shown next to the subject. -->
+    <div
+      style="display: none; max-height: 0; overflow: hidden; opacity: 0; mso-hide: all; font-size: 1px; line-height: 1px; color: #f4f4f5;"
+    >
+      Confirm your email address and your DispatchSEO account is ready. The link is good for 24
+      hours. &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+    </div>
+
+    <table
+      role="presentation"
+      border="0"
+      cellpadding="0"
+      cellspacing="0"
+      width="100%"
+      class="ds-canvas"
+      style="background-color: #f4f4f5;"
+    >
+      <tr>
+        <td align="center" style="padding: 32px 16px;">
+          <!-- Card -->
+          <table
+            role="presentation"
+            border="0"
+            cellpadding="0"
+            cellspacing="0"
+            width="600"
+            class="ds-card"
+            style="width: 600px; max-width: 600px; background-color: #ffffff; border: 1px solid #e4e4e7; border-radius: 14px;"
+          >
+            <!-- Signal bar: the one loud element, echoing the mark's grille. -->
+            <tr>
+              <td
+                height="4"
+                bgcolor="#7c3aed"
+                style="height: 4px; line-height: 4px; font-size: 4px; background-color: #7c3aed; border-radius: 13px 13px 0 0;"
+              >
+                &nbsp;
+              </td>
+            </tr>
+
+            <!-- Wordmark -->
+            <tr>
+              <td class="ds-pad" style="padding: 28px 40px 0 40px;">
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td valign="middle" style="padding-right: 10px;">
+                      <img
+                        src="https://dispatchseo.com/dispatch-mark.png"
+                        width="20"
+                        height="32"
+                        alt=""
+                        style="display: block; width: 20px; height: 32px; border: 0;"
+                      />
+                    </td>
+                    <td
+                      valign="middle"
+                      class="ds-head"
+                      style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; letter-spacing: -0.2px; color: #0a0a0a;"
+                    >
+                      DispatchSEO
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Heading + body -->
+            <tr>
+              <td class="ds-pad" style="padding: 28px 40px 0 40px;">
+                <h1
+                  class="ds-head ds-h1"
+                  style="margin: 0 0 12px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 27px; line-height: 1.2; font-weight: 700; letter-spacing: -0.6px; color: #0a0a0a;"
+                >
+                  Glad you're here
+                </h1>
+                <p
+                  class="ds-body"
+                  style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.6; color: #52525b;"
+                >
+                  Confirm your email address and your account is ready. Then you can pick a plan and
+                  point us at the site you want us working on.
+                </p>
+              </td>
+            </tr>
+
+            <!-- Button (table-based so Outlook renders the fill and padding) -->
+            <tr>
+              <td class="ds-pad" style="padding: 28px 40px 0 40px;">
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td
+                      bgcolor="#7c3aed"
+                      align="center"
+                      style="background-color: #7c3aed; border-radius: 10px; padding: 15px 30px;"
+                    >
+                      <a
+                        href="{{ .ConfirmationURL }}"
+                        style="display: inline-block; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; line-height: 1; color: #ffffff; text-decoration: none;"
+                        >Confirm email address</a
+                      >
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Plain-URL fallback -->
+            <tr>
+              <td class="ds-pad" style="padding: 24px 40px 0 40px;">
+                <p
+                  class="ds-quiet"
+                  style="margin: 0 0 8px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; line-height: 1.5; color: #71717a;"
+                >
+                  Button not working? Paste this link into your browser instead:
+                </p>
+                <table
+                  role="presentation"
+                  border="0"
+                  cellpadding="0"
+                  cellspacing="0"
+                  width="100%"
+                  class="ds-url"
+                  style="background-color: #f7f5ff; border: 1px solid #e9e3ff; border-radius: 8px;"
+                >
+                  <tr>
+                    <td style="padding: 12px 14px;">
+                      <a
+                        href="{{ .ConfirmationURL }}"
+                        class="ds-link"
+                        style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Courier New', monospace; font-size: 12px; line-height: 1.6; color: #6d28d9; text-decoration: none; word-break: break-all; overflow-wrap: anywhere;"
+                        >{{ .ConfirmationURL }}</a
+                      >
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Meta -->
+            <tr>
+              <td class="ds-pad" style="padding: 24px 40px 0 40px;">
+                <p
+                  class="ds-quiet"
+                  style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; line-height: 1.7; color: #71717a;"
+                >
+                  The link is good for 24 hours.<br />
+                  If you didn't sign up for DispatchSEO, you can ignore this email and nothing
+                  happens.
+                </p>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td class="ds-pad" style="padding: 28px 40px 0 40px;">
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                  <tr>
+                    <td
+                      height="1"
+                      class="ds-rule"
+                      style="height: 1px; line-height: 1px; font-size: 1px; background-color: #e4e4e7;"
+                    >
+                      &nbsp;
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td class="ds-pad" style="padding: 16px 40px 28px 40px;">
+                <p
+                  class="ds-quiet"
+                  style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; line-height: 1.6; color: #a1a1aa;"
+                >
+                  DispatchSEO &nbsp;·&nbsp;
+                  <a
+                    href="https://dispatchseo.com"
+                    class="ds-link"
+                    style="color: #6d28d9; text-decoration: none;"
+                    >dispatchseo.com</a
+                  >
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
+
+<!--
+  ============================================================================
+  ALTERNATIVE LINK SHAPE (cross-device confirmation)
+  ============================================================================
+
+  {{ .ConfirmationURL }} is Supabase's default: it points at the Supabase
+  /verify endpoint, which consumes the token and redirects. It works, but the
+  session lands wherever the link was opened.
+
+  The app's /auth/callback route already handles the token_hash shape via
+  verifyOtp, which is the shape that survives a user opening the link on a
+  different device than they signed up on. To switch later, replace BOTH
+  occurrences of {{ .ConfirmationURL }} above (the button href and the plain
+  fallback link, href and text) with:
+
+    {{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=signup
+
+  Nothing else in the template changes. Verify Site URL and the redirect
+  allow-list in the Supabase dashboard before switching, or the callback will
+  bounce.
+  ============================================================================
+-->
