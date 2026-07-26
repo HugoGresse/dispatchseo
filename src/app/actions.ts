@@ -35,6 +35,8 @@ import { placeAtFront, writeQueueOrder } from "@/lib/queue";
 import { requestTrendExpand, requestTrendScan } from "@/lib/trends";
 import { fetchDomainRegistrationDate } from "@/lib/domain-age";
 import { bustGscCredCache, gscAccessProbe, type GscAccessProbe } from "@/lib/gsc";
+import { uninstallPipelineFromRepo, type UninstallResult } from "@/lib/pipeline-uninstall";
+import { REPO_NOTICE_COOKIE, encodeRepoNotice } from "@/lib/repo-notice";
 
 // Every action re-validates auth server-side - the proxy only does presence
 // routing, this is the real check. dashboardAuth covers both modes: the
@@ -724,12 +726,46 @@ export async function switchProject(slug: string) {
 
 export type DeleteProjectState = { error: string } | null;
 
+// Hand a partly-failed teardown to the next page load. Deleting ends in
+// redirect(), so there is no return value left to report through - and a
+// teardown nobody is told about is indistinguishable from no teardown at all.
+async function stashRepoNotice(teardown: UninstallResult | null) {
+  if (!teardown || teardown.ok || !teardown.repo || teardown.warnings.length === 0) return;
+  (await cookies()).set(REPO_NOTICE_COOKIE, encodeRepoNotice({
+    repo: teardown.repo,
+    warnings: teardown.warnings,
+  }), {
+    path: "/",
+    // Readable from JS on purpose - the banner dismisses itself by clearing it.
+    httpOnly: false,
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24,
+  });
+}
+
 // The Settings danger zone. Deleting cascades through every table (migration
 // 0006), so keywords, rank history, suggestions, pages, GSC snapshots,
-// playbook progress, and the profile all go with the project row. The live
-// site itself is untouched - this only forgets the project. The default
+// playbook progress, and the profile all go with the project row. The default
 // project can't be deleted: it anchors the schema's column defaults and the
 // legacy MCP_API_KEY mapping.
+//
+// Deleting also takes the pipeline back OUT of the connected repo - the
+// workflows get disabled, the pack files and .dispatchseo/ get removed, and
+// the SEO_MCP_API_KEY secret is deleted. Without that, "delete" only ever
+// deleted our half: the repo kept firing its crons at a backend that no
+// longer knew the token, so the owner got a GitHub failure email every hour,
+// forever, blaming DispatchSEO for a deletion they asked for. Content is
+// never touched - published guides, tools, and the templates the setup agent
+// scaffolded are the customer's site, not our machinery.
+//
+// The repo teardown runs BEFORE the row delete (it needs github_repo and the
+// installation id) and can never block it: a GitHub outage, a revoked App, or
+// a protected branch must not be able to trap someone in a project they asked
+// to delete. Anything left behind rides out on the cookie above instead.
+//
+// keep_repo is the migration escape hatch: moving a site to another
+// DispatchSEO install (cloud -> self-host, most often) means deleting the
+// project here while the repo's pipeline must keep working.
 export async function deleteProject(
   _prev: DeleteProjectState,
   formData: FormData,
@@ -755,8 +791,23 @@ export async function deleteProject(
     return { error: `Type ${project.domain} exactly to confirm.` };
   }
 
+  const teardown =
+    formData.get("keep_repo") === "on" ? null : await uninstallPipelineFromRepo(project);
+
   const { error } = await db().from("projects").delete().eq("id", project.id);
-  if (error) return { error: error.message };
+  // The repo teardown already happened by now, so a failure here leaves a
+  // live project whose pipeline has been pulled out from under it. Say that
+  // outright - "delete failed" on its own would send the owner back to a
+  // dashboard that looks fine and a repo that has quietly stopped working.
+  if (error) {
+    return {
+      error:
+        teardown && teardown.repo
+          ? `${project.name} could not be deleted (${error.message}), but DispatchSEO was already removed from ${teardown.repo}. Re-run the delete, or reconnect the repo from Settings to put the pipeline back.`
+          : error.message,
+    };
+  }
+  await stashRepoNotice(teardown);
 
   // Drop the cookie instead of pinning a slug: the default project's slug
   // is user-defined since the wizard claims that row, and getActiveProject
@@ -823,6 +874,46 @@ export async function deleteAccount(
     }
   }
 
+  // Take the pipeline back out of every connected repo before the rows go -
+  // afterwards there is no github_repo left to read. Best-effort and never
+  // blocking: billing is already cancelled by this point, so a GitHub problem
+  // must not be allowed to strand someone mid-deletion. Repos we couldn't
+  // finish are named on the way out instead.
+  const { data: owned, error: ownedError } = await db()
+    .from("projects")
+    .select("github_repo, github_installation_id")
+    .eq("owner_user_id", user.id);
+  // Abort rather than treat "couldn't read them" as "there are none": that
+  // would delete the account while quietly leaving every repo running, which
+  // is precisely the failure this teardown exists to end. Nothing has been
+  // destroyed at this point - the plan is cancelled, which is recoverable by
+  // re-subscribing, and the retry is safe.
+  if (ownedError) {
+    return {
+      error: `Your plan was cancelled, but your sites could not be read, so nothing was deleted: ${ownedError.message}`,
+    };
+  }
+  const teardowns = await Promise.allSettled(
+    (owned ?? [])
+      .filter((p) => p.github_repo)
+      .map((p) =>
+        uninstallPipelineFromRepo({
+          github_repo: p.github_repo,
+          // Must be carried through: in cloud this is what picks the App
+          // installation token, and dropping it would silently downgrade
+          // every teardown to the (unset) instance PAT path.
+          github_installation_id: p.github_installation_id,
+        }),
+      ),
+  );
+  // Capped: this rides out in a redirect URL, and a long list would push it
+  // past what proxies will carry - losing the whole notice rather than part
+  // of it. /login renders the overflow as "and N more".
+  const leftover = teardowns
+    .filter((t) => t.status === "fulfilled" && !t.value.ok && t.value.repo)
+    .map((t) => (t as PromiseFulfilledResult<UninstallResult>).value.repo as string)
+    .slice(0, 20);
+
   const { error: projectsError } = await db()
     .from("projects")
     .delete()
@@ -842,8 +933,12 @@ export async function deleteAccount(
 
   // Straight to /logout rather than clearing cookies here: it already tolerates
   // signing out a user that no longer exists, and it owns the cookie names.
+  // Any repo we couldn't finish cleaning rides along to the login screen: the
+  // dashboard banner is useless here (there's no account left to sign into),
+  // and someone whose repo is still running our workflows has to be told
+  // while they're still looking at the screen.
   (await cookies()).delete(PROJECT_COOKIE);
-  redirect("/logout");
+  redirect(leftover.length > 0 ? `/logout?leftover=${encodeURIComponent(leftover.join(","))}` : "/logout");
 }
 
 // Shared core of project creation: validates the form, inserts the row with a

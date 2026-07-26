@@ -5,6 +5,7 @@ import { COOKIE_NAME, cookieSecure, cookieValue, isCorrectPassword } from "@/lib
 import { getSetupState } from "@/lib/setup";
 import { isCloudMode } from "@/lib/cloud";
 import { supabaseAuth } from "@/lib/cloud-auth";
+import { REPO_SLUG } from "@/lib/repo-notice";
 import {
   clearLoginFailures,
   clientIp,
@@ -57,7 +58,32 @@ async function cloudLogin(formData: FormData) {
 const inputCls =
   "w-full rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-400";
 
-function CloudLoginPage({ error, reset }: { error?: string; reset?: string }) {
+function CloudLoginPage({
+  error,
+  reset,
+  leftover,
+}: {
+  error?: string;
+  reset?: string;
+  leftover?: string;
+}) {
+  // Repos whose pipeline teardown didn't finish during account deletion. The
+  // account is gone, so this screen is the last chance to tell them something
+  // of theirs is still scheduled - saying nothing would leave them getting
+  // failure emails from a product they no longer have.
+  //
+  // Filtered to owner/repo shape because this page is UNAUTHENTICATED and the
+  // value is a plain query param: anyone can link to /login?leftover=... and
+  // without this, that is a free "make dispatchseo.com say arbitrary alarming
+  // text" primitive. Constrained to repo slugs it stops being a message
+  // channel. React escapes the output either way, so this is about the
+  // phishing pretext, not injection.
+  const matched = (leftover ?? "")
+    .split(",")
+    .map((r) => r.trim())
+    .filter((r) => REPO_SLUG.test(r));
+  const stranded = matched.slice(0, 5);
+  const strandedExtra = matched.length - stranded.length;
   return (
     <AuthShell>
       <h1 className="text-xl font-semibold text-white">
@@ -66,6 +92,33 @@ function CloudLoginPage({ error, reset }: { error?: string; reset?: string }) {
           DispatchSEO
         </Link>
       </h1>
+      {stranded.length > 0 ? (
+        <div className="space-y-1.5 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-200/90">
+          <p className="leading-relaxed">
+            Your account is deleted. We couldn&apos;t remove our workflows from{" "}
+            {matched.length === 1 ? "one repo" : `${matched.length} repos`} — disable the{" "}
+            <span className="font-mono text-xs">seo-*</span> workflows there or they&apos;ll keep
+            failing:
+          </p>
+          <ul className="space-y-0.5">
+            {stranded.map((repo) => (
+              <li key={repo}>
+                <a
+                  href={`https://github.com/${repo}/actions`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-xs text-amber-200 underline underline-offset-2 hover:text-amber-100"
+                >
+                  {repo}
+                </a>
+              </li>
+            ))}
+            {strandedExtra > 0 ? (
+              <li className="text-xs text-amber-200/70">and {strandedExtra} more</li>
+            ) : null}
+          </ul>
+        </div>
+      ) : null}
       {reset ? (
         <p className="rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm text-green-400">
           Password updated - sign in with your new password.
@@ -106,10 +159,10 @@ function CloudLoginPage({ error, reset }: { error?: string; reset?: string }) {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; reset?: string }>;
+  searchParams: Promise<{ error?: string; reset?: string; leftover?: string }>;
 }) {
-  const { error, reset } = await searchParams;
-  if (isCloudMode()) return <CloudLoginPage error={error} reset={reset} />;
+  const { error, reset, leftover } = await searchParams;
+  if (isCloudMode()) return <CloudLoginPage error={error} reset={reset} leftover={leftover} />;
   // A fresh deploy has nothing to log into yet - hand off to the wizard.
   if ((await getSetupState()) !== "ready") redirect("/setup");
   return (

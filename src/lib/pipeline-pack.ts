@@ -67,6 +67,13 @@ export function hasDataforseo(project: Project): boolean {
   );
 }
 
+// Just the manifest, no personalization. The uninstall side matches repo
+// files against this so the "what we installed" list has exactly one source
+// and can never drift from what install actually writes.
+export function pipelinePackPaths(): string[] {
+  return (pack.files as PackFile[]).map((f) => f.path);
+}
+
 export async function getPipelinePack(project: Project): Promise<PackFile[]> {
   const base = await backendBaseUrl();
   return (pack.files as PackFile[]).map((f) => {

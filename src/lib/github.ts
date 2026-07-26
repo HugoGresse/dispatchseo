@@ -42,7 +42,10 @@ function refInstallation(ref: RepoRef): number | null {
   return ref.github_installation_id ?? null;
 }
 
-async function tokenForRef(ref: RepoRef): Promise<string | null> {
+// Exported for pipeline-uninstall.ts, which needs the same credential
+// resolution (App installation token in cloud, instance PAT on self-host) but
+// drives raw endpoints this module has no other reason to wrap.
+export async function tokenForRef(ref: RepoRef): Promise<string | null> {
   const installation = refInstallation(ref);
   if (isCloudMode() && installation) {
     try {

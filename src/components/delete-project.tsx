@@ -9,6 +9,12 @@ import { deleteProject, type DeleteProjectState } from "@/app/actions";
 export function DeleteProjectForm({
   slug,
   domain,
+  // The connected repo, when there is one. Deleting now reaches into it -
+  // disabling the seo-* workflows, removing the pack files and .dispatchseo/,
+  // deleting the SEO_MCP_API_KEY secret - so this form has to say so BEFORE
+  // the click. Naming the repo is the point: "your repo" is vague enough to
+  // be scary, owner/name is checkable.
+  repo = null,
   // Cloud, this is the account's only site, and the subscription is live.
   // Deleting cancels nothing, and afterwards there is no dashboard left to
   // find Billing from - so say it here, before the click, rather than leaving
@@ -17,6 +23,7 @@ export function DeleteProjectForm({
 }: {
   slug: string;
   domain: string;
+  repo?: string | null;
   lastSiteWhileSubscribed?: boolean;
 }) {
   const [typed, setTyped] = useState("");
@@ -43,6 +50,31 @@ export function DeleteProjectForm({
           </a>{" "}
           if that is what you are here to do.
         </p>
+      ) : null}
+      {repo ? (
+        <div className="space-y-2 rounded-lg border border-neutral-800 bg-neutral-950/60 px-3 py-2.5 text-sm">
+          <p className="leading-relaxed text-neutral-400">
+            This also removes DispatchSEO from{" "}
+            <span className="font-mono text-xs text-neutral-200">{repo}</span>: the{" "}
+            <span className="font-mono text-xs">seo-*</span> workflows are disabled and deleted,
+            along with <span className="font-mono text-xs">.dispatchseo/</span> and the{" "}
+            <span className="font-mono text-xs">SEO_MCP_API_KEY</span> secret. Otherwise they keep
+            running on schedule against a project that no longer exists.{" "}
+            <b className="font-medium text-neutral-300">
+              Published guides, tools, and page templates are left alone.
+            </b>
+          </p>
+          <label className="flex cursor-pointer items-start gap-2 text-neutral-400">
+            <input
+              type="checkbox"
+              name="keep_repo"
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-neutral-600 bg-neutral-900 accent-red-500"
+            />
+            <span className="text-xs leading-relaxed">
+              Leave the repo alone — I&apos;m moving this site to another DispatchSEO install
+            </span>
+          </label>
+        </div>
       ) : null}
       <input type="hidden" name="slug" value={slug} />
       <label className="block space-y-1.5">

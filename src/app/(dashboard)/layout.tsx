@@ -9,6 +9,8 @@ import { ModeSwitch } from "@/components/mode-switch";
 import { getActiveProjectOrNull, scopedProjects } from "@/lib/active-project";
 import { isCloudMode } from "@/lib/cloud";
 import { SetupProgressBanner } from "@/components/setup-progress-banner";
+import { RepoCleanupBanner } from "@/components/repo-cleanup-banner";
+import { REPO_NOTICE_COOKIE, decodeRepoNotice } from "@/lib/repo-notice";
 
 // Shared shell for every dashboard screen. Auth is checked per page (the
 // requireDashboard gate in auth-gate.ts) - this layout is presentation only. force-dynamic
@@ -70,6 +72,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // acknowledged yet. Silent for projects created after it shipped (nothing is
   // "new" to an owner who never saw the old version).
   const release = unseenRelease(jar.get(CHANGELOG_COOKIE)?.value, active?.created_at);
+  // One-shot, set by a project delete whose repo teardown only partly landed.
+  // Outranks both banners below: it's the only one reporting something the
+  // owner may still need to go switch off.
+  const repoNotice = decodeRepoNotice(jar.get(REPO_NOTICE_COOKIE)?.value);
   return (
     <div className="flex min-h-screen bg-neutral-950 text-neutral-100">
       <Sidebar billing={billing} hasProject={active != null} />
@@ -103,7 +109,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
             </div>
           </div>
         </header>
-        {setupInProgress && active ? (
+        {repoNotice ? (
+          <RepoCleanupBanner repo={repoNotice.repo} warnings={repoNotice.warnings} />
+        ) : setupInProgress && active ? (
           <SetupProgressBanner
             slug={active.slug}
             repo={active.github_repo}

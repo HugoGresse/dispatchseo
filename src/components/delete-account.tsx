@@ -53,7 +53,10 @@ export function DeleteAccountForm({
         {subscribed
           ? "Your plan is cancelled first - if that fails, nothing is deleted."
           : "You have no active plan, so there is nothing to cancel."}{" "}
-        The live websites themselves are untouched. There is no undo.
+        {siteCount === 0
+          ? ""
+          : "DispatchSEO's workflows are removed from every connected repo so nothing keeps running, but published content is left alone. "}
+        The live websites themselves keep working. There is no undo.
       </p>
       <label className="block space-y-1.5">
         <span className="text-sm text-neutral-400">

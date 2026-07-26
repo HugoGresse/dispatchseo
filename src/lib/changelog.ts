@@ -30,6 +30,35 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-26.3",
+    date: "2026-07-26",
+    title: "Deleting a site now actually ends it",
+    summary:
+      "Deleting a project takes DispatchSEO back out of the connected repo instead of leaving its workflows running.",
+    changes: [
+      {
+        kind: "fixed",
+        text:
+          "Deleting a project only ever deleted our side of it. The workflows we committed to your repo kept running on schedule, failing against a project that no longer existed, and emailing you about it - with an error blaming DispatchSEO rather than the delete you asked for. Deleting now disables and removes those workflows, the .dispatchseo files, and the SEO_MCP_API_KEY secret.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Your content is never part of that cleanup. Published guides and tools, the page templates the setup run built, and your sitemap wiring all stay exactly where they are - only our machinery is removed.",
+      },
+      {
+        kind: "new",
+        text:
+          "Moving a site to another DispatchSEO install? Tick \"leave the repo alone\" when you delete, and the pipeline keeps working while the old project goes away.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Closing your account cleans out every connected repo the same way, and tells you on the way out if any repo could not be reached.",
+      },
+    ],
+  },
+  {
     version: "2026-07-26.2",
     date: "2026-07-26",
     title: "Getting in, and getting out",

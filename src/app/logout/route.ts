@@ -17,7 +17,12 @@ export async function GET(req: NextRequest) {
   const jar = await cookies();
   jar.delete("dash_auth");
   const url = req.nextUrl.clone();
+  // Account deletion forwards the repos whose pipeline teardown didn't finish
+  // so /login can name them. Only that one param survives the wipe - the rest
+  // of the query string is never meant to outlive a sign-out.
+  const leftover = req.nextUrl.searchParams.get("leftover");
   url.pathname = "/login";
   url.search = "";
+  if (leftover) url.searchParams.set("leftover", leftover);
   return NextResponse.redirect(url);
 }

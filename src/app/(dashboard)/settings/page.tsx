@@ -16,6 +16,12 @@ import { CopyBlock } from "@/components/client";
 import { PageHeader, SectionTitle } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
+// Server actions run under the invoking page's limit, and this page owns the
+// delete actions - which now walk a customer repo (disable ~11 workflows,
+// commit a removal, delete a secret) BEFORE the row is deleted. The default
+// 10s could cut that off mid-teardown, which would leave the project intact
+// but its workflows half-disabled, so give the danger zone real headroom.
+export const maxDuration = 60;
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
@@ -231,12 +237,12 @@ export default async function SettingsPage() {
               <p className="text-sm text-neutral-400">
                 Deleting {project.name} forgets everything DispatchSEO tracked for it: keywords,
                 rank history, suggestions, the pages registry, traffic snapshots, playbook
-                progress, and the product profile. The live site itself is untouched. There is
-                no undo.
+                progress, and the product profile. There is no undo.
               </p>
               <DeleteProjectForm
                 slug={project.slug}
                 domain={project.domain}
+                repo={project.github_repo}
                 lastSiteWhileSubscribed={lastSiteWhileSubscribed}
               />
             </>
