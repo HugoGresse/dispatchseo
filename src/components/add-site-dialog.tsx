@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState, startTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { wizardCreateProject, type WizardCreateState } from "@/app/actions";
@@ -42,6 +42,21 @@ export function AddSiteDialog({
     null,
   );
   const nameRef = useRef<HTMLInputElement>(null);
+  // React 19 RESETS a form once its action resolves - so a rejected submit
+  // (unreachable domain, duplicate site, plan full) handed the error back with
+  // every field blanked, and the owner got to retype all of it to fix one
+  // typo. Worse, the retry then silently no-opped: the emptied required field
+  // failed native validation before the action ever ran. Both seen in a
+  // browser, 2026-07-26.
+  //
+  // Controlled state alone does NOT fix it - the reset clears the DOM input
+  // while the state still holds the old value, so React sees no change and
+  // never re-renders to put it back. The reset only happens when the action is
+  // passed to <form action={...}>; calling it inside a transition ourselves
+  // (see onSubmit) keeps the fields exactly as typed.
+  const [name, setName] = useState("");
+  const [domain, setDomain] = useState("");
+  const [repo, setRepo] = useState("");
   // Portalled to <body> on purpose. The switcher lives in a sticky header with
   // backdrop-blur, and a backdrop-filter makes its element the containing block
   // for position:fixed descendants - rendered in place, this overlay would be
@@ -54,11 +69,23 @@ export function AddSiteDialog({
   // so refreshing the current route re-renders every server component against
   // it - the owner lands on the NEW site's dashboard, setup cards and all,
   // without a navigation. Same pattern the project switch above uses.
+  // Fire once per successful submit, not once per render. useActionState keeps
+  // returning the same ok state forever, and onClose arrives as an inline arrow
+  // whose identity changes every render - so without this guard the effect
+  // re-ran and slammed the dialog shut the instant it was reopened, making
+  // "Add project" work exactly once per page load. Comparing the state OBJECT
+  // (not a boolean) still lets a genuinely new success re-trigger it.
+  const handledRef = useRef<WizardCreateState>(null);
   useEffect(() => {
-    if (state && "ok" in state && state.ok) {
-      onClose();
-      router.refresh();
-    }
+    if (!state || !("ok" in state) || !state.ok || handledRef.current === state) return;
+    handledRef.current = state;
+    // Clear before closing: the fields are controlled, so without this the
+    // next "Add site" opens pre-filled with the site just created.
+    setName("");
+    setDomain("");
+    setRepo("");
+    onClose();
+    router.refresh();
   }, [state, onClose, router]);
 
   useEffect(() => {
@@ -99,7 +126,14 @@ export function AddSiteDialog({
             : "Just the basics here. Installing the pipeline and connecting Search Console happens on the new site's dashboard, one card at a time."}
         </p>
 
-        <form action={formAction} className="mt-5 space-y-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const data = new FormData(e.currentTarget);
+            startTransition(() => formAction(data));
+          }}
+          className="mt-5 space-y-4"
+        >
           {/* Defaults that the row needs and later screens own: mode is
               switchable from the header, content layout is detected during
               install. Asking here would make a two-field dialog a five-field one. */}
@@ -111,6 +145,8 @@ export function AddSiteDialog({
             <input
               ref={nameRef}
               name="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
               required
               maxLength={80}
               placeholder="Acme"
@@ -123,6 +159,8 @@ export function AddSiteDialog({
             <span className="mb-1.5 block text-sm font-medium text-neutral-300">Domain</span>
             <input
               name="domain"
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
               required
               placeholder="acme.com"
               autoComplete="off"
@@ -142,6 +180,8 @@ export function AddSiteDialog({
               <span className="mb-1.5 block text-sm font-medium text-neutral-300">GitHub repo</span>
               <input
                 name="repo"
+                value={repo}
+                onChange={(e) => setRepo(e.target.value)}
                 required
                 placeholder="owner/repo"
                 autoComplete="off"
