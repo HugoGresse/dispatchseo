@@ -18,7 +18,14 @@ import {
   type WizardGscPropertyState,
 } from "@/app/actions";
 import type { CloudWizardScreen } from "@/lib/wizard-screens";
-import { CopyBox, ErrorLine, StepIcon, inputClass } from "@/components/wizard-ui";
+import {
+  CopyBox,
+  ErrorLine,
+  PrereqCallout,
+  StepHelp,
+  StepIcon,
+  inputClass,
+} from "@/components/wizard-ui";
 
 // The cloud onboarding wizard - six screens (c0-c5) over a 5-step rail.
 // Cloud drops everything self-host's wizard needs a terminal for: GitHub
@@ -324,10 +331,16 @@ export function CloudOnboardingWizard(props: {
             </svg>
           </StepIcon>
           <h2 className="text-2xl font-semibold tracking-tight">Add your site</h2>
-          <p className="mb-4 text-base text-neutral-400">
+          <p className="mb-2.5 text-base text-neutral-400">
             The website you want Google traffic for. Takes 30 seconds - GitHub and Claude Code
             connect next.
           </p>
+          {/* Same slot on all six screens - see StepHelp's note on why the
+              position is uniform and why it opens in a new tab. */}
+          <StepHelp
+            href="/docs/setup-wizard#on-dispatchseo-com-the-hosted-version"
+            label="What goes in these fields?"
+          />
           <form action={createAction} className="space-y-3 rounded-xl bg-neutral-900 p-4">
             {createState && "error" in createState ? <ErrorLine msg={createState.error} /> : null}
             <label className="block space-y-1.5">
@@ -377,16 +390,22 @@ export function CloudOnboardingWizard(props: {
             </svg>
           </StepIcon>
           <h2 className="text-2xl font-semibold tracking-tight">Connect GitHub</h2>
-          <p className="mb-4 text-base text-neutral-400">
+          <p className="mb-2.5 text-base text-neutral-400">
             DispatchSEO installs its pipeline into your repo and opens (and merges) pull requests
             through the DispatchSEO GitHub App - no tokens to paste.
           </p>
+          <StepHelp
+            href="/docs/setup-wizard#on-dispatchseo-com-the-hosted-version"
+            label="What does the GitHub App do?"
+          />
           {ghFlag === "error" ? (
-            <ErrorLine
-              msg={ghError ? `GitHub connection failed: ${ghError}` : "GitHub connection failed. Try again."}
-            />
+            <div className="mb-3.5">
+              <ErrorLine
+                msg={ghError ? `GitHub connection failed: ${ghError}` : "GitHub connection failed. Try again."}
+              />
+            </div>
           ) : null}
-          <div className="mt-3.5 rounded-xl bg-neutral-900 p-4">
+          <div className="rounded-xl bg-neutral-900 p-4">
             {githubRepo ? (
               <p className="text-sm text-neutral-400">GitHub is connected. Continuing…</p>
             ) : installationId ? (
@@ -450,12 +469,28 @@ export function CloudOnboardingWizard(props: {
             </svg>
           </StepIcon>
           <h2 className="text-2xl font-semibold tracking-tight">Connect your Claude Code</h2>
-          <p className="mb-4 text-base text-neutral-400">
+          <p className="mb-2.5 text-base text-neutral-400">
             Your Claude Code does the research and writing, on your existing subscription -
             nothing extra to pay, and nothing is billed by DispatchSEO.
           </p>
+          <StepHelp href="/docs/install-claude-code" label="I don't have Claude Code yet" />
           <div className="rounded-xl bg-neutral-900 p-4">
-            <p className="mb-2 text-base font-medium text-neutral-200">
+            {/* The prerequisite goes ABOVE the command, not below it: with no
+                Claude Code installed the command prints "command not found",
+                and a beginner reads that as a broken product rather than a
+                missing tool. This screen is where the funnel used to end. */}
+            <PrereqCallout
+              title="Never used Claude Code before?"
+              body={
+                <>
+                  Install it first - it takes about 2 minutes. Until you do, the command below
+                  prints <code className="font-mono text-neutral-300">command not found</code>.
+                </>
+              }
+              href="/docs/install-claude-code"
+              cta="Install Claude Code"
+            />
+            <p className="mb-2 mt-4 text-base font-medium text-neutral-200">
               Run this in a terminal and copy what it prints
             </p>
             <CopyBox text="claude setup-token" />
@@ -501,12 +536,17 @@ export function CloudOnboardingWizard(props: {
             </svg>
           </StepIcon>
           <h2 className="text-2xl font-semibold tracking-tight">Connect Google Search Console</h2>
-          <p className="mb-4 text-base text-neutral-400">
+          <p className="mb-2.5 text-base text-neutral-400">
             This is where your traffic and ranking data comes from. One click, no key files to
             manage.
           </p>
-          {gscError ? <ErrorLine msg={gscError} /> : null}
-          <div className="mt-3.5 rounded-xl bg-neutral-900 p-4">
+          <StepHelp href="/docs/search-console" label="Walk me through Search Console" />
+          {gscError ? (
+            <div className="mb-3.5">
+              <ErrorLine msg={gscError} />
+            </div>
+          ) : null}
+          <div className="rounded-xl bg-neutral-900 p-4">
             {gscConnected ? (
               <>
                 <p className="text-sm text-emerald-300">
@@ -631,10 +671,11 @@ export function CloudOnboardingWizard(props: {
             </svg>
           </StepIcon>
           <h2 className="text-2xl font-semibold tracking-tight">Should anything go live without you?</h2>
-          <p className="mb-4 text-base text-neutral-400">
+          <p className="mb-2.5 text-base text-neutral-400">
             Both modes research and build the same way. The only difference is whether a human
             says yes before something is published.
           </p>
+          <StepHelp href="/docs/setup-wizard#step-5-publish-mode" label="Explain the two modes" />
           <div className="grid gap-3.5 sm:grid-cols-2">
             <button
               type="button"
@@ -716,13 +757,14 @@ export function CloudOnboardingWizard(props: {
             </svg>
           </StepIcon>
           <h2 className="text-2xl font-semibold tracking-tight">You&apos;re live.</h2>
-          <p className="mb-4 text-base text-neutral-400">
+          <p className="mb-2.5 text-base text-neutral-400">
             Installing the pipeline into {created?.name ?? "your"}&apos;s repo now - no more
             pastes needed. This runs on GitHub and usually takes{" "}
             <b className="font-medium text-neutral-200">5-15 minutes</b>. You can leave this page
             and come back - setup finishes on its own, and your dashboard unlocks the moment
             it&apos;s done.
           </p>
+          <StepHelp href="/docs/day-to-day" label="What happens next?" />
 
           <div className="rounded-xl bg-neutral-900 p-4">{renderInstallBanner()}</div>
 

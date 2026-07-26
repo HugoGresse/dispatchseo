@@ -942,7 +942,22 @@ export default async function Home() {
                 </>,
                 "It will ask you to: approve once in the browser (your Claude Code token - verified before it's saved), and type your DataForSEO email + the API password from app.dataforseo.com/api-access (only if this project uses DataForSEO; NOT your login password).",
                 "It ends by launching your Claude Code, which fetches the pipeline, adapts it to your stack, opens the install PR, and flips this card green itself.",
-                "Needs: Claude Code and the GitHub CLI (gh, logged in). The script tells you exactly what's missing if anything is.",
+                // A named prerequisite with no way to satisfy it is a dead
+                // end, and this card is where a half-finished install lands
+                // when the wizard was closed - so it links out like the
+                // wizard's own Claude Code screens do.
+                <>
+                  Needs: Claude Code and the GitHub CLI (gh, logged in). The script tells you
+                  exactly what&apos;s missing if anything is - and{" "}
+                  <Link
+                    href="/docs/install-claude-code"
+                    target="_blank"
+                    className="text-sky-400 underline underline-offset-2 hover:text-sky-300"
+                  >
+                    installing either one
+                  </Link>{" "}
+                  is a one-time, five-minute detour.
+                </>,
                 "Connecting more than one site? Each site's repo gets its own command with its own key - that key is what sends each repo's work to the right project. Safe to re-run any time.",
               ]}
               closing="The key in the command only sees this project's data. In Semi mode nothing merges without you; the PRs just appear under Next actions."
