@@ -30,6 +30,44 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-26.2",
+    date: "2026-07-26",
+    title: "Getting in, and getting out",
+    summary:
+      "Sign-up and confirmation links actually work now, Settings says which account you're in, and you can close the account yourself.",
+    changes: [
+      {
+        kind: "fixed",
+        text:
+          "Signing up with an address that already had an account showed \"check your inbox\" for an email that was never sent. It now says the account exists and points you at signing in.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "The confirmation link in that email dropped you on the homepage instead of signing you in. It now takes you straight into your dashboard.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "\"Continue with Google\" quietly reused whichever Google account you last signed in with, so a second account could land you in the first one. It asks which account now.",
+      },
+      {
+        kind: "new",
+        text: "Settings shows which account you're signed in as.",
+      },
+      {
+        kind: "new",
+        text:
+          "You can close your account from Settings. It cancels your plan first and removes your sites, and if the cancellation doesn't go through, nothing is deleted.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Deleting your only site now warns you that it doesn't cancel your plan, and with no sites left the sidebar stops offering links that bounce you back to the wizard.",
+      },
+    ],
+  },
+  {
     version: "2026-07-26",
     date: "2026-07-26",
     title: "A shorter, clearer setup",
