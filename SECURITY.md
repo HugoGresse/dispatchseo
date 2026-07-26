@@ -18,26 +18,52 @@ from `main` and pull updates regularly.
 
 ## The security model (what's worth knowing before reporting)
 
-DispatchSEO is a **single-owner** app - there is deliberately no user model,
-no signup, and no role system. The trust boundaries are:
+The same codebase runs in **two modes**, and which one you're looking at
+decides what counts as a vulnerability. The switch is `CLOUD_MODE`
+(`src/lib/cloud.ts`), read per-request and never at module scope.
 
-- **Dashboard**: one password (`DASHBOARD_PASSWORD`) gates every page. The
-  session cookie is an HMAC keyed by that password, so rotating the password
-  invalidates all sessions. Login is rate-limited (5 failed attempts per IP =
-  15-minute lockout).
+**Self-hosted (the default, `CLOUD_MODE` unset)** is a single-owner app: no
+user model, no signup, no roles. One person owns every project in the
+deployment.
+
+- **Dashboard**: one password gates every page (`DASHBOARD_PASSWORD`, or the
+  hash chosen in the setup wizard). The session cookie is an HMAC keyed by
+  that secret, so rotating it invalidates all sessions. Login is rate-limited
+  (5 failed attempts per IP = 15-minute lockout).
+
+**Hosted cloud (`dispatchseo.com`, `CLOUD_MODE=true`)** is genuinely
+multi-tenant: Supabase Auth accounts, per-account subscriptions, and many
+customers' projects in one database.
+
+- **Dashboard**: Supabase Auth session (email/password or Google), checked
+  through the central gate in `src/lib/auth-gate.ts`. There is no shared
+  password.
+- **Tenant isolation is a real boundary here.** Every project row carries an
+  `owner_user_id`, and actions that take a project or row id assert ownership
+  via `src/lib/tenant-guard.ts` before touching anything.
+  **Cross-tenant reads AND writes are in scope and we want those reports** -
+  including subtler ones than data reads, e.g. one tenant clearing another's
+  alerts or influencing their scheduled work.
+
+Boundaries shared by both modes:
+
 - **MCP server** (`/api/mcp`): per-project 192-bit bearer tokens. A token IS
-  the tenant - it can only touch its own project's rows.
+  the tenant - it can only touch its own project's rows, and must never
+  reveal another project's existence.
 - **Crons** (`/api/cron/*`): a shared `CRON_SECRET` bearer token.
 - **Database**: server code holds full read/write and it never reaches the
   browser - server-only modules (`src/lib/db.ts` and friends) are kept out of
   client bundles by design. On the **hosted/cloud** deployment the store is
-  Supabase with RLS enabled and zero policies, gated by the service-role key.
-  On a **self-hosted Docker** stack it's the bundled Postgres + PostgREST,
-  reachable only on the stack's internal Docker network (never exposed to the
-  host) - no Supabase and no service-role key involved.
+  Supabase with RLS enabled and zero policies, gated by the service-role key -
+  so isolation is enforced in application code, not by RLS, which is exactly
+  why the tenant-guard assertions matter. On a **self-hosted Docker** stack
+  it's the bundled Postgres + PostgREST, reachable only on the stack's
+  internal Docker network (never exposed to the host) - no Supabase and no
+  service-role key involved.
 
-Reports that assume a multi-user model (e.g. "user A can see user B's data"
-within one deployment) are out of scope - there is only one user.
+Out of scope: multi-user findings against a **self-hosted** deployment
+("user A can see user B's data") - there really is only one user there. The
+same finding against the hosted cloud is in scope and worth reporting.
 
 ## Notes for self-hosters
 
