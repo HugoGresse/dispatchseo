@@ -40,20 +40,6 @@ export const SLIDES: Slide[] = [
     alt: "Automations page with per-feature toggles for auto-approval and daily builds",
   },
   {
-    id: "instructions",
-    title: "You write the rules",
-    caption: "The playbook your agent follows, editable live.",
-    image: "/screenshots/instructions.png",
-    alt: "Instructions page showing the site's theme, voice, and what the agent builds",
-  },
-  {
-    id: "rankings",
-    title: "Watch ranks move",
-    caption: "Daily SERP checks on every keyword.",
-    image: "/screenshots/rankings-v2.png",
-    alt: "Rank tracking table showing keyword positions over time",
-  },
-  {
     id: "trends",
     title: "Catch trends early",
     caption: "Rising topics in your niche become guides.",
@@ -66,12 +52,5 @@ export const SLIDES: Slide[] = [
     caption: "Know when AI assistants cite you.",
     image: "/screenshots/ai-visibility.png",
     alt: "AI visibility page tracking how often AI assistants cite the site",
-  },
-  {
-    id: "backlinks",
-    title: "A backlink playbook, researched",
-    caption: "Every link worth getting, with exact steps.",
-    image: "/screenshots/backlinks.png",
-    alt: "Backlink playbook listing free and paid link opportunities with submission steps",
   },
 ];
