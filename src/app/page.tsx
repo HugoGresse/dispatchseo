@@ -222,11 +222,13 @@ export default async function LandingPage({
           <div className="cta-row" id="get-started">
             <DomainCta />
           </div>
-          {/* The mascot's aside, attached to the hero at every width and in
-              normal flow - it scrolls away with the hero rather than following
-              the reader. See the note at the top of why-card.tsx. */}
-          <WhyCard />
         </div>
+        {/* The mascot's aside, attached to the hero at every width and in
+            normal flow - it scrolls away with the hero rather than following
+            the reader. Deliberately a sibling of .wrap, not a child: it hangs
+            off the hero's bottom-right corner (where it used to float), which
+            means clearing .wrap's 1120px measure. See why-card.tsx. */}
+        <WhyCard />
       </header>
 
       {/* ==================== FEATURES ==================== */}
