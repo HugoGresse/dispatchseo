@@ -42,7 +42,13 @@ async function claim(formData: FormData) {
     maxAge: 60 * 60 * 24 * 30,
     path: "/",
   });
-  redirect("/setup/keys");
+  // Straight into the wizard. The generated keys used to get their own
+  // reveal screen here, but nobody has to do anything with them at this
+  // point - the wizard hands over the MCP token inside the ready-to-paste
+  // `claude mcp add` command, and the install writes the cron secret into
+  // the repo itself. Both stay readable on Settings for the rare moment
+  // someone needs the raw value.
+  redirect("/onboarding");
 }
 
 // Shared primary-action look for the three "advance the wizard" controls
@@ -180,7 +186,7 @@ export default async function SetupPage({
               <h2 className="text-2xl font-semibold text-white">Choose your password</h2>
               <p className="mt-3 text-lg leading-relaxed text-neutral-400">
                 Pick the password you'll use to log in to this dashboard -
-                everything else is generated for you on the next screen.
+                every other key this install needs is generated for you.
               </p>
             </div>
             <form action={claim} className="space-y-4">

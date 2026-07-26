@@ -49,7 +49,7 @@ export function proxy(req: NextRequest) {
     // yet by definition when they land here.
     pathname === "/auth/callback" ||
     // First-boot wizard: must be reachable before any password exists. Only
-    // the exact path - /setup/keys stays behind the cookie-presence gate.
+    // the exact path - claiming redirects into /onboarding, which is gated.
     pathname === "/setup" ||
     pathname === "/blog" ||
     pathname.startsWith("/blog/") ||

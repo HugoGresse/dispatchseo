@@ -14,7 +14,9 @@ Things that were tempting but deliberately not built. Add here instead of buildi
 - **First-boot setup wizard - BUILT 2026-07-19**, same day it was queued (owner's
   call during the deploy-button test). /setup walks a fresh deploy through connect-db →
   run-migrations → claim (password chosen there, scrypt hash in instance_settings,
-  migration 0026 applied); MCP + cron keys are generated/revealed at /setup/keys.
+  migration 0026 applied); MCP + cron keys are generated at claim time (2026-07-26:
+  their reveal screen is gone - claiming goes straight to /onboarding, and both keys
+  stay readable on Settings).
   Deploy buttons ask for nothing. Env vars remain as overrides, so classic installs
   (including prod) are untouched - verified live against the real DB, plus a
   claim-and-login E2E in the browser.

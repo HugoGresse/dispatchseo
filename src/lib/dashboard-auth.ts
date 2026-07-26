@@ -131,6 +131,11 @@ export async function isCorrectPassword(attempt: string): Promise<boolean> {
 }
 
 // The wizard-generated cron secret, for checkCron's fallback chain.
+// INSTANCE-wide, not per-project: never render it on a surface a cloud tenant
+// can reach - that would hand every customer the platform's own key. Callers
+// that display it gate on `!isCloudMode()` (Settings does). The gate lives in
+// the caller, not here, because checkCron must still accept this value in
+// cloud - nulling it here would silently narrow cron auth to the env secret.
 export async function instanceCronSecret(): Promise<string | null> {
   const row = await instanceRow();
   return row?.cron_secret ?? null;

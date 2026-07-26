@@ -1,5 +1,6 @@
 import { requireDashboard } from "@/lib/auth-gate";
 import { headers } from "next/headers";
+import { instanceCronSecret } from "@/lib/dashboard-auth";
 import { mcpAddCommand } from "@/lib/mcp-connect";
 import { getActiveProject } from "@/lib/active-project";
 import { credsForProject } from "@/lib/dataforseo";
@@ -38,6 +39,10 @@ export default async function SettingsPage() {
     isCloudMode() && project.github_installation_id
       ? await hasRepoSecret(project, "CLAUDE_CODE_OAUTH_TOKEN").catch(() => false)
       : false;
+  // Self-host only: the cron secret is INSTANCE-wide, not per-project, so in
+  // cloud it would hand every tenant the platform's own key. Null on a classic
+  // env install (no instance row) - the section just doesn't render.
+  const cronSecret = isCloudMode() ? null : await instanceCronSecret();
   const hdrs = await headers();
   const dashOrigin = `${hdrs.get("x-forwarded-proto") ?? "https"}://${hdrs.get("host") ?? "dispatchseo.com"}`;
 
@@ -116,6 +121,15 @@ export default async function SettingsPage() {
             every connected site keeps its own entry):
           </p>
           <CopyBlock text={mcpAddCommand(project.slug, dashOrigin, mcpToken)} />
+        </section>
+      ) : null}
+
+      {cronSecret ? (
+        <section className="space-y-3">
+          <SectionTitle sub="what the scheduled jobs use to call this backend - the pipeline install writes it into your repo as a secret, so you should never need to paste it by hand">
+            Cron key
+          </SectionTitle>
+          <CopyBlock text={cronSecret} />
         </section>
       ) : null}
 
