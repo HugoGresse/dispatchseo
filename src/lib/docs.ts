@@ -35,6 +35,11 @@ export const DOCS_NAV: { section: string; items: { slug: string; title: string }
   {
     section: "Setup",
     items: [
+      // First in the section on purpose: it is the one prerequisite the
+      // wizard cannot check for you, and the step every other Setup page
+      // assumes is already done. Both onboarding wizards deep-link here
+      // from their Claude Code screens.
+      { slug: "install-claude-code", title: "Install Claude Code" },
       { slug: "setup-wizard", title: "The setup wizard" },
       { slug: "search-console", title: "Google Search Console" },
       { slug: "connect-your-site", title: "Connect your site" },

@@ -5,6 +5,7 @@ import { instanceCronSecret } from "@/lib/dashboard-auth";
 import { DEFAULT_PROJECT_ID, fetchProjectToken } from "@/lib/projects";
 import { isCloudMode } from "@/lib/cloud";
 import { DispatchMark } from "@/components/logo";
+import { CopyBox } from "@/components/wizard-ui";
 
 // Post-claim reveal: the keys the instance generated for itself. Guarded
 // like every dashboard page; both values stay readable later (the MCP token
@@ -16,9 +17,7 @@ function KeyBlock({ label, value, hint }: { label: string; value: string; hint: 
   return (
     <div className="space-y-1.5">
       <p className="text-sm font-medium text-white">{label}</p>
-      <code className="block break-all rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5 font-mono text-[13px] text-neutral-200">
-        {value}
-      </code>
+      <CopyBox text={value} />
       <p className="text-xs leading-relaxed text-neutral-500">{hint}</p>
     </div>
   );

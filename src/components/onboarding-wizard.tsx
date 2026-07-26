@@ -25,7 +25,14 @@ import {
 } from "@/app/actions";
 import type { GscAccessProbe } from "@/lib/gsc";
 import type { SelfHostWizardScreen as WizardScreen } from "@/lib/wizard-screens";
-import { CopyBox, ErrorLine, StepIcon, inputClass } from "@/components/wizard-ui";
+import {
+  CopyBox,
+  ErrorLine,
+  PrereqCallout,
+  StepHelp,
+  StepIcon,
+  inputClass,
+} from "@/components/wizard-ui";
 
 // The onboarding wizard - the approved mockup, wired to real actions. Eight
 // screens over five rail steps: site -> GSC -> keyword-data pick (+ one detail
@@ -387,11 +394,17 @@ export function OnboardingWizard({
             </svg>
           </StepIcon>
           <h2 className="text-2xl font-semibold tracking-tight">Add your site</h2>
-          <p className="mb-4 text-base text-neutral-400">
+          <p className="mb-2.5 text-base text-neutral-400">
             Everything on this page is about <b className="font-medium text-neutral-200">your website</b> -
             the site you want Google traffic for. DispatchSEO itself is already
             running; now point it at your site. Takes 30 seconds.
           </p>
+          {/* Same slot on all ten screens - see StepHelp's note on why the
+              position is uniform and why it opens in a new tab. */}
+          <StepHelp
+            href="/docs/setup-wizard#step-1-add-your-site"
+            label="What goes in these fields?"
+          />
           {isLocalInstance ? (
             <div className="mb-3.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] p-3.5 text-sm leading-relaxed text-amber-100/90">
               <b className="font-semibold text-amber-200">Running on {origin.replace(/^https?:\/\//, "")}.</b>{" "}
@@ -510,9 +523,10 @@ export function OnboardingWizard({
             </svg>
           </StepIcon>
           <h2 className="text-2xl font-semibold tracking-tight">Connect Google Search Console</h2>
-          <p className="mb-4 text-base text-neutral-400">
+          <p className="mb-2.5 text-base text-neutral-400">
             This is where your traffic and ranking data comes from. It&apos;s free and takes 2 minutes.
           </p>
+          <StepHelp href="/docs/search-console" label="Walk me through Search Console" />
           <div className="rounded-xl bg-neutral-900 p-4">
             {effectiveSaEmail ? (
               <>
@@ -545,6 +559,25 @@ export function OnboardingWizard({
                   {gscCheck?.state === "ok" ? (
                     <span className="text-sm text-emerald-300">
                       Search Console is connected - data starts flowing today.
+                    </span>
+                  ) : gscCheck?.state === "error" ? (
+                    // A real rejection from Google, not propagation lag. Saying
+                    // "give it a few minutes" here would send someone off to
+                    // wait out a broken paste that will never fix itself.
+                    <span className="text-sm text-red-400">
+                      Google rejected this: {gscCheck.why}. Waiting won&apos;t
+                      clear it. Usually the key file was pasted incompletely -
+                      re-copy the whole .json (first character to last) and
+                      paste it again.{" "}
+                      <a
+                        href="/docs/search-console"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline underline-offset-2 hover:text-red-300"
+                      >
+                        The full walkthrough
+                      </a>{" "}
+                      has every click.
                     </span>
                   ) : gscCheck ? (
                     <span className="text-sm text-amber-200/90">
@@ -676,7 +709,11 @@ export function OnboardingWizard({
             </svg>
           </StepIcon>
           <h2 className="text-2xl font-semibold tracking-tight">Where should Claude get keyword data?</h2>
-          <p className="mb-4 text-base text-neutral-400">Pick one. You can switch anytime in Settings.</p>
+          <p className="mb-2.5 text-base text-neutral-400">Pick one. You can switch anytime in Settings.</p>
+          <StepHelp
+            href="/docs/setup-wizard#step-3-pick-a-keyword-data-source"
+            label="Which one should I pick?"
+          />
           <div className="grid gap-3.5 sm:grid-cols-2">
             <button
               type="button"
@@ -751,9 +788,13 @@ export function OnboardingWizard({
             </svg>
           </StepIcon>
           <h2 className="text-2xl font-semibold tracking-tight">Connect DataForSEO</h2>
-          <p className="mb-4 text-base text-neutral-400">
+          <p className="mb-2.5 text-base text-neutral-400">
             Two fields from your DataForSEO account. New accounts start with $1 free credit.
           </p>
+          <StepHelp
+            href="/docs/setup-wizard#step-3-pick-a-keyword-data-source"
+            label="Where do I find these?"
+          />
           <form action={dfsAction} className="space-y-3 rounded-xl bg-neutral-900 p-4">
             {dfsState && "error" in dfsState ? <ErrorLine msg={dfsState.error} /> : null}
             <label className="block space-y-1.5">
@@ -816,9 +857,13 @@ export function OnboardingWizard({
             </svg>
           </StepIcon>
           <h2 className="text-2xl font-semibold tracking-tight">Optional but worth it: free SerpApi key</h2>
-          <p className="mb-4 text-base text-neutral-400">
+          <p className="mb-2.5 text-base text-neutral-400">
             Free mode is set. This one upgrade is worth 2 minutes, and you can skip it.
           </p>
+          <StepHelp
+            href="/docs/setup-wizard#step-3-pick-a-keyword-data-source"
+            label="What does SerpApi add?"
+          />
           <form action={serpAction} className="space-y-3 rounded-xl bg-neutral-900 p-4">
             {serpState && "error" in serpState ? <ErrorLine msg={serpState.error} /> : null}
             <p className="text-sm text-neutral-400">
@@ -882,9 +927,10 @@ export function OnboardingWizard({
             </svg>
           </StepIcon>
           <h2 className="text-2xl font-semibold tracking-tight">Your Claude Code does the work</h2>
-          <p className="mb-4 text-base text-neutral-400">
+          <p className="mb-2.5 text-base text-neutral-400">
             Claude Code is the brain. DispatchSEO is its memory and dashboard.
           </p>
+          <StepHelp href="/docs/install-claude-code" label="I don't have Claude Code yet" />
           <div className="rounded-xl bg-neutral-900 p-4">
             <p className="text-sm text-neutral-300">
               Nothing to do on this step - the last screen gives you a single command that
@@ -928,10 +974,11 @@ export function OnboardingWizard({
             </svg>
           </StepIcon>
           <h2 className="text-2xl font-semibold tracking-tight">Should anything go live without you?</h2>
-          <p className="mb-4 text-base text-neutral-400">
+          <p className="mb-2.5 text-base text-neutral-400">
             Both modes research and build the same way. The only difference is whether a human
             says yes before something is published.
           </p>
+          <StepHelp href="/docs/setup-wizard#step-5-publish-mode" label="Explain the two modes" />
           <div className="grid gap-3.5 sm:grid-cols-2">
             <button
               type="button"
@@ -1029,7 +1076,7 @@ export function OnboardingWizard({
             </svg>
           </StepIcon>
           <h2 className="text-2xl font-semibold tracking-tight">One-tap merge</h2>
-          <p className="mb-4 text-base text-neutral-400">
+          <p className="mb-2.5 text-base text-neutral-400">
             {isDocker ? (
               <>
                 Claude opens finished pages as pull requests, and this token is
@@ -1047,6 +1094,10 @@ export function OnboardingWizard({
               </>
             )}
           </p>
+          <StepHelp
+            href="/docs/setup-wizard#step-6-one-tap-merge-optional"
+            label="How do I make a GitHub token?"
+          />
           <div className="rounded-xl bg-neutral-900 p-4">
             <ol className="space-y-2.5 text-[15px] text-neutral-400">
               {[
@@ -1128,10 +1179,11 @@ export function OnboardingWizard({
             </svg>
           </StepIcon>
           <h2 className="text-2xl font-semibold tracking-tight">What happens next</h2>
-          <p className="mb-4 text-base text-neutral-400">
+          <p className="mb-2.5 text-base text-neutral-400">
             SEO is slow at the start - that&apos;s how it works for everyone. Here&apos;s the honest
             timeline, so a quiet first month reads as on schedule, not broken.
           </p>
+          <StepHelp href="/docs/day-to-day" label="What will my week look like?" />
           <div className="rounded-xl bg-neutral-900 px-4 py-1">
             {TIMELINE.map((t) => (
               <div key={t.label} className="flex gap-3.5 border-b border-neutral-800 py-3 last:border-b-0">
@@ -1184,7 +1236,7 @@ export function OnboardingWizard({
             // replaces the dense kickoff list so the page stops feeling
             // overwhelming (owner feedback), with the checklist below carrying
             // the detail.
-            <div className="mb-4 mt-1 rounded-xl border border-violet-500/30 bg-violet-500/[0.07] px-5 py-5">
+            <div className="mb-2.5 mt-1 rounded-xl border border-violet-500/30 bg-violet-500/[0.07] px-5 py-5">
               <p className="text-xl font-semibold text-white">Let your agent work.</p>
               <p className="mt-2 text-[15px] leading-relaxed text-neutral-300">
                 It&apos;s installing your pipeline and running your first keyword research -
@@ -1194,10 +1246,14 @@ export function OnboardingWizard({
               </p>
             </div>
           ) : (
-            <p className="mb-4 text-base text-neutral-400">
+            <p className="mb-2.5 text-base text-neutral-400">
               Two pastes and your Claude Code takes care of the rest.
             </p>
           )}
+
+          {/* The help slot sits under the intro on every screen, including this
+              one - so it lands under whichever of the two intros rendered. */}
+          <StepHelp href="/docs/install-claude-code" label="Walk me through these two pastes" />
 
           {agentWorking ? (
             // Steps 1 & 2 already did their job - tuck them into a one-click
@@ -1233,7 +1289,27 @@ export function OnboardingWizard({
             </details>
           ) : (
             <>
-              <div className="space-y-2">
+              {/* Prerequisites before the instructions, never after: both
+                  pastes below are terminal commands that fail with "command
+                  not found" if these two tools are missing, and a prerequisite
+                  the reader only meets at the bottom of the screen has already
+                  failed at its job. (In the agentWorking branch the tools are
+                  demonstrably installed, so this doesn't render there.) */}
+              <PrereqCallout
+                title="Two things on your computer first"
+                body={
+                  <>
+                    This needs <b className="font-medium text-neutral-200">Claude Code</b> and the{" "}
+                    <b className="font-medium text-neutral-200">GitHub CLI</b> (
+                    <code className="font-mono text-neutral-300">gh</code>). Don&apos;t have them
+                    yet? The guide installs both, start to finish, in about 5 minutes.
+                  </>
+                }
+                href="/docs/install-claude-code"
+                cta="Install Claude Code and gh"
+              />
+
+              <div className="mt-4 space-y-2">
                 <p className="text-[15px] text-neutral-300">
                   <b className="font-semibold text-neutral-100">1.</b>{" "}
                   Connect Claude Code to this project - run this in a terminal,{" "}
@@ -1271,10 +1347,10 @@ export function OnboardingWizard({
                   keep the chat visible and follow its instructions. The checklist below fills
                   itself in as it works.
                 </p>
+                {/* The prerequisite half of this line moved to the callout at
+                    the top of the screen - what's left is the reassurance. */}
                 <p className="text-[13px] text-neutral-500">
-                  Needs Claude Code and the GitHub CLI (
-                  <code className="font-mono text-neutral-400">gh</code>) installed; safe to
-                  re-run any time.
+                  Both pastes are safe to re-run any time.
                 </p>
               </div>
             </>

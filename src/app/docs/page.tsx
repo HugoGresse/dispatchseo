@@ -45,6 +45,64 @@ function TerminalIcon() {
   );
 }
 
+function RepoIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="6" cy="6" r="2.3" stroke="currentColor" strokeWidth="1.6" />
+      <circle cx="6" cy="18" r="2.3" stroke="currentColor" strokeWidth="1.6" />
+      <circle cx="18" cy="6" r="2.3" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M6 8.3v7.4M18 8.3a6 6 0 0 1-6 6h-.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function SparkleIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function KeyIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="8" cy="15" r="3.2" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M10.3 12.7L18 5M15.3 7.7l2 2M18 5l2.3 2.3"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function CpuIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="7" y="7" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
+      <rect x="10" y="10" width="4" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M9 3.5v2M12 3.5v2M15 3.5v2M9 18.5v2M12 18.5v2M15 18.5v2M3.5 9h2M3.5 12h2M3.5 15h2M18.5 9h2M18.5 12h2M18.5 15h2"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+const INLINE_CODE = "rounded bg-neutral-900 px-1.5 py-0.5 font-mono text-[0.9em] text-neutral-200";
+const INLINE_LINK =
+  "text-violet-400 underline underline-offset-2 hover:text-violet-300 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70";
+
 const INSTALL_PATHS = [
   {
     href: "/docs/docker-compose",
@@ -79,6 +137,83 @@ export default function DocsQuickstart() {
       <p className="mt-3 max-w-lg text-neutral-400">
         Get DispatchSEO running, then hand it to your agent.
       </p>
+
+      <p
+        id="before-you-start"
+        className="mt-12 mb-4 scroll-mt-24 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-500"
+      >
+        Before you start
+      </p>
+      <ul className="divide-y divide-neutral-800 overflow-hidden rounded-xl border border-neutral-800">
+        <li className="flex gap-3 bg-amber-500/[0.04] px-5 py-4">
+          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400">
+            <RepoIcon />
+          </span>
+          <span>
+            <span className="block text-sm font-medium text-neutral-100">
+              A website whose code lives in a GitHub repo
+            </span>
+            <span className="mt-1 block text-sm text-neutral-400">
+              Articles arrive as pull requests you review, so the site has to be git-based.
+              WordPress and other database-backed CMSes can&apos;t work this way.
+            </span>
+          </span>
+        </li>
+        <li className="flex gap-3 px-5 py-4">
+          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400">
+            <SparkleIcon />
+          </span>
+          <span>
+            <span className="block text-sm font-medium text-neutral-100">
+              <a
+                href="https://claude.com/product/claude-code"
+                target="_blank"
+                rel="noreferrer"
+                className={INLINE_LINK}
+              >
+                Claude Code
+              </a>
+              , and a Claude subscription
+            </span>
+            <span className="mt-1 block text-sm text-neutral-400">
+              Your agent does the actual thinking. It runs on the plan you already pay for -
+              DispatchSEO never bills you for it.
+            </span>
+          </span>
+        </li>
+        <li className="flex gap-3 px-5 py-4">
+          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400">
+            <KeyIcon />
+          </span>
+          <span>
+            <span className="block text-sm font-medium text-neutral-100">
+              The{" "}
+              <a href="https://cli.github.com" target="_blank" rel="noreferrer" className={INLINE_LINK}>
+                GitHub CLI
+              </a>{" "}
+              (<code className={INLINE_CODE}>gh</code>), signed in
+            </span>
+            <span className="mt-1 block text-sm text-neutral-400">
+              Your agent opens every pull request through it. Check with{" "}
+              <code className={INLINE_CODE}>gh auth status</code>.
+            </span>
+          </span>
+        </li>
+        <li className="flex gap-3 px-5 py-4">
+          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400">
+            <CpuIcon />
+          </span>
+          <span>
+            <span className="block text-sm font-medium text-neutral-100">
+              A machine that can run Docker
+            </span>
+            <span className="mt-1 block text-sm text-neutral-400">
+              About 1 GB of RAM. A laptop is fine to try it; schedules only run while the machine
+              is awake, so day to day you want something that stays on.
+            </span>
+          </span>
+        </li>
+      </ul>
 
       <p className="mt-12 mb-4 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-500">
         Choose your install

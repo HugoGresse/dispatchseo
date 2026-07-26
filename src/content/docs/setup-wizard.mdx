@@ -20,7 +20,9 @@ platform does the installing for you:
 3. **Connect your Claude Code** - run `claude setup-token` on your
    computer and paste the token it prints. It's stored as a secret on
    **your repo**, never on our side, and builds run on your own Claude
-   Code subscription.
+   Code subscription. Never installed Claude Code?
+   [Do that first](/docs/install-claude-code) - it's about five minutes,
+   and this step's command won't exist until you have.
 4. **Connect Google Search Console** - one click, sign in with the Google
    account that has access to your property, pick the property. Read-only,
    revocable any time. No service account needed.
@@ -59,6 +61,12 @@ Then you add the service account's email as a user in Search Console
 asks Google right then and tells you if it worked. Google occasionally
 takes a few minutes to catch up; you can continue and it re-checks on its
 own.
+
+This is the fiddliest step in the whole setup, and the only one that leaves
+the app. If you want every click spelled out - including what to do when
+your site isn't in Search Console yet and you need to add a DNS record to
+prove you own it - [Google Search Console](/docs/search-console) is the
+same walkthrough at full length.
 
 ## Step 3 - Pick a keyword data source
 
@@ -106,6 +114,13 @@ paste the token, and it's verified against your repo before saving
 (encrypted, like everything else). Skipping is fine: you'll just merge each
 PR on GitHub yourself.
 
+One thing GitHub asks that the wizard can't answer for you: the token's
+expiration. Whatever you pick, merging quietly stops working on that date,
+and on a Docker install so does automatic building. Pick a window you'll
+actually remember, or choose **No expiration** and treat the token like the
+password it is. When it does expire, nothing breaks loudly - you just come
+back to this step and paste a new one.
+
 ## Step 7 - The honest timeline
 
 A month-by-month picture of what SEO actually looks like, so a quiet first
@@ -124,14 +139,36 @@ From that second paste, your agent takes over: it writes the automation
 workflow files into your repo, sets the repo secrets, opens one pull
 request with all of it, personalizes the backlink playbook for your
 product, and kicks off your first keyword research. You approve its steps
-in the chat as it goes. It needs Claude Code and the GitHub CLI (`gh`)
-installed, and it's safe to re-run if anything is interrupted.
+in the chat as it goes. It's safe to re-run if anything is interrupted.
+
+Both pastes assume Claude Code and the GitHub CLI (`gh`) are already on
+your computer. If they aren't - or if a command comes back
+`command not found` - [installing both](/docs/install-claude-code) is a
+one-time, five-minute detour.
 
 Docker installs get one more item on the same screen: **turning on
 automatic builds**. Two pastes - a token created on your own computer
 (`claude setup-token`), then that token pasted into the field on this same
 screen (no terminal on the server needed) - and the wizard's checklist flips
 green when the builder makes its first check-in.
+
+## Which key is which
+
+Setup hands you four different secrets, and they look alike enough to mix
+up. You never have to memorize or file any of them - the dashboard shows
+each one again wherever it's needed - but when you're staring at a field
+wondering which string goes in it:
+
+| Key | Starts with | What it's for | Where it comes from |
+| --- | --- | --- | --- |
+| Agent key (MCP token) | a long random string | How your Claude Code talks to this dashboard | Generated for you; already inside the `claude mcp add` command the wizard hands you. Also on Settings. |
+| Cron key | a long hex string | Lets the scheduled jobs call your backend | Generated for you; the install sets it as a repo secret. You never paste it by hand. |
+| GitHub token | `ghp_` | Lets the Approve button merge your pull requests | You create it on GitHub in step 6. |
+| Claude token | `sk-ant-oat` | Docker only - lets the bundled builder run Claude Code for you | You create it by running `claude setup-token` on your own computer. |
+
+All four are stored encrypted in your own database.
+
+## Live progress, and what "stuck" actually looks like
 
 The wizard tracks all of it live. When the pipeline PR is open, it shows
 **"Your move: merge the pipeline PR"** with a direct link - merging that PR

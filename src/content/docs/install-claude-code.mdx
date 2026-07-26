@@ -1,0 +1,219 @@
+---
+title: Install Claude Code
+description: Claude Code is the agent that does the actual work. Here is how to get it on your computer, from nothing, on any operating system.
+---
+
+DispatchSEO doesn't write your content. Your Claude Code does. This
+dashboard is its memory and its schedule, and the place you approve
+things - the researching and writing happen in Claude Code, running on
+your own Claude subscription.
+
+So the setup wizard can't finish until Claude Code exists on your
+computer. Never installed it? Start here. About five minutes, and none of
+it needs you to know how to program.
+
+## First, check your Claude plan
+
+Claude Code is **not** part of the free Claude plan. There is no way around
+this one, so check before you spend time on the rest of the page.
+
+| Your plan | Claude Code |
+|---|---|
+| Free | Not included |
+| Pro | Included |
+| Max | Included |
+| Team | Included |
+| Enterprise | Included on current plans - older contracts have seat types that may not, so check with whoever manages your account |
+
+On the free plan, Pro is the cheapest way in. Check or change your plan at
+[claude.com/pricing](https://claude.com/pricing).
+
+<Steps>
+
+<Step title="Open a terminal">
+
+The terminal is a window where you type commands instead of clicking
+buttons. It's already on your computer - nothing to install.
+
+- **On a Mac:** press `Cmd` + `Space`, type `Terminal`, press `Enter`.
+- **On Windows:** press the Start button, type `PowerShell`, and click
+  **Windows PowerShell**. Take the ordinary one, not "ISE", and you don't
+  need to run it as an administrator.
+- **On Linux:** press `Ctrl` + `Alt` + `T`, or find Terminal in your
+  applications.
+
+A window opens with some text and a blinking cursor. That's all it needs
+to look like. Everything below is copy, paste, press `Enter`.
+
+</Step>
+
+<Step title="Run the install command">
+
+Copy the line for your system, paste it into the terminal, press `Enter`,
+and wait. It prints a lot of text - that's normal.
+
+**On a Mac or on Linux:**
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+```
+
+**On Windows,** in PowerShell:
+
+```powershell
+irm https://claude.ai/install.ps1 | iex
+```
+
+That's the whole install. It updates itself from here on, so this is a
+one-time thing.
+
+Prefer a package manager? `brew install --cask claude-code` on a Mac and
+`winget install Anthropic.ClaudeCode` on Windows both work, but neither
+auto-updates - upgrading is on you, with `brew upgrade claude-code`. Older
+guides tell you to use `npm install -g`; skip that. It still works, but
+Anthropic has deprecated it in favor of the command above.
+
+</Step>
+
+<Step title="Check that it worked">
+
+Close the terminal window completely and open a new one. This matters -
+the install changes a setting your old window has already read, so a
+still-open window will claim nothing happened.
+
+In the new window, type:
+
+```bash
+claude --version
+```
+
+A version number means you're done. If you get `command not found`
+instead, the next section fixes it in one line.
+
+</Step>
+
+<Step title="Sign in">
+
+Type `claude` and press `Enter`. The first run sends you to a browser to
+sign in to your Claude account. After that, Claude Code is ready and you
+can go back to the setup wizard.
+
+</Step>
+
+</Steps>
+
+## When the terminal says "command not found"
+
+On a Mac or Linux you see `command not found: claude`; on Windows,
+`'claude' is not recognized`. Both mean the same harmless thing: Claude
+Code installed fine, your terminal just doesn't know where to look for it
+yet.
+
+The installer prints the exact fix at the end of its output, so scroll up
+in that window if it's still open. Otherwise paste the line for your
+shell:
+
+```bash
+# Mac (the default shell there is zsh)
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
+```
+
+```bash
+# Most Linux systems (bash)
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
+```
+
+Then open a **new** terminal window and try `claude --version` again.
+
+Two more errors look alarming and aren't:
+
+- **A wall of HTML, or `syntax error near unexpected token`** - the
+  download served a web page instead of the install script. Usually a
+  network blip, occasionally a country Anthropic doesn't support yet. Try
+  again, or use the Homebrew or WinGet command above instead.
+- **`'&&' is not a valid statement separator`** - you pasted a Mac command
+  into Windows PowerShell. Check which shell you're in: a PowerShell
+  prompt starts with `PS C:\`, plain Command Prompt starts with `C:\`.
+
+Anthropic keeps a full list of install errors and their fixes at
+[code.claude.com/docs/en/troubleshoot-install](https://code.claude.com/docs/en/troubleshoot-install).
+
+## Get your setup token
+
+Two places ask you to paste a token that starts with `sk-ant-oat`: the
+hosted wizard's "Connect your Claude Code" step, and the Docker install's
+automatic builds. The token is how a server runs Claude Code as you,
+without you sitting there.
+
+With Claude Code installed, run:
+
+```bash
+claude setup-token
+```
+
+It opens a browser, asks you to approve, then prints the token in the
+terminal. Copy the whole thing and paste it where you were asked.
+
+Three things to know:
+
+- It's printed once and never saved to a file. Lose it and you run the
+  command again; a fresh one works the same.
+- It lasts a year, then you generate a new one the same way.
+- It needs a paid plan, same as the rest of this page.
+
+## Install the GitHub CLI
+
+Only self-hosted installs need this. The hosted version at dispatchseo.com
+does its GitHub work through the DispatchSEO GitHub App instead, so skip
+this section if you're on the hosted plan.
+
+`gh` is GitHub's own command-line tool. Your agent uses it to open pull
+requests and set the secrets your automations need.
+
+```bash
+# Mac
+brew install gh
+```
+
+```powershell
+# Windows
+winget install --id GitHub.cli --source winget
+```
+
+On Windows, open a brand-new terminal **window** afterwards; a new tab in
+the same window won't find it.
+
+On Linux, follow GitHub's install page for your distribution:
+[github.com/cli/cli/blob/trunk/docs/install_linux.md](https://github.com/cli/cli/blob/trunk/docs/install_linux.md).
+
+Then connect it to your GitHub account:
+
+```bash
+gh auth login
+```
+
+Answer the prompts: **GitHub.com**, then **HTTPS**, then let it
+authenticate in your browser. The defaults are right at every step.
+
+## Only copy these commands from official pages
+
+Install commands are the one thing here worth being fussy about. Copy them
+from this page, from
+[code.claude.com](https://code.claude.com/docs/en/setup), or from the
+[anthropics/claude-code](https://github.com/anthropics/claude-code)
+repository - not from a search ad, and not from a site you have never
+heard of. Fake install pages for popular developer tools are a real trick,
+and an install command is exactly the thing you do not want to take from a
+stranger.
+
+Commands drift over time. If something here doesn't match Anthropic's own
+setup page, trust theirs and
+[tell us](https://github.com/NeoZi12/dispatchseo/discussions) so this page
+gets fixed.
+
+## Back to setup
+
+Claude Code installed and signed in? Go back to the setup wizard - it
+saved your place, so you'll land on the step you left. The
+[wizard walkthrough](/docs/setup-wizard) covers every screen if you want
+to read ahead.

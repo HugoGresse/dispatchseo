@@ -3,6 +3,12 @@ title: Install on your computer
 description: One command starts the whole product on any machine with Docker. Open the URL it prints and the setup wizard takes over.
 ---
 
+Before the install, check the [four things you need](/docs#before-you-start) -
+it takes ten seconds and saves a wasted hour. The one that catches people
+out: your site's code has to live in a GitHub repo, because every article
+arrives as a pull request. WordPress and other database-backed CMSes can't
+work that way.
+
 <Steps>
 
 <Step title="Install Docker">
@@ -30,8 +36,13 @@ docker --version
 
 <Step title="Run the command">
 
-Open a terminal - the **Terminal** app on Mac, **Git Bash** or **WSL** on
-Windows (plain PowerShell can't run this) - and paste the command below.
+Open a terminal. On Mac that's the **Terminal** app (press `Cmd+Space`, type
+"terminal"). On Windows you need either
+[Git Bash](https://git-scm.com/downloads/win) - the simpler option, it comes
+with Git and installs like any app - or
+[WSL](https://learn.microsoft.com/windows/wsl/install). Plain PowerShell
+can't run this command, so install one of those two first if you haven't.
+
 Run it from any plain folder (your Desktop is fine) - **not inside your
 website's own repository**. It creates a new `dispatchseo` folder where
 DispatchSEO itself lives; your site's code is never touched, you'll just
