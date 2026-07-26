@@ -74,14 +74,26 @@ and slash commands.
    ONE AT A TIME with the native file-write tool; do NOT dump them with a bulk
    extraction script - the permission gate blocks scripts that create many
    files at once, and a real install stalled on exactly that (2026-07-24).
-2. On an update run (files already exist), overwrite the pack's own files
-   freely - workflows carry no repo-specific truth anymore; everything
+2. **Already current? Stop before you rewrite anything.** Fetch
+   \`.dispatchseo/pipeline-version\` FIRST (a single \`path=\` call) and compare
+   it to the repo's copy. Identical means this repo already runs this exact
+   shim: skip the remaining per-file fetches AND all of Part 2 - there is
+   nothing to write, nothing to adapt, and no PR to open. Say that plainly,
+   then go straight to Part 4 step 3, whose checklist has an already-installed
+   path. Do NOT manufacture work to look busy: rewriting identical files
+   produces an empty PR that can never merge, and the owner's wizard sits on
+   the finale screen waiting for it forever.
+3. On an update run (files exist but the version differs), overwrite the pack's
+   own files freely - workflows carry no repo-specific truth anymore; everything
    repo-specific lives in \`.dispatchseo/\` files the pack does NOT include
    (conventions.md, publish-paths), and those must be LEFT ALONE. The one
    exception worth a diff-and-ask: a file the owner visibly hand-edited
    beyond the known adaptation spots (custom steps, extra jobs) - never
    silently discard work like that.
-3. Call \`mark_install_step\` with step=\`workflows\`. (These stamps feed the
+4. Call \`mark_install_step\` with step=\`workflows\` - including on the
+   already-current path above, where the step is satisfied by what is already
+   there. An unstamped step reads on the owner's finale as "nothing happened".
+   (These stamps feed the
    live checklist the owner watches on the wizard finale - stamp each step
    RIGHT AFTER finishing it, throughout this install. Best-effort always:
    if the tool is missing or errors, continue - a progress tick must never
@@ -283,6 +295,12 @@ with step=\`repo_settings\`.
    then re-check - never proceed on a promise:
    - **Install PR merged** - the workflows must be live on the default
      branch. Not merged? Ask the owner to merge (link the PR) and wait.
+     **Nothing to install?** When Part 1 found the shim already current there
+     is no PR and never will be, so waiting for one deadlocks the owner's
+     finale. This line is satisfied the moment the workflows are provably live
+     on the DEFAULT branch - check with
+     \`gh api repos/{{REPO}}/contents/.github/workflows/seo-daily.yml --jq .name\`.
+     Green it and move on; every other line below still gets checked for real.
    - **Actions can open PRs** (required in BOTH modes - the daily builder
      opens every content PR from inside a workflow; semi vs auto only
      changes who merges): \`gh api repos/{{REPO}}/actions/permissions/workflow\`
@@ -319,6 +337,17 @@ with step=\`repo_settings\`.
      \`seo\` and \`seo-tool\`.
    - **Secrets set:** \`gh secret list --repo {{REPO}}\` shows every secret
      Part 3 required.
+   - **The repo's key points at THIS backend.** A repo can carry a complete,
+     current shim that is wired to a DIFFERENT DispatchSEO instance - the
+     owner reinstalled, moved from cloud to self-host, or wiped their database
+     (our own troubleshooting guide tells them to run
+     \`docker compose down -v\`). Matching files prove nothing about which
+     backend those workflows call, and GitHub never reads a secret back, so
+     you cannot inspect the stored one. Just re-set it: \`gh secret set
+     SEO_MCP_API_KEY --repo {{REPO}}\` with THIS session's bearer token, and
+     confirm the workflows' backend URL is the one this connection uses.
+     Skipping this hands the owner a repo that looks installed and reports to
+     someone else's dashboard.
    - **Setup ran:** conventions.md is on its PR/branch and the site profile
      saved (get_site_profile returns it).
    Only when all pass, call \`mark_pipeline_installed\` - one call, no
