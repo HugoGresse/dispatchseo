@@ -74,6 +74,29 @@ export type Keyword = {
   keyword_difficulty: number | null;
 };
 
+// Rank-table order: best position first (#1 at the top), everything not in the
+// top 100 after it. Unranked keywords sort by search volume instead, so the
+// tail reads as an opportunity list - the biggest keyword you don't rank for
+// yet sits at the top of it. Neither the keywords table nor rank_checks can
+// order this in SQL: "current position" is the last row of each keyword's
+// series, derived in JS by deltas(). Shared by the Rankings page and the
+// get_rankings MCP tool so the two never disagree about order.
+export function sortByBestPosition<
+  T extends { position: number | null; search_volume?: number | null; keyword: string },
+>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => {
+    if (a.position != null && b.position != null && a.position !== b.position) {
+      return a.position - b.position;
+    }
+    if (a.position != null && b.position == null) return -1;
+    if (a.position == null && b.position != null) return 1;
+    const va = a.search_volume ?? -1;
+    const vb = b.search_volume ?? -1;
+    if (va !== vb) return vb - va;
+    return a.keyword.localeCompare(b.keyword);
+  });
+}
+
 export type RankCheck = {
   keyword_id: string;
   position: number | null;

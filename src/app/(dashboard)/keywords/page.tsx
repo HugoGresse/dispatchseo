@@ -2,7 +2,13 @@ import { requireDashboard } from "@/lib/auth-gate";
 import { db } from "@/lib/db";
 import { requireOnboarded } from "@/lib/onboarding-gate";
 import { getActiveProject } from "@/lib/active-project";
-import { deltas, groupChecks, type Keyword, type RankCheck } from "@/lib/metrics";
+import {
+  deltas,
+  groupChecks,
+  sortByBestPosition,
+  type Keyword,
+  type RankCheck,
+} from "@/lib/metrics";
 import {
   Arrow,
   BigStatTile,
@@ -45,8 +51,19 @@ export default async function KeywordsPage() {
   const keywords = (kwRes.data ?? []) as Keyword[];
   const byKw = groupChecks((rcRes.data ?? []) as RankCheck[]);
 
+  // One row per keyword with its series and deltas resolved once, ordered best
+  // position first. Both views below render from this - computing deltas twice
+  // (once per view) let the card list and the table drift apart in principle.
+  const rows = sortByBestPosition(
+    keywords.map((k) => {
+      const series = byKw.get(k.id) ?? [];
+      const d = deltas(series);
+      return { ...k, series, d, position: d.current };
+    }),
+  );
+
   // Headline numbers for the stat row, from the same series the table shows.
-  const stats = keywords.map((k) => deltas(byKw.get(k.id) ?? []));
+  const stats = rows.map((r) => r.d);
   const positions = stats
     .map((s) => s.current)
     .filter((p): p is number => p != null);
@@ -98,22 +115,18 @@ export default async function KeywordsPage() {
           {/* Below sm: stacked cards, no sparkline (a 112px chart reads as
               noise at card width) - the 7d/30d arrows already carry the trend. */}
           <CardList>
-            {keywords.map((k) => {
-              const series = byKw.get(k.id) ?? [];
-              const d = deltas(series);
-              return (
-                <DataCard
-                  key={k.id}
-                  title={k.keyword}
-                  meta={`${k.search_volume ?? "?"}/mo · difficulty ${k.keyword_difficulty ?? "?"}`}
-                  stats={[
-                    { label: "Position", value: d.current ?? ">100" },
-                    { label: "7d", value: <Arrow delta={d.d7} /> },
-                    { label: "30d", value: <Arrow delta={d.d30} /> },
-                  ]}
-                />
-              );
-            })}
+            {rows.map((k) => (
+              <DataCard
+                key={k.id}
+                title={k.keyword}
+                meta={`${k.search_volume ?? "?"}/mo · difficulty ${k.keyword_difficulty ?? "?"}`}
+                stats={[
+                  { label: "Position", value: k.d.current ?? ">100" },
+                  { label: "7d", value: <Arrow delta={k.d.d7} /> },
+                  { label: "30d", value: <Arrow delta={k.d.d30} /> },
+                ]}
+              />
+            ))}
           </CardList>
           <TableShell className="hidden sm:block">
             <THead>
@@ -128,36 +141,32 @@ export default async function KeywordsPage() {
               <Th>Trend (30d)</Th>
             </THead>
             <tbody>
-              {keywords.map((k) => {
-                const series = byKw.get(k.id) ?? [];
-                const d = deltas(series);
-                return (
-                  <Tr key={k.id}>
-                    <Td>
-                      {k.keyword}
-                      <span className="ml-2 text-xs text-neutral-500 sm:hidden">
-                        {k.search_volume ?? "?"}/mo · difficulty {k.keyword_difficulty ?? "?"}
-                      </span>
-                    </Td>
-                    <Td className="hidden tabular-nums text-neutral-300 sm:table-cell">
-                      {k.search_volume ?? "-"}
-                    </Td>
-                    <Td className="hidden tabular-nums text-neutral-300 sm:table-cell">
-                      {k.keyword_difficulty ?? "-"}
-                    </Td>
-                    <Td className="font-mono">{d.current ?? ">100"}</Td>
-                    <Td>
-                      <Arrow delta={d.d7} />
-                    </Td>
-                    <Td>
-                      <Arrow delta={d.d30} />
-                    </Td>
-                    <Td>
-                      <Sparkline positions={series.map((c) => c.position)} />
-                    </Td>
-                  </Tr>
-                );
-              })}
+              {rows.map((k) => (
+                <Tr key={k.id}>
+                  <Td>
+                    {k.keyword}
+                    <span className="ml-2 text-xs text-neutral-500 sm:hidden">
+                      {k.search_volume ?? "?"}/mo · difficulty {k.keyword_difficulty ?? "?"}
+                    </span>
+                  </Td>
+                  <Td className="hidden tabular-nums text-neutral-300 sm:table-cell">
+                    {k.search_volume ?? "-"}
+                  </Td>
+                  <Td className="hidden tabular-nums text-neutral-300 sm:table-cell">
+                    {k.keyword_difficulty ?? "-"}
+                  </Td>
+                  <Td className="font-mono">{k.d.current ?? ">100"}</Td>
+                  <Td>
+                    <Arrow delta={k.d.d7} />
+                  </Td>
+                  <Td>
+                    <Arrow delta={k.d.d30} />
+                  </Td>
+                  <Td>
+                    <Sparkline positions={k.series.map((c) => c.position)} />
+                  </Td>
+                </Tr>
+              ))}
             </tbody>
           </TableShell>
         </>

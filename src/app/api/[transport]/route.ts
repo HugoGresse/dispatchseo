@@ -38,7 +38,7 @@ import { currentProject, projectStore } from "@/lib/mcp-context";
 import { isProjectUrl } from "@/lib/url-guard";
 import { isLive, refreshPageLiveness, type LivenessRow } from "@/lib/page-liveness";
 import { AGENT_ENGINES, getAiVisibility, recordAiSnapshots } from "@/lib/ai-visibility";
-import { sortQueue } from "@/lib/metrics";
+import { sortByBestPosition, sortQueue } from "@/lib/metrics";
 import { placeAtFront, writeQueueOrder } from "@/lib/queue";
 import {
   compareToCorpus,
@@ -626,7 +626,9 @@ const mcpHandler = createMcpHandler(
           "position null together with checked: checked true + position null means confirmed " +
           "not in the top 100; checked false means the keyword has never been successfully " +
           "checked in the window (rank tracking not set up yet, or the nightly cron hasn't " +
-          "run) - unknown, NOT 'not ranking'. Pass a keyword to scope to one.",
+          "run) - unknown, NOT 'not ranking'. Pass a keyword to scope to one. Ordered best " +
+          "position first; keywords outside the top 100 come last, ordered by search volume " +
+          "(so the tail reads as an opportunity list).",
         inputSchema: {
           keyword: z.string().optional(),
           days: z.number().int().positive().optional(),
@@ -674,7 +676,13 @@ const mcpHandler = createMcpHandler(
             checks: series,
           });
         }
-        return ok(results);
+        // Same order the Rankings page shows: best position first, then the
+        // ones outside the top 100 by search volume.
+        return ok(
+          sortByBestPosition(results.map((r) => ({ ...r, position: r.current_position }))).map(
+            ({ position: _position, ...r }) => r,
+          ),
+        );
       },
     );
 
