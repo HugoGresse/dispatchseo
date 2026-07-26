@@ -1159,6 +1159,44 @@ export async function wizardCreateProject(
   return { ok: true, ...result };
 }
 
+// The dashboard's add-site dialog. Same creation as the wizard's step 1, then
+// it parks the new project on the screen that FOLLOWS step 1 so the caller can
+// send the owner straight into the wizard to finish - GitHub, Search Console,
+// publish mode, pipeline install.
+//
+// A site is not "added" when its row exists. Without the pipeline installed it
+// has no workflows, so nothing researches, builds, or publishes for it - it
+// just sits in the switcher looking real. So the dialog deliberately does not
+// stop at the row: creating and setting up are one act, and the owner is never
+// handed a half-made project plus a list of things to go do.
+//
+// The stamp is what makes the hand-off land correctly. Cloud is already safe
+// (buildCloudResume forces c1 whenever github_repo is null), but self-host
+// resume defaults to s5 - the LAST screen - for a project with a repo and no
+// saved screen, which would skip Search Console and the install entirely.
+export async function addSiteAndStartSetup(
+  _prev: WizardCreateState,
+  formData: FormData,
+): Promise<WizardCreateState> {
+  await assertAuthed();
+  const result = await createProjectCore(formData);
+  if ("error" in result) return result;
+  // createProjectCore already pointed the dash_project cookie at the new row,
+  // so this scopes to it. Tolerated, not awaited on: a pre-0030 database has
+  // no onboarding_screen column, and losing the stamp costs a resume nicety,
+  // never the creation the owner just paid attention to.
+  try {
+    await db()
+      .from("projects")
+      .update({ onboarding_screen: isCloudMode() ? "c1" : "s1" })
+      .eq("slug", result.slug);
+  } catch {
+    // resume falls back to its own defaults
+  }
+  (await cookies()).delete("pending_domain");
+  return { ok: true, ...result };
+}
+
 // Header mode switch: flips the active project between semi-automatic (the
 // owner approves ideas and merges PRs) and automatic (fully hands-off
 // publishing). Picking a preset also writes its flag values so the row always

@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef, useState, startTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
-import { wizardCreateProject, type WizardCreateState } from "@/app/actions";
+import { addSiteAndStartSetup, type WizardCreateState } from "@/app/actions";
 
 // Adding a site from inside the dashboard, as a dialog.
 //
@@ -16,12 +16,20 @@ import { wizardCreateProject, type WizardCreateState } from "@/app/actions";
 // dashboard yet; a customer who already has one shouldn't be thrown out of it
 // to type two fields.
 //
-// So this collects only what creating the row needs - name, domain, and the
-// repo on self-host - then gets out of the way. The remaining steps (GitHub,
-// Search Console, pipeline install) are already owned by the Home setup cards,
-// which walk a half-configured project through exactly those and hand off to
-// the wizard at the precise screen that's missing. Duplicating that here would
-// be a second copy of a flow that already works.
+// So this collects what creating the row needs - name, domain, and the repo on
+// self-host, which has no GitHub App to pick one with - and then hands off to
+// the wizard at the step right after "add your site" to finish: GitHub, Search
+// Console, publish mode, pipeline install.
+//
+// It hands off rather than reimplementing, because two of those steps leave the
+// page entirely (the App install and Google's consent screen) and come back
+// through the wizard's resume path. A dialog can't survive that round trip; the
+// wizard already does, and it's the same flow the first site went through.
+//
+// What it must NOT do is stop at the row and leave the rest to the Home setup
+// cards. A project with no pipeline has no workflows, so nothing researches,
+// builds, or publishes for it - it only looks real in the switcher. Adding a
+// site and setting it up are one act.
 export function AddSiteDialog({
   open,
   onClose,
@@ -36,9 +44,8 @@ export function AddSiteDialog({
   // it hands a docker owner a site the UI can never attach a repo to.
   cloud: boolean;
 }) {
-  const router = useRouter();
   const [state, formAction, pending] = useActionState<WizardCreateState, FormData>(
-    wizardCreateProject,
+    addSiteAndStartSetup,
     null,
   );
   const nameRef = useRef<HTMLInputElement>(null);
@@ -79,14 +86,27 @@ export function AddSiteDialog({
   useEffect(() => {
     if (!state || !("ok" in state) || !state.ok || handledRef.current === state) return;
     handledRef.current = state;
-    // Clear before closing: the fields are controlled, so without this the
+    // Clear before leaving: the fields are controlled, so without this the
     // next "Add site" opens pre-filled with the site just created.
     setName("");
     setDomain("");
     setRepo("");
     onClose();
-    router.refresh();
-  }, [state, onClose, router]);
+    // Into the wizard, not back to the dashboard. The row exists but nothing
+    // runs for it yet - no repo, no Search Console, no workflows - and the
+    // action has parked it on the screen right after "add your site", so this
+    // continues the same setup the first site got instead of leaving the owner
+    // to discover what's still missing.
+    //
+    // A full load rather than router.push: this effect closes the dialog in the
+    // same tick, and the push made from the unmounting subtree silently never
+    // navigated (seen in a browser, 2026-07-26 - the dialog closed and the page
+    // stayed put). It also guarantees the wizard's server render reads the
+    // dash_project cookie createProjectCore just repointed, instead of risking
+    // a cached segment for the previous project - the same staleness the
+    // project switcher works around with a refresh.
+    window.location.assign("/onboarding");
+  }, [state, onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -122,8 +142,8 @@ export function AddSiteDialog({
         </h2>
         <p className="mt-1.5 text-sm leading-relaxed text-neutral-400">
           {cloud
-            ? "Just the basics here. Connecting the repo and Search Console happens on the new site's dashboard, one card at a time."
-            : "Just the basics here. Installing the pipeline and connecting Search Console happens on the new site's dashboard, one card at a time."}
+            ? "Then setup continues here: connecting your repo, Search Console, and publishing - the same few minutes your first site took."
+            : "Then setup continues here: Search Console, publishing, and installing the pipeline in your repo - the same few minutes your first site took."}
         </p>
 
         <form
