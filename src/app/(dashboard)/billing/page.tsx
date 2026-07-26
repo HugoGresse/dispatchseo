@@ -67,9 +67,18 @@ export default async function BillingPage({
       ) : null}
       {error === "no-customer" ? (
         <p className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm text-neutral-400">
-          {active
-            ? "We couldn't open the billing portal - this account has no payment record with our provider. If you just subscribed, give it a minute and retry; otherwise contact support."
-            : "No billing history yet - pick a plan first."}
+          {active ? (
+            <>
+              We couldn&apos;t open the billing portal - this account has no payment record with our
+              provider. If you just subscribed, give it a minute and retry; otherwise email{" "}
+              <a href="mailto:support@dispatchseo.com" className="underline underline-offset-2">
+                support@dispatchseo.com
+              </a>{" "}
+              and we&apos;ll sort it out.
+            </>
+          ) : (
+            "No billing history yet - pick a plan first."
+          )}
         </p>
       ) : null}
       {!polarConfigured() ? (
