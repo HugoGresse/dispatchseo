@@ -618,12 +618,16 @@ html:has(.ld) { scroll-behavior: smooth; }
    thing competing with the CTA underneath it. z-index keeps the opened card
    above the sections it hangs over; it stays under the sticky nav (50), which
    it never reaches now that it opens downward.
-   Bottom-RIGHT of the hero, which is where it used to float: margin-top auto
-   pushes it to the bottom of the hero's flex column, and the gutter matches
-   .nav-wrap's so its right edge lines up with the nav's CTA cluster rather
-   than with the 1120px body measure. Aligning it to .wrap instead parked it
-   near the middle of a wide screen, which read as centred. */
-.ld .why-hero { position: relative; z-index: 45; display: flex; justify-content: flex-end; width: 100%; max-width: 1400px; padding: 0 var(--navpad); margin: 30px auto 0; margin-top: auto; }
+   Deliberately the OLD floating rule with one word changed - position: fixed
+   became absolute, and .hero is the positioned ancestor. Same 22px/22px
+   corner offsets, same z-index, same column/flex-end stack, so it sits
+   exactly where it always did; it just scrolls away with the hero instead of
+   tracking the reader. Anything else (aligning to .wrap, or to the nav's
+   gutter, or reserving flow space with margin-top: auto) moves it inward and
+   it stops reading as a corner aside.
+   z-index above the nav's 50 is load-bearing: the card opens upward, and at
+   45 it rendered BEHIND the sticky bar and looked clipped. */
+.ld .why-hero { position: absolute; right: 22px; bottom: 22px; z-index: 60; display: flex; flex-direction: column; align-items: flex-end; }
 
 /* resting tab: a slightly-tilted note with a speech tail */
 .ld .why-tab { position: relative; display: flex; align-items: center; gap: 12px; padding: 12px 15px 12px 14px; background: var(--card); border: 1.5px solid var(--line3); border-radius: 16px 16px 4px 16px; box-shadow: 0 14px 34px -12px rgba(0, 0, 0, 0.7); cursor: pointer; font-family: var(--body); color: var(--txt); transform: rotate(-1.4deg); transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease; }
@@ -700,10 +704,11 @@ html:has(.ld) { scroll-behavior: smooth; }
    500px card off a trigger either way, so the card behaves like what it
    already is, a full-width sheet. */
 @media (max-width: 980px) {
-  /* z-index goes back to auto so the wrapper stops being a stacking context:
-     the sheet below is fixed to the viewport and has to escape upward past
-     the sticky nav, which it cannot do from inside a z-45 context. */
-  .ld .why-hero { justify-content: center; margin-top: 22px; z-index: auto; }
+  /* Back into normal flow under the CTA, and z-index back to auto so the
+     wrapper stops being a stacking context: the sheet below is fixed to the
+     viewport and has to escape upward past the sticky nav, which it cannot
+     do from inside a positioned, z-indexed ancestor. */
+  .ld .why-hero { position: static; right: auto; bottom: auto; align-items: center; margin-top: 22px; z-index: auto; }
   .ld .why-tab { -webkit-tap-highlight-color: transparent; }
 
   .ld .why-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(6, 6, 8, 0.7); backdrop-filter: blur(3px); animation: why-scrim-in 0.2s ease both; }
