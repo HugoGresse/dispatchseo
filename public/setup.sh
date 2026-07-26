@@ -74,6 +74,51 @@ claude mcp add --transport http "$NAME" "$BASE/api/mcp" \
   die "Could not add the connection to Claude Code (claude mcp add failed)."
 say "  Connected (key verified against the server)."
 
+# Let the agent actually use gh. Claude Code gates terminal commands, and gh
+# is not allowed by default - so the install agent's FIRST step (gh auth
+# status, the same check this script passed at step 2) gets blocked. That
+# block cannot be lifted from the chat: telling the agent "you have my
+# permission" never reaches the gate, and the agent correctly refuses to
+# grant itself the rule by editing this file. Left to the owner it is a
+# dead stop on step one, right after paying. So write it here, where we
+# already know they want DispatchSEO driving gh in this repo.
+#
+# Additive on purpose: an existing settings.local.json belongs to the owner,
+# so we merge into it and never clobber it. Without a JSON tool we print the
+# line instead of risking their file.
+SETTINGS=".claude/settings.local.json"
+GH_RULE='Bash(gh *)'
+mkdir -p .claude 2>/dev/null
+if [ ! -f "$SETTINGS" ]; then
+  ( printf '%s\n' '{' '  "permissions": {' '    "allow": ["Bash(gh *)"]' '  }' '}' > "$SETTINGS" ) 2>/dev/null \
+    && say "  Allowed Claude Code to run gh in this folder ($SETTINGS)." \
+    || say "  ! Could not write $SETTINGS - if the agent stalls on a gh command, add \"$GH_RULE\" to its permissions.allow."
+elif grep -Fq "$GH_RULE" "$SETTINGS" 2>/dev/null; then
+  say "  Claude Code may already run gh here - left $SETTINGS alone."
+elif command -v python3 >/dev/null 2>&1; then
+  python3 - "$SETTINGS" "$GH_RULE" <<'PY' 2>/dev/null && say "  Allowed Claude Code to run gh in this folder (added to your $SETTINGS)." \
+    || say "  ! Could not update $SETTINGS - add \"$GH_RULE\" to permissions.allow yourself if the agent stalls on a gh command."
+import json, sys
+path, rule = sys.argv[1], sys.argv[2]
+with open(path) as f:
+    data = json.load(f)
+if not isinstance(data, dict):
+    raise SystemExit(1)
+perms = data.setdefault("permissions", {})
+allow = perms.setdefault("allow", [])
+if not isinstance(allow, list):
+    raise SystemExit(1)
+if rule not in allow:
+    allow.append(rule)
+with open(path, "w") as f:
+    json.dump(data, f, indent=2)
+    f.write("\n")
+PY
+else
+  say "  ! $SETTINGS exists and python3 isn't available to merge into it."
+  say "    Add \"$GH_RULE\" to its permissions.allow, or the agent will stall on its first gh command."
+fi
+
 # ---- 4. GitHub secrets - every value verified before it is stored ----------
 say ""
 say "Step 4 of 5 - the GitHub secrets your automations run on."
