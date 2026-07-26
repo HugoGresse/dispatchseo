@@ -759,6 +759,85 @@ export async function deleteProject(
   redirect("/dashboard");
 }
 
+export type DeleteAccountState = { error: string } | null;
+
+// Closing the account for real: cancel the money, remove the data, remove the
+// login - in that order, and the order IS the design.
+//
+// Billing first, and we ABORT if it fails. Polar is the source of truth for
+// the subscription, so deleting the user first would leave someone paying for
+// an account they can no longer sign into, with the cancel button sitting
+// behind a login that no longer exists. A failed deletion is recoverable; a
+// silent recurring charge is not.
+//
+// Projects are deleted explicitly rather than left to the foreign key.
+// projects.owner_user_id is ON DELETE SET NULL, so removing the user would
+// merely orphan them - and the crons enumerate every project with no owner
+// filter (listProjectsChecked), so orphans keep pulling SERP and Search
+// Console quota forever while being invisible to every dashboard.
+//
+// No MCP counterpart, deliberately, despite the parity rule in CLAUDE.md: the
+// MCP token IS the tenant, so a project-scoped token able to delete the whole
+// account would be a privilege escalation rather than parity.
+export async function deleteAccount(
+  _prev: DeleteAccountState,
+  formData: FormData,
+): Promise<DeleteAccountState> {
+  if (!isCloudMode()) return { error: "Accounts only exist on the hosted version." };
+  const auth = await dashboardAuth();
+  const user = auth?.user;
+  if (!user) return { error: "Not signed in." };
+
+  const typed = String(formData.get("confirm") ?? "").trim().toLowerCase();
+  if (!user.email || typed !== user.email.toLowerCase()) {
+    return { error: `Type ${user.email ?? "your email address"} exactly to confirm.` };
+  }
+
+  const { getSubscription, isActive, polar, polarConfigured } = await import("@/lib/billing");
+  const sub = await getSubscription(user.id);
+  if (isActive(sub) && sub?.provider_subscription_id) {
+    if (!polarConfigured()) {
+      return {
+        error:
+          "Can't reach billing to cancel your plan, so nothing was deleted. Cancel it in the billing portal first, then come back.",
+      };
+    }
+    try {
+      await polar().subscriptions.revoke({ id: sub.provider_subscription_id });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // Already cancelled is the state we wanted anyway - keep going.
+      if (!/already.?cancell?ed/i.test(msg)) {
+        return {
+          error: `Couldn't cancel your subscription, so nothing was deleted. Cancel it in the billing portal, then try again. (${msg.slice(0, 120)})`,
+        };
+      }
+    }
+  }
+
+  const { error: projectsError } = await db()
+    .from("projects")
+    .delete()
+    .eq("owner_user_id", user.id);
+  if (projectsError) {
+    return {
+      error: `Your plan was cancelled, but the sites could not be deleted: ${projectsError.message}`,
+    };
+  }
+
+  const { error: userError } = await db().auth.admin.deleteUser(user.id);
+  if (userError) {
+    return {
+      error: `Your plan and sites are gone, but the login itself could not be removed: ${userError.message}`,
+    };
+  }
+
+  // Straight to /logout rather than clearing cookies here: it already tolerates
+  // signing out a user that no longer exists, and it owns the cookie names.
+  (await cookies()).delete(PROJECT_COOKIE);
+  redirect("/logout");
+}
+
 // Shared core of project creation: validates the form, inserts the row with a
 // fresh MCP token, and switches the dashboard cookie to it. Only the wizard
 // consumes it today (/new redirects there), but the split keeps creation

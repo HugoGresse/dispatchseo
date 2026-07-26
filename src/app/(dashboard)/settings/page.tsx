@@ -9,6 +9,7 @@ import { isCloudMode } from "@/lib/cloud";
 import { ClaudeTokenConnect } from "@/components/claude-token-connect";
 import { hasRepoSecret } from "@/lib/github-app-secrets";
 import { DeleteProjectForm } from "@/components/delete-project";
+import { DeleteAccountForm } from "@/components/delete-account";
 import { KeywordSourceSettings } from "@/components/keyword-source-settings";
 import { SiteLaunchedRow } from "@/components/site-launched";
 import { CopyBlock } from "@/components/client";
@@ -41,6 +42,21 @@ function AccountSection({ email }: { email: string | null }) {
 
 export default async function SettingsPage() {
   const auth = await requireDashboard();
+
+  // Account-level facts, resolved once: both the last-site warning and the
+  // close-account form need them, and they must be available on the no-project
+  // branch below too. Null on self-host, which has no accounts.
+  const user = auth.user;
+  const account = user
+    ? await (async () => {
+        const [{ getSubscription, isActive }, { scopedProjects }] = await Promise.all([
+          import("@/lib/billing"),
+          import("@/lib/active-project"),
+        ]);
+        const [mine, sub] = await Promise.all([scopedProjects(), getSubscription(user.id)]);
+        return { email: user.email, siteCount: mine.length, subscribed: isActive(sub) };
+      })()
+    : null;
 
   // OrNull, not getActiveProject: this page has to survive owning no site.
   // getActiveProject would bounce to the wizard, which is where someone who
@@ -76,6 +92,18 @@ export default async function SettingsPage() {
             .
           </div>
         </section>
+        {account ? (
+          <section className="space-y-3">
+            <SectionTitle sub="irreversible - read before you click">Danger zone</SectionTitle>
+            <div className="rounded-xl border border-red-500/25 bg-neutral-900 p-4 sm:p-5">
+              <DeleteAccountForm
+                email={account.email}
+                siteCount={account.siteCount}
+                subscribed={account.subscribed}
+              />
+            </div>
+          </section>
+        ) : null}
       </div>
     );
   }
@@ -97,15 +125,8 @@ export default async function SettingsPage() {
   // Deleting the last site leaves a paying account with no dashboard to reach
   // Billing from, so the danger zone has to say that up front. Self-host has
   // no subscription and can't delete the home project anyway, hence cloud-only.
-  const lastSiteWhileSubscribed = await (async () => {
-    if (!isCloudMode() || !auth.user) return false;
-    const [{ getSubscription, isActive }, { scopedProjects }] = await Promise.all([
-      import("@/lib/billing"),
-      import("@/lib/active-project"),
-    ]);
-    if ((await scopedProjects()).length !== 1) return false;
-    return isActive(await getSubscription(auth.user.id));
-  })();
+  const lastSiteWhileSubscribed =
+    isCloudMode() && account?.siteCount === 1 && account.subscribed;
   const hdrs = await headers();
   const dashOrigin = `${hdrs.get("x-forwarded-proto") ?? "https"}://${hdrs.get("host") ?? "dispatchseo.com"}`;
 
@@ -220,6 +241,18 @@ export default async function SettingsPage() {
               />
             </>
           )}
+          {/* Closing the whole account, below deleting one site: a heavier
+              action reached from the same place, but folded away so it isn't
+              the first red control the eye lands on. */}
+          {account ? (
+            <div className="border-t border-neutral-800 pt-3">
+              <DeleteAccountForm
+                email={account.email}
+                siteCount={account.siteCount}
+                subscribed={account.subscribed}
+              />
+            </div>
+          ) : null}
         </div>
       </section>
     </div>
