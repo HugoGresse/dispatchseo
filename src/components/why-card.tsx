@@ -12,15 +12,18 @@ import { PixelDispatcher } from "@/components/pixel-dispatcher";
 // "Why DispatchSEO?" label, so it's unmistakably a mascot aside. Opening it
 // pops a card whose star is the full PixelDispatcher scene, animated.
 //
-// Two placements, one component, chosen by CSS rather than JS so neither can
-// flash or shift after hydration:
-//   - desktop  (>980px): <WhyCard />        floats bottom-right, as before
-//   - phone   (<=980px): <WhyCard inline /> sits in the hero, in normal flow
-// A tab that tracks the scroll on a phone is both annoying and expensive (a
-// fixed layer repainting over a backdrop-filtered sticky nav), so below the
-// breakpoint the aside scrolls away with the hero like any other element.
-// Whichever placement is hidden is `display: none`, so it costs no paint and
-// is out of the accessibility tree.
+// ONE placement, at every width: the note sits in the hero, in normal document
+// flow, and scrolls away with it. Nothing here is `position: fixed`. An aside
+// that tracks the reader down the page is an interruption, not an aside - and
+// on a phone it is also a fixed layer repainting over a backdrop-filtered
+// sticky nav on every scrolled frame. The mascot says its piece next to the
+// CTA and then gets out of the way.
+//
+// Because the trigger now lives near the TOP of the document, the anchored
+// popover opens DOWNWARD (`top: calc(100% + 16px)`, see landing.css) - the old
+// upward anchor would have flown off the top of the viewport. Below 980px the
+// popover becomes a bottom sheet, which is the only thing `compact` still
+// decides: modal semantics, the scrim, and the scroll lock.
 
 // The clay agent's front face - the exact BODY_OPEN grid from the pixel
 // dispatcher, minus the headset. Same character as the animation, drawn as
@@ -106,14 +109,14 @@ const POINTS: Array<{ icon: ReactNode; lead: string; body: string }> = [
   },
 ];
 
-export function WhyCard({ inline }: { inline?: boolean }) {
+export function WhyCard() {
   const [open, setOpen] = useState(false);
-  const [nearFooter, setNearFooter] = useState(false);
-  // null until the media query has been read on the client. It no longer
-  // gates any paint - it only picks the sheet-vs-popover behaviour (modal
-  // semantics, scrim, scroll lock), so a null first render is harmless.
+  // null until the media query has been read on the client. It gates no paint -
+  // it only picks the sheet-vs-popover behaviour (modal semantics, scrim,
+  // scroll lock, scroll-into-view), so a null first render is harmless.
   const [compact, setCompact] = useState<boolean | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const prevOpen = useRef(false);
@@ -147,33 +150,43 @@ export function WhyCard({ inline }: { inline?: boolean }) {
   }, [open]);
 
   // Move focus into the card on open, restore to the trigger on close.
+  //
+  // The popover hangs off a trigger sitting near the bottom of the first
+  // viewport, so opening it also scrolls it into view. `block: "nearest"` is
+  // the whole point: it moves the page by the minimum needed and does nothing
+  // at all when the card already fits, so it never yanks a reader who is
+  // looking straight at it. The sheet is fixed to the viewport and needs none
+  // of this.
+  //
+  // It has to wait for the entry animation to finish. scrollIntoView measures
+  // the TRANSFORMED box, and the card enters at scale(0.94) translateY(-10px);
+  // measuring mid-flight computes the scroll for a card ~44px shorter than the
+  // one that lands, and the bottom ends up off-screen. `finished` resolves on
+  // the next frame when reduced motion has already cancelled the animation.
   useEffect(() => {
-    if (open) closeRef.current?.focus();
-    else if (prevOpen.current) triggerRef.current?.focus();
+    if (open) {
+      closeRef.current?.focus({ preventScroll: true });
+      const el = popRef.current;
+      if (compact === false && el) {
+        const reveal = () =>
+          el.scrollIntoView({
+            block: "nearest",
+            behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+              ? "auto"
+              : "smooth",
+          });
+        const running = el.getAnimations?.() ?? [];
+        if (running.length) {
+          void Promise.allSettled(running.map((a) => a.finished)).then(reveal);
+        } else {
+          reveal();
+        }
+      }
+    } else if (prevOpen.current) {
+      triggerRef.current?.focus();
+    }
     prevOpen.current = open;
-  }, [open]);
-
-  // Get out of the way of the footer so the floating note never overlaps it.
-  // The inline placement scrolls with the page, so it needs no observer at
-  // all - one fewer scroll-driven state flip on the device that can least
-  // afford it.
-  useEffect(() => {
-    if (inline) return;
-    const footer = document.querySelector(".ld footer");
-    if (!footer) return;
-    const io = new IntersectionObserver(
-      ([entry]) => setNearFooter(entry.isIntersecting),
-      { rootMargin: "0px 0px -40px 0px" },
-    );
-    io.observe(footer);
-    return () => io.disconnect();
-  }, [inline]);
-
-  const hidden = !inline && nearFooter;
-
-  useEffect(() => {
-    if (hidden) setOpen(false);
-  }, [hidden]);
+  }, [open, compact]);
 
   // The sheet owns the screen while it's up, so the page behind it holds still.
   useEffect(() => {
@@ -186,15 +199,18 @@ export function WhyCard({ inline }: { inline?: boolean }) {
   }, [open, compact]);
 
   return (
-    <div
-      ref={rootRef}
-      className={`${inline ? "why-inline" : "why-fab"}${hidden ? " is-hidden" : ""}${open ? " is-open" : ""}`}
-    >
+    <div ref={rootRef} className="why-hero">
       {open && compact && (
         <div className="why-scrim" onClick={() => setOpen(false)} aria-hidden="true" />
       )}
       {open && (
-        <div className="why-pop" role="dialog" aria-modal={compact === true} aria-label="Why DispatchSEO?">
+        <div
+          ref={popRef}
+          className="why-pop"
+          role="dialog"
+          aria-modal={compact === true}
+          aria-label="Why DispatchSEO?"
+        >
           <button ref={closeRef} type="button" className="why-x" onClick={() => setOpen(false)} aria-label="Close">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M18 6 6 18M6 6l12 12" />
@@ -231,40 +247,23 @@ export function WhyCard({ inline }: { inline?: boolean }) {
         </div>
       )}
 
-      {/* In the hero the full pixel scene is already a few hundred pixels up,
-          so the trigger drops the note, the tail and the chevron and keeps
-          only what makes it the mascot's aside rather than another nav link:
-          the face, and the question a visitor is actually asking. */}
-      {inline ? (
-        <button
-          ref={triggerRef}
-          type="button"
-          className="why-inline-btn"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-        >
-          <MascotFace className="why-inline-face" />
-          <span>Why DispatchSEO?</span>
-        </button>
-      ) : (
-        <button
-          ref={triggerRef}
-          type="button"
-          className="why-tab"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          aria-label="Why DispatchSEO? Open the explainer"
-        >
-          <MascotFace className="why-tab-face" />
-          <span className="why-tab-text">
-            <span className="why-tab-eyebrow">psst -</span>
-            <span className="why-tab-title">Why DispatchSEO?</span>
-          </span>
-          <svg className="why-tab-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="m9 18 6-6-6-6" />
-          </svg>
-        </button>
-      )}
+      <button
+        ref={triggerRef}
+        type="button"
+        className="why-tab"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label="Why DispatchSEO? Open the explainer"
+      >
+        <MascotFace className="why-tab-face" />
+        <span className="why-tab-text">
+          <span className="why-tab-eyebrow">psst -</span>
+          <span className="why-tab-title">Why DispatchSEO?</span>
+        </span>
+        <svg className="why-tab-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="m9 18 6-6-6-6" />
+        </svg>
+      </button>
     </div>
   );
 }

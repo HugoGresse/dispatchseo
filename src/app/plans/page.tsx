@@ -202,16 +202,28 @@ export default async function PlansPage() {
                 </div>
                 <p className="mt-1 text-sm text-neutral-400">{copy.tagline}</p>
 
-                {/* Struck list price sits on its own line above the number, not
+                {/* Three facts in reading order: the saving, the number, the
+                    promise. The tag is the same violet slab the offer ticket
+                    above uses, shrunk to card scale, and squared rather than a
+                    capsule so it doesn't compete with the "Most popular" badge
+                    on the row above.
+                    Struck list price sits on its own line above the number, not
                     beside it: at the sm breakpoint a third of 640px cannot hold
                     "$149 $74.50 /mo" on one row. */}
                 {founding ? (
-                  <p className="mt-5 text-sm font-semibold tabular-nums text-neutral-600">
-                    <s className="decoration-violet-400 decoration-2">
-                      <span className="sr-only">Regular price </span>
-                      {listPriceLabel(tier)}
-                    </s>
-                  </p>
+                  <>
+                    <p className="mt-5">
+                      <span className="inline-block rounded-[5px] bg-violet-500 px-1.5 pb-[3px] pt-px text-[11px] font-bold tracking-wide text-neutral-950">
+                        {founding.discountPct}% off
+                      </span>
+                    </p>
+                    <p className="mt-2 text-sm font-semibold tabular-nums text-neutral-600">
+                      <s className="decoration-violet-400 decoration-2">
+                        <span className="sr-only">Regular price </span>
+                        {listPriceLabel(tier)}
+                      </s>
+                    </p>
+                  </>
                 ) : null}
                 <div
                   className={`flex flex-wrap items-baseline gap-x-1 ${founding ? "mt-0.5" : "mt-5"}`}
@@ -224,7 +236,7 @@ export default async function PlansPage() {
                 {founding ? (
                   <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-violet-300">
                     <Lock className="h-3.5 w-3.5 shrink-0" />
-                    Founding price
+                    Locked for life
                   </p>
                 ) : null}
                 {tier === "starter" ? (

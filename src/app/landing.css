@@ -333,6 +333,21 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .plan .p-found { display: inline-flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 12.5px; font-weight: 700; letter-spacing: 0.005em; color: var(--vio2); }
 .ld .plan .p-found svg { width: 12px; height: 12px; flex-shrink: 0; }
 
+/* The saving, stated on the card itself. Same violet slab the founding ticket
+   and the hero headline use, shrunk to card scale, so offer and page read as
+   one thing rather than a promo sticker on top of one.
+   Two deliberate differences from the "Most popular" cap it shares the Growth
+   card with: squared instead of a capsule, and near-black on violet instead of
+   white on violet. That is not only separation - white on --vio is 3.5:1,
+   which is fine at the headline's 70px and not fine at 12px, while the page
+   background on --vio is 5.7:1. Same move as .why-cta and .btn-solid.
+   It also sits INSIDE the card's content flow, between the plan name and the
+   number, so it cannot fight the cap: the cap straddles the card's top border,
+   this never leaves the padding box.
+   All spacing is on the tag itself, so no-offer leaves no gap behind. */
+.ld .plan .p-off { align-self: flex-start; margin-top: 9px; padding: 3px 8px 4px; font-family: var(--disp); font-size: 12px; font-weight: 800; line-height: 1.15; letter-spacing: 0.01em; color: var(--bg); background: var(--vio); border-radius: 5px; }
+.ld .plan .p-off + .p-price { margin-top: 4px; }
+
 /* ---------- pricing: mobile compare scoreboard (<=980px) ---------- */
 /* Desktop shows three full plan columns; a phone would show sixty near-identical
    rows, so below 981px the plans collapse to the four things that actually
@@ -348,6 +363,10 @@ html:has(.ld) { scroll-behavior: smooth; }
 /* Founding variant: was / now / per stack on three lines. Inline "$74.50/mo"
    overflows a third of a 320px screen, so /mo drops to its own line and the
    number steps down a notch to buy back the two extra glyphs. */
+/* The same violet slab as the desktop card, sized for a third of a phone
+   screen. Its own line above the price block: beside the struck number it
+   would push "$149" out of a ~90px column at 320px. */
+.ld .pm-tag { display: block; width: fit-content; margin: 0 auto 4px; padding: 1px 5px 2px; font-family: var(--disp); font-size: 10px; font-weight: 800; line-height: 1.2; letter-spacing: 0.01em; color: var(--bg); background: var(--vio); border-radius: 4px; white-space: nowrap; }
 .ld .pm-was { display: inline-block; font-size: 12.5px; }
 .ld .pm-was::after { height: 1.5px; }
 .ld .pm-price-f { font-size: clamp(19px, 5.4vw, 26px); margin-top: 0; }
@@ -587,22 +606,29 @@ html:has(.ld) { scroll-behavior: smooth; }
 }
 
 /* ---------- "why us" mascot explainer ---------- */
-/* Bottom-right, but deliberately NOT a round chat launcher (which reads as
-   live chat and baits the visitor): the resting state is a tilted speech-note
-   with the pixel agent peeking over its edge and a visible "Why DispatchSEO?"
-   label, so it's unmistakably a mascot aside. z-index sits above the sticky
-   nav (50).
-   Which of the two placements is live is decided HERE, not in JS: the page
-   renders both and each breakpoint display:none's the one it doesn't want, so
-   nothing appears, moves or reflows after hydration. */
-.ld .why-fab { position: fixed; right: 22px; bottom: 22px; z-index: 60; display: flex; flex-direction: column; align-items: flex-end; }
-.ld .why-inline { display: none; }
-.ld .why-fab.is-hidden { opacity: 0; pointer-events: none; transform: translateY(12px); transition: opacity 0.3s ease, transform 0.3s ease; }
+/* Deliberately NOT a round chat launcher (which reads as live chat and baits
+   the visitor): the resting state is a tilted speech-note with the pixel agent
+   peeking over its edge and a visible "Why DispatchSEO?" label, so it's
+   unmistakably a mascot aside.
+   ONE placement, at every width: in the hero, in normal flow, under the CTA.
+   Nothing here is position: fixed - the note scrolls away with the hero like
+   any other element rather than following the reader down the page.
+   Right-aligned on a wide screen, which is where it used to float and which
+   keeps it clearly an aside off the centred hero column rather than a second
+   thing competing with the CTA underneath it. z-index keeps the opened card
+   above the sections it hangs over; it stays under the sticky nav (50), which
+   it never reaches now that it opens downward.
+   The 760px band is the sub-headline's column, so the note's right edge lands
+   on the right edge of the paragraph above it - stated rather than inherited,
+   because .wrap is content-sized here and would otherwise drift with the copy. */
+.ld .why-hero { position: relative; z-index: 45; display: flex; justify-content: flex-end; width: min(760px, 100%); margin: 30px auto 0; }
 
 /* resting tab: a slightly-tilted note with a speech tail */
 .ld .why-tab { position: relative; display: flex; align-items: center; gap: 12px; padding: 12px 15px 12px 14px; background: var(--card); border: 1.5px solid var(--line3); border-radius: 16px 16px 4px 16px; box-shadow: 0 14px 34px -12px rgba(0, 0, 0, 0.7); cursor: pointer; font-family: var(--body); color: var(--txt); transform: rotate(-1.4deg); transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease; }
 .ld .why-tab:hover { transform: rotate(0deg) translateY(-2px); border-color: var(--clay); box-shadow: 0 20px 44px -14px rgba(0, 0, 0, 0.75); }
 .ld .why-tab:focus-visible { outline: 2px solid var(--vio2); outline-offset: 3px; }
+/* Touch has no hover, so the press itself is the feedback. */
+.ld .why-tab:active { transform: rotate(0deg) translateY(0); border-color: var(--clay); }
 /* speech tail hanging off the bottom-right corner */
 .ld .why-tab::after { content: ""; position: absolute; right: 22px; bottom: -7px; width: 13px; height: 13px; background: var(--card); border-right: 1.5px solid var(--line3); border-bottom: 1.5px solid var(--line3); border-bottom-right-radius: 3px; transform: rotate(45deg); transition: border-color 0.16s ease; }
 .ld .why-tab:hover::after { border-color: var(--clay); }
@@ -619,10 +645,16 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .why-tab:hover .why-tab-chev { color: var(--clay); transform: translateX(2px); }
 
 /* the popped card */
-/* text-align is explicit so the card reads the same from either trigger - the
-   inline one lives inside the centred hero and would otherwise inherit it. */
-.ld .why-pop { text-align: left; position: absolute; bottom: calc(100% + 16px); right: 0; width: min(342px, calc(100vw - 32px)); background: var(--card); border: 1px solid var(--line2); border-radius: 20px; overflow: hidden; box-shadow: 0 30px 70px -24px rgba(0, 0, 0, 0.85); transform-origin: bottom right; animation: why-pop-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
-@keyframes why-pop-in { from { opacity: 0; transform: translateY(10px) scale(0.94); } to { opacity: 1; transform: translateY(0) scale(1); } }
+/* Opens DOWNWARD: the trigger sits near the top of the document now, so an
+   upward anchor would fly off the top of the viewport. 16px clears the speech
+   tail, whose rotated corner hangs ~10px below the note.
+   The height cap is the backstop to the scroll-into-view in why-card.tsx: on a
+   window too short to hold the whole card even at scroll extent, the card
+   scrolls internally rather than hiding its own CTA.
+   text-align is explicit because the card lives inside the centred hero and
+   would otherwise inherit that centring and render ragged. */
+.ld .why-pop { text-align: left; scroll-margin: 88px 0 24px; max-height: calc(100dvh - 132px); overflow-y: auto; overscroll-behavior: contain; position: absolute; top: calc(100% + 16px); right: 0; width: min(342px, calc(100vw - 32px)); background: var(--card); border: 1px solid var(--line2); border-radius: 20px; overflow: hidden; box-shadow: 0 30px 70px -24px rgba(0, 0, 0, 0.85); transform-origin: top right; animation: why-pop-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes why-pop-in { from { opacity: 0; transform: translateY(-10px) scale(0.94); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .ld .why-pop { animation: none; } }
 
 .ld .why-x { position: absolute; top: 10px; right: 10px; z-index: 3; width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 9px; background: rgba(10, 10, 12, 0.55); color: var(--mut); cursor: pointer; backdrop-filter: blur(4px); transition: background 0.14s ease, color 0.14s ease; }
@@ -654,27 +686,21 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .why-cta svg { width: 15px; height: 15px; transition: transform 0.14s ease; }
 .ld .why-cta:hover svg { transform: translateX(2px); }
 
-/* Mobile: the tab stops floating and the anchored popover becomes a bottom
-   sheet. A fixed tab that tracks the scroll on a phone is both an annoyance
-   and a cost (a fixed layer repainting over the backdrop-filtered nav on
-   every scroll), and `bottom: calc(100% + 16px)` could run off the top of a
-   short viewport anyway - so the trigger joins the hero and the card behaves
-   like what it already is, a full-width sheet. */
+/* Mobile: the note centres under the CTA (a right-hugging aside reads as
+   misaligned once the hero is one narrow column) and the anchored popover
+   becomes a bottom sheet - on a short viewport there is no room to hang a
+   500px card off a trigger either way, so the card behaves like what it
+   already is, a full-width sheet. */
 @media (max-width: 980px) {
-  .ld .why-fab { display: none; }
-  .ld .why-inline { display: flex; justify-content: center; margin-top: 12px; }
-  /* Flat on purpose: the hero already has one button that matters, and a
-     second bordered box under it would read as a competing CTA. */
-  .ld .why-inline-btn { display: inline-flex; align-items: center; gap: 9px; min-height: 44px; padding: 10px 12px; border: 0; background: transparent; cursor: pointer; font-family: var(--body); font-size: 14.5px; font-weight: 600; color: var(--mut); -webkit-tap-highlight-color: transparent; }
-  .ld .why-inline-btn span { border-bottom: 1px solid var(--line3); padding-bottom: 2px; transition: color 0.14s ease, border-color 0.14s ease; }
-  .ld .why-inline-btn:active span { color: #fff; border-color: var(--clay); }
-  .ld .why-inline-btn:focus-visible { outline: 2px solid var(--vio2); outline-offset: 2px; border-radius: 10px; }
-  .ld .why-inline-face { width: 21px; height: auto; flex-shrink: 0; }
+  /* z-index goes back to auto so the wrapper stops being a stacking context:
+     the sheet below is fixed to the viewport and has to escape upward past
+     the sticky nav, which it cannot do from inside a z-45 context. */
+  .ld .why-hero { justify-content: center; margin-top: 22px; z-index: auto; }
+  .ld .why-tab { -webkit-tap-highlight-color: transparent; }
 
   .ld .why-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(6, 6, 8, 0.7); backdrop-filter: blur(3px); animation: why-scrim-in 0.2s ease both; }
-  /* z-index is explicit here because the inline trigger, unlike the fixed
-     tab, creates no stacking context of its own - without it the sheet would
-     open underneath the sticky nav (z 50). */
+  /* Both z-indexes are explicit and above the .why-hero stacking context so
+     the sheet clears the sticky nav (z 50) it is now free to cover. */
   .ld .why-pop { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 61; width: auto; max-height: 86dvh; overflow-y: auto; overscroll-behavior: contain; border-radius: 22px 22px 0 0; border-left: 0; border-right: 0; border-bottom: 0; transform-origin: bottom center; animation: why-sheet-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; padding-bottom: env(safe-area-inset-bottom); }
   .ld .why-stage { max-width: 320px; margin: 0 auto; }
   .ld .why-x { width: 36px; height: 36px; }

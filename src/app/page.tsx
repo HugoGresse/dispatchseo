@@ -102,6 +102,12 @@ function FoundingMascot() {
 // Desktop plan card price. One component for all three cards so the founding
 // price can never drift between them - and so "no offer" is a single branch,
 // not three places to forget.
+//
+// Three facts, in the order a buyer reads them: the saving (tag), the number
+// (price), the promise (locked for life). The label under the price used to
+// read "Founding price", which after adding the tag said the same thing twice
+// - the tag names the deal, so the label was freed to carry the part that is
+// actually load-bearing and nowhere else on the card.
 function PlanPrice({ tier, founding }: { tier: Tier; founding: FoundingOffer | null }) {
   if (!founding) {
     return (
@@ -113,6 +119,7 @@ function PlanPrice({ tier, founding }: { tier: Tier; founding: FoundingOffer | n
   }
   return (
     <>
+      <div className="p-off">{founding.discountPct}% off</div>
       <div className="p-price">
         <s className="p-was">
           <span className="ld-sr">Regular price </span>
@@ -123,7 +130,7 @@ function PlanPrice({ tier, founding }: { tier: Tier; founding: FoundingOffer | n
       </div>
       <div className="p-found">
         <LockIc />
-        Founding price
+        Locked for life
       </div>
     </>
   );
@@ -143,6 +150,7 @@ function PmPrice({ tier, founding }: { tier: Tier; founding: FoundingOffer | nul
   }
   return (
     <>
+      <span className="pm-tag">{founding.discountPct}% off</span>
       <s className="pm-was">
         <span className="ld-sr">Regular price </span>
         {listPriceLabel(tier)}
@@ -214,10 +222,10 @@ export default async function LandingPage({
           <div className="cta-row" id="get-started">
             <DomainCta />
           </div>
-          {/* Phone-only placement of the mascot aside - CSS-hidden above
-              980px, where the floating copy at the end of the page takes
-              over. See the note at the top of why-card.tsx. */}
-          <WhyCard inline />
+          {/* The mascot's aside, attached to the hero at every width and in
+              normal flow - it scrolls away with the hero rather than following
+              the reader. See the note at the top of why-card.tsx. */}
+          <WhyCard />
         </div>
       </header>
 
@@ -624,9 +632,6 @@ export default async function LandingPage({
           </div>
         </div>
       </footer>
-
-      {/* ==================== FLOATING MASCOT EXPLAINER ==================== */}
-      <WhyCard />
     </div>
   );
 }
