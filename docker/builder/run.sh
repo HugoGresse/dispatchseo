@@ -48,12 +48,46 @@ sync_repo() { # sync_repo <owner/repo> <dir> -> 0/1
   git -C "$2" clean -qfd
 }
 
-# Changed-file deny-list for the auto-merge sweep: a guide PR must never
-# touch workflows, dependency manifests, or config. Mirrors the allowlist
-# idea in seo-auto-merge.yml, made portable across site stacks.
+# Last-resort deny-list, kept as a second gate behind the allowlist below.
+# The allowlist is what actually decides; this only catches a repo whose
+# publish-paths were edited to include something they should not.
 DENY='^\.github/|^\.dispatchseo/|(^|/)package\.json$|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|(^|/)\.env|next\.config|vercel\.json|(^|/)tsconfig'
 
+# Path prefixes a guide PR may touch, read from the repo's OWN
+# .dispatchseo/publish-paths on the default branch - the same file
+# seo-auto-merge.yml reads, so self-host and hosted installs apply the
+# identical gate. On a self-hosted backend GitHub cannot reach, that workflow
+# never runs (it curls the backend for project mode), which makes this sweep
+# the only gate there is - a deny-list would auto-merge anything nobody
+# thought to ban. Reference-stack layout is the fallback when the file is
+# absent. Fetched per sweep so an owner's edit takes effect without a restart.
+publish_prefixes() { # publish_prefixes <owner/repo>
+  prefixes=$(gh api "repos/$1/contents/.dispatchseo/publish-paths" \
+    -H "Accept: application/vnd.github.raw" 2>/dev/null \
+    | grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$')
+  if [ -z "$prefixes" ]; then
+    printf 'src/content/blog/\nsrc/components/blog/\npublic/blog/covers/\n'
+  else
+    printf '%s\n' "$prefixes"
+  fi
+}
+
+# 0 when every changed file sits under one of the allowed prefixes. Word
+# splitting is fine here: a path containing whitespace simply fails to match
+# and the PR goes to the owner, which is the safe direction.
+within_publish_paths() { # within_publish_paths <files> <prefixes>
+  for f in $1; do
+    ok=0
+    for p in $2; do
+      case "$f" in "$p"*) ok=1; break ;; esac
+    done
+    [ "$ok" = 1 ] || return 1
+  done
+  return 0
+}
+
 merge_sweep() { # merge_sweep <slug> <owner/repo>
+  allowed=$(publish_prefixes "$2")
   gh pr list --repo "$2" --label seo --state open \
     --json number,labels \
     --jq '.[] | select([.labels[].name] | index("seo-tool") | not) | .number' \
@@ -61,7 +95,12 @@ merge_sweep() { # merge_sweep <slug> <owner/repo>
       [ -n "$n" ] || continue
       # Every check green (gh exits 0 only then; pending=8, failing/none=1).
       if ! gh pr checks "$n" --repo "$2" >/dev/null 2>&1; then continue; fi
-      if gh pr diff "$n" --repo "$2" --name-only | grep -qE "$DENY"; then
+      changed=$(gh pr diff "$n" --repo "$2" --name-only)
+      if ! within_publish_paths "$changed" "$allowed"; then
+        log "PR #$n in $2 touches files outside the publish dirs (structural change) - leaving it for the owner"
+        continue
+      fi
+      if echo "$changed" | grep -qE "$DENY"; then
         log "PR #$n in $2 touches protected files - leaving it for the owner"
         continue
       fi
@@ -213,7 +252,7 @@ while :; do
   nsweeps=$(echo "$feed" | jq '.merge_sweeps | length')
   if [ -z "$GH_TOKEN" ]; then
     if [ "$njobs" != "0" ]; then
-      log "jobs are due but no GitHub token is available - connect one in the wizard's One-tap merge step (or set BUILDER_GH_TOKEN in .env)"
+      log "jobs are due but no GitHub token is available - connect one in the wizard's Connect GitHub step, or on Home's 'Connect GitHub' card (or set BUILDER_GH_TOKEN in .env)"
     fi
   else
     for row in $(echo "$feed" | jq -r '.jobs[] | @base64'); do
