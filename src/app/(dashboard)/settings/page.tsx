@@ -26,7 +26,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 export default async function SettingsPage() {
-  await requireDashboard();
+  const auth = await requireDashboard();
 
   const project = await getActiveProject();
   const isDefault = project.id === DEFAULT_PROJECT_ID;
@@ -43,6 +43,18 @@ export default async function SettingsPage() {
   // cloud it would hand every tenant the platform's own key. Null on a classic
   // env install (no instance row) - the section just doesn't render.
   const cronSecret = isCloudMode() ? null : await instanceCronSecret();
+  // Deleting the last site leaves a paying account with no dashboard to reach
+  // Billing from, so the danger zone has to say that up front. Self-host has
+  // no subscription and can't delete the home project anyway, hence cloud-only.
+  const lastSiteWhileSubscribed = await (async () => {
+    if (!isCloudMode() || !auth.user) return false;
+    const [{ getSubscription, isActive }, { scopedProjects }] = await Promise.all([
+      import("@/lib/billing"),
+      import("@/lib/active-project"),
+    ]);
+    if ((await scopedProjects()).length !== 1) return false;
+    return isActive(await getSubscription(auth.user.id));
+  })();
   const hdrs = await headers();
   const dashOrigin = `${hdrs.get("x-forwarded-proto") ?? "https"}://${hdrs.get("host") ?? "dispatchseo.com"}`;
 
@@ -148,7 +160,11 @@ export default async function SettingsPage() {
                 progress, and the product profile. The live site itself is untouched. There is
                 no undo.
               </p>
-              <DeleteProjectForm slug={project.slug} domain={project.domain} />
+              <DeleteProjectForm
+                slug={project.slug}
+                domain={project.domain}
+                lastSiteWhileSubscribed={lastSiteWhileSubscribed}
+              />
             </>
           )}
         </div>

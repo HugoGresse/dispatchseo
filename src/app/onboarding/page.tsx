@@ -194,6 +194,14 @@ export default async function OnboardingPage({
   const isNew = params.new;
   const cloud = isCloudMode();
 
+  // Owns nothing, yet got past the gate above - in cloud that can only mean a
+  // live subscription, i.e. a returning customer who just deleted their last
+  // site. This route is a standalone shell with no sidebar, and every other
+  // dashboard page needs a project, so the only way to Billing is typing the
+  // URL: the cancel button is invisible to precisely the person hunting for
+  // it. scopedProjects is request-cached, so asking again is free.
+  const strandedNoSites = cloud && Boolean(auth.user) && (await scopedProjects()).length === 0;
+
   // Someone installed the App straight from github.com - no signed state, so
   // the callback couldn't tie it to a project. Interrupt with a chooser over
   // this user's installation-less projects, then resume the wizard normally.
@@ -252,16 +260,29 @@ export default async function OnboardingPage({
             <DispatchMark className="h-7 w-auto" />
             DispatchSEO
           </p>
-          {/* Escape hatch to the plain-English walkthrough. Served by this
-              same instance, so it works on localhost installs too. */}
-          <a
-            href="/docs/setup-wizard"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm font-medium text-neutral-500 transition-colors hover:text-neutral-300"
-          >
-            Stuck? Open the quick guide ↗
-          </a>
+          <div className="flex items-center gap-4">
+            {/* The way out for someone who does not want a site here at all -
+                see strandedNoSites above. Only rendered when they own none,
+                so a normal add-a-site run is not invited to go cancel. */}
+            {strandedNoSites ? (
+              <a
+                href="/billing"
+                className="text-sm font-medium text-neutral-500 transition-colors hover:text-neutral-300"
+              >
+                Manage billing
+              </a>
+            ) : null}
+            {/* Escape hatch to the plain-English walkthrough. Served by this
+                same instance, so it works on localhost installs too. */}
+            <a
+              href="/docs/setup-wizard"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium text-neutral-500 transition-colors hover:text-neutral-300"
+            >
+              Stuck? Open the quick guide ↗
+            </a>
+          </div>
         </div>
         {/* The landing hero's dispatcher, already at the desk for this shift.
             Canvas-rendered, so its per-frame redraw never mutates the DOM and

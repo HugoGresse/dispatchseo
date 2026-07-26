@@ -6,7 +6,19 @@ import { deleteProject, type DeleteProjectState } from "@/app/actions";
 // Vercel-style confirm-by-typing: the button stays disabled until the domain
 // is typed back exactly, and the server re-checks the same thing.
 
-export function DeleteProjectForm({ slug, domain }: { slug: string; domain: string }) {
+export function DeleteProjectForm({
+  slug,
+  domain,
+  // Cloud, this is the account's only site, and the subscription is live.
+  // Deleting cancels nothing, and afterwards there is no dashboard left to
+  // find Billing from - so say it here, before the click, rather than leaving
+  // someone to discover it on the next invoice.
+  lastSiteWhileSubscribed = false,
+}: {
+  slug: string;
+  domain: string;
+  lastSiteWhileSubscribed?: boolean;
+}) {
   const [typed, setTyped] = useState("");
   const [state, formAction, pending] = useActionState<DeleteProjectState, FormData>(
     deleteProject,
@@ -18,6 +30,19 @@ export function DeleteProjectForm({ slug, domain }: { slug: string; domain: stri
     <form action={formAction} className="space-y-3">
       {state?.error ? (
         <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{state.error}</p>
+      ) : null}
+      {lastSiteWhileSubscribed ? (
+        <p className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2.5 text-sm leading-relaxed text-amber-200/90">
+          This is your only site, and deleting it does not cancel your subscription - the plan
+          keeps billing until you cancel it.{" "}
+          <a
+            href="/billing"
+            className="font-medium text-amber-200 underline underline-offset-2 hover:text-white"
+          >
+            Manage billing
+          </a>{" "}
+          if that is what you are here to do.
+        </p>
       ) : null}
       <input type="hidden" name="slug" value={slug} />
       <label className="block space-y-1.5">
