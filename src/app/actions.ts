@@ -78,9 +78,17 @@ export async function decideSuggestion(id: string, decision: "approved" | "rejec
 // The Home banner's "Mark fixed" - the dashboard face of the mark_cron_fixed
 // MCP tool. An owner judgment call: clears the alert now; if the job is still
 // broken the next failed run or missed window re-raises it on its own.
+//
+// Scoped exactly like the banner that renders it (dashboard/page.tsx passes
+// the same slug in cloud mode): `job` arrives from the client, and a server
+// action is callable directly, so without the slug markCronFixed resolves it
+// against getCronHealth(undefined) - the ALL-tenants view - and one tenant
+// could silence a sibling's failure banner and its alert email. Self-host
+// stays deployment-wide: there, one owner really does own every job.
 export async function markCronFixedAction(job: string) {
   await assertAuthed();
-  await markCronFixed(job);
+  const project = isCloudMode() ? await getActiveProject() : null;
+  await markCronFixed(job, project?.slug);
   revalidatePath("/dashboard");
 }
 
