@@ -320,7 +320,32 @@ function LogoutLink() {
   );
 }
 
-export function Sidebar({ billing = false }: { billing?: boolean }) {
+// Every link in GROUPS resolves through getActiveProject(), which redirects to
+// the wizard when the account owns nothing. Rendering them anyway gives a
+// sidebar full of controls that silently teleport you to step 1. Settings and
+// Billing both survive a zero-project account, so those stay.
+function NoSiteNote() {
+  return (
+    <p className="px-3.5 py-3 text-sm leading-relaxed text-neutral-500">
+      No site yet.{" "}
+      <Link
+        href="/onboarding?new=1"
+        className="font-medium text-violet-400 underline underline-offset-2 hover:text-violet-300"
+      >
+        Add one
+      </Link>{" "}
+      to unlock the rest of the dashboard.
+    </p>
+  );
+}
+
+export function Sidebar({
+  billing = false,
+  hasProject = true,
+}: {
+  billing?: boolean;
+  hasProject?: boolean;
+}) {
   const pathname = usePathname();
   return (
     <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-neutral-800/80 md:flex">
@@ -337,22 +362,26 @@ export function Sidebar({ billing = false }: { billing?: boolean }) {
           shrink this); Settings lives OUTSIDE the scroll area so it can
           never be clipped off the bottom of the screen. */}
       <nav className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-3">
-        {GROUPS.map((group, i) => (
-          <div key={group.label ?? "top"} className="flex flex-col gap-1.5">
-            {group.label ? (
-              <p
-                className={`px-3.5 pb-1 text-[11px] font-medium uppercase tracking-wider text-neutral-600 ${
-                  i > 0 ? "pt-5" : ""
-                }`}
-              >
-                {group.label}
-              </p>
-            ) : null}
-            {group.links.map((l) => (
-              <SidebarLink key={l.href} link={l} pathname={pathname} />
-            ))}
-          </div>
-        ))}
+        {hasProject ? (
+          GROUPS.map((group, i) => (
+            <div key={group.label ?? "top"} className="flex flex-col gap-1.5">
+              {group.label ? (
+                <p
+                  className={`px-3.5 pb-1 text-[11px] font-medium uppercase tracking-wider text-neutral-600 ${
+                    i > 0 ? "pt-5" : ""
+                  }`}
+                >
+                  {group.label}
+                </p>
+              ) : null}
+              {group.links.map((l) => (
+                <SidebarLink key={l.href} link={l} pathname={pathname} />
+              ))}
+            </div>
+          ))
+        ) : (
+          <NoSiteNote />
+        )}
       </nav>
       <div className="shrink-0 border-t border-neutral-800/80 px-3 py-3">
         {billing ? <SidebarLink link={BILLING} pathname={pathname} /> : null}
@@ -369,7 +398,13 @@ export function Sidebar({ billing = false }: { billing?: boolean }) {
 // shortest viewports. Instead: a hamburger in the topbar opening a drawer that
 // keeps the desktop sidebar's grouping, so the two navigations teach the same
 // map of the app.
-export function MobileNav({ billing = false }: { billing?: boolean }) {
+export function MobileNav({
+  billing = false,
+  hasProject = true,
+}: {
+  billing?: boolean;
+  hasProject?: boolean;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   // The overlay is portaled to <body>, so it can't render during SSR.
@@ -445,22 +480,26 @@ export function MobileNav({ billing = false }: { billing?: boolean }) {
             {/* Same groups as the desktop sidebar, and Settings likewise pinned
                 outside the scroll area so it can't be clipped off the bottom. */}
             <nav className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-1">
-              {GROUPS.map((group, i) => (
-                <div key={group.label ?? "top"} className="flex flex-col gap-1.5">
-                  {group.label ? (
-                    <p
-                      className={`px-3.5 pb-1 text-[11px] font-medium uppercase tracking-wider text-neutral-600 ${
-                        i > 0 ? "pt-5" : ""
-                      }`}
-                    >
-                      {group.label}
-                    </p>
-                  ) : null}
-                  {group.links.map((l) => (
-                    <SidebarLink key={l.href} link={l} pathname={pathname} />
-                  ))}
-                </div>
-              ))}
+              {hasProject ? (
+                GROUPS.map((group, i) => (
+                  <div key={group.label ?? "top"} className="flex flex-col gap-1.5">
+                    {group.label ? (
+                      <p
+                        className={`px-3.5 pb-1 text-[11px] font-medium uppercase tracking-wider text-neutral-600 ${
+                          i > 0 ? "pt-5" : ""
+                        }`}
+                      >
+                        {group.label}
+                      </p>
+                    ) : null}
+                    {group.links.map((l) => (
+                      <SidebarLink key={l.href} link={l} pathname={pathname} />
+                    ))}
+                  </div>
+                ))
+              ) : (
+                <NoSiteNote />
+              )}
             </nav>
             <div className="shrink-0 border-t border-neutral-800/80 px-3 py-3">
               {billing ? <SidebarLink link={BILLING} pathname={pathname} /> : null}

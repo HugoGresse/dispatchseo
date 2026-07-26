@@ -72,7 +72,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const release = unseenRelease(jar.get(CHANGELOG_COOKIE)?.value, active?.created_at);
   return (
     <div className="flex min-h-screen bg-neutral-950 text-neutral-100">
-      <Sidebar billing={billing} />
+      <Sidebar billing={billing} hasProject={active != null} />
       <div className="flex min-w-0 flex-1 flex-col">
         {/* One row on every size. Desktop keeps the three-up grid (switcher /
             centered title / mode). Mobile can't: at 390px the centered title
@@ -83,7 +83,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <header className="sticky top-0 z-20 border-b border-neutral-800/80 bg-neutral-950/90 backdrop-blur">
           <div className="flex h-14 items-center gap-2 px-4 sm:px-6 md:grid md:grid-cols-[1fr_auto_1fr]">
             <div className="flex min-w-0 flex-1 items-center gap-1.5 md:flex-none md:gap-2">
-              <MobileNav billing={billing} />
+              <MobileNav billing={billing} hasProject={active != null} />
               <Link href="/dashboard" className="shrink-0 md:hidden" aria-label="DispatchSEO home">
                 <DispatchMark className="h-7 w-auto" />
               </Link>

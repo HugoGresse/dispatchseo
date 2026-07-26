@@ -2,7 +2,7 @@ import { requireDashboard } from "@/lib/auth-gate";
 import { headers } from "next/headers";
 import { instanceCronSecret } from "@/lib/dashboard-auth";
 import { mcpAddCommand } from "@/lib/mcp-connect";
-import { getActiveProject } from "@/lib/active-project";
+import { getActiveProjectOrNull } from "@/lib/active-project";
 import { credsForProject } from "@/lib/dataforseo";
 import { DEFAULT_PROJECT_ID, fetchProjectToken } from "@/lib/projects";
 import { isCloudMode } from "@/lib/cloud";
@@ -25,10 +25,61 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+// Which account this browser is signed in to. Account-level, not project-level,
+// so it renders even when there is no site - and it is the answer to "am I in
+// the right account", which nothing in the dashboard used to state anywhere.
+function AccountSection({ email }: { email: string | null }) {
+  return (
+    <section className="space-y-3">
+      <SectionTitle sub="the account this dashboard is signed in to">Account</SectionTitle>
+      <div className="divide-y divide-neutral-800/70 rounded-xl bg-neutral-900 px-4 py-1.5 sm:px-5">
+        <InfoRow label="Signed in as" value={email ?? "no email on file"} />
+      </div>
+    </section>
+  );
+}
+
 export default async function SettingsPage() {
   const auth = await requireDashboard();
 
-  const project = await getActiveProject();
+  // OrNull, not getActiveProject: this page has to survive owning no site.
+  // getActiveProject would bounce to the wizard, which is where someone who
+  // just deleted their last project already is - so the one screen that says
+  // which account they are in would be the one screen they cannot open.
+  // Self-host has no accounts (auth.user is null), so it skips the section.
+  const project = await getActiveProjectOrNull();
+  if (!project) {
+    return (
+      <div className="mx-auto max-w-xl space-y-8">
+        <PageHeader
+          title="Settings"
+          hint="Add a site to configure it. Your account details are below either way."
+        />
+        {auth.user ? <AccountSection email={auth.user.email} /> : null}
+        <section className="space-y-3">
+          <SectionTitle sub="nothing to configure until a site exists">Site settings</SectionTitle>
+          <div className="rounded-xl bg-neutral-900 px-4 py-4 text-sm leading-relaxed text-neutral-400 sm:px-5">
+            You don&apos;t have a site yet.{" "}
+            <a
+              href="/onboarding?new=1"
+              className="font-medium text-violet-400 underline underline-offset-2 hover:text-violet-300"
+            >
+              Add one
+            </a>{" "}
+            and its settings appear here. To change or cancel your plan, open{" "}
+            <a
+              href="/billing"
+              className="font-medium text-violet-400 underline underline-offset-2 hover:text-violet-300"
+            >
+              Billing
+            </a>
+            .
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   const isDefault = project.id === DEFAULT_PROJECT_ID;
   const mcpToken = await fetchProjectToken(project.id);
   // Whether a Claude Code token is already stored on the repo, so Settings can
@@ -64,6 +115,8 @@ export default async function SettingsPage() {
         title="Project settings"
         hint={`Everything DispatchSEO knows about ${project.name}. Switch projects from the header to manage a different one.`}
       />
+
+      {auth.user ? <AccountSection email={auth.user.email} /> : null}
 
       <section className="space-y-3">
         <SectionTitle>Project</SectionTitle>
