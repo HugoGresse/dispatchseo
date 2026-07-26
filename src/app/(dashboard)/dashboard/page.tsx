@@ -38,7 +38,11 @@ import { NextUpdate } from "@/components/next-update";
 import { getActiveProject } from "@/lib/active-project";
 import { DEFAULT_PROJECT_ID, effectiveAutomations, fetchProjectToken } from "@/lib/projects";
 import { credsForProject } from "@/lib/dataforseo";
-import { platformBudgetGate } from "@/lib/dataforseo-usage";
+import {
+  platformBudgetGate,
+  platformUsageStatus,
+  TIER_BUDGET_MICROUSD,
+} from "@/lib/dataforseo-usage";
 import { DataforseoConnectForm } from "@/components/dataforseo-connect";
 import { gscAccessOk, serviceAccountEmail } from "@/lib/gsc";
 import { buildsActive } from "@/lib/builder-status";
@@ -252,6 +256,7 @@ export default async function Home() {
     cronHealth,
     mergeReady,
     saEmail,
+    dfsUsage,
   ] = await Promise.all([
     client
       .from("suggestions")
@@ -310,6 +315,12 @@ export default async function Home() {
     // render on its first (uncached) call, so they ride the big fan-out now.
     canMerge(project),
     serviceAccountEmail(),
+    // Bundled-DataForSEO spend, cloud only. Deliberately NOT gated on
+    // dfsCreds?.billedTo === "platform": credsForProject returns null once the
+    // budget gate denies, so keying off it would hide this notice at exactly
+    // the moment it matters. platformUsageStatus keeps reporting "platform"
+    // through exhaustion for this reason.
+    isCloudMode() ? platformUsageStatus(project.id) : Promise.resolve(null),
   ]);
 
   // Two guide numbers from one query (0033): "logged" drives the setup cards
@@ -334,6 +345,31 @@ export default async function Home() {
     .filter((h) => !h.ok || h.stale);
   const updateNotices = isCloudMode() ? [] : jobIssues.filter((h) => h.update_available);
   const cronIssues = jobIssues.filter((h) => !h.update_available);
+
+  // The last window before bundled DataForSEO runs out. Exhaustion itself is
+  // already owned by the needsUsageLimit setup card below - this is the part
+  // that was missing: by the time that card appears, rank tracking has ALREADY
+  // stopped, and the drop is otherwise invisible (past the budget
+  // credsForProject returns null, so every rank check reports
+  // `{skipped: "no DataForSEO connected"}` - never hadError, never an alert).
+  // Warning at 80% leaves room to connect an account or upgrade first.
+  const budgetWarning =
+    dfsUsage &&
+    dfsUsage.billed_to === "platform" &&
+    dfsUsage.percent_used >= 80 &&
+    dfsUsage.percent_used < 100
+      ? {
+          percent: dfsUsage.percent_used,
+          // Nothing above Scale to move to, so don't offer the top tier an
+          // upgrade it can't buy - connecting an own account is the only real
+          // way out for them.
+          canUpgrade: dfsUsage.budget_usd < TIER_BUDGET_MICROUSD.scale / 1_000_000,
+          resetsOn: new Date(dfsUsage.resets_at).toLocaleDateString("en-US", {
+            month: "long",
+            day: "numeric",
+          }),
+        }
+      : null;
 
   // One-line version of the same trouble for the AgentStatus pill - the
   // green heartbeat flips red the moment any background job is unhealthy.
@@ -606,6 +642,34 @@ export default async function Home() {
             Self-hides once the queue and rankings land. */}
         {pipelineInstalled ? (
           <FirstRunBackground slug={project.slug} cloud={isCloudMode()} />
+        ) : null}
+        {budgetWarning ? (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
+            <p className="font-medium text-amber-200">
+              You&apos;ve used {budgetWarning.percent}% of this month&apos;s included keyword data
+            </p>
+            <p className="mt-1 text-amber-300/90">
+              When it runs out, daily rank checks and keyword research pause until the allowance
+              resets on {budgetWarning.resetsOn}. Search Console traffic keeps updating either way.
+            </p>
+            <p className="mt-2 text-xs text-amber-300/70">
+              To avoid the gap,{" "}
+              <Link href="/settings" className="underline underline-offset-2">
+                connect your own DataForSEO account
+              </Link>{" "}
+              - it&apos;s unmetered and takes over immediately
+              {budgetWarning.canUpgrade ? (
+                <>
+                  {" "}
+                  - or move to a bigger plan on{" "}
+                  <Link href="/billing" className="underline underline-offset-2">
+                    Billing
+                  </Link>
+                </>
+              ) : null}
+              .
+            </p>
+          </div>
         ) : null}
         {cronIssues.length > 0 ? (
           <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm">
