@@ -276,9 +276,9 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .ca-pill svg { width: 16px; height: 16px; color: var(--vio2); flex-shrink: 0; }
 
 /* ---------- pricing: founding offer ---------- */
-/* A dispatch ticket with a tear-off stub. The offer is two facts - the deal
-   and its deadline - so the perforation separates them and the structure says
-   what a third sentence used to. One accent, deliberately: the page's violet.
+/* One bar, split by a dashed rule. The offer is two facts - the deal and its
+   deadline - so the divider separates them and the structure says what a third
+   sentence used to. One accent, deliberately: the page's violet.
    An earlier pass used the mascot's clay to mark the offer as "Neo speaking,
    not the product", but a second hue in the pricing block read as noise.
    Clay stays the mascot's alone. */
@@ -295,8 +295,8 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .found-note { display: inline-flex; align-items: center; gap: 5px; font-family: var(--body); font-size: 13.5px; font-weight: 500; letter-spacing: 0; color: var(--mut); }
 .ld .found-lock { width: 12px; height: 12px; flex-shrink: 0; color: var(--dim); }
 
-/* The stub. Its left border IS the perforation, so the two punched notches
-   position off it - no magic offset to keep in sync with the stub's width. */
+/* The deadline half. Its left border is the divider; the border flips to the
+   top edge on a phone, where the two halves stack. */
 .ld .found-stub { position: relative; flex-shrink: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 18px 22px; border-left: 1px dashed var(--line3); }
 /* --mut, not --dim: at 10.5px uppercase the dimmer grey drops under 4.5:1 on
    the card, and this label is one of only two words on the stub. */
@@ -304,15 +304,7 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .found-stub-v { font-family: var(--disp); font-size: 15.5px; font-weight: 700; letter-spacing: -0.015em; color: var(--txt); white-space: nowrap; }
 /* Only rendered past 15 seats sold, so the stub is designed to work without it. */
 .ld .found-stub-n { font-size: 12.5px; color: var(--mut); white-space: nowrap; }
-/* Punched, not printed: the hole is filled with the page behind it, which is
-   also why the ticket sits on --card2 rather than the plans' --card - against
-   the darker canvas the notch reads as a bite out of the edge instead of a
-   dot drawn on the line. */
-.ld .found-notch { position: absolute; left: 0; width: 14px; height: 14px; border-radius: 50%; background: var(--bg); }
-.ld .found-notch.n-a { top: 0; transform: translate(-50%, -50%); }
-.ld .found-notch.n-b { bottom: 0; transform: translate(-50%, 50%); }
-
-/* The dispatcher, off-shift, sitting on the ticket's top edge with its legs
+/* The dispatcher, off-shift, sitting on the banner's top edge with its legs
    over the front. Absolutely positioned so it costs the banner no width, and
    parked at the stub end so it doesn't crowd the slab.
    Clay, like the hero scene and the why-card tab: the offer's ACCENT is
@@ -333,7 +325,7 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .plan .p-found { display: inline-flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 12.5px; font-weight: 700; letter-spacing: 0.005em; color: var(--vio2); }
 .ld .plan .p-found svg { width: 12px; height: 12px; flex-shrink: 0; }
 
-/* The saving, stated on the card itself. Same violet slab the founding ticket
+/* The saving, stated on the card itself. Same violet slab the founding banner
    and the hero headline use, shrunk to card scale, so offer and page read as
    one thing rather than a promo sticker on top of one.
    Two deliberate differences from the "Most popular" cap it shares the Growth
@@ -502,15 +494,13 @@ html:has(.ld) { scroll-behavior: smooth; }
   /* pricing: swap the three-column desktop grid for the compare scoreboard */
   .ld .plans { display: none; }
   .ld .plans-m { display: block; }
-  /* founding offer: the ticket tears the other way. Side by side, the stub
-     would squeeze the number to nothing on a phone, so the perforation goes
-     horizontal and the two notches move to its ends. */
+  /* founding offer: the divider turns the other way. Side by side, the stub
+     would squeeze the number to nothing on a phone, so the dashed rule goes
+     horizontal and the deadline sits under the price. */
   .ld .found { max-width: 470px; margin: 22px auto 32px; flex-direction: column; }
   .ld .found-main { padding: 17px 20px 18px; }
   .ld .found-v { margin-top: 8px; }
   .ld .found-stub { flex-direction: row; justify-content: flex-start; align-items: baseline; flex-wrap: wrap; gap: 3px 9px; padding: 12px 20px 14px; border-left: 0; border-top: 1px dashed var(--line3); }
-  .ld .found-notch.n-a { top: 0; bottom: auto; transform: translate(-50%, -50%); }
-  .ld .found-notch.n-b { top: 0; bottom: auto; left: auto; right: 0; transform: translate(50%, -50%); }
   .ld .found-px { top: -25px; right: 22px; width: 33px; height: 30px; }
   .ld .plan li { white-space: normal; }
   /* the three pills repeat rows that live in "On every plan" below */

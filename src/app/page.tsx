@@ -326,10 +326,10 @@ export default async function LandingPage({
             <h2>Pick your plan</h2>
             <p>Starter comes with a 7-day free trial; Growth and Scale start today. Unlimited articles on every plan - the writing runs on your own Claude, so we never meter content.</p>
           </div>
-          {/* The offer as a dispatch ticket: the deal on the body, the deadline
-              on a tear-off stub. The perforation does the work a third sentence
-              used to do, so the banner carries two facts and no paragraph. The
-              "why only 50" reasoning moved to the getting-started FAQ below. */}
+          {/* One bar, two facts: the deal on the left, the deadline past a
+              dashed rule on the right. The divider does the work a third
+              sentence used to do, so the banner needs no paragraph. The "why
+              only 50" reasoning moved to the getting-started FAQ below. */}
           {founding ? (
             <div className="found">
               <FoundingMascot />
@@ -344,10 +344,6 @@ export default async function LandingPage({
                 </p>
               </div>
               <div className="found-stub">
-                {/* Punched holes at the ends of the perforation - children of
-                    the stub so they track its border, not a hardcoded offset. */}
-                <span className="found-notch n-a" aria-hidden="true" />
-                <span className="found-notch n-b" aria-hidden="true" />
                 <span className="found-stub-k">Ends</span>
                 <b className="found-stub-v">{founding.endsAtLabel}</b>
                 {founding.showCount ? (

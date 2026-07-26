@@ -122,9 +122,9 @@ export default async function PlansPage() {
             trial &mdash; cancel anytime.
           </p>
 
-          {/* The offer as a dispatch ticket, same device as the landing page:
-              the deal on the body, the deadline on a tear-off stub, no
-              paragraph. No mascot here - the animated one is right above it. */}
+          {/* One bar, same device as the landing page: the deal on the left,
+              the deadline past a dashed rule, no paragraph. No mascot here -
+              the animated one is right above it. */}
           {founding ? (
             <div className="mt-8 flex w-full max-w-xl flex-col rounded-2xl border border-neutral-800 bg-neutral-900/40 text-left sm:flex-row sm:items-stretch">
               <div className="flex-1 px-5 py-4 sm:px-6 sm:py-5">
@@ -141,18 +141,9 @@ export default async function PlansPage() {
                   </span>
                 </p>
               </div>
-              {/* The stub. Its dashed border IS the perforation, and the two
-                  punched holes sit on its ends - top edge on a phone, left
-                  edge once the ticket turns side by side. */}
+              {/* The deadline, past a dashed rule: a top border on a phone, a
+                  left border once the two halves sit side by side. */}
               <div className="relative flex shrink-0 flex-wrap items-baseline gap-x-2.5 gap-y-1 border-t border-dashed border-neutral-700 px-5 py-3 sm:flex-col sm:justify-center sm:gap-1 sm:border-l sm:border-t-0 sm:px-6 sm:py-5">
-                <span
-                  aria-hidden="true"
-                  className="absolute left-0 top-0 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-neutral-950 sm:top-0"
-                />
-                <span
-                  aria-hidden="true"
-                  className="absolute right-0 top-0 h-3 w-3 translate-x-1/2 -translate-y-1/2 rounded-full bg-neutral-950 sm:bottom-0 sm:left-0 sm:right-auto sm:top-auto sm:-translate-x-1/2 sm:translate-y-1/2"
-                />
                 <span className="text-[10px] font-semibold uppercase tracking-[0.13em] text-neutral-400">
                   Ends
                 </span>
