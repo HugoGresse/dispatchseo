@@ -105,14 +105,26 @@ Should anything go live without you?
 There's a Semi/Auto toggle in the dashboard's top bar, so this is never a
 final answer.
 
-## Step 6 - One-tap merge (optional)
+## Step 6 - Connect GitHub
 
-Claude ships pages as GitHub pull requests. If you give the dashboard a
-GitHub token, its Approve button also merges - approve = live on your site.
-The wizard links you to a pre-filled GitHub page, you press Generate,
-paste the token, and it's verified against your repo before saving
-(encrypted, like everything else). Skipping is fine: you'll just merge each
-PR on GitHub yourself.
+Claude ships pages as GitHub pull requests, and this step gives DispatchSEO a
+GitHub token so it can work with them. The wizard links you to a pre-filled
+GitHub page, you press Generate, paste the token, and it's verified against
+your repo before saving (encrypted, like everything else).
+
+**Whether you can skip it depends on your install.** On a hosted install
+(Vercel), the pipeline runs as GitHub Actions inside your own repo, so your
+pages get built and the pull requests open either way - the token only adds
+one-tap merging, and skipping just means you merge each PR on GitHub
+yourself.
+
+On a **Docker install using the bundled builder**, the token is how the
+builder reaches your repo at all: it clones with it. Skip it and nothing
+gets built - there are no pull requests waiting for you on GitHub, because
+none were ever opened. The skip button is still there for the one case that
+needs it (a Docker install on a public URL that lets GitHub-hosted workflows
+do the building instead), but for everyone else on Docker, this step is
+required.
 
 One thing GitHub asks that the wizard can't answer for you: the token's
 expiration. Whatever you pick, merging quietly stops working on that date,

@@ -213,7 +213,7 @@ async function fireDispatch(
   const target = refRepo(repo);
   if (!target) return { ok: false, message: "No pipeline repo connected for this project." };
   if (!(await tokenForRef(repo))) {
-    return { ok: false, message: "No GitHub token connected - see the one-tap merge step in setup." };
+    return { ok: false, message: "No GitHub token connected - see the Connect GitHub step in setup." };
   }
   try {
     const res = await fetch(`${API}/repos/${target}/dispatches`, {

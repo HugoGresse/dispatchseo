@@ -21,7 +21,7 @@
   &nbsp;&middot;&nbsp;
   <a href="https://github.com/NeoZi12/dispatchseo/discussions">Discussions</a>
   &nbsp;&middot;&nbsp;
-  <a href="https://dispatchseo.com">Cloud waitlist</a>
+  <a href="https://dispatchseo.com">Hosted version</a>
 </p>
 
 <p align="center">
@@ -172,10 +172,10 @@ separate lint or test setup.
 
 ## Cloud version
 
-A hosted version is coming for people who'd rather not run a machine:
-we host it, bundle the SERP + volume data into one bill, and replace the
-Google service-account ritual with one click. Join the waitlist at
-[dispatchseo.com](https://dispatchseo.com). Self-hosting will stay
+There's a hosted version for people who'd rather not run a machine: we host
+it, bundle the SERP + volume data into one bill, and replace the Google
+service-account ritual with one click. It's at
+[dispatchseo.com](https://dispatchseo.com). Self-hosting stays
 feature-complete either way; the cloud sells convenience, not capability.
 
 ## Architecture, briefly

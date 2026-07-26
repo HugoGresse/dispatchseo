@@ -30,6 +30,34 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-26",
+    date: "2026-07-26",
+    title: "A shorter, clearer setup",
+    summary: "One less screen to click through, and the GitHub step now says what it actually does.",
+    changes: [
+      {
+        kind: "improved",
+        text:
+          "Setup no longer stops to show you the keys it generated - you go straight into the wizard. Both keys are on Settings whenever you want them.",
+      },
+      {
+        kind: "improved",
+        text:
+          "The GitHub step is called Connect GitHub, and it's honest about skipping: on a Docker install the bundled builder needs that token to reach your repo at all.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Reinstalling on a site whose repo was already set up used to leave setup waiting forever. It now finishes on its own.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Self-hosted auto-merge now holds back any pull request that touches files outside your publishing folders, matching what the hosted version has always done.",
+      },
+    ],
+  },
+  {
     version: "2026-07-25",
     date: "2026-07-25",
     title: "Updates apply themselves",

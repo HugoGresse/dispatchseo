@@ -848,8 +848,8 @@ export default async function Home() {
           ) : null}
           {needsMergeToken ? (
             <SetupStep
-              title="Enable one-tap merge"
-              why="With a GitHub token, approve = ship: PRs get a Merge button here, and on Docker installs the builder uses the same token to open and merge them. Verified against your repo the moment you paste it, stored encrypted."
+              title="Connect GitHub"
+              why="With a GitHub token, approve = ship: PRs get a Merge button here. On a Docker install it is also how the bundled builder reaches your repo at all - without it nothing gets built. Verified against your repo the moment you paste it, stored encrypted."
               steps={[
                 <>
                   <ExtLink href="https://github.com/settings/tokens/new?scopes=repo&description=DispatchSEO%20merge">

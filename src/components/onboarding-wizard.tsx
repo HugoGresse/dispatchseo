@@ -65,7 +65,7 @@ const META: Record<Exclude<Screen, "s5">, { name: string; time: string }> = {
   s2b_free: { name: "Keyword data", time: "about 3 minutes" },
   s3: { name: "Claude Code", time: "just read" },
   s3m: { name: "Publish mode", time: "one choice" },
-  s_gh: { name: "One-tap merge", time: "about 2 minutes" },
+  s_gh: { name: "Connect GitHub", time: "about 2 minutes" },
   s4b: { name: "What happens next", time: "just read" },
 };
 
@@ -1075,7 +1075,7 @@ export function OnboardingWizard({
               <path d="M13 2 3 14h8l-1 8 11-14h-9l1-6Z" strokeLinejoin="round" />
             </svg>
           </StepIcon>
-          <h2 className="text-2xl font-semibold tracking-tight">One-tap merge</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">Connect GitHub</h2>
           <p className="mb-2.5 text-base text-neutral-400">
             {isDocker ? (
               <>
@@ -1095,7 +1095,7 @@ export function OnboardingWizard({
             )}
           </p>
           <StepHelp
-            href="/docs/setup-wizard#step-6-one-tap-merge-optional"
+            href="/docs/setup-wizard#step-6-connect-github"
             label="How do I make a GitHub token?"
           />
           <div className="rounded-xl bg-neutral-900 p-4">
@@ -1153,7 +1153,11 @@ export function OnboardingWizard({
                     disabled={pendingGhSkip}
                     className="cursor-pointer px-2 text-sm font-medium text-neutral-500 transition-colors hover:text-neutral-300 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    {pendingGhSkip ? "Saving..." : "Skip - I'll merge on GitHub"}
+                    {pendingGhSkip
+                      ? "Saving..."
+                      : isDocker
+                        ? "Skip - no automatic building"
+                        : "Skip - I'll merge on GitHub"}
                   </button>
                   <button
                     type="submit"
