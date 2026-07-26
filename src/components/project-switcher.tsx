@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { switchProject } from "@/app/actions";
+import { AddSiteDialog, useAddSiteParam } from "@/components/add-site-dialog";
 
 // Vercel-style project picker in the header: the current project's domain with
 // a chevron, a dropdown listing every project, and Add project at the bottom.
@@ -53,14 +54,28 @@ function Favicon({
 export function ProjectSwitcher({
   projects,
   activeSlug,
+  cloud,
 }: {
   projects: SwitcherProject[];
   activeSlug: string;
+  // Only so the add-site dialog knows whether to ask for a repo - self-host
+  // has no GitHub App to pick one with. See AddSiteDialog.
+  cloud: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [pending, start] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
+
+  // The switcher is the one component on every dashboard screen, so it hosts
+  // the add-site dialog - that keeps "add a site" reachable from anywhere
+  // without a navigation, which was the whole problem with the old /new link.
+  const openAdd = useCallback(() => {
+    setOpen(false);
+    setAdding(true);
+  }, []);
+  useAddSiteParam(openAdd);
 
   useEffect(() => {
     if (!open) return;
@@ -184,14 +199,14 @@ export function ProjectSwitcher({
             );
           })}
           <div className="my-1 border-t border-neutral-800" />
-          <Link
-            href="/new"
+          <button
+            type="button"
             role="menuitem"
-            onClick={() => setOpen(false)}
-            className="block rounded-lg px-3 py-2 text-sm text-neutral-300 transition-colors hover:bg-neutral-800 hover:text-neutral-100"
+            onClick={openAdd}
+            className="block w-full cursor-pointer rounded-lg px-3 py-2 text-left text-sm text-neutral-300 transition-colors hover:bg-neutral-800 hover:text-neutral-100"
           >
             + Add project
-          </Link>
+          </button>
           <Link
             href="/settings"
             role="menuitem"
@@ -203,6 +218,7 @@ export function ProjectSwitcher({
         </div>
       ) : null}
       </div>
+      <AddSiteDialog open={adding} onClose={() => setAdding(false)} cloud={cloud} />
     </>
   );
 }

@@ -194,6 +194,17 @@ export default async function OnboardingPage({
   const isNew = params.new;
   const cloud = isCloudMode();
 
+  // "Add a site" from an owner who already has one belongs in the dashboard,
+  // not here: this route is the chrome-less first-run shell, and on cloud the
+  // resume below keys off the ACTIVE project, so ?new=1 rendered THAT
+  // project's saved screen - typically the c5 finale, which re-fires its
+  // pipeline install. /new no longer points here at all; this covers the
+  // bookmarked URL. An account that owns nothing still gets the wizard, which
+  // is exactly what a first run is.
+  if (isNew === "1" && (await scopedProjects()).length > 0) {
+    redirect("/dashboard?add=1");
+  }
+
   // Owns nothing, yet got past the gate above - in cloud that can only mean a
   // live subscription, i.e. a returning customer who just deleted their last
   // site. This route is a standalone shell with no sidebar, and every other

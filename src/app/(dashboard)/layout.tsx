@@ -91,6 +91,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 <ProjectSwitcher
                   projects={projects.map((p) => ({ slug: p.slug, name: p.name, domain: p.domain }))}
                   activeSlug={active.slug}
+                  cloud={billing}
                 />
               )}
             </div>
