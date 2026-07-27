@@ -514,10 +514,33 @@ alter table suggestions
 -- from created_at (the best guess we have); the owner can correct it on the
 -- Settings page.
 
-alter table projects
-  add column if not exists site_launched_at timestamptz not null default now();
-
-update projects set site_launched_at = created_at;
+-- The backfill runs ONLY when this migration actually adds the column.
+--
+-- setup.sql concatenates every migration and the docker stack REPLAYS it in
+-- full on every boot. An unconditional `update` here therefore re-ran forever:
+-- every restart reset every project's site_launched_at back to created_at,
+-- silently discarding BOTH the owner's Settings correction and the RDAP
+-- domain-registration date createProjectCore seeds at creation - so an
+-- established site kept reverting to "joined DispatchSEO today" and the
+-- Journey/site-age readout lied after each reboot (2026-07-27).
+--
+-- Same replay rule as 0013/0014: a statement that rewrites EXISTING rows must
+-- be gated on the schema change it belongs to, or it becomes a landmine that
+-- fires on every boot. `add column if not exists` is self-guarding; a bare
+-- `update` is not.
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'projects'
+      and column_name = 'site_launched_at'
+  ) then
+    alter table projects
+      add column site_launched_at timestamptz not null default now();
+    update projects set site_launched_at = created_at;
+  end if;
+end $$;
 
 -- ============ 0016_trend_topics.sql ============
 -- 0016: the two-stage trend radar. Stage 1 (Scan now) sweeps the niche and
@@ -941,9 +964,31 @@ alter table instance_settings
 -- while - presume them live so no established install regresses to a wall of
 -- "awaiting publish" (a site whose WAF blocks our checker must not look
 -- broken). New rows start null and get stamped by the first successful check.
-alter table pages add column if not exists live_at timestamptz;
+-- The presume-live backfill runs ONLY on the apply that adds the column.
+--
+-- setup.sql concatenates every migration and the docker stack REPLAYS it in
+-- full on every boot, so `where live_at is null` was NOT a sufficient guard:
+-- null is also the legitimate steady state of a page that has been logged but
+-- is not live yet (PR still open, or the checker hasn't seen a 200). Every
+-- restart therefore stamped exactly those pages as live - reintroducing, on a
+-- schedule, the precise lie this migration was written to end (2026-07-27).
+--
+-- Same replay rule as 0013/0014/0015: a statement that rewrites EXISTING rows
+-- must be gated on the schema change it belongs to.
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'pages'
+      and column_name = 'live_at'
+  ) then
+    alter table pages add column live_at timestamptz;
+    update pages set live_at = coalesce(published_at, created_at);
+  end if;
+end $$;
+
 alter table pages add column if not exists live_checked_at timestamptz;
-update pages set live_at = coalesce(published_at, created_at) where live_at is null;
 
 -- ============ 0034_github_app.sql ============
 -- 0034: GitHub App install core. Adds the columns the App's install flow
@@ -1140,4 +1185,42 @@ alter table projects add column if not exists pipeline_verified boolean;
 -- Backlinks dashboard (2026-07-27 audit). Stamp every status transition so
 -- the dashboard can flag a prospect stuck in one status too long.
 alter table backlink_prospects add column if not exists status_changed_at timestamptz;
+
+-- ============ 0042_serp_tasks.sql ============
+-- 0042: SERP task-queue ledger.
+--
+-- Rank checks moved from DataForSEO's live endpoints to its standard task
+-- queue (~70% cheaper at the depths we use, and billing is flat by requested
+-- depth instead of by pages returned). The daily-ranks cron POSTs tasks and
+-- records them here; the serp-collect cron fetches finished tasks, writes
+-- rank_checks / AI-visibility rows, and stamps collected_at. A row with
+-- collected_at NULL is in flight; error records a task that came back failed
+-- (or was abandoned by the queue) so the collector can report it loudly.
+--
+-- Plain vanilla-Postgres objects only - no Supabase-specific references, so
+-- the docker stack's setup.sql replay needs no guard block.
+
+create table if not exists serp_tasks (
+  id text primary key,                -- DataForSEO task id
+  project_id uuid not null default '00000000-0000-4000-8000-000000000001'
+    references projects(id) on delete cascade,
+  keyword_id uuid references keywords(id) on delete cascade,
+  keyword text not null,
+  -- rank    = daily depth-30 check of a keyword recently seen in the top 30
+  -- sweep   = weekly full-depth check (+ AI Overview) of every tracked keyword
+  -- confirm = same-day full-depth recheck after a rank task lost the domain
+  purpose text not null,
+  depth int not null,
+  posted_at timestamptz not null default now(),
+  collected_at timestamptz,
+  error text
+);
+
+-- The collector's hot path: pending tasks per project, oldest first.
+create index if not exists serp_tasks_pending_idx
+  on serp_tasks (project_id, posted_at)
+  where collected_at is null;
+
+-- Service-role only, like every operational table (RLS on, zero policies).
+alter table serp_tasks enable row level security;
 
