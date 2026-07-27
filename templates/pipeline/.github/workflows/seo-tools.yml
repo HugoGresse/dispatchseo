@@ -58,6 +58,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           open=$(gh pr list --repo "$GITHUB_REPOSITORY" --label seo-tool --state open --json number --jq 'length')
           if [ "$open" != "0" ]; then
@@ -88,7 +89,13 @@ jobs:
           # scheduler - a retry must not re-run once today's earlier attempt
           # already succeeded. Reuses the project-mode fetch above (same
           # tolerant rule: anything but a clean "true" reads as "not run yet").
-          if [ "$open" = "0" ] && [ "$code" = "200" ] && [ "$(jq -r '.ran_today."seo-tools" // false' /tmp/mode.json 2>/dev/null)" = "true" ]; then
+          # SCHEDULE-only. This exists so a same-day retry does not redo the
+          # earlier attempt's work; it was never meant to gate an ON-DEMAND run.
+          # Without the event_name test, an owner approving a tool after that
+          # day's sweep had the build silently skipped - every step no-op'd, the
+          # final step still reported ok=1, and the next chance was seven days
+          # later (2026-07-27).
+          if [ "$EVENT_NAME" = "schedule" ] && [ "$open" = "0" ] && [ "$code" = "200" ] && [ "$(jq -r '.ran_today."seo-tools" // false' /tmp/mode.json 2>/dev/null)" = "true" ]; then
             echo "Today's tool sweep already ran - skipping this attempt."
             open=skip
           fi

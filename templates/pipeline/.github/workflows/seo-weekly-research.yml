@@ -50,14 +50,27 @@ jobs:
         id: guard
         env:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           skip=0
-          code=$(curl -s -o /tmp/mode.json -w "%{http_code}" --max-time 30 \
-            -H "Authorization: Bearer $SEO_MCP_API_KEY" \
-            {{BACKEND_URL}}/api/project-mode) || code=unreachable
-          if [ "$code" = "200" ] && [ "$(jq -r '.ran_today."seo-weekly-research" // false' /tmp/mode.json 2>/dev/null)" = "true" ]; then
-            echo "Today's research already ran - skipping this attempt."
-            skip=1
+          # The ran-today check exists for SCHEDULE-vs-SCHEDULE retries: this
+          # workflow runs several times a day so a trigger GitHub drops or
+          # delays self-heals, and a later attempt must not redo the earlier
+          # one's work. It was never meant to gate an ON-DEMAND run, but it did
+          # - the check ignored github.event_name, so any repository_dispatch or
+          # workflow_dispatch arriving after a scheduled run that day was
+          # silently no-op'd, and the final step still reported ok=1. Approve a
+          # tool on a Wednesday and the build vanished for seven days; onboard a
+          # customer on a Monday and their first research never ran while the
+          # wizard promised "ideas in a few minutes" (2026-07-27).
+          if [ "$EVENT_NAME" = "schedule" ]; then
+            code=$(curl -s -o /tmp/mode.json -w "%{http_code}" --max-time 30 \
+              -H "Authorization: Bearer $SEO_MCP_API_KEY" \
+              {{BACKEND_URL}}/api/project-mode) || code=unreachable
+            if [ "$code" = "200" ] && [ "$(jq -r '.ran_today."seo-weekly-research" // false' /tmp/mode.json 2>/dev/null)" = "true" ]; then
+              echo "Today's research already ran - skipping this attempt."
+              skip=1
+            fi
           fi
           echo "skip=$skip" >> "$GITHUB_OUTPUT"
 
