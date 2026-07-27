@@ -1,0 +1,39 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "dispatchseo",
+  "owner": {
+    "name": "NeoZi12",
+    "url": "https://github.com/NeoZi12"
+  },
+  "metadata": {
+    "description": "DispatchSEO - self-hostable AGPL SEO manager backend for Claude Code"
+  },
+  "plugins": [
+    {
+      "name": "dispatchseo",
+      "source": "./claude-plugin",
+      "description": "Connect Claude Code to your DispatchSEO project - SEO keyword research, content queue, and SERP rank tracking over MCP",
+      "version": "1.0.0",
+      "author": {
+        "name": "NeoZi12",
+        "email": "neozi2014@gmail.com",
+        "url": "https://github.com/NeoZi12"
+      },
+      "homepage": "https://dispatchseo.com",
+      "repository": "https://github.com/NeoZi12/dispatchseo",
+      "license": "AGPL-3.0",
+      "keywords": [
+        "seo",
+        "search-console",
+        "keyword-research",
+        "content-pipeline",
+        "rank-tracking",
+        "backlinks",
+        "self-hosted",
+        "claude-code"
+      ],
+      "category": "productivity",
+      "tags": ["seo", "content", "search-console", "marketing", "automation"]
+    }
+  ]
+}

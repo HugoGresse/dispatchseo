@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "dispatchseo": {
+      "type": "http",
+      "url": "${DISPATCHSEO_URL:-https://dispatchseo.com}/api/mcp",
+      "headers": {
+        "Authorization": "Bearer ${DISPATCHSEO_MCP_TOKEN}"
+      }
+    }
+  }
+}
