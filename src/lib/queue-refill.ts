@@ -2,6 +2,7 @@ import { db } from "./db";
 import { getCronHealth, reportCronRun } from "./cron-alerts";
 import { dispatchResearch } from "./github";
 import { listProjects } from "./projects";
+import { isCloudMode } from "./cloud";
 
 // Queue-empty self-heal (2026-07-27 incident).
 //
@@ -116,15 +117,36 @@ async function refillProject(p: {
   }
   // Already researched today by any path (the Monday cron, an earlier refill,
   // the onboarding first-run trigger)? Then the queue being dry right now is
-  // that run's verdict, not a missed trigger - dispatching again would just
-  // hit the workflow's own ran_today guard and no-op.
-  const researchedToday = health.some(
-    (h) =>
-      (h.job === "seo-weekly-research" || h.job === `seo-weekly-research--${p.slug}`) &&
-      h.ok &&
-      new Date(h.last_run_at).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10),
-  );
-  if (researchedToday) return { skipped: "research already completed today" };
+  // that run's verdict, not a missed trigger.
+  //
+  // Queried against cron_runs DIRECTLY rather than through getCronHealth,
+  // deliberately. getCronHealth hides instance-wide (bare-name) rows from a
+  // scoped caller in CLOUD_MODE, so a repo still reporting research under the
+  // bare "seo-weekly-research" name would be invisible here - and since the
+  // workflow's own ran_today guard now applies only to SCHEDULED runs, a
+  // dispatch from this sweep would sail past it and produce a second batch the
+  // same day. That is precisely the no-double-research invariant this check
+  // exists to hold, so it must not depend on a display-scoping rule.
+  // The BARE job name counts only on self-host. There, one owner means one
+  // pipeline and a bare "seo-weekly-research" row is this project's own run
+  // (repos reporting with CRON_SECRET instead of a project token). In cloud a
+  // bare row belongs to whoever reported it - counting it would let one
+  // tenant's research suppress every other tenant's refill for the rest of the
+  // day, which is worse than the double-batch this check prevents.
+  const startOfUtcDay = new Date().toISOString().slice(0, 10) + "T00:00:00.000Z";
+  const researchJobNames = isCloudMode()
+    ? [`seo-weekly-research--${p.slug}`]
+    : ["seo-weekly-research", `seo-weekly-research--${p.slug}`];
+  const { data: researchRuns } = await db()
+    .from("cron_runs")
+    .select("id")
+    .in("job", researchJobNames)
+    .eq("ok", true)
+    .gte("created_at", startOfUtcDay)
+    .limit(1);
+  if ((researchRuns ?? []).length > 0) {
+    return { skipped: "research already completed today" };
+  }
 
   // Marker BEFORE the dispatch, like the onboarding first-run triggers: if the
   // dispatch throws or the process dies mid-call, the debounce still holds and
