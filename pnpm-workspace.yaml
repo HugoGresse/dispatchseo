@@ -18,3 +18,7 @@ overrides:
   # otherwise pulls 0.34.x).
   fast-uri: ">=3.1.4"
   sharp: ">=0.35.0"
+  # Dependabot GHSA-mh99-v99m-4gvg: brace-expansion DoS via unbounded
+  # expansion length (pulled in transitively through googleapis -> gaxios ->
+  # rimraf -> glob -> minimatch).
+  brace-expansion: ">=5.0.8"
