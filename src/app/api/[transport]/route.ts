@@ -893,6 +893,18 @@ const mcpHandler = createMcpHandler(
             // report "access not granted". OAuth-connected = waiting on the
             // first sync, not a setup gap.
             note = `Search Console is connected for ${p.gsc_site_url} but no data has synced yet - GSC data lags 2-3 days, and the next hourly refresh picks it up.`;
+          } else if (isCloudMode()) {
+            // Cloud project with no OAuth token: the owner has not connected
+            // Google yet. Do NOT fall through to the probe below - it runs on
+            // the shared PLATFORM service account, and gsc_site_url is
+            // tenant-writable (this tool's own project, set_gsc_property, the
+            // wizard picker). Probing with the operator's credential would
+            // answer "can the platform read the property you just named?" for
+            // any property a tenant cares to name - an access oracle over the
+            // operator's own Search Console, reachable with nothing but a valid
+            // project token. Same reasoning as gsc-readiness.ts and
+            // gscClientForProject (2026-07-27).
+            note = `setup incomplete: Search Console is not connected for this project - the owner needs to connect Google on the dashboard before traffic data can exist.`;
           } else {
             const probe = await gscAccessProbe(p.gsc_site_url);
             note =
@@ -1532,8 +1544,13 @@ const mcpHandler = createMcpHandler(
       {
         title: "Get cron health",
         description:
-          "The latest run of every background job: the backend crons " +
-          "(daily-ranks, hourly-gsc, weekly-opportunities), deploy-check (the " +
+          "The latest run of this project's background jobs. On the hosted " +
+          "version that means YOUR project's jobs only - the platform's own " +
+          "instance-wide crons (daily-ranks, hourly-gsc, serp-collect, " +
+          "deploy-check) belong to the operator and are deliberately not " +
+          "listed, so an empty result here never means 'the backend is down'. " +
+          "A self-hosted instance owns its crons and sees all of them. " +
+          "Covered: deploy-check (the " +
           "post-deploy smoke test after every push), the SEO GitHub workflows " +
           "(seo-daily, seo-auto-merge, seo-tools, trend scans, weekly research - " +
           "they phone their outcomes home), and the secrets canary that " +

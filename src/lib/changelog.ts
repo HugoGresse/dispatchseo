@@ -30,6 +30,47 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-27.3",
+    date: "2026-07-27",
+    title: "Your queue refills itself, and setup tells the truth",
+    summary:
+      "The builder no longer sits idle when the idea queue empties, and the jobs that used to fail quietly now say so.",
+    changes: [
+      {
+        kind: "new",
+        text:
+          "If your guide queue ever runs empty, research now starts on its own instead of " +
+          "waiting for the next weekly run - so a delayed or dropped schedule can't cost you " +
+          "a day's post. Still at most one research run a day.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Approving a tool, or connecting a brand-new site, could silently do nothing for the " +
+          "rest of the day if that day's scheduled run had already happened. Both start " +
+          "immediately now.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "If the GitHub app loses access to your repo, the dashboard now tells you and links " +
+          "the fix. Before, merges and approvals just stopped working with nothing to see.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Setup could drop you on the final screen having skipped Search Console, your keyword " +
+          "source and publish mode. It now resumes exactly where you left off.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Self-hosted installs: the dashboard is now reachable only from the machine running " +
+          "Docker unless you deliberately open it up, matching what the VPS guide always said.",
+      },
+    ],
+  },
+  {
     version: "2026-07-27.2",
     date: "2026-07-27",
     title: "Rank tracking that never runs out of budget",

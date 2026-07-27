@@ -59,8 +59,8 @@ export const AUTOMATIONS: Automation[] = [
     id: "opportunity-scan",
     name: "Weekly research run",
     status: "live",
-    what: "A Claude research agent reads the product as it exists that week, derives keyword ideas from it, validates them through DataForSEO, and queues suggestions.",
-    schedule: "Mondays 06:00 UTC",
+    what: "A Claude research agent reads the product as it exists that week, derives keyword ideas from it, validates them through DataForSEO, and queues suggestions. It also runs on demand the moment your guide queue empties out, so a dropped or delayed weekly run can't leave the builder with nothing to publish - at most one research run per day either way.",
+    schedule: "Mondays 06:00 UTC - plus automatically whenever the queue runs dry",
     flow: ["Fresh product read", "Keyword validation", "Suggestions queue"],
     control: {
       locked:
