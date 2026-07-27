@@ -38,6 +38,9 @@ export type CronJob =
 const STALE_HOURS: Record<string, number> = {
   "daily-ranks": 36,
   "hourly-gsc": 6,
+  // Hourly (GH Actions). If it stalls, queued SERP tasks pile up uncollected
+  // and rank charts silently freeze - 4h catches that the same morning.
+  "serp-collect": 4,
   "seo-daily": 36,
   "seo-auto-merge": 6, // hourly backstop schedule
   "seo-tools": 8 * 24, // Wednesdays, 1-day buffer over the weekly cadence
@@ -509,7 +512,19 @@ export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]>
     .filter((row) => {
       if (!projectSlug) return true;
       const owner = jobProjectSlug(row.job as string);
-      return owner === null || owner === projectSlug;
+      if (owner === projectSlug) return true;
+      // Bare job names (daily-ranks, hourly-gsc, deploy-check, build-recovery)
+      // are INSTANCE-WIDE runs that loop every project. On self-host that is
+      // the single owner's own infrastructure and they should see it.
+      //
+      // On cloud it is the OPERATOR's, and passing it to a scoped tenant leaked
+      // two ways: the row's `errors` array is built from the whole loop, so it
+      // carries other tenants' slugs, domains, tracked keywords and raw failure
+      // text; and because markCronFixed() takes its allowlist from exactly this
+      // list, any tenant could also insert an ok-row against daily-ranks and
+      // silence the operator's banner and alert emails for EVERYONE. Scoping
+      // the read closes both doors at once (2026-07-27).
+      return owner === null && !isCloudMode();
     })
     // Legacy-identity suppression: a repo that switches its reporting auth
     // from CRON_SECRET to its project token (the install/update flow does

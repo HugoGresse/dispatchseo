@@ -106,7 +106,19 @@ services:
       ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-}
       SEED_KEYWORDS: ${SEED_KEYWORDS:-}
     ports:
-      - "${DISPATCH_PORT:-4005}:3000"
+      # Bind to LOOPBACK, not 0.0.0.0. A bare "4005:3000" publishes the
+      # dashboard on every interface, and Docker writes its own DOCKER-chain
+      # iptables rules that bypass ufw - so a VPS owner who dutifully ran
+      # `ufw allow 22` still had the dashboard facing the internet. The VPS
+      # guide states the opposite in as many words ("listening on port 4005 of
+      # the server - but only locally"), and the two documented ways in are
+      # unaffected by this: the `domain` profile's caddy reaches the app over
+      # the compose network (--to app:3000), and the SSH tunnel in vps.mdx
+      # (`ssh -L 4005:localhost:4005`) needs precisely a loopback bind.
+      # DISPATCH_BIND is the escape hatch for anyone who really does want it
+      # reachable on the LAN - set it to 0.0.0.0 deliberately, in front of a
+      # firewall you control.
+      - "${DISPATCH_BIND:-127.0.0.1}:${DISPATCH_PORT:-4005}:3000"
     depends_on:
       migrate:
         condition: service_completed_successfully

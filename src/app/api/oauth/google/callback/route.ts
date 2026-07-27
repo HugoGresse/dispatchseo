@@ -2,6 +2,8 @@ import { requireDashboard } from "@/lib/auth-gate";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { connectProject, verifyStateDetailed, type OauthReturnTo } from "@/lib/gsc-oauth";
+import { getProjectBySlug } from "@/lib/projects";
+import { ownedProjectIds } from "@/lib/tenant-guard";
 
 // Google redirects here after consent. Verifies the signed state (CSRF),
 // exchanges the code, stores the encrypted refresh token on the project the
@@ -25,6 +27,20 @@ export async function GET(req: Request): Promise<Response> {
 
   const code = url.searchParams.get("code");
   if (!code || !detailed) redirect(landing(returnTo, "error=bad_state"));
+
+  // The signed state proves the URL came from us; it does NOT prove it was
+  // minted for the browser that is redeeming it. Nothing stops one signed-in
+  // customer from starting a flow for their own project, handing the resulting
+  // callback URL to someone else, and having THAT person's Google consent -
+  // and the long-lived refresh token it mints - written onto the attacker's
+  // project row. Re-check ownership here, against the session that actually
+  // arrived, before connectProject() stores anything (2026-07-27).
+  const project = await getProjectBySlug(detailed.slug);
+  if (!project) redirect(landing(returnTo, "error=unknown_project"));
+  const owned = await ownedProjectIds(); // null on self-host = single owner, no-op
+  if (owned && !owned.has(project.id)) {
+    redirect(landing(returnTo, "error=not_your_project"));
+  }
 
   const hdrs = await headers();
   const origin = `${hdrs.get("x-forwarded-proto") ?? "https"}://${hdrs.get("host")}`;

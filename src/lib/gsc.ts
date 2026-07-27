@@ -88,9 +88,21 @@ export type GscClient = Awaited<ReturnType<typeof searchConsole>>;
 // gsc_stats never fills.
 export async function gscClientForProject(project: {
   gsc_oauth_refresh_token: string | null;
+  owner_user_id?: string | null;
 }): Promise<GscClient> {
   if (isCloudMode() && project.gsc_oauth_refresh_token) {
     return oauthSearchConsole(project.gsc_oauth_refresh_token);
+  }
+  // In cloud, a TENANT's project may never fall back to the shared service
+  // account. gsc_site_url is tenant-writable (set_gsc_property over MCP, the
+  // wizard's picker), so falling back here meant a customer could point their
+  // project at any property the platform SA can read - the operator's own
+  // properties included - and the next sync copied that property's clicks,
+  // impressions, top queries and top pages into their gsc_stats and onto their
+  // Analytics page. The SA is the OPERATOR's credential; only an ownerless
+  // (operator) row may spend it (2026-07-27).
+  if (isCloudMode() && project.owner_user_id) {
+    throw new Error("Connect Google Search Console for this project first.");
   }
   return searchConsole();
 }

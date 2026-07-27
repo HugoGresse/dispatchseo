@@ -49,6 +49,24 @@ export function clientIp(hdrs: Headers): string {
   if (vercel) return vercel;
   const real = hdrs.get("x-real-ip")?.trim();
   if (real) return real;
-  const first = hdrs.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return first || "unknown";
+  // RIGHTMOST, not leftmost. x-forwarded-for is append-only by convention: each
+  // proxy tacks the address it saw onto the end, so the last entry is the one
+  // written by the hop closest to us - the only entry in the list that a client
+  // could not have authored. The leftmost is whatever the CLIENT sent.
+  //
+  // This matters for the bundled docker stack specifically: Caddy's
+  // reverse_proxy APPENDS to an inbound x-forwarded-for rather than replacing
+  // it, and it does not set x-real-ip at all. So on the documented `domain`
+  // profile, reading leftmost handed the lockout a fully attacker-controlled
+  // key - rotate the header per request and 5-strikes-per-IP never trips, on a
+  // dashboard whose only door is a password the owner chose (2026-07-27).
+  //
+  // Behind two or more proxies (e.g. Cloudflare in front of your own nginx)
+  // this keys on the nearest proxy instead of the true client, which buckets
+  // more attempts together than strictly necessary. That is the safe direction
+  // to be wrong in for a single-owner dashboard: it over-throttles an attacker,
+  // it cannot hand one unlimited guesses.
+  const chain = hdrs.get("x-forwarded-for")?.split(",") ?? [];
+  const last = chain[chain.length - 1]?.trim();
+  return last || "unknown";
 }

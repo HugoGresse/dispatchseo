@@ -18,16 +18,36 @@ mkdir -p /data/repos /data/mcp /data/logs
 
 log() { echo "[builder] $(date -u '+%Y-%m-%dT%H:%M:%SZ') $*"; }
 
+# A dropped report is not cosmetic: the backend hands jobs out by logging a
+# CLAIM row, and only a real outcome supersedes it. If reporting fails, the run
+# that actually happened never registers - the dashboard banner and
+# get_cron_health stay blind, and the job looks in-flight until the claim grace
+# window expires. This used to fail completely silently: the body went to
+# /dev/null and `|| true` ate the exit code, so a rejected report (e.g. the
+# 40-char job-name cap that every long slug tripped) looked identical to a
+# successful one. Still non-fatal by design - a logging failure must never kill
+# the builder - but now it SAYS so in the container logs.
 report() { # report <job-key> <ok|fail> [message]
   if [ "$2" = "ok" ]; then
-    curl -sG --max-time 30 -H "Authorization: Bearer ${CRON_SECRET}" \
+    resp=$(curl -sG --max-time 30 -w '\n%{http_code}' -H "Authorization: Bearer ${CRON_SECRET}" \
       --data-urlencode "job=$1" --data-urlencode "ok=1" \
-      "${APP}/api/cron/deploy-check" >/dev/null || true
+      "${APP}/api/cron/deploy-check" 2>&1) || resp="${resp}
+000"
   else
-    curl -sG --max-time 30 -H "Authorization: Bearer ${CRON_SECRET}" \
+    resp=$(curl -sG --max-time 30 -w '\n%{http_code}' -H "Authorization: Bearer ${CRON_SECRET}" \
       --data-urlencode "job=$1" --data-urlencode "fail=$3" \
-      "${APP}/api/cron/deploy-check" >/dev/null || true
+      "${APP}/api/cron/deploy-check" 2>&1) || resp="${resp}
+000"
   fi
+  code=$(printf '%s' "$resp" | tail -n 1)
+  case "$code" in
+    2*) ;;
+    *)
+      log "WARN: the dashboard did not accept the outcome report for '$1' (HTTP ${code:-?})."
+      log "      This run will not appear on the dashboard or in failure alerts."
+      log "      Response: $(printf '%s' "$resp" | head -n 1)"
+      ;;
+  esac
 }
 
 # Clone the repo, or hard-reset an existing clone to the remote's default

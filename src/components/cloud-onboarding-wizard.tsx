@@ -212,7 +212,19 @@ export function CloudOnboardingWizard(props: {
     // before a project exists, whose getActiveProject() redirects a fresh user
     // back to /onboarding - which remounts this wizard and re-fires the effect,
     // a ~0.3s redirect loop that stole focus from every field (2026-07-23).
-    if (screen !== "c5" || installedOnce.current) return;
+    //
+    // Leaving c5 ARMS the next arrival: the finale can now send someone back to
+    // c2 to re-paste a Claude token, and a ref that latched true forever meant
+    // returning to c5 silently did nothing - the one screen whose entire job is
+    // to fire the install would just sit there. Re-entry is safe: the install
+    // is idempotent by design (pipeline-install.ts), and an already-installed
+    // project short-circuits in the action.
+    if (screen !== "c5") {
+      installedOnce.current = false;
+      setInstallResult(null);
+      return;
+    }
+    if (installedOnce.current) return;
     installedOnce.current = true;
     fireInstall();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -260,21 +272,54 @@ export function CloudOnboardingWizard(props: {
         </div>
       );
     }
+    if (installResult.mode === "already-installed") {
+      return (
+        <p className="text-sm text-neutral-300">
+          Setup is already complete for this site - nothing left to install. The checklist below
+          shows where your first runs got to.
+        </p>
+      );
+    }
     if (!installResult.setup_dispatched) {
+      // Two very different states, and telling them apart is the whole point:
+      // no token on the repo is a dead end that Retry cannot clear, so send the
+      // owner back to the step that fixes it instead of asking them to wait.
+      const noToken = !installResult.claude_token_present;
       return (
         <div className="space-y-3">
-          <p className="text-sm text-neutral-400">
-            Setup will start automatically once your Claude Code token finishes verifying in the
-            background. If this hasn&apos;t moved in a few minutes, retry.
-          </p>
-          <button
-            type="button"
-            onClick={fireInstall}
-            disabled={installPending}
-            className="cursor-pointer rounded-lg bg-neutral-800 px-4 py-2 text-sm font-semibold text-neutral-200 transition-colors hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {installPending ? "Retrying..." : "Retry"}
-          </button>
+          {noToken ? (
+            <p className="text-sm text-amber-100/90">
+              <b className="font-semibold text-amber-200">Your Claude Code token didn&apos;t make it
+              onto the repo.</b>{" "}
+              Setup can&apos;t start without it, and waiting won&apos;t fix it - go back to the
+              Claude Code step and paste the token again.
+            </p>
+          ) : (
+            <p className="text-sm text-neutral-400">
+              The pipeline is in your repo, but GitHub didn&apos;t accept the request to start the
+              setup run. Retry below - if it keeps failing, check that Actions are enabled on your
+              repository.
+            </p>
+          )}
+          <div className="flex items-center gap-2.5">
+            {noToken ? (
+              <button
+                type="button"
+                onClick={() => setScreen("c2")}
+                className="cursor-pointer rounded-lg bg-violet-500 px-4 py-2 text-sm font-semibold text-neutral-950 transition-colors hover:bg-violet-400"
+              >
+                Back to the Claude Code step
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={fireInstall}
+              disabled={installPending}
+              className="cursor-pointer rounded-lg bg-neutral-800 px-4 py-2 text-sm font-semibold text-neutral-200 transition-colors hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {installPending ? "Retrying..." : "Retry"}
+            </button>
+          </div>
         </div>
       );
     }

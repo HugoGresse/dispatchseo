@@ -83,7 +83,18 @@ export async function GET(req: Request): Promise<Response> {
   // phoning their run outcomes home under their own job name (?job=seo-daily
   // with either &fail=<message> or &ok=1; success rows clear the banner).
   const jobParam = url.searchParams.get("job");
-  if (jobParam && !/^[a-z0-9_-]{1,40}$/.test(jobParam)) {
+  // 120, not 40. The in-stack builder reports under its own composite key,
+  // `builder-<workflow>--<slug>` (api/builder/jobs/route.ts) - and
+  // "builder-build-guide--" is already 21 characters, so the old cap left just
+  // 19 for the slug. Any project whose slug ran longer (a multi-label domain
+  // falls back to the full dashed form, e.g. app-myreallylongdomain-com) had
+  // every outcome report rejected with a 400 - and run.sh's report() ends in
+  // `|| true`, so the builder never noticed. The claim row was then never
+  // superseded by a real outcome: the job read as permanently in-flight, the
+  // dashboard banner and get_cron_health stayed blind to it, and nothing
+  // anywhere said so (2026-07-27). cron_runs.job is `text` (0020), so the cap
+  // is only here to keep junk out of the log, not a storage constraint.
+  if (jobParam && !/^[a-z0-9_-]{1,120}$/.test(jobParam)) {
     return Response.json({ error: "bad job name" }, { status: 400 });
   }
   if (projectSuffix && !jobParam) {

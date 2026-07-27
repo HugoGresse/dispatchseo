@@ -1080,6 +1080,26 @@ async function createProjectCore(
     mcp_token: mcpToken,
     mode,
     content_mode: contentMode,
+    // Stamp the screen that FOLLOWS creation, server-side, at the same instant
+    // the row appears. Two things depended on this and both were broken while
+    // the stamp was only written client-side by the wizard's fire-and-forget
+    // setWizardScreen (2026-07-27):
+    //
+    //  1. hasConfiguredProject() (onboarding-gate.ts) treats
+    //     `github_repo && onboarding_screen == null` as a grandfathered
+    //     pre-0030 project and UNLOCKS the dashboard. A brand-new row matched
+    //     that rule for the whole window between creation and the first
+    //     setScreen POST landing - i.e. the dashboard unlocked at step 1.
+    //  2. buildResume() defaults a null screen to "s5", the FINALE. If that
+    //     POST was ever lost (tab closed on the step, navigation cancelling
+    //     the in-flight request, a blip), reopening /onboarding skipped
+    //     Search Console, the keyword source, publish mode and GitHub, and
+    //     dropped the owner straight on "You're live."
+    //
+    // addSiteAndStartSetup already stamped it for the same reason; doing it
+    // here covers the wizard's own creation path too, so no creation route can
+    // produce a screenless row.
+    onboarding_screen: isCloudMode() ? "c1" : "s1",
   };
   if (contentPathHint && contentMode === "existing") row.content_path_hint = contentPathHint;
   if (siteLaunchedAt) row.site_launched_at = siteLaunchedAt;
@@ -1134,6 +1154,14 @@ async function createProjectCore(
     }
     if (error.message.includes("site_launched_at")) {
       delete retry.site_launched_at;
+      dropped = true;
+    }
+    // 0030 pending: the resume stamp is a nicety, never worth failing the
+    // creation the owner is standing in front of. Dropping it puts the row
+    // back on the pre-0030 grandfathering path, which is correct for a
+    // database that genuinely predates screen persistence.
+    if (error.message.includes("onboarding_screen")) {
+      delete retry.onboarding_screen;
       dropped = true;
     }
     // 0031 pending on a self-host DB - harmless to drop there (ownership is a
@@ -1500,7 +1528,20 @@ export async function connectBuilderToken(
 export async function runPipelineInstall(
   slug: string,
 ): Promise<
-  { ok: true; mode: string; pr_url?: string; setup_dispatched: boolean } | { error: string }
+  | {
+      ok: true;
+      mode: string;
+      pr_url?: string;
+      setup_dispatched: boolean;
+      // Passed through so the finale can name the ACTUAL reason setup didn't
+      // start. Without it the wizard showed one catch-all line ("your token is
+      // still verifying in the background") for two unrelated states, and it
+      // was the wrong story for the common one: no token on the repo means
+      // nothing is verifying and nothing ever will, so "wait a few minutes,
+      // then retry" sent people to wait out a dead end.
+      claude_token_present: boolean;
+    }
+  | { error: string }
 > {
   await assertAuthed();
   if (!isCloudMode()) return { error: "Self-host installs via the terminal setup command." };
@@ -1509,10 +1550,23 @@ export async function runPipelineInstall(
   if (!project) return { error: "Unknown project." };
   await assertProjectOwned(project.id);
   if (project.pipeline_installed_at) {
-    return { ok: true, mode: "already-installed", setup_dispatched: false };
+    return { ok: true, mode: "already-installed", setup_dispatched: true, claude_token_present: true };
   }
   const { installPipelineToRepo } = await import("@/lib/pipeline-install");
-  const result = await installPipelineToRepo(project);
+  // installPipelineToRepo returns {ok:false} for handled failures, but it can
+  // still THROW - installationToken() rejects on a malformed/expired App key,
+  // getPipelinePack() can throw, and any fetch can reject on a network fault.
+  // A throw here rejects the server action, which the finale's startInstall
+  // transition does not catch: installResult stays null while installPending
+  // flips back to false, so renderInstallBanner returns NULL and the owner is
+  // left staring at an empty box - no error, no Retry, no way to tell that the
+  // install of their pipeline just died (2026-07-27).
+  let result: Awaited<ReturnType<typeof installPipelineToRepo>>;
+  try {
+    result = await installPipelineToRepo(project);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
   if (!result.ok) return { error: result.error ?? "install failed" };
   await captureServer((await currentUser())?.id ?? project.id, "pipeline_installed", {
     mode: result.mode ?? "direct",
@@ -1522,6 +1576,7 @@ export async function runPipelineInstall(
     mode: result.mode ?? "direct",
     pr_url: result.pr_url,
     setup_dispatched: result.setup_dispatched,
+    claude_token_present: result.claude_token_present,
   };
 }
 
@@ -1597,9 +1652,18 @@ export async function attachGithubInstallation(projectSlug: string, installation
   // Installation ids are enumerable integers - refuse one already bound to
   // another tenant (see assertInstallationClaimable).
   await assertInstallationClaimable(installationId);
-  const { getInstallation, listInstallationRepos } = await import("@/lib/github-app");
-  if (!(await getInstallation(installationId))) {
-    throw new Error("That installation does not belong to the DispatchSEO app");
+  const { getInstallation, installationClaimable, listInstallationRepos } = await import(
+    "@/lib/github-app"
+  );
+  // Same freshness/suspension gate the callback applies (github-app.ts):
+  // GitHub's setup redirect is unsigned, so an installation that is merely
+  // "real and unattached" is not proof of anything - it also describes every
+  // abandoned, suspended, or repo-removed orphan sitting claimable forever.
+  const installation = await getInstallation(installationId);
+  if (!installation || !installationClaimable(installation)) {
+    throw new Error(
+      "That GitHub installation isn't available to connect. Install the DispatchSEO App from your dashboard's setup step and come straight back.",
+    );
   }
   const row: Record<string, unknown> = {
     github_installation_id: installationId,

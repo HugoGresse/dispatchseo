@@ -78,6 +78,12 @@ export type Project = {
   // word alone (typically: no merge/dispatch token configured, so nothing
   // GitHub-side could actually be checked) - see pipeline_installed_at above.
   pipeline_verified: boolean | null;
+  // The cloud tenant who owns this project (migration 0031). Null on self-host
+  // and on the operator's own pre-cloud rows - which is load-bearing, not
+  // incidental: "has an owner" is what distinguishes a CUSTOMER's project from
+  // the operator's, and gsc.ts uses exactly that to decide whether the shared
+  // service account may be used for it.
+  owner_user_id: string | null;
   created_at: string;
 };
 
@@ -145,20 +151,20 @@ export const DEFAULT_PROJECT_ID = "00000000-0000-4000-8000-000000000001";
 
 // mcp_token deliberately excluded - only fetchProjectToken exposes it.
 const COLS =
-  "id, slug, name, domain, gsc_site_url, github_repo, content_mode, content_path_hint, dataforseo_login, dataforseo_password, keyword_source, serpapi_key, powerups_skipped, location_code, language_code, mode, auto_approve, auto_approve_tools, auto_build_guides, auto_build_tools, auto_merge, last_trend_scan_at, site_launched_at, pipeline_installed_at, pipeline_verified, content_prefs, gsc_oauth_refresh_token, github_installation_id, github_app_installed_at, install_progress, created_at";
+  "id, slug, name, domain, gsc_site_url, github_repo, content_mode, content_path_hint, dataforseo_login, dataforseo_password, keyword_source, serpapi_key, powerups_skipped, location_code, language_code, mode, auto_approve, auto_approve_tools, auto_build_guides, auto_build_tools, auto_merge, last_trend_scan_at, site_launched_at, pipeline_installed_at, pipeline_verified, content_prefs, gsc_oauth_refresh_token, github_installation_id, github_app_installed_at, install_progress, owner_user_id, created_at";
 
 // COLS minus 0040's pipeline_verified, for a DB that hasn't run that
 // migration yet. A distinct tier so a DB missing only 0040 keeps
 // install_progress et al; falls back further only if that still 404s.
 const COLS_PRE_0040 =
-  "id, slug, name, domain, gsc_site_url, github_repo, content_mode, content_path_hint, dataforseo_login, dataforseo_password, keyword_source, serpapi_key, powerups_skipped, location_code, language_code, mode, auto_approve, auto_approve_tools, auto_build_guides, auto_build_tools, auto_merge, last_trend_scan_at, site_launched_at, pipeline_installed_at, content_prefs, gsc_oauth_refresh_token, github_installation_id, github_app_installed_at, install_progress, created_at";
+  "id, slug, name, domain, gsc_site_url, github_repo, content_mode, content_path_hint, dataforseo_login, dataforseo_password, keyword_source, serpapi_key, powerups_skipped, location_code, language_code, mode, auto_approve, auto_approve_tools, auto_build_guides, auto_build_tools, auto_merge, last_trend_scan_at, site_launched_at, pipeline_installed_at, content_prefs, gsc_oauth_refresh_token, github_installation_id, github_app_installed_at, install_progress, owner_user_id, created_at";
 
 // COLS minus 0036's install_progress, for a DB that hasn't run that migration
 // yet (migrations are applied manually, so code can reach prod first). A
 // distinct tier from COLS_PRE_0028 so a DB that HAS 0028/0034 but not 0036
 // degrades only the finale's install checklist, never github_installation_id.
 const COLS_PRE_0036 =
-  "id, slug, name, domain, gsc_site_url, github_repo, content_mode, content_path_hint, dataforseo_login, dataforseo_password, keyword_source, serpapi_key, powerups_skipped, location_code, language_code, mode, auto_approve, auto_approve_tools, auto_build_guides, auto_build_tools, auto_merge, last_trend_scan_at, site_launched_at, pipeline_installed_at, content_prefs, gsc_oauth_refresh_token, github_installation_id, github_app_installed_at, created_at";
+  "id, slug, name, domain, gsc_site_url, github_repo, content_mode, content_path_hint, dataforseo_login, dataforseo_password, keyword_source, serpapi_key, powerups_skipped, location_code, language_code, mode, auto_approve, auto_approve_tools, auto_build_guides, auto_build_tools, auto_merge, last_trend_scan_at, site_launched_at, pipeline_installed_at, content_prefs, gsc_oauth_refresh_token, github_installation_id, github_app_installed_at, owner_user_id, created_at";
 
 // COLS minus 0028's auto_approve_tools, for databases where that migration
 // hasn't run yet (migrations are applied manually, so code can reach prod
@@ -228,6 +234,10 @@ function envFallbackProject(): Project {
     github_installation_id: null,
     github_app_installed_at: null,
     install_progress: {},
+    // Ownerless on purpose: this synthetic row stands in for the OPERATOR's
+    // env-backed project, never a tenant's, so it keeps service-account access
+    // (see gscClientForProject).
+    owner_user_id: null,
     created_at: new Date(0).toISOString(),
   };
 }

@@ -607,7 +607,6 @@ export default async function Home() {
   const hasSetupCards =
     !isCloudMode() &&
     (needsMergeToken ||
-      needsAppReconnect ||
       needsDataforseo ||
       needsUsageLimit ||
       needsFunding ||
@@ -617,6 +616,19 @@ export default async function Home() {
       needsGsc ||
       needsBuilder ||
       needsAlertEmail);
+  // Cloud gets its OWN tiny section rather than the self-host one, because
+  // most cards above are self-host framing that would actively mislead a cloud
+  // customer (the "bring your own DataForSEO account" card, the PAT card, the
+  // builder card). But two cloud states genuinely need a surface, and both
+  // used to have NONE: needsAppReconnect and the cloud GSC connect card were
+  // written, then rendered inside a section gated on !isCloudMode(), so they
+  // could never appear (2026-07-27).
+  //
+  // needsAppReconnect is the serious one: when the App is uninstalled, the
+  // customer's scheduled workflows keep running while approvals, one-tap merge
+  // and every dashboard-triggered dispatch silently lose their credential -
+  // exactly the "looks healthy, does nothing" state with no way to notice.
+  const hasCloudSetupCards = isCloudMode() && (needsAppReconnect || (needsGsc && !gscWaiting));
 
   return (
     <div className="space-y-8">
@@ -744,6 +756,55 @@ export default async function Home() {
         guidesPublished={guidesLiveCount}
       />
 
+      {/* ---------- NEEDS YOU (cloud) - see hasCloudSetupCards ---------- */}
+      {hasCloudSetupCards ? (
+      <section className="space-y-3">
+        <SectionTitle sub="the hosted version handles setup for you - these are the only two things it cannot do on your behalf, and each disappears on its own once it's sorted">
+          Needs you
+        </SectionTitle>
+        <div className="grid gap-4 [&>*]:min-w-0 md:grid-cols-2 xl:grid-cols-3">
+          {needsAppReconnect ? (
+            <SetupStep
+              title="Reconnect the GitHub App"
+              why={`The DispatchSEO GitHub App no longer has access to ${project.github_repo} - it was uninstalled, or the repo was removed from the installation. Your repo's scheduled workflows keep running, but approving tools, one-tap merge, and every run triggered from this dashboard are paused until it's back.`}
+              steps={[
+                <>
+                  <a
+                    href={`/api/github/install/start?slug=${project.slug}`}
+                    className="text-sky-400 underline underline-offset-2 hover:text-sky-300"
+                  >
+                    Reinstall the DispatchSEO GitHub App
+                  </a>{" "}
+                  and grant it access to {project.github_repo}.
+                </>,
+                "That's it - nothing else changed, and no data was lost.",
+              ]}
+            />
+          ) : null}
+          {needsGsc && !gscWaiting ? (
+            <SetupStep
+              title="Connect Google Search Console"
+              why={`Traffic numbers come straight from Google. One click connects the Google account that owns the ${project.domain} property - read-only access, revocable any time. Skipped it during setup? This is where you pick it back up.`}
+              steps={[
+                <>
+                  <Link
+                    href="/google"
+                    className="text-sky-400 underline underline-offset-2 hover:text-sky-300"
+                  >
+                    Connect Google
+                  </Link>{" "}
+                  - sign in with the account that has Search Console access to {project.domain}.
+                </>,
+                "Pick the property if the guess was wrong - the connect page lists everything the account can see.",
+                "Done - traffic starts landing with the next hourly sync. Google's data runs 2-3 days behind, so give it a day or two.",
+              ]}
+              closing="This card disappears on its own once the first day of search data arrives."
+            />
+          ) : null}
+        </div>
+      </section>
+      ) : null}
+
       {/* ---------- INITIAL SETUP (hidden once every step is done) ---------- */}
       {hasSetupCards ? (
       <section className="space-y-3">
@@ -818,26 +879,6 @@ export default async function Home() {
               }
             />
           ) : null}
-          {needsGsc && !gscWaiting && isCloudMode() ? (
-            <SetupStep
-              title="Connect Google Search Console"
-              why={`Traffic numbers come straight from Google. One click connects the Google account that owns the ${project.domain} property - read-only access, revocable any time.`}
-              steps={[
-                <>
-                  <Link
-                    href="/google"
-                    className="text-sky-400 underline underline-offset-2 hover:text-sky-300"
-                  >
-                    Connect Google
-                  </Link>{" "}
-                  - sign in with the account that has Search Console access to {project.domain}.
-                </>,
-                "Pick the property if the guess was wrong - the connect page lists everything the account can see.",
-                "Done - traffic starts landing with the next hourly sync. Google's data runs 2-3 days behind, so give it a day or two.",
-              ]}
-              closing="This card disappears on its own once the first day of search data arrives."
-            />
-          ) : null}
           {needsGsc && !gscWaiting && !isCloudMode() ? (
             <SetupStep
               title="Connect Google Search Console"
@@ -891,24 +932,6 @@ export default async function Home() {
               ]}
               command={'[ -f start.sh ] && echo "RESEND_API_KEY=re_PASTE-YOUR-KEY-HERE" >> .env && echo "ALERT_EMAIL=you@example.com" >> .env && sh start.sh || echo "Wrong folder - run this inside the dispatchseo folder (on a VPS: ssh in first)"'}
               closing="At most one email per job per day, and a machine that was asleep or off never counts as broken. No email means everything is working."
-            />
-          ) : null}
-          {needsAppReconnect ? (
-            <SetupStep
-              title="Reconnect the GitHub App"
-              why={`The DispatchSEO GitHub App no longer has access to ${project.github_repo} - it was uninstalled or the repo was removed from the installation. Your repo's scheduled workflows keep running, but approving tools, one-tap merge, and dashboard-triggered runs are paused until it's back.`}
-              steps={[
-                <>
-                  <a
-                    href={`/api/github/install/start?slug=${project.slug}`}
-                    className="text-sky-400 underline underline-offset-2 hover:text-sky-300"
-                  >
-                    Reinstall the DispatchSEO GitHub App
-                  </a>{" "}
-                  and grant it access to {project.github_repo}.
-                </>,
-                "That's it - nothing else changed, and no data was lost.",
-              ]}
             />
           ) : null}
           {needsMergeToken ? (

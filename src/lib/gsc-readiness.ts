@@ -28,6 +28,7 @@ export async function gscCronReadiness(project: {
   id: string;
   gsc_site_url: string | null;
   gsc_oauth_refresh_token: string | null;
+  owner_user_id?: string | null;
 }): Promise<GscReadiness> {
   const site = project.gsc_site_url;
   if (!site) return { ready: false, skipped: "no GSC property connected" };
@@ -45,6 +46,23 @@ export async function gscCronReadiness(project: {
     .select("*", { count: "exact", head: true })
     .eq("project_id", project.id);
   if (!error && (count ?? 0) > 0) return { ready: true };
+
+  // Cloud tenant that has never had GSC data and holds no OAuth token: stop
+  // here. Falling through to the probe would test the property with the shared
+  // PLATFORM service account - which is both the wrong credential (a cloud
+  // customer never grants it) and an access oracle: gsc_site_url is
+  // tenant-writable, so a customer could probe arbitrary properties and learn
+  // which ones the operator's service account can read. Deliberately placed
+  // AFTER the rows-exist check, so a project that HAS synced before and now
+  // fails still counts as a regression and stays loud (CLAUDE.md's readiness
+  // split), rather than being downgraded to a quiet skip.
+  if (isCloudMode() && project.owner_user_id) {
+    return {
+      ready: false,
+      skipped:
+        "setup incomplete: connect Google Search Console for this project - automations stay paused until then",
+    };
+  }
 
   const probe = await gscAccessProbe(site);
   if (probe.state === "ok") return { ready: true };

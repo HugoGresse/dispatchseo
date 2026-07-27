@@ -4,7 +4,7 @@ import { requireDashboard } from "@/lib/auth-gate";
 import { verifyState } from "@/lib/gsc-oauth";
 import { getProjectBySlug } from "@/lib/projects";
 import { assertInstallationClaimable, assertProjectOwned } from "@/lib/tenant-guard";
-import { getInstallation, listInstallationRepos, makeInstallNonce } from "@/lib/github-app";
+import { getInstallation, installationClaimable, listInstallationRepos, makeInstallNonce } from "@/lib/github-app";
 import { db } from "@/lib/db";
 import { isCloudMode } from "@/lib/cloud";
 
@@ -61,7 +61,13 @@ export async function GET(req: Request): Promise<Response> {
       await assertInstallationClaimable(installationId);
 
       const installation = await getInstallation(installationId);
-      if (!installation) redirect("/onboarding?gh=error&msg=install-not-found");
+      // One generic message for BOTH "not our App's installation" and "not
+      // claimable right now". Distinct replies made this endpoint an oracle:
+      // probe an id, read which error came back, learn whether it belongs to
+      // DispatchSEO - free reconnaissance for picking a hijack target.
+      if (!installation || !installationClaimable(installation)) {
+        redirect("/onboarding?gh=error&msg=install-not-found");
+      }
 
       const repos = await listInstallationRepos(installationId);
       const patch: Record<string, unknown> = {
@@ -87,7 +93,9 @@ export async function GET(req: Request): Promise<Response> {
     // nothing is written yet, so an install can't get silently attached to
     // the wrong tenant.
     const installation = await getInstallation(installationId);
-    if (!installation) redirect("/onboarding?gh=error&msg=install-not-found");
+    if (!installation || !installationClaimable(installation)) {
+      redirect("/onboarding?gh=error&msg=install-not-found");
+    }
     // No signed state proves WHO installed this. Drop an httpOnly HMAC nonce
     // tying THIS browser to THIS installation_id; attachGithubInstallation
     // requires it back, so a signed-in attacker guessing the (enumerable) id

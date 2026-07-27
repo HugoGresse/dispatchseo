@@ -140,14 +140,61 @@ export async function installationToken(installationId: number): Promise<string>
 // ours" (404) as well as any other non-2xx GitHub response.
 export async function getInstallation(
   installationId: number,
-): Promise<{ account_login: string } | null> {
+): Promise<{ account_login: string; updated_at: string | null; suspended: boolean } | null> {
   const res = await fetch(`${API}/app/installations/${installationId}`, {
     headers: ghHeaders(appJwt()),
     signal: AbortSignal.timeout(10000),
   });
   if (!res.ok) return null;
-  const body = (await res.json()) as { account?: { login?: string } };
-  return { account_login: body.account?.login ?? "" };
+  const body = (await res.json()) as {
+    account?: { login?: string };
+    updated_at?: string;
+    suspended_at?: string | null;
+  };
+  return {
+    account_login: body.account?.login ?? "",
+    updated_at: body.updated_at ?? null,
+    suspended: Boolean(body.suspended_at),
+  };
+}
+
+// How recently GitHub must have touched an installation for us to accept a
+// claim on it. The install/update redirect lands within seconds; a human
+// picking a project on the interrupt screen takes a minute or two.
+const CLAIM_FRESHNESS_MS = 15 * 60_000;
+
+// Defense in depth against installation-claim hijacking.
+//
+// GitHub's setup redirect is UNSIGNED: `installation_id` arrives as a bare
+// integer in the query string, and nothing in it proves the browser redeeming
+// it is the account that performed the install. Project ownership is checked,
+// but that only proves the caller owns the project they are writing INTO -
+// never that they control the installation they are writing IN. So a signed-in
+// customer who learns a live installation id can bind it to their own project,
+// then have our App commit files, write Actions secrets, and dispatch workflows
+// in someone else's repository.
+//
+// The complete fix is user-to-server OAuth during install (tick "Request user
+// authorization (OAuth) during installation" on the App, then verify the id
+// appears in the caller's own GET /user/installations). That needs App-level
+// configuration and new secrets, so it is deliberately NOT what this is.
+//
+// What this does close, cheaply and with no configuration: every case where the
+// id is a claimable ORPHAN rather than a live race. An installation goes orphan
+// whenever our webhook NULLs github_installation_id but the installation stays
+// alive on GitHub - suspension, a repo removed from the installation, an
+// abandoned install that never finished the wizard. Those sit claimable
+// indefinitely, and they are what makes a scan worth running. Requiring GitHub
+// to have touched the installation seconds ago collapses the exposure to the
+// few minutes around a real, in-progress install.
+export function installationClaimable(inst: {
+  updated_at: string | null;
+  suspended: boolean;
+}): boolean {
+  if (inst.suspended) return false;
+  if (!inst.updated_at) return false; // no timestamp = cannot prove freshness
+  const age = Date.now() - new Date(inst.updated_at).getTime();
+  return Number.isFinite(age) && age >= 0 && age <= CLAIM_FRESHNESS_MS;
 }
 
 // Every repo the installation can see, paginated to total_count. Used right
