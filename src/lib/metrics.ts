@@ -122,7 +122,36 @@ export type Prospect = {
   domain: string;
   reason: string | null;
   status: string;
+  created_at: string;
+  // Absent until migration 0041 runs. Null on a row whose status hasn't
+  // changed since that migration applied.
+  status_changed_at?: string | null;
 };
+
+// The Tools/Guides screens show GSC-derived clicks/impressions/indexing
+// status with no check of whether that data is current or even real: a
+// project that never connected Search Console and one whose hourly sync has
+// silently broken both rendered identical numbers to a healthy project, with
+// nothing distinguishing "genuinely quiet" from "we stopped looking"
+// (2026-07-27 audit). newestGscDate should be the most recent gsc_stats.date
+// for the project, or null if no row exists.
+const GSC_STALE_DAYS = 3; // matches the "GSC data lags 2-3 days" convention used elsewhere
+export function gscFreshnessNote(
+  gscSiteUrl: string | null,
+  newestGscDate: string | null,
+): string | null {
+  if (!gscSiteUrl) {
+    return "Search Console isn't connected yet - clicks, impressions, and indexing status below read as zero, not necessarily true. Connect it on Home.";
+  }
+  if (!newestGscDate) {
+    return "Search Console is connected but no data has synced yet - it lags 2-3 days after first connecting, and the hourly sync will fill this in.";
+  }
+  const ageDays = Math.floor((Date.now() - Date.parse(newestGscDate)) / 86400000);
+  if (ageDays > GSC_STALE_DAYS) {
+    return `Search Console data hasn't updated in ${ageDays} days (last: ${newestGscDate}) - the hourly sync may be failing; check cron health on Home.`;
+  }
+  return null;
+}
 
 export function sumGsc(
   rows: Array<Pick<GscRow, "clicks" | "impressions">>,
@@ -368,8 +397,16 @@ export function groupChecks(checks: RankCheck[]) {
 }
 
 // Position deltas: positive = moved up (a lower position number is better).
+// `current: null` is ambiguous on its own - DataForSEO/SerpApi still insert a
+// rank_checks row (position: null) for a keyword confirmed outside the top
+// 100, so that case and "no check has ever run" (broken creds, cron never
+// reached this keyword) both produce the identical `current: null`. Screens
+// rendered both the same way with no way to tell a real "not ranking" from a
+// silently-broken pipeline (2026-07-27 audit) - `checked`/`lastCheckedAt`
+// let a caller tell them apart without changing the math above.
 export function deltas(series: RankCheck[]) {
   const current = series.length ? series[series.length - 1].position : null;
+  const lastCheckedAt = series.length ? series[series.length - 1].checked_at : null;
   const at = (days: number) => {
     const cutoff = Date.now() - days * 86400000;
     const past = series.filter((c) => new Date(c.checked_at).getTime() <= cutoff);
@@ -379,6 +416,8 @@ export function deltas(series: RankCheck[]) {
   const d30 = at(30);
   return {
     current,
+    checked: series.length > 0,
+    lastCheckedAt,
     d7: current != null && d7 != null ? d7 - current : null,
     d30: current != null && d30 != null ? d30 - current : null,
   };

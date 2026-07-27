@@ -4,6 +4,7 @@ import { requireOnboarded } from "@/lib/onboarding-gate";
 import { getActiveProject } from "@/lib/active-project";
 import {
   aggregatePageTraffic,
+  gscFreshnessNote,
   normalizePageUrl,
   type GscFullRow,
   type PublishedPage,
@@ -124,7 +125,11 @@ export default async function PagesPage() {
   ]);
   const pages = (pagesRes.data ?? []) as PageRow[];
   const done = (doneRes.data ?? []) as Suggestion[];
-  const traffic = aggregatePageTraffic((gscRes.data ?? []) as GscFullRow[]);
+  const gscRows = (gscRes.data ?? []) as GscFullRow[];
+  const traffic = aggregatePageTraffic(gscRows);
+  // gscRows is ordered newest-first (see the query above), so [0] is the
+  // latest snapshot date, or undefined if nothing has synced.
+  const gscNote = gscFreshnessNote(project.gsc_site_url, gscRows[0]?.date ?? null);
 
   // Verify any not-yet-live pages right now (bounded, best-effort): a guide
   // whose PR just merged flips to live on this very render, and a guide whose
@@ -157,6 +162,10 @@ export default async function PagesPage() {
         title="Guides"
         hint={`Every guide shipped to ${project.domain}, newest first. Clicks and impressions are Google search, last 28 days.`}
       />
+
+      {gscNote ? (
+        <div className="rounded-xl bg-neutral-900 p-4 text-sm text-amber-300">{gscNote}</div>
+      ) : null}
 
       {pages.length > 0 ? (
         <StatRow cols={3}>

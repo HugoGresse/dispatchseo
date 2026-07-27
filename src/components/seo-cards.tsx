@@ -363,8 +363,20 @@ export function RankingsTable({ rankings, limit }: { rankings: RankingRow[]; lim
           <Tr key={r.keyword.id}>
             <Td>{r.keyword.keyword}</Td>
             <Td className="text-right tabular-nums">
-              {r.current == null ? (
-                <span className="text-neutral-600">-</span>
+              {!r.checked ? (
+                <span
+                  className="text-neutral-600"
+                  title="No rank check has run for this keyword yet"
+                >
+                  not checked
+                </span>
+              ) : r.current == null ? (
+                <span
+                  className="text-neutral-600"
+                  title={`Confirmed outside the top 100 as of ${fmtDate(r.lastCheckedAt)}`}
+                >
+                  -
+                </span>
               ) : (
                 <span
                   className={

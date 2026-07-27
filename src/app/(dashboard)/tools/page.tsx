@@ -4,6 +4,7 @@ import { requireOnboarded } from "@/lib/onboarding-gate";
 import { getActiveProject } from "@/lib/active-project";
 import {
   aggregatePageTraffic,
+  gscFreshnessNote,
   normalizePageUrl,
   type GscFullRow,
   type PublishedPage,
@@ -107,7 +108,11 @@ export default async function ToolsPage() {
   ]);
   const pages = (pagesRes.data ?? []) as PageRow[];
   const done = (doneRes.data ?? []) as Suggestion[];
-  const traffic = aggregatePageTraffic((gscRes.data ?? []) as GscFullRow[]);
+  const gscRows = (gscRes.data ?? []) as GscFullRow[];
+  const traffic = aggregatePageTraffic(gscRows);
+  // gscRows is ordered newest-first (see the query above), so [0] is the
+  // latest snapshot date, or undefined if nothing has synced.
+  const gscNote = gscFreshnessNote(project.gsc_site_url, gscRows[0]?.date ?? null);
 
   // Headline numbers, from the same traffic roll-up the table uses.
   const indexedCount = pages.filter((p) => {
@@ -125,6 +130,10 @@ export default async function ToolsPage() {
         title="Tools"
         hint={`Every interactive tool shipped to ${project.domain}, newest first. Clicks and impressions are Google search, last 28 days.`}
       />
+
+      {gscNote ? (
+        <div className="rounded-xl bg-neutral-900 p-4 text-sm text-amber-300">{gscNote}</div>
+      ) : null}
 
       {pages.length > 0 ? (
         <StatRow cols={3}>

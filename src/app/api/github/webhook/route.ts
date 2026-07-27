@@ -4,12 +4,13 @@ import { db } from "@/lib/db";
 import { bustInstallationTokenCache } from "@/lib/github-app";
 
 // GitHub App lifecycle webhook. Keeps projects in sync when a customer
-// uninstalls the App or removes repo access from an installation. An
-// uninstall does NOT stop their already-committed workflows (those run on
-// GitHub's own token + repo secrets) - it only breaks OUR control-plane
-// operations (dispatch, merge, secret/file writes), so we clear the
-// installation pointer and nothing else. Never touches github_repo data,
-// pipeline_installed_at, or any SEO state on uninstall.
+// uninstalls the App, suspends it, or removes repo access from an
+// installation. Neither an uninstall nor a suspend stops their
+// already-committed workflows (those run on GitHub's own token + repo
+// secrets) - it only breaks OUR control-plane operations (dispatch, merge,
+// secret/file writes), so we clear the installation pointer and nothing
+// else. Never touches github_repo data, pipeline_installed_at, or any SEO
+// state.
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,20 @@ export async function POST(req: Request): Promise<Response> {
   const installationId = payload.installation?.id;
   if (!installationId) return NextResponse.json({ ok: true });
 
-  if (event === "installation" && payload.action === "deleted") {
+  // "suspend" was never handled: an owner suspending the App (without
+  // uninstalling it) left github_installation_id set, so needsAppReconnect
+  // never fired and the dashboard never showed the reconnect card - every
+  // dispatch/merge/secret call just failed with a generic "no token
+  // connected" message instead (2026-07-27 audit). installationToken() gets a
+  // 403 for a suspended installation exactly like a deleted one, so treat it
+  // the same way: clear the pointer so the existing reconnect flow takes
+  // over. There's no way to auto-resume on "unsuspend" once the pointer is
+  // cleared (the same manual-reconnect tradeoff "deleted" already has), but
+  // that beats staying invisible.
+  if (
+    event === "installation" &&
+    (payload.action === "deleted" || payload.action === "suspend")
+  ) {
     await db()
       .from("projects")
       .update({ github_installation_id: null, github_app_installed_at: null })

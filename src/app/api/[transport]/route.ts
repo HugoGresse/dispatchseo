@@ -799,33 +799,29 @@ const mcpHandler = createMcpHandler(
           return fail("Pass requested_urls and/or already_indexed_urls.");
         }
         const now = new Date().toISOString();
-        const stamp = async (urls: string[], patch: Record<string, unknown>) => {
+        const stamp = async (urls: string[]) => {
           if (urls.length === 0) return [] as string[];
-          let res = await db()
+          const res = await db()
             .from("pages")
-            .update(patch)
+            .update({ index_requested_at: now })
             .eq("project_id", p.id)
             .in("url", urls)
             .select("url");
-          // indexed_at only exists once migration 0010 runs - fall back to
-          // the 0005 stamp alone so the card still clears on older schemas.
-          if (res.error && "indexed_at" in patch) {
-            res = await db()
-              .from("pages")
-              .update({ index_requested_at: now })
-              .eq("project_id", p.id)
-              .in("url", urls)
-              .select("url");
-          }
           if (res.error) throw new Error(res.error.message);
           return (res.data ?? []).map((r) => r.url as string);
         };
         try {
-          const requestedMarked = await stamp(requested, { index_requested_at: now });
-          const indexedMarked = await stamp(alreadyIndexed, {
-            index_requested_at: now,
-            indexed_at: now,
-          });
+          const requestedMarked = await stamp(requested);
+          // Do NOT stamp indexed_at here: that column is the hourly-gsc cron's
+          // read-only URL Inspection verdict, and an agent reading GSC's
+          // inspection panel can misread it or hallucinate from an ambiguous
+          // screenshot. Stamping indexed_at from an unverified self-report
+          // would permanently remove the page from verifyIndexing's query
+          // (.is("indexed_at", null)) with nothing ever re-checking it
+          // (2026-07-27 audit). index_requested_at alone already clears the
+          // dashboard card (indexingQueue treats either stamp as "handled");
+          // the real indexed_at confirmation still comes from the cron.
+          const indexedMarked = await stamp(alreadyIndexed);
           const marked = new Set([...requestedMarked, ...indexedMarked]);
           const unknown = [...requested, ...alreadyIndexed].filter((u) => !marked.has(u));
           return ok({
@@ -927,6 +923,24 @@ const mcpHandler = createMcpHandler(
       },
       async ({ domain, url, reason, domain_rating }) => {
         const p = currentProject();
+        // No DB uniqueness constraint on (project_id, domain), and the
+        // playbook doesn't call get_backlink_prospects before adding - repeated
+        // /seo-backlinks runs (same keyword twice, or a competitor sharing a
+        // source) silently piled up duplicate rows with nothing to flag it
+        // (2026-07-27 audit). Dedup here instead: normalize and compare
+        // in-process rather than an ilike pattern match, so a domain
+        // containing SQL wildcard characters can't cause a false match.
+        const norm = (d: string) => d.trim().toLowerCase().replace(/^www\./, "");
+        const target = norm(domain);
+        const { data: existingRows, error: existErr } = await db()
+          .from("backlink_prospects")
+          .select("*")
+          .eq("project_id", p.id);
+        if (existErr) return fail(existErr.message);
+        const dup = (existingRows ?? []).find(
+          (r) => norm(r.domain as string) === target,
+        );
+        if (dup) return ok({ ...dup, already_queued: true });
         const { data, error } = await db()
           .from("backlink_prospects")
           .insert({ project_id: p.id, domain, url, reason, domain_rating })
@@ -976,15 +990,29 @@ const mcpHandler = createMcpHandler(
       },
       async ({ id, status }) => {
         const p = currentProject();
-        const { data, error } = await db()
+        const now = new Date().toISOString();
+        // Stamp when the status actually changed (migration 0041) so a stuck
+        // "contacted" prospect can eventually be told apart from one that just
+        // moved yesterday - previously nothing recorded this at all. Fall back
+        // to a plain status update on an unmigrated schema.
+        let res = await db()
           .from("backlink_prospects")
-          .update({ status })
+          .update({ status, status_changed_at: now })
           .eq("id", id)
           .eq("project_id", p.id)
           .select()
           .single();
-        if (error) return fail(error.message);
-        return ok(data);
+        if (res.error) {
+          res = await db()
+            .from("backlink_prospects")
+            .update({ status })
+            .eq("id", id)
+            .eq("project_id", p.id)
+            .select()
+            .single();
+        }
+        if (res.error) return fail(res.error.message);
+        return ok(res.data);
       },
     );
 

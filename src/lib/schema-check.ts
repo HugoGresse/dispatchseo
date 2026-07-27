@@ -63,14 +63,25 @@ const PROBES: Probe[] = [
   { migration: "0035_dataforseo_usage", table: "dataforseo_usage" },
   { migration: "0036_install_progress", table: "projects", column: "install_progress" },
   { migration: "0037_builder_claude_token", table: "instance_settings", column: "builder_claude_token" },
+  { migration: "0041_backlink_status_changed", table: "backlink_prospects", column: "status_changed_at" },
 ];
 
 async function probeMissing(p: Probe): Promise<boolean> {
   try {
-    const { error } = await db()
-      .from(p.table)
-      .select(p.column ?? "*", { count: "exact", head: true })
-      .limit(0);
+    // Column probes must NOT combine head:true with count:"exact": verified
+    // 2026-07-27 that PostgREST/supabase-js optimizes that combination into a
+    // bare `SELECT count(*)` and never validates the select list against it -
+    // a definitely-nonexistent column produced the identical no-error result
+    // as a real one. Every column probe in this file was silently a no-op,
+    // always reporting "present" regardless of the column's actual existence
+    // - the exact false-success shape this file exists to prevent. A plain
+    // (non-head) select still transfers zero rows via limit(0) but forces
+    // real column validation. Table-only probes (no column) keep the cheap
+    // head+count existence check - a genuinely missing table still errors
+    // regardless of select-list handling.
+    const { error } = p.column
+      ? await db().from(p.table).select(p.column).limit(0)
+      : await db().from(p.table).select("*", { count: "exact", head: true }).limit(0);
     if (!error) return false;
     // Missing table (42P01 / PGRST205) or missing column (42703): the
     // migration genuinely hasn't run. Anything else is a DB hiccup - treat

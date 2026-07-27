@@ -40,7 +40,9 @@ export type PageRow = AnalyticsPage & PageTraffic;
 
 export type RankingRow = {
   keyword: Keyword;
-  current: number | null; // null = outside top 100
+  current: number | null; // null = outside top 100 (only meaningful when checked=true)
+  checked: boolean; // false = no rank_checks row exists yet - not the same as "outside top 100"
+  lastCheckedAt: string | null;
   change: number | null; // 30d, positive = improved toward #1
   volume: number | null;
 };
@@ -154,7 +156,14 @@ export async function getAnalyticsOverview(project: Project): Promise<AnalyticsO
   const rankings: RankingRow[] = keywords
     .map((k) => {
       const d = deltas(byKw.get(k.id) ?? []);
-      return { keyword: k, current: d.current, change: d.d30, volume: k.search_volume };
+      return {
+        keyword: k,
+        current: d.current,
+        checked: d.checked,
+        lastCheckedAt: d.lastCheckedAt,
+        change: d.d30,
+        volume: k.search_volume,
+      };
     })
     .sort((a, b) => {
       if (a.current == null && b.current == null) return 0;

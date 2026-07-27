@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { planGate } from "@/lib/billing";
-import { credsForProject, serpAiOverview } from "@/lib/dataforseo";
-import { serpProviderForProject, providerRank } from "@/lib/serp";
+import { credsForProject, serpAiOverview, takeDecryptFailure } from "@/lib/dataforseo";
+import { serpProviderForProject, providerRank, takeSerpapiDecryptFailure } from "@/lib/serp";
 import { refreshDomainRating } from "@/lib/domain-rating";
 import { getLatestSnapshot, gscQueryPositions, gscClientForProject } from "@/lib/gsc";
 import { gscCronReadiness, type GscReadiness } from "@/lib/gsc-readiness";
@@ -96,6 +96,16 @@ async function runRanks(
   // --- DataForSEO / SerpApi modes: live SERP via the provider layer ---
   const provider = await serpProviderForProject(project);
   if (!provider) {
+    // A decrypt failure (rotated ENCRYPTION_KEY, corrupted ciphertext) means
+    // creds that worked before are now broken - a regression, not a normal
+    // "not connected yet" state. Report it as a failed check (populating
+    // `failed` trips hadError below, same as any other rank-check error)
+    // instead of a silent informational skip (2026-07-27 audit).
+    const decryptErr =
+      project.keyword_source === "serpapi"
+        ? takeSerpapiDecryptFailure(project.id)
+        : takeDecryptFailure(project.id);
+    if (decryptErr) return { failed: [decryptErr] };
     return {
       skipped:
         project.keyword_source === "serpapi"
@@ -108,6 +118,11 @@ async function runRanks(
   }
 
   const aiRows: AiSnapshotInput[] = [];
+  // Counts the DataForSEO AI-Overview sub-call specifically (serpAiOverview),
+  // separately from the rank check it rides with - see the aiVisibility block
+  // below for why.
+  let aiAttempted = 0;
+  let aiFailed = 0;
   const checks = await Promise.allSettled(
     // Wrapped so every failure names its keyword - a bare "task error 40101"
     // in the alert email gives the owner nothing to act on.
@@ -132,6 +147,7 @@ async function runRanks(
       // effort: an AI-check failure must never fail the rank it rides with.
       let ai = rank.ai;
       if (!ai && provider.kind === "dataforseo") {
+        aiAttempted += 1;
         try {
           ai = (
             await serpAiOverview(
@@ -142,6 +158,7 @@ async function runRanks(
             )
           ).ai;
         } catch (e) {
+          aiFailed += 1;
           console.error(`[daily-ranks] AI Overview check failed for "${kw.keyword}":`, e);
         }
       }
@@ -158,7 +175,18 @@ async function runRanks(
   // AI-visibility write is best-effort: a missing 0025 migration or a bad
   // insert must never fail the rank half it rides on.
   let aiVisibility: Record<string, unknown> = { snapshots: 0 };
-  if (aiRows.length > 0) {
+  if (aiRows.length === 0 && aiAttempted > 0 && aiFailed === aiAttempted) {
+    // Every attempted AI-Overview check errored (broken creds, a DataForSEO
+    // endpoint change) - previously indistinguishable from the equally
+    // aiRows.length===0 case of "no keyword happened to show an Overview",
+    // and neither ever surfaced anywhere since the per-keyword catch above
+    // only console.errors (2026-07-27 audit). Still never fails the rank
+    // half - just makes the difference visible in the stored result.
+    aiVisibility = {
+      snapshots: 0,
+      error: `AI Overview check failed for all ${aiAttempted} keyword(s) checked`,
+    };
+  } else if (aiRows.length > 0) {
     const rec = await recordAiSnapshots(project.id, aiRows);
     aiVisibility =
       "error" in rec
@@ -230,7 +258,15 @@ async function runProject(project: Project): Promise<Record<string, unknown>> {
   // free modes without creds skip - there is no free backlink index.
   const creds = await credsForProject(project);
   if (!creds) {
-    result.dr = { skipped: "no DataForSEO connected" };
+    // Same regression-vs-not-configured distinction as the ranks half above:
+    // a decrypt failure means DR was working and just broke.
+    const decryptErr = takeDecryptFailure(project.id);
+    if (decryptErr) {
+      result.hadError = true;
+      result.dr = { error: decryptErr };
+    } else {
+      result.dr = { skipped: "no DataForSEO connected" };
+    }
   } else {
     try {
       const dr = await refreshDomainRating(project.id, project.domain, creds);

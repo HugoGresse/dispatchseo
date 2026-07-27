@@ -6,6 +6,7 @@ import { getProjectByToken, listProjectsChecked } from "@/lib/projects";
 import { missingMigrations } from "@/lib/schema-check";
 import { isCloudMode } from "@/lib/cloud";
 import { polarConfigured } from "@/lib/billing";
+import { appJwt } from "@/lib/github-app";
 
 // Post-deploy smoke test. The deploy-check GitHub Action hits this after
 // every push to main: first polling with ?expect=<sha> until Vercel serves
@@ -230,6 +231,41 @@ export async function GET(req: Request): Promise<Response> {
     };
   } else {
     checks.billing_config = isCloudMode() ? "ok" : "skipped (self-host)";
+  }
+
+  // GitHub App config: in CLOUD_MODE every repo connect/dispatch/merge/secret
+  // call runs through installationToken(), which needs GITHUB_APP_ID and a
+  // parseable GITHUB_APP_PRIVATE_KEY to even sign the app-level JWT. This had
+  // no canary at all - unlike billing_config above, a broken key degraded
+  // silently: each project's dispatch/merge call swallowed the failure into
+  // its own generic "no token connected" message, with nothing attributing
+  // the outage to auth (2026-07-27 audit). appJwt() actually signs, so this
+  // also catches a malformed key the line-wrap paste gotcha can produce, not
+  // just a missing env var.
+  if (isCloudMode()) {
+    if (
+      !process.env.GITHUB_APP_ID ||
+      !process.env.GITHUB_APP_PRIVATE_KEY ||
+      !process.env.GITHUB_APP_WEBHOOK_SECRET
+    ) {
+      hadError = true;
+      checks.github_app_config = {
+        error:
+          "CLOUD_MODE is on but GITHUB_APP_ID/GITHUB_APP_PRIVATE_KEY/GITHUB_APP_WEBHOOK_SECRET is unset - every project's GitHub connect/dispatch/merge will fail. Set them in Vercel project settings and redeploy",
+      };
+    } else {
+      try {
+        appJwt();
+        checks.github_app_config = "ok";
+      } catch (e) {
+        hadError = true;
+        checks.github_app_config = {
+          error: `GITHUB_APP_PRIVATE_KEY failed to sign a JWT (${e instanceof Error ? e.message : String(e)}) - it is likely malformed (check for the line-wrap paste gotcha). Every project's GitHub connect/dispatch/merge will fail`,
+        };
+      }
+    }
+  } else {
+    checks.github_app_config = "skipped (self-host)";
   }
 
   const result = { sha: liveSha || null, checks };

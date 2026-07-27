@@ -26,6 +26,30 @@ import {
   Tr,
 } from "@/components/ui";
 
+// current: null is ambiguous by itself - it means either "confirmed outside
+// the top 100" (a rank_checks row exists with position: null) or "no check
+// has ever run" (broken creds, cron never reached this keyword). Both used to
+// render as the identical ">100" with no way to tell them apart (2026-07-27
+// audit) - deltas().checked distinguishes them.
+function positionLabel(d: { current: number | null; checked: boolean; lastCheckedAt: string | null }) {
+  if (!d.checked) {
+    return (
+      <span title="No rank check has run for this keyword yet">not checked</span>
+    );
+  }
+  if (d.current == null) {
+    const checkedDate = d.lastCheckedAt
+      ? new Date(d.lastCheckedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      : null;
+    return (
+      <span title={checkedDate ? `Confirmed outside the top 100 as of ${checkedDate}` : undefined}>
+        &gt;100
+      </span>
+    );
+  }
+  return d.current;
+}
+
 export const dynamic = "force-dynamic";
 
 export default async function KeywordsPage() {
@@ -121,7 +145,7 @@ export default async function KeywordsPage() {
                 title={k.keyword}
                 meta={`${k.search_volume ?? "?"}/mo · difficulty ${k.keyword_difficulty ?? "?"}`}
                 stats={[
-                  { label: "Position", value: k.d.current ?? ">100" },
+                  { label: "Position", value: positionLabel(k.d) },
                   { label: "7d", value: <Arrow delta={k.d.d7} /> },
                   { label: "30d", value: <Arrow delta={k.d.d30} /> },
                 ]}
@@ -155,7 +179,7 @@ export default async function KeywordsPage() {
                   <Td className="hidden tabular-nums text-neutral-300 sm:table-cell">
                     {k.keyword_difficulty ?? "-"}
                   </Td>
-                  <Td className="font-mono">{k.d.current ?? ">100"}</Td>
+                  <Td className="font-mono">{positionLabel(k.d)}</Td>
                   <Td>
                     <Arrow delta={k.d.d7} />
                   </Td>

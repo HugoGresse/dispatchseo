@@ -151,7 +151,23 @@ export default async function BacklinksPage() {
   const statusOf = new Map<string, string>(
     (statusRes.data ?? []).map((r: { slug: string; status: string }) => [r.slug, r.status]),
   );
+  // blRes.error was previously never checked here, unlike statusRes right
+  // above it - a genuine query failure (RLS hiccup, transient error) rendered
+  // the exact same "None yet" empty state as a project with no prospects,
+  // with no way to tell them apart (2026-07-27 audit).
+  const prospectsFailed = blRes.error != null;
   const prospects = (blRes.data ?? []) as Prospect[];
+  // A prospect that has sat in "contacted" for a long time with no reply and
+  // no status change is invisible otherwise: update_backlink_prospect only
+  // ever touched status until migration 0041 added status_changed_at.
+  const STALE_CONTACT_DAYS = 30;
+  const prospectStaleDays = (p: Prospect): number | null => {
+    if (p.status !== "contacted") return null;
+    const since = p.status_changed_at ?? p.created_at;
+    if (!since) return null;
+    const days = Math.floor((Date.now() - Date.parse(since)) / 86400000);
+    return days >= STALE_CONTACT_DAYS ? days : null;
+  };
 
   const all = [...FREE_BACKLINKS, ...PAID_BACKLINKS];
   const doneCount = all.filter((i) => statusOf.get(i.slug) === "done").length;
@@ -257,7 +273,12 @@ export default async function BacklinksPage() {
           Backlink prospects
         </SectionTitle>
 
-        {prospects.length === 0 ? (
+        {prospectsFailed ? (
+          <div className="rounded-xl bg-neutral-900 p-4 text-sm text-amber-300">
+            Couldn&apos;t load backlink prospects right now - this is a query error, not an empty
+            list. Reload the page; if it keeps happening, check the Supabase connection.
+          </div>
+        ) : prospects.length === 0 ? (
           <EmptyState>
             None yet. Run <Mono>/seo-backlinks</Mono> in Claude Code to find prospects.
           </EmptyState>
@@ -269,26 +290,39 @@ export default async function BacklinksPage() {
               <Th>Status</Th>
             </THead>
             <tbody>
-              {prospects.map((b) => (
-                <Tr key={b.id}>
-                  <Td>
-                    <a
-                      href={`https://${b.domain}`}
-                      target="_blank"
-                      className="text-sky-400 underline underline-offset-2 hover:text-sky-300"
-                    >
-                      {b.domain}
-                    </a>
-                    {b.reason ? (
-                      <span className="mt-0.5 block text-xs text-neutral-400 sm:hidden">{b.reason}</span>
-                    ) : null}
-                  </Td>
-                  <Td className="hidden text-neutral-300 sm:table-cell">{b.reason}</Td>
-                  <Td>
-                    <ProspectStatus id={b.id} status={b.status} />
-                  </Td>
-                </Tr>
-              ))}
+              {prospects.map((b) => {
+                const staleDays = prospectStaleDays(b);
+                return (
+                  <Tr key={b.id}>
+                    <Td>
+                      <a
+                        href={`https://${b.domain}`}
+                        target="_blank"
+                        className="text-sky-400 underline underline-offset-2 hover:text-sky-300"
+                      >
+                        {b.domain}
+                      </a>
+                      {b.reason ? (
+                        <span className="mt-0.5 block text-xs text-neutral-400 sm:hidden">{b.reason}</span>
+                      ) : null}
+                    </Td>
+                    <Td className="hidden text-neutral-300 sm:table-cell">{b.reason}</Td>
+                    <Td>
+                      <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <ProspectStatus id={b.id} status={b.status} />
+                        {staleDays != null ? (
+                          <span
+                            className="text-xs text-amber-300"
+                            title="No status change since contacting - might be worth a follow-up or marking rejected"
+                          >
+                            contacted {staleDays}d ago, no reply logged
+                          </span>
+                        ) : null}
+                      </span>
+                    </Td>
+                  </Tr>
+                );
+              })}
             </tbody>
           </TableShell>
         )}

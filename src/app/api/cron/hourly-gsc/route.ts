@@ -59,7 +59,14 @@ async function verifyIndexing(project: Project, sc: GscClient): Promise<Record<s
       failed += 1;
     }
   }
-  return { checked: rows.length, newly_indexed: newlyIndexed, failed };
+  // A single failed inspection is routine (quota edge, transient API hiccup)
+  // and must stay best-effort. But every one of the batch failing (lost URL
+  // Inspection permission, broken creds) is a systemic break that previously
+  // had no way to surface: `failed` was returned but nothing ever read it, so
+  // this could stay broken forever while cron_runs/the banner/get_cron_health
+  // kept reporting success (2026-07-27 audit).
+  const allFailed = rows.length > 0 && failed === rows.length;
+  return { checked: rows.length, newly_indexed: newlyIndexed, failed, allFailed };
 }
 
 async function runProject(project: Project): Promise<Record<string, unknown>> {
@@ -123,6 +130,8 @@ export async function GET(req: Request): Promise<Response> {
     const slug = projects[i].slug;
     if (r.status === "fulfilled") {
       result[slug] = r.value;
+      const indexing = (r.value as { indexing?: { allFailed?: boolean } }).indexing;
+      if (indexing?.allFailed) hadError = true;
     } else {
       hadError = true;
       result[slug] = { error: r.reason instanceof Error ? r.reason.message : String(r.reason) };

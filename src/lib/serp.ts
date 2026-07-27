@@ -27,6 +27,16 @@ export type SerpProvider =
   | { kind: "dataforseo"; creds: DataforseoCreds }
   | { kind: "serpapi"; apiKey: string };
 
+// Same regression-vs-not-configured distinction as dataforseo.ts's
+// recentDecryptFailures, for the SerpApi key path (2026-07-27 audit).
+const recentSerpapiDecryptFailures = new Map<string, string>();
+
+export function takeSerpapiDecryptFailure(projectId: string): string | null {
+  const msg = recentSerpapiDecryptFailures.get(projectId);
+  if (msg) recentSerpapiDecryptFailures.delete(projectId);
+  return msg ?? null;
+}
+
 // DataForSEO location_code -> SerpApi gl country code, for the markets a
 // project can realistically be set to. Unknown codes fall back to "us" -
 // wrong-market results are still far better than no results.
@@ -51,9 +61,13 @@ export async function serpProviderForProject(project: Project): Promise<SerpProv
   if (project.keyword_source === "serpapi") {
     if (!project.serpapi_key) return null;
     try {
-      return { kind: "serpapi", apiKey: await decryptSecret(project.serpapi_key) };
+      const apiKey = await decryptSecret(project.serpapi_key);
+      recentSerpapiDecryptFailures.delete(project.id);
+      return { kind: "serpapi", apiKey };
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error(`SerpApi key decrypt failed for project ${project.slug}:`, err);
+      recentSerpapiDecryptFailures.set(project.id, msg);
       return null;
     }
   }

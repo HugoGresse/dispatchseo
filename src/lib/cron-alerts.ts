@@ -33,7 +33,8 @@ export type CronJob =
 // enough that scheduler jitter (Vercel Hobby ~1h, GitHub Actions delays)
 // never false-alarms. Jobs that run per push or per dispatch (deploy-check,
 // trend scans, tool validations) have no schedule to be late against, so
-// anything not listed here defaults to never-stale.
+// anything not listed here defaults to never-stale. (weekly-opportunities has
+// no entry here on purpose - see RETIRED_JOBS below.)
 const STALE_HOURS: Record<string, number> = {
   "daily-ranks": 36,
   "hourly-gsc": 6,
@@ -61,6 +62,16 @@ const STALE_HOURS: Record<string, number> = {
   "builder-research": 180,
   "builder-geo-scan": 180,
 };
+
+// Retired jobs kept callable for manual/debug use (see weekly-opportunities'
+// own route comment) but no longer on any schedule. Without this, a job's
+// LAST historical cron_runs row (from before retirement) stays the permanent
+// "latest" row forever - if that row happened to be a failure, `!ok` would
+// alarm on the Home banner and get_cron_health with no real job left to fix
+// it and re-run (2026-07-27 audit). Excluded from health entirely, not just
+// staleness: a retired job showing "broken" from a run nobody is watching is
+// as misleading as it showing "stale".
+const RETIRED_JOBS = new Set(["weekly-opportunities"]);
 
 // Jobs reported through a per-project MCP token arrive suffixed with the
 // project slug ("seo-daily--acme"). Staleness thresholds are keyed by the
@@ -426,6 +437,7 @@ export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]>
     if (!latest.has(row.job as string)) latest.set(row.job as string, row);
   }
   const health = [...latest.values()]
+    .filter((row) => !RETIRED_JOBS.has(baseJobName(row.job as string)))
     .filter((row) => {
       if (!projectSlug) return true;
       const owner = jobProjectSlug(row.job as string);

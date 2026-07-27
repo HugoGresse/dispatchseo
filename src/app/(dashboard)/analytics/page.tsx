@@ -3,7 +3,7 @@ import Link from "next/link";
 import { requireOnboarded } from "@/lib/onboarding-gate";
 import { getActiveProject } from "@/lib/active-project";
 import { getAnalyticsOverview } from "@/lib/analytics-data";
-import { halfDelta } from "@/lib/metrics";
+import { gscFreshnessNote, halfDelta } from "@/lib/metrics";
 import {
   BigStatTile,
   DeltaPill,
@@ -36,6 +36,11 @@ export default async function AnalyticsPage() {
 
   const project = await getActiveProject();
   const o = await getAnalyticsOverview(project);
+  // o.gsc is ascending (see getAnalyticsOverview), so the last row is newest.
+  // The "updates in Xh Ym" widgets below read as confidently current even
+  // during a multi-day GSC sync outage - this note is the one thing on this
+  // page that would actually say so (2026-07-27 audit).
+  const gscNote = gscFreshnessNote(project.gsc_site_url, o.gsc.at(-1)?.date ?? null);
 
   return (
     <div className="space-y-8">
@@ -43,6 +48,10 @@ export default async function AnalyticsPage() {
         title="Analytics"
         hint={`Everything the SEO manager is driving for ${o.domain}, in one place. Search data is from Google, last 28 days.`}
       />
+
+      {gscNote ? (
+        <div className="rounded-xl bg-neutral-900 p-4 text-sm text-amber-300">{gscNote}</div>
+      ) : null}
 
       {/* ---------- DOMAIN RATING ---------- */}
       <section className="space-y-3">

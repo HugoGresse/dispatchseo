@@ -27,6 +27,23 @@ const BASE = "https://api.dataforseo.com/v3";
 const LOCATION_CODE = 2840;
 const LANGUAGE_CODE = "en";
 
+// A decrypt failure (rotated ENCRYPTION_KEY, corrupted ciphertext) must not
+// 500 a cron or the dashboard, so credsForProject degrades it to null exactly
+// like "not configured" for every one of its ~9 call sites. That made a real
+// regression - creds that worked yesterday, broken today - indistinguishable
+// from a project that simply never connected DataForSEO, with no alert ever
+// firing (2026-07-27 audit). This map lets a caller that specifically cares
+// about regressions (the daily-ranks cron) ask without every other caller
+// needing to change: recorded on decrypt failure, cleared on the next
+// success or once read via takeDecryptFailure.
+const recentDecryptFailures = new Map<string, string>();
+
+export function takeDecryptFailure(projectId: string): string | null {
+  const msg = recentDecryptFailures.get(projectId);
+  if (msg) recentDecryptFailures.delete(projectId);
+  return msg ?? null;
+}
+
 export type DataforseoCreds = {
   login: string;
   password: string;
@@ -56,13 +73,13 @@ export async function credsForProject(project: {
     // A missing/rotated key must not 500 the dashboard or a cron, so a decrypt
     // failure degrades to "not connected" - the paid features just skip.
     try {
-      return {
-        login: project.dataforseo_login,
-        password: await decryptSecret(project.dataforseo_password),
-        billedTo: "own",
-      };
+      const password = await decryptSecret(project.dataforseo_password);
+      recentDecryptFailures.delete(project.id);
+      return { login: project.dataforseo_login, password, billedTo: "own" };
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error(`DataForSEO password decrypt failed for project ${project.slug}:`, err);
+      recentDecryptFailures.set(project.id, msg);
       return null;
     }
   }
