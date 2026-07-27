@@ -10,6 +10,7 @@ import { isCloudMode } from "@/lib/cloud";
 import { supabaseAuth } from "@/lib/cloud-auth";
 import { authCallbackUrl } from "@/lib/origin";
 import { cleanDomain, isValidDomain } from "@/lib/domain";
+import { captureServer, identifyServer } from "@/lib/posthog-server";
 
 export const dynamic = "force-dynamic";
 
@@ -84,6 +85,12 @@ async function signup(formData: FormData) {
   const identities = data.user?.identities;
   if (!data.session && Array.isArray(identities) && identities.length === 0) {
     redirect(`/signup?error=exists${back}`);
+  }
+  // A genuinely new account row exists past this point, whether or not email
+  // confirmation still stands between here and a session.
+  if (data.user) {
+    await captureServer(data.user.id, "user_signed_up", { method: "email" });
+    await identifyServer(data.user.id, { email });
   }
   if (!data.session) {
     (await cookies()).set(EMAIL_COOKIE, email, {

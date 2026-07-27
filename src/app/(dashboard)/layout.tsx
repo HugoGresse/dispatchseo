@@ -8,9 +8,11 @@ import { ProjectSwitcher } from "@/components/project-switcher";
 import { ModeSwitch } from "@/components/mode-switch";
 import { getActiveProjectOrNull, scopedProjects } from "@/lib/active-project";
 import { isCloudMode } from "@/lib/cloud";
+import { currentUser } from "@/lib/cloud-auth";
 import { SetupProgressBanner } from "@/components/setup-progress-banner";
 import { RepoCleanupBanner } from "@/components/repo-cleanup-banner";
 import { REPO_NOTICE_COOKIE, decodeRepoNotice } from "@/lib/repo-notice";
+import { PostHogIdentify } from "@/components/posthog-identify";
 
 // Shared shell for every dashboard screen. Auth is checked per page (the
 // requireDashboard gate in auth-gate.ts) - this layout is presentation only. force-dynamic
@@ -29,10 +31,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // is null for a cloud account with no projects yet - the page itself
   // redirects to the wizard (getActiveProject), the layout just renders a
   // chrome without switcher/mode for that one request.
-  const [projects, active, jar] = await Promise.all([
+  const [projects, active, jar, user] = await Promise.all([
     scopedProjects(),
     getActiveProjectOrNull(),
     cookies(),
+    currentUser(),
   ]);
 
   const billing = isCloudMode();
@@ -78,6 +81,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const repoNotice = decodeRepoNotice(jar.get(REPO_NOTICE_COOKIE)?.value);
   return (
     <div className="flex min-h-screen bg-neutral-950 text-neutral-100">
+      {user && <PostHogIdentify userId={user.id} email={user.email} />}
       <Sidebar billing={billing} hasProject={active != null} />
       <div className="flex min-w-0 flex-1 flex-col">
         {/* One row on every size. Desktop keeps the three-up grid (switcher /

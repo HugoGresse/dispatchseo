@@ -5,6 +5,7 @@ import { COOKIE_NAME, cookieSecure, cookieValue, isCorrectPassword } from "@/lib
 import { getSetupState } from "@/lib/setup";
 import { isCloudMode } from "@/lib/cloud";
 import { supabaseAuth } from "@/lib/cloud-auth";
+import { captureServer } from "@/lib/posthog-server";
 import { REPO_SLUG } from "@/lib/repo-notice";
 import {
   clearLoginFailures,
@@ -50,8 +51,9 @@ async function cloudLogin(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   if (!email || !password) redirect("/login?error=1");
   const supabase = await supabaseAuth();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) redirect("/login?error=1");
+  if (data.user) await captureServer(data.user.id, "user_logged_in", { method: "password" });
   redirect("/dashboard");
 }
 

@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { JOURNEY_STAGES, STAGE_META } from "@/lib/journey-meta";
-import { mcpAddCommand } from "@/lib/mcp-connect";
+import { mcpAddCommand, ghPermissionCommand } from "@/lib/mcp-connect";
 import { FirstRunStatus } from "@/components/first-run-status";
 import {
   chooseGscOnly,
@@ -1280,7 +1280,13 @@ export function OnboardingWizard({
                     <b className="font-medium text-neutral-200">1.</b>{" "}
                     Connect Claude Code (in your site&apos;s repo):
                   </p>
-                  <CopyBox text={created ? mcpAddCommand(created.slug, origin, created.mcpToken) : ""} />
+                  <CopyBox
+                    text={
+                      created
+                        ? `${mcpAddCommand(created.slug, origin, created.mcpToken)} && ${ghPermissionCommand()}`
+                        : ""
+                    }
+                  />
                 </div>
                 <div className="space-y-2">
                   <p className="text-sm text-neutral-400">
@@ -1316,10 +1322,17 @@ export function OnboardingWizard({
               <div className="mt-4 space-y-2">
                 <p className="text-[15px] text-neutral-300">
                   <b className="font-semibold text-neutral-100">1.</b>{" "}
-                  Connect Claude Code to this project - run this in a terminal,{" "}
-                  <b className="font-medium text-neutral-100">inside your site&apos;s repo</b>:
+                  Connect Claude Code to this project and let it run{" "}
+                  <code className="font-mono text-neutral-200">gh</code> here - run this in a
+                  terminal, <b className="font-medium text-neutral-100">inside your site&apos;s repo</b>:
                 </p>
-                <CopyBox text={created ? mcpAddCommand(created.slug, origin, created.mcpToken) : ""} />
+                <CopyBox
+                  text={
+                    created
+                      ? `${mcpAddCommand(created.slug, origin, created.mcpToken)} && ${ghPermissionCommand()}`
+                      : ""
+                  }
+                />
                 <p className="text-[13px] text-neutral-500">
                   Already had Claude Code open in that repo? Close and reopen it after this
                   command - it only loads connections at startup, so an open session can&apos;t

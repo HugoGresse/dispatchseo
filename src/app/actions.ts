@@ -8,6 +8,8 @@ import { db } from "@/lib/db";
 import { bustInstanceCache } from "@/lib/dashboard-auth";
 import { dashboardAuth } from "@/lib/auth-gate";
 import { isCloudMode } from "@/lib/cloud";
+import { currentUser } from "@/lib/cloud-auth";
+import { captureServer } from "@/lib/posthog-server";
 import {
   assertInstallationClaimable,
   assertProjectOwned,
@@ -72,6 +74,11 @@ export async function decideSuggestion(id: string, decision: "approved" | "rejec
   if (decision === "approved" && data?.source === "trend-scan" && data.project_id) {
     await placeAtFront(data.project_id, id, data.type);
   }
+  await captureServer(
+    (await currentUser())?.id ?? data?.project_id ?? id,
+    decision === "approved" ? "suggestion_approved" : "suggestion_rejected",
+    { type: data?.type, source: data?.source },
+  );
   revalidatePath("/dashboard");
   revalidatePath("/trends");
   revalidatePath("/research");
@@ -292,6 +299,9 @@ export async function mergeSeoPr(number: number) {
   // request (read-your-own-writes), so the merged PR's "Ready to ship" card
   // is gone on the very render this action streams back.
   if (project.github_repo) updateTag(`seo-prs:${project.github_repo}`);
+  if (result.ok) {
+    await captureServer((await currentUser())?.id ?? project.id, "pr_merged", { number });
+  }
   revalidatePath("/dashboard");
   return result;
 }
@@ -808,6 +818,9 @@ export async function deleteProject(
     };
   }
   await stashRepoNotice(teardown);
+  await captureServer((await currentUser())?.id ?? project.id, "project_deleted", {
+    domain: project.domain,
+  });
 
   // Drop the cookie instead of pinning a slug: the default project's slug
   // is user-defined since the wizard claims that row, and getActiveProject
@@ -930,6 +943,7 @@ export async function deleteAccount(
       error: `Your plan and sites are gone, but the login itself could not be removed: ${userError.message}`,
     };
   }
+  await captureServer(user.id, "account_deleted");
 
   // Straight to /logout rather than clearing cookies here: it already tolerates
   // signing out a user that no longer exists, and it owns the cookie names.
@@ -1113,6 +1127,7 @@ async function createProjectCore(
     maxAge: 60 * 60 * 24 * 365,
   });
   revalidatePath("/", "layout");
+  await captureServer((await currentUser())?.id ?? slug, "project_created", { domain });
   return { slug, name, domain, mcpToken };
 }
 
@@ -1336,6 +1351,7 @@ export async function chooseGithubRepo(
   }
   const { error } = await db().from("projects").update({ github_repo: repo }).eq("id", project.id);
   if (error) return { error: error.message };
+  await captureServer((await currentUser())?.id ?? project.id, "github_connected", { repo });
   revalidatePath("/onboarding");
   return { ok: true, repo };
 }
@@ -1465,6 +1481,9 @@ export async function runPipelineInstall(
   const { installPipelineToRepo } = await import("@/lib/pipeline-install");
   const result = await installPipelineToRepo(project);
   if (!result.ok) return { error: result.error ?? "install failed" };
+  await captureServer((await currentUser())?.id ?? project.id, "pipeline_installed", {
+    mode: result.mode ?? "direct",
+  });
   return {
     ok: true,
     mode: result.mode ?? "direct",
@@ -1512,6 +1531,7 @@ export async function wizardSetGscProperty(
   }
   const err = await setTrackedProperty(project.id, siteUrl);
   if (err) return { error: err };
+  await captureServer((await currentUser())?.id ?? project.id, "gsc_connected");
   revalidatePath("/onboarding");
   revalidatePath("/google");
   return { ok: true };

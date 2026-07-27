@@ -4,6 +4,7 @@ import { ResourceNotFound } from "@polar-sh/sdk/models/errors/resourcenotfound.j
 import { currentUser } from "@/lib/cloud-auth";
 import { isCloudMode } from "@/lib/cloud";
 import { polar, polarConfigured } from "@/lib/billing";
+import { captureServer, captureServerException } from "@/lib/posthog-server";
 
 // GET /api/polar/portal - Polar's hosted customer portal (invoices, plan
 // changes, cancellation). Resolved by the same external id the checkout set.
@@ -24,8 +25,10 @@ export async function GET(req: NextRequest) {
     // the user as "pick a plan first", so log it before the same fallback.
     if (!(err instanceof ResourceNotFound)) {
       console.error(`[billing] portal session failed for ${user.id}: ${String(err)}`);
+      await captureServerException(user.id, err);
     }
     redirect("/billing?error=no-customer");
   }
+  await captureServer(user.id, "billing_portal_opened");
   redirect(url);
 }

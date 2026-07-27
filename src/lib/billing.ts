@@ -1,6 +1,7 @@
 import { Polar } from "@polar-sh/sdk";
 import { db } from "./db";
 import { isCloudMode } from "./cloud";
+import { captureServer } from "./posthog-server";
 
 // Polar billing for CLOUD_MODE (Neo's 2026-07-22 decision: Polar as merchant
 // of record). One subscriptions row per user (migration 0031), upserted by
@@ -102,7 +103,16 @@ export async function applySubscriptionState(state: {
     row.provider_subscription_id = state.providerSubscriptionId;
   if (state.currentPeriodEnd !== undefined) row.current_period_end = state.currentPeriodEnd;
   const { error } = await db().from("subscriptions").upsert(row, { onConflict: "user_id" });
-  if (error) console.error(`[billing] subscription upsert failed: ${error.message}`);
+  if (error) {
+    console.error(`[billing] subscription upsert failed: ${error.message}`);
+    return;
+  }
+  const event = ["active", "trialing"].includes(state.status)
+    ? "subscription_activated"
+    : ["canceled", "revoked"].includes(state.status)
+      ? "subscription_canceled"
+      : "subscription_updated";
+  await captureServer(state.userId, event, { tier: state.tier ?? undefined, status: state.status });
 }
 
 // How many more sites this user's plan allows. null = unlimited (self-host,

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { type EmailOtpType } from "@supabase/supabase-js";
 import { supabaseAuth } from "@/lib/cloud-auth";
+import { captureServer } from "@/lib/posthog-server";
 
 // Email-link + OAuth landing for CLOUD_MODE (Supabase Auth). Two credential
 // shapes arrive here, both of which establish the session cookies:
@@ -51,13 +52,28 @@ export async function GET(req: NextRequest) {
 
   try {
     const supabase = await supabaseAuth();
-    const { error } = tokenHash
+    const { data, error } = tokenHash
       ? await supabase.auth.verifyOtp({
           token_hash: tokenHash,
           type: (type ?? "email") as EmailOtpType,
         })
       : await supabase.auth.exchangeCodeForSession(code as string);
     if (error) return fail();
+    // Password recovery lands here too (both credential shapes), but signing
+    // back in to set a new password isn't a login/signup event.
+    if (!isRecovery && data.user) {
+      if (tokenHash) {
+        // Email-confirm link - signup() already fired user_signed_up when the
+        // account row was created, this just closes the loop.
+        await captureServer(data.user.id, "user_confirmed_email");
+      } else {
+        // The only other code-grant flow reaching here is Google OAuth.
+        const justCreated = Date.now() - new Date(data.user.created_at).getTime() < 15_000;
+        await captureServer(data.user.id, justCreated ? "user_signed_up" : "user_logged_in", {
+          method: "google",
+        });
+      }
+    }
     // `next` may carry its own query string (e.g. /onboarding?new=1). Apply
     // path and query separately - assigning the whole string to .pathname
     // would percent-encode the `?` into the path and 404.

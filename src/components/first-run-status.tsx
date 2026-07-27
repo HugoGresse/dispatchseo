@@ -369,7 +369,15 @@ export function FirstRunStatus({ slug, cloud }: { slug: string; cloud?: boolean 
           <p className="text-sm font-semibold text-neutral-200">
             {doneCount} of {totalCount} set up
           </p>
-          <p className="text-[13px] text-neutral-500">{allDone ? "Complete" : "Typically 10-20 min"}</p>
+          <p className="flex items-center gap-1.5 text-[13px] text-neutral-500">
+            {!allDone ? (
+              <span className="relative flex h-1.5 w-1.5" aria-hidden>
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-75" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-violet-500" />
+              </span>
+            ) : null}
+            {allDone ? "Complete" : "Typically 10-20 min"}
+          </p>
         </div>
         <div className="mt-2 h-1 overflow-hidden rounded-full bg-neutral-800">
           <div

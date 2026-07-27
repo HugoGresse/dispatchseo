@@ -68,8 +68,16 @@ code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 -X POST "$BASE/api/m
 [ "$code" = "200" ] || \
   die "Your project key was rejected (HTTP $code). Keys change when a project is recreated - copy the CURRENT command from the dashboard and run it instead."
 NAME="dispatchseo-$SLUG"
-claude mcp remove "$NAME" >/dev/null 2>&1
-claude mcp add --transport http "$NAME" "$BASE/api/mcp" \
+# --scope local pins this connection to THIS folder. Without it a connection
+# can end up at user scope and leak into every project the owner opens
+# Claude Code in - an owner with several projects connected would then have
+# all of them active at once in an unrelated repo, and the install
+# workflow's repo-remote check would keep failing against the wrong
+# project's token. Scope local on both remove and add so a stray user-scope
+# entry from an older run gets found and cleaned up too.
+claude mcp remove --scope local "$NAME" >/dev/null 2>&1
+claude mcp remove --scope user "$NAME" >/dev/null 2>&1
+claude mcp add --transport http --scope local "$NAME" "$BASE/api/mcp" \
   --header "Authorization: Bearer $TOKEN" >/dev/null 2>&1 || \
   die "Could not add the connection to Claude Code (claude mcp add failed)."
 say "  Connected (key verified against the server)."

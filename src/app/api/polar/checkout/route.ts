@@ -4,6 +4,7 @@ import { currentUser } from "@/lib/cloud-auth";
 import { isCloudMode } from "@/lib/cloud";
 import { polar, polarConfigured, productIdForTier, type Tier } from "@/lib/billing";
 import { foundingOffer } from "@/lib/founding";
+import { captureServer } from "@/lib/posthog-server";
 
 // GET /api/polar/checkout?tier=starter|growth|scale - sends the signed-in
 // user to a Polar checkout for that tier. externalCustomerId ties the Polar
@@ -39,5 +40,6 @@ export async function GET(req: NextRequest) {
     // back to /billing after the user just paid).
     successUrl: `${origin}/onboarding?new=1&checkout=success`,
   });
+  await captureServer(user.id, "checkout_started", { tier, discounted: Boolean(discountId) });
   redirect(checkout.url);
 }

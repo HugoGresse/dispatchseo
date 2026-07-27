@@ -3,6 +3,7 @@
 # list alone) makes a fresh `pnpm install --frozen-lockfile` hard-fail with
 # ERR_PNPM_IGNORED_BUILDS, which killed the CI builder runs.
 allowBuilds:
+  core-js: true
   sharp: true
   unrs-resolver: false
 # Kept for older pnpm versions that read the approve-list instead.
