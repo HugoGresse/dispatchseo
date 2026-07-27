@@ -84,7 +84,9 @@ async function runProject(project: Project): Promise<Record<string, unknown>> {
   if (!readiness.ready) return { skipped: readiness.skipped };
   // Resolve the client once: OAuth for a connected cloud project, service
   // account otherwise. Both the snapshot and index-inspection calls share it.
-  const sc = await gscClientForProject(project);
+  // readiness checked immediately above - safe to fall back to the service
+  // account for a project that has demonstrably synced through it before.
+  const sc = await gscClientForProject(project, { afterReadinessCheck: true });
   const snaps = await getFreshSnapshots(project.gsc_site_url!, 3, sc);
   // No snapshot data is no reason to skip index verification - a brand-new
   // site with zero impressions is exactly where it matters most.

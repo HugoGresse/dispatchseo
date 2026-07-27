@@ -86,22 +86,39 @@ export type GscClient = Awaited<ReturnType<typeof searchConsole>>;
 // with no OAuth token) uses the shared service account. Without this, cloud
 // properties get probed against a service account they never granted -> 403 ->
 // gsc_stats never fills.
-export async function gscClientForProject(project: {
-  gsc_oauth_refresh_token: string | null;
-  owner_user_id?: string | null;
-}): Promise<GscClient> {
+export async function gscClientForProject(
+  project: {
+    gsc_oauth_refresh_token: string | null;
+    owner_user_id?: string | null;
+  },
+  // Set ONLY by callers that have already passed gscCronReadiness for this
+  // project. Not a bypass - see below for why that gate is the real boundary.
+  opts: { afterReadinessCheck?: boolean } = {},
+): Promise<GscClient> {
   if (isCloudMode() && project.gsc_oauth_refresh_token) {
     return oauthSearchConsole(project.gsc_oauth_refresh_token);
   }
-  // In cloud, a TENANT's project may never fall back to the shared service
+  // In cloud, a TENANT's project must not read through the shared service
   // account. gsc_site_url is tenant-writable (set_gsc_property over MCP, the
-  // wizard's picker), so falling back here meant a customer could point their
+  // wizard's picker), so an unguarded fallback let a customer point their
   // project at any property the platform SA can read - the operator's own
-  // properties included - and the next sync copied that property's clicks,
-  // impressions, top queries and top pages into their gsc_stats and onto their
-  // Analytics page. The SA is the OPERATOR's credential; only an ownerless
-  // (operator) row may spend it (2026-07-27).
-  if (isCloudMode() && project.owner_user_id) {
+  // included - and receive its clicks, impressions, top queries and top pages.
+  //
+  // What actually stops that is gscCronReadiness: a cloud project with an
+  // owner, no OAuth token and NO existing gsc_stats rows is skipped outright,
+  // so a fresh tenant can never bootstrap SA-sourced data whatever property
+  // they name. Callers that ran that gate are safe to fall through here, and
+  // must declare it - that is what afterReadinessCheck means.
+  //
+  // The ungated live path (analytics-data.ts's getFresh24h, rendered straight
+  // onto the Analytics page) has no such gate, so it keeps the hard refusal.
+  //
+  // Refusing unconditionally here was wrong and broke production: the
+  // operator's OWN cloud project carries an owner_user_id and legitimately
+  // reads through the service account, and since it has plenty of gsc_stats
+  // rows, readiness passed it straight into the throw - hourly-gsc started
+  // failing for the operator within the hour (2026-07-27).
+  if (isCloudMode() && project.owner_user_id && !opts.afterReadinessCheck) {
     throw new Error("Connect Google Search Console for this project first.");
   }
   return searchConsole();

@@ -73,7 +73,8 @@ async function runRanks(
       project.gsc_site_url!,
       tracked.map((k) => k.keyword),
       7,
-      await gscClientForProject(project),
+      // gscReady checked above - safe to fall back to the service account.
+      await gscClientForProject(project, { afterReadinessCheck: true }),
     );
     // No impressions in the window = unknown, not "not ranking" - skip those
     // rows so the dashboard keeps the last known value instead of lying.
@@ -213,7 +214,11 @@ async function runProject(project: Project): Promise<Record<string, unknown>> {
     if (!gscReady.ready) {
       result.gsc = { skipped: gscReady.skipped };
     } else {
-      const snap = await getLatestSnapshot(project.gsc_site_url!, await gscClientForProject(project));
+      const snap = await getLatestSnapshot(
+        project.gsc_site_url!,
+        // gscReady checked at the top of this branch.
+        await gscClientForProject(project, { afterReadinessCheck: true }),
+      );
       if (!snap) {
         result.gsc = { skipped: "no GSC data in window" };
       } else {
