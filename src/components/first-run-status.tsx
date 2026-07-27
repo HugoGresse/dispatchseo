@@ -29,6 +29,10 @@ type Status = {
   pages_known: number;
   is_docker: boolean;
   builds_active: boolean;
+  // null = pre-0040 row or an old agent this predates; false = the unlock
+  // went through on the agent's word alone (typically no merge/dispatch
+  // token to actually check anything against) - see mark_pipeline_installed.
+  pipeline_verified: boolean | null;
 };
 
 type ItemState = "pending" | "active" | "done" | "error";
@@ -511,7 +515,9 @@ export function FirstRunStatus({ slug, cloud }: { slug: string; cloud?: boolean 
           title="Pipeline verified"
           detail={
             stPipelineVerified === "done"
-              ? "Verified - dashboard unlocked"
+              ? s?.pipeline_verified === false
+                ? "Dashboard unlocked - but not backend-checked (no GitHub token was connected to verify against)"
+                : "Verified - dashboard unlocked"
               : stPipelineVerified === "active"
                 ? "Verifying the full pipeline"
                 : "Final check before your dashboard unlocks"

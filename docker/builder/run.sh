@@ -254,6 +254,19 @@ while :; do
     if [ "$njobs" != "0" ]; then
       log "jobs are due but no GitHub token is available - connect one in the wizard's Connect GitHub step, or on Home's 'Connect GitHub' card (or set BUILDER_GH_TOKEN in .env)"
     fi
+    # This used to be silent whenever njobs was 0 (the common steady state) -
+    # auto-merge being on with no token to actually merge with just sat there
+    # invisibly, no docker log line and no cron_runs row, while Home's "Ready
+    # to ship" card still claimed "merges on its own, no action needed"
+    # unconditionally. Report it as a real failed run so it shows up on the
+    # dashboard/get_cron_health like any other broken automation.
+    if [ "$nsweeps" != "0" ]; then
+      log "auto-merge is on but no GitHub token is available - PRs will not be merged until one is connected"
+      echo "$feed" | jq -r '.merge_sweeps[].slug' | while read -r slug; do
+        [ -n "$slug" ] || continue
+        report "builder-merge--$slug" fail "no GitHub token connected - connect one in the wizard's Connect GitHub step, or on Home's 'Connect GitHub' card (or set BUILDER_GH_TOKEN in .env)"
+      done
+    fi
   else
     for row in $(echo "$feed" | jq -r '.jobs[] | @base64'); do
       run_job "$row"

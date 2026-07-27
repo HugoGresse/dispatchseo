@@ -1238,9 +1238,20 @@ export default async function Home() {
                     Review PR #{pr.number} (preview link inside)
                   </a>
                   {autoMergeOn ? (
-                    <span className="text-xs text-neutral-400">
-                      merges on its own once checks pass - no action needed
-                    </span>
+                    mergeReady ? (
+                      <span className="text-xs text-neutral-400">
+                        merges on its own once checks pass - no action needed
+                      </span>
+                    ) : (
+                      // autoMergeOn used to claim "no action needed" here
+                      // unconditionally, even with no merge token connected -
+                      // the sweep that's supposed to merge this silently has
+                      // nothing to authenticate with, and nothing said so.
+                      <span className="text-xs text-amber-400">
+                        auto-merge is on, but no GitHub token is connected - this won&apos;t merge
+                        until you connect one (Home&apos;s &quot;Connect GitHub&quot; card)
+                      </span>
+                    )
                   ) : mergeReady ? (
                     <MergeButton number={pr.number} />
                   ) : null}

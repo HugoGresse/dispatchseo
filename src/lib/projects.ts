@@ -72,6 +72,12 @@ export type Project = {
   // finale's live checklist + collapse. MUST be in COLS - the read path is the
   // whole point of the write. NOT NULL DEFAULT '{}', so real rows always have it.
   install_progress: Record<string, string>;
+  // mark_pipeline_installed's verifyPipelinePrereqs outcome (migration 0040) -
+  // null on rows from before this column existed, or when github_repo was
+  // empty at stamp time. false means the stamp went through on the agent's
+  // word alone (typically: no merge/dispatch token configured, so nothing
+  // GitHub-side could actually be checked) - see pipeline_installed_at above.
+  pipeline_verified: boolean | null;
   created_at: string;
 };
 
@@ -139,6 +145,12 @@ export const DEFAULT_PROJECT_ID = "00000000-0000-4000-8000-000000000001";
 
 // mcp_token deliberately excluded - only fetchProjectToken exposes it.
 const COLS =
+  "id, slug, name, domain, gsc_site_url, github_repo, content_mode, content_path_hint, dataforseo_login, dataforseo_password, keyword_source, serpapi_key, powerups_skipped, location_code, language_code, mode, auto_approve, auto_approve_tools, auto_build_guides, auto_build_tools, auto_merge, last_trend_scan_at, site_launched_at, pipeline_installed_at, pipeline_verified, content_prefs, gsc_oauth_refresh_token, github_installation_id, github_app_installed_at, install_progress, created_at";
+
+// COLS minus 0040's pipeline_verified, for a DB that hasn't run that
+// migration yet. A distinct tier so a DB missing only 0040 keeps
+// install_progress et al; falls back further only if that still 404s.
+const COLS_PRE_0040 =
   "id, slug, name, domain, gsc_site_url, github_repo, content_mode, content_path_hint, dataforseo_login, dataforseo_password, keyword_source, serpapi_key, powerups_skipped, location_code, language_code, mode, auto_approve, auto_approve_tools, auto_build_guides, auto_build_tools, auto_merge, last_trend_scan_at, site_launched_at, pipeline_installed_at, content_prefs, gsc_oauth_refresh_token, github_installation_id, github_app_installed_at, install_progress, created_at";
 
 // COLS minus 0036's install_progress, for a DB that hasn't run that migration
@@ -168,11 +180,12 @@ async function selectProjects<T>(
     Boolean(e && e.message.includes("does not exist"));
   const first = await run(COLS);
   if (!missingCol(first.error)) return first;
-  // Drop only the newest column (0036) first, so a DB that lags 0036 alone
-  // keeps github_installation_id et al; fall back to pre-0028 only if that
-  // still names a missing column.
-  const second = await run(COLS_PRE_0036);
+  // Drop only the newest column (0040) first, so a DB that lags 0040 alone
+  // keeps everything else; fall back further only if that still 404s.
+  const second = await run(COLS_PRE_0040);
   if (!missingCol(second.error)) return second;
+  const third = await run(COLS_PRE_0036);
+  if (!missingCol(third.error)) return third;
   return run(COLS_PRE_0028);
 }
 
@@ -209,6 +222,7 @@ function envFallbackProject(): Project {
     last_trend_scan_at: null,
     site_launched_at: null,
     pipeline_installed_at: null,
+    pipeline_verified: null,
     content_prefs: {},
     gsc_oauth_refresh_token: null,
     github_installation_id: null,

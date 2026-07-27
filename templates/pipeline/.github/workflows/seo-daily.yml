@@ -9,15 +9,17 @@ name: SEO daily builder
 # more on top. Publishing is handled by seo-auto-merge.yml: guide PRs whose
 # checks all pass are merged hands-off; tool PRs are left for you to merge.
 #
-# Runs up to three times a day (05:00, 12:00, 19:00 UTC) so a Claude usage-limit
+# Runs up to three times a day (05:13, 12:13, 19:13 UTC) so a Claude usage-limit
 # hit is a quiet deferral, not a lost day: the guard step's built-today check
-# skips any later attempt once one of them actually built a guide.
+# skips any later attempt once one of them actually built a guide. Offset off
+# the top of the hour - GitHub's scheduler queues/drops on-the-hour triggers
+# more than odd minutes.
 
 on:
   schedule:
-    - cron: "0 5 * * *" # 05:00 UTC daily
-    - cron: "0 12 * * *" # 12:00 UTC retry, if the 05:00 attempt deferred (usage limit)
-    - cron: "0 19 * * *" # 19:00 UTC retry, if the 12:00 attempt deferred too
+    - cron: "13 5 * * *" # 05:13 UTC daily
+    - cron: "13 12 * * *" # 12:13 UTC retry, if the 05:13 attempt deferred (usage limit)
+    - cron: "13 19 * * *" # 19:13 UTC retry, if the 12:13 attempt deferred too
   workflow_dispatch:
 
 concurrency:

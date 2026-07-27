@@ -2263,10 +2263,26 @@ const mcpHandler = createMcpHandler(
           }
           verified = verdict.checked;
         }
-        const { error } = await db()
+        // backend_verified used to be returned ONLY in this tool call's
+        // ephemeral response - the agent saw it once, but the dashboard had
+        // no way to know later whether the unlock was ever actually checked
+        // (typically: no merge/dispatch token, so nothing GitHub-side could
+        // be verified). Persist it so the finale's "Pipeline verified" step
+        // can tell that apart from a real backend-checked pass (migration 0040).
+        // A DB that hasn't run 0040 yet (migrations are applied manually, so
+        // code can reach prod first) must NEVER have the unlock itself fail
+        // on a missing column - retry with just the original column.
+        const stampedAt = new Date().toISOString();
+        let { error } = await db()
           .from("projects")
-          .update({ pipeline_installed_at: new Date().toISOString() })
+          .update({ pipeline_installed_at: stampedAt, pipeline_verified: verified })
           .eq("id", p.id);
+        if (error && /pipeline_verified|does not exist/i.test(error.message)) {
+          ({ error } = await db()
+            .from("projects")
+            .update({ pipeline_installed_at: stampedAt })
+            .eq("id", p.id));
+        }
         if (error) return fail(error.message);
         return ok({ marked: true, project: p.slug, backend_verified: verified });
       },

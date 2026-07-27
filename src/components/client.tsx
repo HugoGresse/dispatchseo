@@ -27,12 +27,18 @@ const ERR = "Couldn't save - try again";
 export function DecideButtons({ id }: { id: string }) {
   const [, start] = useTransition();
   const [state, setState] = useState<"idle" | "approved" | "rejected" | "failed">("idle");
+  // Approving a tool can silently fail to fire its instant build dispatch
+  // (no GitHub token, no repo, GitHub error) while the approval itself still
+  // succeeds - show that honestly instead of a blanket "✓ Approved" that
+  // implies the build is already on its way.
+  const [note, setNote] = useState<string | null>(null);
 
   function decide(status: "approved" | "rejected") {
     setState(status); // instant - the round trip runs behind this
     start(async () => {
       try {
-        await decideSuggestion(id, status);
+        const { dispatchNote } = await decideSuggestion(id, status);
+        if (dispatchNote) setNote(dispatchNote);
       } catch {
         setState("failed");
       }
@@ -40,7 +46,12 @@ export function DecideButtons({ id }: { id: string }) {
   }
 
   if (state === "approved")
-    return <p className="text-sm text-emerald-400">✓ Approved - queued for the builders</p>;
+    return (
+      <p className="text-sm text-emerald-400">
+        ✓ Approved - queued for the builders
+        {note ? <span className="block text-xs text-amber-400">{note}</span> : null}
+      </p>
+    );
   if (state === "rejected") return <p className="text-sm text-neutral-400">Skipped</p>;
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -167,9 +178,15 @@ export function QueueApproveButton({
 }) {
   const [, start] = useTransition();
   const [state, setState] = useState<"idle" | "approved" | "failed">("idle");
+  const [note, setNote] = useState<string | null>(null);
 
   if (state === "approved")
-    return <span className="whitespace-nowrap text-xs text-emerald-400">✓ Queued</span>;
+    return (
+      <span className="whitespace-nowrap text-xs text-emerald-400">
+        ✓ Queued
+        {note ? <span className="ml-1.5 text-amber-400">{note}</span> : null}
+      </span>
+    );
   return (
     <span className="inline-flex items-center gap-1.5">
       <button
@@ -178,7 +195,8 @@ export function QueueApproveButton({
           onApproved?.();
           start(async () => {
             try {
-              await decideSuggestion(id, "approved");
+              const { dispatchNote } = await decideSuggestion(id, "approved");
+              if (dispatchNote) setNote(dispatchNote);
             } catch {
               setState("failed");
               onReverted?.();
@@ -481,12 +499,14 @@ export function DismissTopicButton({ id }: { id: string }) {
 export function TakeDecideButtons({ id }: { id: string }) {
   const [, start] = useTransition();
   const [state, setState] = useState<"idle" | "approved" | "rejected" | "failed">("idle");
+  const [note, setNote] = useState<string | null>(null);
 
   function decide(status: "approved" | "rejected") {
     setState(status); // instant swap; the card leaves on the next revalidate
     start(async () => {
       try {
-        await decideSuggestion(id, status);
+        const { dispatchNote } = await decideSuggestion(id, status);
+        if (dispatchNote) setNote(dispatchNote);
       } catch {
         setState("failed");
       }
@@ -495,7 +515,10 @@ export function TakeDecideButtons({ id }: { id: string }) {
 
   if (state === "approved")
     return (
-      <p className="text-sm text-emerald-400">✓ Added to queue - ships on the next paced build</p>
+      <p className="text-sm text-emerald-400">
+        ✓ Added to queue - ships on the next paced build
+        {note ? <span className="block text-xs text-amber-400">{note}</span> : null}
+      </p>
     );
   if (state === "rejected") return <p className="text-sm text-neutral-400">Skipped</p>;
   return (

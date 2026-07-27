@@ -15,6 +15,14 @@ type Status = {
   ideas_queued: number;
   keywords_tracked: number;
   rank_checks: number;
+  // Docker installs have an in-stack builder that's supposed to claim research
+  // silently in the background - telling that owner to paste /seo-research is
+  // wrong advice (2026-07-27 incident: the real blocker was a builder stuck on
+  // a broken GitHub token, and this banner's "paste this" copy pointed at the
+  // wrong fix entirely). is_docker/builds_active let the overdue branch below
+  // give docker owners the right next step instead.
+  is_docker: boolean;
+  builds_active: boolean;
 };
 
 export function FirstRunBackground({ slug, cloud = false }: { slug: string; cloud?: boolean }) {
@@ -66,6 +74,34 @@ export function FirstRunBackground({ slug, cloud = false }: { slug: string; clou
             On your plan it runs automatically on the schedule - nothing to paste. Ideas land here as
             soon as it does.
           </p>
+        ) : status.is_docker ? (
+          // Docker installs have an in-stack builder that's supposed to claim
+          // this silently - "paste /seo-research" is the wrong advice here,
+          // it doesn't touch whatever's actually blocking the builder.
+          status.builds_active ? (
+            <p className="text-sm text-amber-100/90">
+              <b className="font-medium text-amber-200">The first keyword research hasn&apos;t landed yet.</b>{" "}
+              Your builder container is checking in, so it should pick this up automatically -
+              ideas usually land within 10-20 minutes of install. Taking longer? Run{" "}
+              <code className="rounded bg-neutral-900 px-1.5 py-0.5 font-mono text-[13px] text-neutral-200">
+                docker logs dispatchseo-builder-1
+              </code>{" "}
+              - a missing GitHub or Claude token is the usual cause.
+            </p>
+          ) : (
+            <p className="text-sm text-amber-100/90">
+              <b className="font-medium text-amber-200">The first keyword research hasn&apos;t landed yet.</b>{" "}
+              Your builder container hasn&apos;t checked in at all. Make sure{" "}
+              <code className="rounded bg-neutral-900 px-1.5 py-0.5 font-mono text-[13px] text-neutral-200">
+                docker compose up
+              </code>{" "}
+              is running, then check{" "}
+              <code className="rounded bg-neutral-900 px-1.5 py-0.5 font-mono text-[13px] text-neutral-200">
+                docker logs dispatchseo-builder-1
+              </code>{" "}
+              for why.
+            </p>
+          )
         ) : (
           <p className="text-sm text-amber-100/90">
             <b className="font-medium text-amber-200">The first keyword research hasn&apos;t landed.</b>{" "}

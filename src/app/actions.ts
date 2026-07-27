@@ -49,7 +49,10 @@ async function assertAuthed() {
   }
 }
 
-export async function decideSuggestion(id: string, decision: "approved" | "rejected") {
+export async function decideSuggestion(
+  id: string,
+  decision: "approved" | "rejected",
+): Promise<{ dispatchNote?: string }> {
   await assertAuthed();
   await assertRowOwned("suggestions", id);
   // select("*") tolerates rows from before migrations 0013/0014 - the source
@@ -64,9 +67,23 @@ export async function decideSuggestion(id: string, decision: "approved" | "rejec
   // Approving a TOOL idea starts its build immediately (repository_dispatch
   // to the suggestion's project repo). Guides need no dispatch - the daily
   // builder picks them up on schedule.
+  let dispatchNote: string | undefined;
   if (decision === "approved" && data?.type === "tool") {
     const project = data.project_id ? await getProjectById(data.project_id) : null;
-    await dispatchToolBuild(project, id);
+    const dispatch = await dispatchToolBuild(project, id);
+    // dispatchToolBuild's result used to be discarded here, so the dashboard
+    // always showed "✓ Approved" even when the instant build trigger silently
+    // failed (no token, no repo, GitHub error) - the MCP tool's equivalent
+    // (propose_suggestion/update_suggestion in route.ts) already surfaces this
+    // as a note; give the dashboard the same honesty instead of staying quiet.
+    if (!dispatch.dispatched) {
+      dispatchNote =
+        dispatch.reason === "no-repo"
+          ? "no content pipeline is connected yet - nothing can build until the pipeline install step on Home is done"
+          : dispatch.reason === "no-token"
+            ? "no GitHub token connected - the Wednesday tool sweep will pick it up once that's fixed"
+            : "the instant build trigger could not reach GitHub - the Wednesday tool sweep will pick it up";
+    }
   }
   // Approving a trend find puts it at the front of the queue - that's the
   // whole point of the radar: it ships next morning, while the hype window
@@ -82,6 +99,7 @@ export async function decideSuggestion(id: string, decision: "approved" | "rejec
   revalidatePath("/dashboard");
   revalidatePath("/trends");
   revalidatePath("/research");
+  return { dispatchNote };
 }
 
 // The Home banner's "Mark fixed" - the dashboard face of the mark_cron_fixed
@@ -224,10 +242,26 @@ export async function buildToolNow(id: string): Promise<{ ok: boolean; message: 
     return { ok: false, message: "Only queued tool ideas can be built." };
   }
   const project = data.project_id ? await getProjectById(data.project_id) : null;
-  await dispatchToolBuild(project, id);
+  const dispatch = await dispatchToolBuild(project, id);
   revalidatePath("/dashboard");
   revalidatePath("/research");
-  return { ok: true, message: "Build requested - the PR lands in a few minutes." };
+  // dispatched was previously discarded here, so this button always said
+  // "Build requested" even when the GitHub dispatch silently failed (no
+  // token, no repo, GitHub error) - the owner saw success and nothing ever
+  // arrived, with no error to explain why. Mirror the MCP tool's wording
+  // (route.ts) so both faces tell the same honest story.
+  if (dispatch.dispatched) {
+    return { ok: true, message: "Build requested - the PR lands in a few minutes." };
+  }
+  return {
+    ok: false,
+    message:
+      dispatch.reason === "no-repo"
+        ? "No content pipeline is connected yet - nothing can build until the pipeline install step on Home is done."
+        : dispatch.reason === "no-token"
+          ? "No GitHub token connected - see the Connect GitHub step in setup. The idea stays approved; the Wednesday tool sweep will pick it up once that's fixed."
+          : "The instant build trigger could not reach GitHub - the idea stays approved, and the Wednesday tool sweep will pick it up.",
+  };
 }
 
 // ---- the trend radar (two-stage: subjects, then takes) ----------------------

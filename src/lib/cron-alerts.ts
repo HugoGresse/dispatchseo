@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { isTransientErrorMessage } from "./dataforseo";
 import { isCloudMode } from "./cloud";
+import { listProjects, effectiveAutomations } from "./projects";
 
 // Cron failure alerts (LATER.md gap A4). Every cron route calls
 // reportCronRun() with its result JSON right before responding; this module
@@ -48,6 +49,17 @@ const STALE_HOURS: Record<string, number> = {
   // itself, only the absence of its heartbeat can.
   "seo-token-check": 30,
   "seo-pipeline-version": 30,
+  // The self-hosted in-stack builder's own jobs (/api/builder/jobs) never had
+  // ANY staleness coverage - a permanently stuck builder-research/geo-scan job
+  // (the exact class of the 2026-07-27 incident) read as "ok: true, stale:
+  // false" on the Home banner and get_cron_health forever. research/geo-scan
+  // run unconditionally on every due() cycle (no automation flag gates them,
+  // see builder/jobs/route.ts), so unlike build-guide/build-tool/merge below
+  // a flat threshold here can never false-alarm on a deliberately-disabled
+  // automation - only on an actually-stuck job. 24h buffer over their 156h
+  // CADENCE_HOURS, matching the weeklies' buffer above.
+  "builder-research": 180,
+  "builder-geo-scan": 180,
 };
 
 // Jobs reported through a per-project MCP token arrive suffixed with the
@@ -455,7 +467,101 @@ export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]>
     projectSlug,
     new Set(health.map((h) => h.job)),
   );
-  return [...health, ...heartbeat];
+  const builderHeartbeat = await builderJobHeartbeatAlerts(
+    projectSlug,
+    new Set(health.map((h) => h.job)),
+  );
+  return [...health, ...heartbeat, ...builderHeartbeat];
+}
+
+// builder-build-guide/builder-build-tool never get a flat STALE_HOURS entry
+// like builder-research/builder-geo-scan above, because they're gated on
+// per-project state a global threshold can't see: auto_build_guides/
+// auto_build_tools can be deliberately OFF (no row ever, correctly not an
+// alarm), and build-tool additionally only ever runs when something is
+// actually approved and waiting (an empty tool queue is a normal, common
+// state, not a bug). A blind threshold would false-alarm on both. This
+// checks the actual gating condition per project instead - only self-host
+// (IS_DOCKER_STACK), since cloud has no in-stack builder at all.
+// (builder-merge is deliberately NOT covered here: "no open PR to merge" is
+// just as normal a silent state as the two above, but confirming there's
+// nothing to merge means a live GitHub PR-list call, which no other
+// staleness check in this file does - a real, smaller gap left open.)
+const BUILDER_JOB_STALE_HOURS: Record<string, number> = {
+  "build-guide": 30, // CADENCE_HOURS['build-guide'] (20h) + a 10h buffer
+  "build-tool": 30,
+};
+async function builderJobHeartbeatAlerts(
+  projectSlug: string | undefined,
+  alreadyReported: Set<string>,
+): Promise<CronHealth[]> {
+  try {
+    if (!IS_DOCKER_STACK) return [];
+    const projects = await listProjects();
+    const out: CronHealth[] = [];
+    for (const p of projects) {
+      if (projectSlug && p.slug !== projectSlug) continue;
+      if (!p.github_repo || !p.pipeline_installed_at) continue;
+      const flags = effectiveAutomations(p);
+      const wanted: Array<"build-guide" | "build-tool"> = [];
+      if (flags.auto_build_guides) wanted.push("build-guide");
+      if (flags.auto_build_tools) {
+        const { count } = await db()
+          .from("suggestions")
+          .select("id", { count: "exact", head: true })
+          .eq("project_id", p.id)
+          .eq("type", "tool")
+          .eq("status", "approved");
+        if ((count ?? 0) > 0) wanted.push("build-tool");
+      }
+      for (const wf of wanted) {
+        const job = `builder-${wf}--${p.slug}`;
+        if (alreadyReported.has(job)) continue; // the main window already covers it
+        const { data: row, error } = await db()
+          .from("cron_runs")
+          .select("ok, created_at")
+          .eq("job", job)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (error) continue;
+        const threshold = BUILDER_JOB_STALE_HOURS[wf];
+        if (!row) {
+          // Grace period so a job that only just became due (flag flipped on,
+          // or a tool was only just approved) isn't flagged before the
+          // builder's ~10-minute poll has even had a chance to pick it up.
+          if (Date.now() - new Date(p.pipeline_installed_at).getTime() < threshold * 3_600_000) continue;
+          out.push({
+            job,
+            ok: false,
+            stale: true,
+            last_run_at: p.pipeline_installed_at,
+            errors: [
+              `${wf} is enabled and has work waiting, but the in-stack builder has never reported a run - check its GitHub/Claude token connection (docker logs dispatchseo-builder-1)`,
+            ],
+            update_available: false,
+            claimed_only: false,
+          });
+          continue;
+        }
+        const ageHours = staleAgeHours(new Date(row.created_at as string).getTime());
+        if (ageHours > threshold) {
+          out.push({
+            job,
+            ok: Boolean(row.ok),
+            stale: true,
+            last_run_at: row.created_at as string,
+            errors: [],
+            update_available: false,
+            claimed_only: false,
+          });
+        }
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
 }
 
 // The window above can only alarm about jobs with a row INSIDE it - a

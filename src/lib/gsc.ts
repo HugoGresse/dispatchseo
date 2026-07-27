@@ -12,19 +12,28 @@ import { oauthSearchConsole } from "./gsc-oauth";
 // Credential resolution: the GSC_SERVICE_ACCOUNT_JSON env var wins when set
 // (classic installs, Vercel deployments); otherwise the encrypted copy the
 // onboarding wizard stores in instance_settings (0029) - that's how a
-// self-hoster connects Search Console without touching .env. Cached per
-// process; the connect action busts it.
+// self-hoster connects Search Console without touching .env.
+//
+// Cached per process, TTL-bound rather than indefinite-until-busted - the
+// same bug github.ts's mergeToken() had (fixed 2026-07-27): an indefinite
+// cache busted only by bustGscCredCache() can outlive a freshly-saved
+// credential if the connect action and a cron route end up in separate
+// Next.js route bundles with their own copy of this module's variables, so
+// the bust never reaches the copy a cron reads from. A short TTL bounds the
+// worst case to CACHE_TTL_MS regardless, while still avoiding a JWT token
+// exchange (GoogleAuth's real cost) on every single GSC call.
 //
 // GSC data lags 2-3 days, so "yesterday" is often empty. We find the most recent
 // date that actually has data and snapshot THAT, storing it under its own date -
 // never blindly writing an empty "yesterday" row.
 
-let credCache: { raw: string | null } | null = null;
+const CACHE_TTL_MS = 60_000;
+let credCache: { raw: string | null; at: number } | null = null;
 // The googleapis client, cached per process alongside the credential it was
 // built from. GoogleAuth caches its OAuth access token per instance (and
 // auto-refreshes on expiry), so reusing the client skips the JWT token
 // exchange that a fresh instance pays on every single API call.
-let clientCache: Awaited<ReturnType<typeof buildSearchConsole>> | null = null;
+let clientCache: { client: Awaited<ReturnType<typeof buildSearchConsole>>; at: number } | null = null;
 
 export function bustGscCredCache() {
   credCache = null;
@@ -33,7 +42,7 @@ export function bustGscCredCache() {
 }
 
 async function credentialJson(): Promise<string | null> {
-  if (credCache) return credCache.raw;
+  if (credCache && Date.now() - credCache.at < CACHE_TTL_MS) return credCache.raw;
   let raw: string | null = process.env.GSC_SERVICE_ACCOUNT_JSON ?? null;
   if (!raw) {
     try {
@@ -44,7 +53,7 @@ async function credentialJson(): Promise<string | null> {
       raw = null;
     }
   }
-  credCache = { raw };
+  credCache = { raw, at: Date.now() };
   return raw;
 }
 
@@ -60,11 +69,12 @@ function buildSearchConsole(raw: string) {
 }
 
 async function searchConsole() {
-  if (clientCache) return clientCache;
+  if (clientCache && Date.now() - clientCache.at < CACHE_TTL_MS) return clientCache.client;
   const raw = await credentialJson();
   if (!raw) throw new Error("Missing GSC service account (connect it in the wizard or set GSC_SERVICE_ACCOUNT_JSON)");
-  clientCache = buildSearchConsole(raw);
-  return clientCache;
+  const client = buildSearchConsole(raw);
+  clientCache = { client, at: Date.now() };
+  return client;
 }
 
 export type GscClient = Awaited<ReturnType<typeof searchConsole>>;
