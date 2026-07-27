@@ -60,7 +60,11 @@ Bash.</p>
 paid cloud will do, this repo does today, in your own accounts, at $0.</i></p>
 
 <p align="center">
-  <img src="docs/screenshots/home.png" alt="The dashboard Home: journey stage, publishing pace, and live Search Console stats for a connected site">
+  <a href="https://www.youtube.com/watch?v=1gCXPxPqfy0">
+    <img src="https://img.youtube.com/vi/1gCXPxPqfy0/maxresdefault.jpg" alt="DispatchSEO preview video - the dashboard, the queue, and a pipeline-built pull request, walked through end to end">
+  </a>
+  <br>
+  <sub>▶ Watch the preview</sub>
 </p>
 
 ## How it works
@@ -86,6 +90,9 @@ The thinking happens in your agent, where your product knowledge already
 lives.
 
 <table>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/home.png" alt="The dashboard Home: journey stage, publishing pace, and live Search Console stats for a connected site"></td>
+  </tr>
   <tr>
     <td><img src="docs/screenshots/queue.png" alt="The queue: keyword ideas with volume and difficulty, each waiting for approval or set to auto"></td>
     <td><img src="docs/screenshots/guide-pr.png" alt="A pull request the pipeline built: target keyword, SERP gate verdict, archetype, and information-gain asset, all named in the description"></td>
