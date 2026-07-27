@@ -109,13 +109,13 @@ const INSTALL_PATHS = [
     icon: ContainerIcon,
     title: "Your own computer",
     description: "One command, no cloud accounts.",
-    recommended: true,
   },
   {
     href: "/docs/vps",
     icon: ServerIcon,
     title: "A VPS or server",
     description: "One line installs everything, HTTPS included.",
+    recommended: true,
   },
   {
     href: "/docs/local-development",
@@ -227,7 +227,7 @@ export default function DocsQuickstart() {
           >
             {recommended && (
               <span className="absolute top-5 right-5 rounded border border-violet-400/30 bg-violet-500/10 px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-violet-300">
-                Start here
+                Highly recommended
               </span>
             )}
             <span className="flex size-9 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400">
