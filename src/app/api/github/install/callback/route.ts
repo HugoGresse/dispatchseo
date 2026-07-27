@@ -4,7 +4,14 @@ import { requireDashboard } from "@/lib/auth-gate";
 import { verifyState } from "@/lib/gsc-oauth";
 import { getProjectBySlug } from "@/lib/projects";
 import { assertInstallationClaimable, assertProjectOwned } from "@/lib/tenant-guard";
-import { getInstallation, installationClaimable, listInstallationRepos, makeInstallNonce } from "@/lib/github-app";
+import {
+  callerControlsInstallation,
+  getInstallation,
+  installationClaimable,
+  listInstallationRepos,
+  makeInstallNonce,
+  userAuthConfigured,
+} from "@/lib/github-app";
 import { db } from "@/lib/db";
 import { isCloudMode } from "@/lib/cloud";
 
@@ -60,6 +67,24 @@ export async function GET(req: Request): Promise<Response> {
       // victim's repo through our App.
       await assertInstallationClaimable(installationId);
 
+      // Proof that the human who just clicked Install controls THIS installation.
+      // GitHub's setup redirect is unsigned, so without this the only checks were
+      // "do you own the project you are writing into" and "is this installation
+      // fresh" - neither of which says the installation is yours. With user
+      // authorization enabled on the App, GitHub sends a one-time `code`; it
+      // exchanges for a token belonging to the installer, whose
+      // GET /user/installations lists what they can actually administer.
+      //
+      // Enforced only when the App is configured for it, so self-host and any
+      // deployment without the client credentials keeps working on the freshness
+      // gate alone. When it IS configured the code is REQUIRED - accepting a
+      // missing code would hand every attacker a one-parameter downgrade back to
+      // the weaker path.
+      const proofCode = url.searchParams.get("code") ?? "";
+      if (userAuthConfigured() && !(await callerControlsInstallation(proofCode, installationId))) {
+        redirect("/onboarding?gh=error&msg=install-not-yours");
+      }
+
       const installation = await getInstallation(installationId);
       // One generic message for BOTH "not our App's installation" and "not
       // claimable right now". Distinct replies made this endpoint an oracle:
@@ -92,6 +117,24 @@ export async function GET(req: Request): Promise<Response> {
     // off to the wizard's interrupt screen to ask which project it's for -
     // nothing is written yet, so an install can't get silently attached to
     // the wrong tenant.
+    // Proof that the human who just clicked Install controls THIS installation.
+    // GitHub's setup redirect is unsigned, so without this the only checks were
+    // "do you own the project you are writing into" and "is this installation
+    // fresh" - neither of which says the installation is yours. With user
+    // authorization enabled on the App, GitHub sends a one-time `code`; it
+    // exchanges for a token belonging to the installer, whose
+    // GET /user/installations lists what they can actually administer.
+    //
+    // Enforced only when the App is configured for it, so self-host and any
+    // deployment without the client credentials keeps working on the freshness
+    // gate alone. When it IS configured the code is REQUIRED - accepting a
+    // missing code would hand every attacker a one-parameter downgrade back to
+    // the weaker path.
+    const proofCode = url.searchParams.get("code") ?? "";
+    if (userAuthConfigured() && !(await callerControlsInstallation(proofCode, installationId))) {
+      redirect("/onboarding?gh=error&msg=install-not-yours");
+    }
+
     const installation = await getInstallation(installationId);
     if (!installation || !installationClaimable(installation)) {
       redirect("/onboarding?gh=error&msg=install-not-found");

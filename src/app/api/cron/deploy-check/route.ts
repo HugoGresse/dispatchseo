@@ -267,7 +267,20 @@ export async function GET(req: Request): Promise<Response> {
     } else {
       try {
         appJwt();
-        checks.github_app_config = "ok";
+        // The install-claim proof (github-app.ts callerControlsInstallation)
+        // only runs when both client credentials are present, and falls back to
+        // the weaker freshness heuristic when they are not - a downgrade that
+        // is invisible from the outside. In cloud that is a security control
+        // quietly switching itself off, so it alarms rather than shrugs.
+        if (!process.env.GITHUB_APP_CLIENT_ID || !process.env.GITHUB_APP_CLIENT_SECRET) {
+          hadError = true;
+          checks.github_app_config = {
+            error:
+              "GITHUB_APP_CLIENT_ID / GITHUB_APP_CLIENT_SECRET are unset, so GitHub App install claims fall back to the freshness heuristic and are NOT verified against the installer's own account. Set both in Vercel project settings and redeploy (the App also needs 'Request user authorization (OAuth) during installation' enabled)",
+          };
+        } else {
+          checks.github_app_config = "ok";
+        }
       } catch (e) {
         hadError = true;
         checks.github_app_config = {

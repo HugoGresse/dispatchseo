@@ -197,6 +197,73 @@ export function installationClaimable(inst: {
   return Number.isFinite(age) && age >= 0 && age <= CLAIM_FRESHNESS_MS;
 }
 
+// ---- proof that the CALLER controls the installation ------------------------
+//
+// This is the real boundary the freshness heuristic above only narrows.
+// GitHub's setup redirect carries installation_id as a bare integer and proves
+// nothing about who performed the install, so ownership of the project being
+// written INTO was the only thing ever checked - never control of the
+// installation being written IN. With "Request user authorization (OAuth)
+// during installation" enabled on the App, GitHub also sends a short-lived
+// `code`. Exchanging it yields a token for the HUMAN who just clicked Install,
+// and GET /user/installations lists exactly the installations that human can
+// administer. If the id is not in that list, the caller does not control it.
+//
+// Fails CLOSED on anything unexpected - a network error, a rejected exchange, a
+// malformed response. An authorization check that degrades to "allow" under
+// load is not a check.
+export function userAuthConfigured(): boolean {
+  return Boolean(process.env.GITHUB_APP_CLIENT_ID && process.env.GITHUB_APP_CLIENT_SECRET);
+}
+
+export async function callerControlsInstallation(
+  code: string,
+  installationId: number,
+): Promise<boolean> {
+  if (!code) return false;
+  try {
+    const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": USER_AGENT,
+      },
+      body: JSON.stringify({
+        client_id: process.env.GITHUB_APP_CLIENT_ID,
+        client_secret: process.env.GITHUB_APP_CLIENT_SECRET,
+        code,
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!tokenRes.ok) return false;
+    // GitHub answers 200 with {error: "bad_verification_code"} on a spent or
+    // forged code, so the status alone proves nothing.
+    const token = (await tokenRes.json()) as { access_token?: string; error?: string };
+    if (!token.access_token) return false;
+
+    // Paginate: an account can administer more installations than one page.
+    for (let page = 1; page <= 5; page++) {
+      const res = await fetch(`${API}/user/installations?per_page=100&page=${page}`, {
+        headers: {
+          Authorization: `Bearer ${token.access_token}`,
+          Accept: "application/vnd.github+json",
+          "User-Agent": USER_AGENT,
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) return false;
+      const body = (await res.json()) as { installations?: Array<{ id?: number }> };
+      const list = body.installations ?? [];
+      if (list.some((i) => i.id === installationId)) return true;
+      if (list.length < 100) return false; // last page, not found
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 // Every repo the installation can see, paginated to total_count. Used right
 // after install to decide whether the flow can auto-attach a single repo or
 // must ask the owner to pick one.
