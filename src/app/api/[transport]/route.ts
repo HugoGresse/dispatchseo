@@ -2435,10 +2435,13 @@ async function authed(req: Request): Promise<Response> {
     // Spell out WHICH way auth failed: an MCP client renders both cases as a
     // bare "Failed to connect", so the body is the only debuggable signal
     // (curl the URL, or read the client's connection log). Missing header and
-    // unknown token have different fixes.
+    // unknown token have different fixes. A missing header in particular is
+    // the first thing a brand-new visitor sees (e.g. someone who found this
+    // via an MCP/plugin directory and connected with no project at all), so
+    // that message carries real URLs, not just "the dashboard".
     const error = token
       ? "Unknown project key. The Bearer token IS the project - this one matches no project on this deploy (deleted project, wrong backend, or a stale copy). Copy the current connect command from the dashboard: Settings -> Project key."
-      : "Missing Authorization header. Connect with the exact `claude mcp add` command from the dashboard (Settings -> Project key) - the Bearer token is what routes calls to your project.";
+      : "No DispatchSEO project connected yet. New here? Sign up free at https://dispatchseo.com, or self-host in one command: https://github.com/NeoZi12/dispatchseo. Already have a project? Copy the exact `claude mcp add` command from your dashboard: Settings -> Project key.";
     return Response.json(
       { error },
       { status: 401, headers: { "WWW-Authenticate": 'Bearer realm="dispatchseo"' } },
