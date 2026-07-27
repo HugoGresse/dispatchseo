@@ -7,10 +7,19 @@ name: SEO weekly research
 # winners, and fills the suggestions queue (guides pre-approved, tool ideas
 # pending). No PR - it only writes to the queue via the seo-manager MCP, which
 # you then see on the dashboard. This replaces the old REST opportunities cron.
+#
+# Runs up to three times on Monday (06:23, 13:23, 20:23 UTC) so a trigger
+# GitHub's scheduler drops or delays self-heals the same day instead of
+# losing the whole week: the guard step's ran-today check skips any later
+# attempt once one of them already succeeded. Offset off the top of the
+# hour - GitHub's scheduler queues/drops on-the-hour triggers more than odd
+# minutes.
 
 on:
   schedule:
-    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+    - cron: "23 6 * * 1" # Mondays 06:23 UTC (offset off the top of the hour)
+    - cron: "23 13 * * 1" # 13:23 UTC retry, if the 06:23 attempt was dropped/delayed
+    - cron: "23 20 * * 1" # 20:23 UTC retry, if the 13:23 attempt was dropped/delayed too
   # The backend fires this the first time a freshly-installed project's queue is
   # still empty (onboarding/status first-run trigger), so the dashboard fills
   # itself instead of asking the owner to run a command.
@@ -32,6 +41,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # This workflow now retries later the same day (13:23/20:23 UTC) if an
+      # earlier attempt was dropped or delayed by GitHub's scheduler - a retry
+      # must not re-run once today's earlier attempt already succeeded.
+      # Best-effort: missing field, non-200, or a parse failure all read as
+      # "not run yet" so this check can never itself block a run.
+      - name: Skip if today's research already ran
+        id: guard
+        env:
+          SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
+        run: |
+          skip=0
+          code=$(curl -s -o /tmp/mode.json -w "%{http_code}" --max-time 30 \
+            -H "Authorization: Bearer $SEO_MCP_API_KEY" \
+            https://dispatchseo.com/api/project-mode) || code=unreachable
+          if [ "$code" = "200" ] && [ "$(jq -r '.ran_today."seo-weekly-research" // false' /tmp/mode.json 2>/dev/null)" = "true" ]; then
+            echo "Today's research already ran - skipping this attempt."
+            skip=1
+          fi
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+
       # Fail fast, in plain language, when the Claude token secret is broken.
       # Without this the claude-code-action dies minutes in with a cryptic
       # "Environment variable validation failed" (empty secret) or a 401
@@ -39,6 +68,7 @@ jobs:
       # runs on exactly that. setup.sh verifies the token before storing it,
       # so this preflight should only ever fire on hand-set secrets.
       - name: Preflight - Claude token secret usable
+        if: steps.guard.outputs.skip == '0'
         env:
           CLAUDE_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
@@ -57,6 +87,7 @@ jobs:
       # stale URL in mcp-ci.json makes Claude see an empty toolset and "exit
       # cleanly" - a green run that built nothing (2026-07-14 domain-move bug).
       - name: Preflight - seo-manager MCP reachable
+        if: steps.guard.outputs.skip == '0'
         env:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
         run: |
@@ -73,6 +104,7 @@ jobs:
           echo "seo-manager MCP OK ($url)"
 
       - name: Run the SEO researcher
+        if: steps.guard.outputs.skip == '0'
         uses: anthropics/claude-code-action@v1
         with:
           # Cloud fires this as the DispatchSEO GitHub App (a Bot actor), and the App also authored the workflow commits, so scheduled runs are bot-actored too. Every trigger here needs repo write access, so allowing bots is safe; without this claude-code-action aborts with "non-human actor".

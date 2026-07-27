@@ -9,8 +9,11 @@ name: SEO tool builder
 # concept on the dashboard. Three triggers:
 #   1. repository_dispatch "seo-tool-approved" - the dashboard fires this the
 #      moment a tool suggestion is approved, so the build starts immediately.
-#   2. Weekly sweep (Wednesday 05:30 UTC) - fallback that catches anything the
-#      dispatch missed (backend hiccup, approval made while Actions was down).
+#   2. Weekly sweep (Wednesday 05:42, 12:42, 19:42 UTC) - fallback that catches
+#      anything the dispatch missed (backend hiccup, approval made while
+#      Actions was down), with same-day retries if GitHub's scheduler drops or
+#      delays the first attempt - the guard step's ran-today check skips any
+#      later attempt once one of them already succeeded.
 #   3. workflow_dispatch - manual runs.
 # If the queue has no approved tools, the run exits cleanly.
 #
@@ -22,7 +25,9 @@ on:
   repository_dispatch:
     types: [seo-tool-approved]
   schedule:
-    - cron: "30 5 * * 3" # Wednesdays 05:30 UTC - researcher fills the queue Monday
+    - cron: "42 5 * * 3" # Wednesdays 05:42 UTC (offset off the top of the hour) - researcher fills the queue Monday
+    - cron: "42 12 * * 3" # 12:42 UTC retry, if the 05:42 attempt was dropped/delayed
+    - cron: "42 19 * * 3" # 19:42 UTC retry, if the 12:42 attempt was dropped/delayed too
   workflow_dispatch:
 
 concurrency:
@@ -77,6 +82,15 @@ jobs:
             elif [ "$code" != "200" ] && [ "$code" != "404" ]; then
               echo "::error::project-mode endpoint returned HTTP $code"; exit 1
             fi
+          fi
+          # Already-ran-today gate: this workflow now retries at 12:42 and
+          # 19:42 UTC if an earlier attempt was dropped or delayed by GitHub's
+          # scheduler - a retry must not re-run once today's earlier attempt
+          # already succeeded. Reuses the project-mode fetch above (same
+          # tolerant rule: anything but a clean "true" reads as "not run yet").
+          if [ "$open" = "0" ] && [ "$code" = "200" ] && [ "$(jq -r '.ran_today."seo-tools" // false' /tmp/mode.json 2>/dev/null)" = "true" ]; then
+            echo "Today's tool sweep already ran - skipping this attempt."
+            open=skip
           fi
           echo "open=$open" >> "$GITHUB_OUTPUT"
 

@@ -6,10 +6,17 @@ name: SEO geo scan
 # subscription, and records which answers cite dispatchseo.com via the seo-manager
 # MCP. Google's AI Overview side needs no agent - the daily rank cron already
 # snapshots it. No PR - results land on the dashboard's AI-visibility section.
+#
+# Runs up to three times on Wednesday (06:27, 13:27, 20:27 UTC) so a trigger
+# GitHub's scheduler drops or delays self-heals the same day: the guard
+# step's ran-today check skips any later attempt once one of them already
+# succeeded. Offset off the top of the hour for the same reason.
 
 on:
   schedule:
-    - cron: "0 6 * * 3" # Wednesdays 06:00 UTC
+    - cron: "27 6 * * 3" # Wednesdays 06:27 UTC (offset off the top of the hour)
+    - cron: "27 13 * * 3" # 13:27 UTC retry, if the 06:27 attempt was dropped/delayed
+    - cron: "27 20 * * 3" # 20:27 UTC retry, if the 13:27 attempt was dropped/delayed too
   workflow_dispatch:
 
 concurrency:
@@ -26,8 +33,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # This workflow now retries later the same day (13:27/20:27 UTC) if an
+      # earlier attempt was dropped or delayed by GitHub's scheduler - a retry
+      # must not re-run once today's earlier attempt already succeeded.
+      # Best-effort: missing field, non-200, or a parse failure all read as
+      # "not run yet" so this check can never itself block a run.
+      - name: Skip if today's geo scan already ran
+        id: guard
+        env:
+          SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
+        run: |
+          skip=0
+          code=$(curl -s -o /tmp/mode.json -w "%{http_code}" --max-time 30 \
+            -H "Authorization: Bearer $SEO_MCP_API_KEY" \
+            https://dispatchseo.com/api/project-mode) || code=unreachable
+          if [ "$code" = "200" ] && [ "$(jq -r '.ran_today."seo-geo-scan" // false' /tmp/mode.json 2>/dev/null)" = "true" ]; then
+            echo "Today's geo scan already ran - skipping this attempt."
+            skip=1
+          fi
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+
       # Fail fast, in plain language, when the Claude token secret is broken.
       - name: Preflight - Claude token secret usable
+        if: steps.guard.outputs.skip == '0'
         env:
           CLAUDE_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
@@ -45,6 +73,7 @@ jobs:
       # Fail loudly if the seo-manager MCP is unreachable - without this a
       # stale URL makes Claude see an empty toolset and "exit cleanly".
       - name: Preflight - seo-manager MCP reachable
+        if: steps.guard.outputs.skip == '0'
         env:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
         run: |
@@ -61,6 +90,7 @@ jobs:
           echo "seo-manager MCP OK ($url)"
 
       - name: Run the geo scan
+        if: steps.guard.outputs.skip == '0'
         uses: anthropics/claude-code-action@v1
         with:
           # Cloud fires this as the DispatchSEO GitHub App (a Bot actor), and the App also authored the workflow commits, so scheduled runs are bot-actored too. Every trigger here needs repo write access, so allowing bots is safe; without this claude-code-action aborts with "non-human actor".

@@ -1,15 +1,15 @@
 name: SEO health check
 
-# Daily pre-flight, 30 minutes before the 05:00 builder: proves the Claude
+# Daily pre-flight, before the 05:13 builder: proves the Claude
 # token still works with one minimal model call, and checks whether the
 # installed pipeline is stale. Both outcomes phone home to the DispatchSEO
 # dashboard (banner + email on failure), so a dead token is a red alert at
-# 04:30 - not a mystery failed build at 05:00. Cost: one tiny Claude call per
+# 04:18 - not a mystery failed build at 05:13. Cost: one tiny Claude call per
 # day on the owner's own subscription.
 
 on:
   schedule:
-    - cron: "30 4 * * *" # 04:30 UTC daily, before the 05:00 builder
+    - cron: "18 4 * * *" # 04:18 UTC daily, before the 05:13 builder (offset off the top of the hour)
   workflow_dispatch:
 
 jobs:

@@ -28,6 +28,41 @@ async function builtToday(projectId: string): Promise<{ guide: boolean; tool: bo
   }
 }
 
+// The three weekly-cadence GitHub workflows (seo-weekly-research, seo-tools,
+// seo-geo-scan) each now retry later the same day if an earlier attempt was
+// dropped or delayed by GitHub's scheduler, mirroring seo-daily's built_today
+// pattern - a retry must not re-run once today's earlier attempt already
+// succeeded. Tolerant like builtToday: any query error reads as "not run
+// yet" so this check can never itself block a run.
+const RETRY_GUARDED_JOBS = ["seo-weekly-research", "seo-tools", "seo-geo-scan"] as const;
+
+async function ranToday(projectSlug: string): Promise<Record<string, boolean>> {
+  const result = Object.fromEntries(RETRY_GUARDED_JOBS.map((j) => [j, false])) as Record<
+    string,
+    boolean
+  >;
+  try {
+    const utcMidnight = new Date().toISOString().slice(0, 10) + "T00:00:00Z";
+    const names = RETRY_GUARDED_JOBS.flatMap((j) => [j, `${j}--${projectSlug}`]);
+    const { data, error } = await db()
+      .from("cron_runs")
+      .select("job")
+      .eq("ok", true)
+      .in("job", names)
+      .gte("created_at", utcMidnight);
+    if (error || !data) return result;
+    for (const row of data) {
+      const base = RETRY_GUARDED_JOBS.find(
+        (j) => row.job === j || row.job === `${j}--${projectSlug}`,
+      );
+      if (base) result[base] = true;
+    }
+    return result;
+  } catch {
+    return result;
+  }
+}
+
 // Tiny read endpoint for the project repos' CI. Before acting, workflows ask
 // which automations this project has enabled: auto-merge checks
 // automations.auto_merge, the builders check auto_build_guides /
@@ -51,5 +86,6 @@ export async function GET(req: Request) {
     // daily seo-token-check workflow and report when an update is available.
     pipeline_version: (pack as { version?: string }).version ?? null,
     built_today: await builtToday(project.id),
+    ran_today: await ranToday(project.slug),
   });
 }
