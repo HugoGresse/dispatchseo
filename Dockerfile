@@ -14,7 +14,10 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # DOCKER_BUILD flips next.config.ts to standalone output. No secrets are
 # needed at build time - all env (database, keys) is runtime-only.
-ENV DOCKER_BUILD=1 NEXT_TELEMETRY_DISABLED=1
+# NODE_OPTIONS raises the type-check worker's heap ceiling - Next's default
+# was OOM-killing the build inside Docker's more constrained memory even
+# with several GB free on the host (2026-07-27, BUILD_FROM_SOURCE=1 path).
+ENV DOCKER_BUILD=1 NEXT_TELEMETRY_DISABLED=1 NODE_OPTIONS=--max-old-space-size=4096
 RUN pnpm build
 
 FROM node:22-bookworm-slim AS runner
