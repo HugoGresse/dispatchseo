@@ -33,9 +33,10 @@ content pipeline that ships pull requests, rank tracking, and a dashboard
 where you stay in control.
 </p>
 
-<p align="center">Self-hosting is one command on any machine with Docker -
-run it from any plain folder (not inside your website's repo; it creates
-its own <code>dispatchseo</code> folder):</p>
+<p align="center">Self-hosting is one command on any machine with Docker - on
+a VPS, <code>ssh</code> in first, then run this there instead of on your
+own computer. Run it from any plain folder (not inside your website's
+repo; it creates its own <code>dispatchseo</code> folder):</p>
 
 ```bash
 git clone https://github.com/NeoZi12/dispatchseo &&
@@ -45,11 +46,13 @@ git clone https://github.com/NeoZi12/dispatchseo &&
 
 <p align="center">When it finishes it prints your dashboard URL - open it
 and the setup wizard takes it from there. Your laptop is fine for trying
-it out; for the real always-on autopilot, use any machine that stays
-awake - a $5 VPS, a Raspberry Pi, a desktop that never sleeps
-(<a href="https://dispatchseo.com/docs/docker-compose">the guide</a>
-explains the difference honestly). On Windows, paste this in WSL or Git
-Bash.</p>
+it out, but <b>we highly recommend a machine that stays on</b> for real
+use - a $5 VPS, a Raspberry Pi, a desktop that never sleeps. The
+<a href="https://dispatchseo.com/docs/vps">VPS guide</a> has a shorter
+one-line installer plus your own domain with automatic HTTPS;
+<a href="https://dispatchseo.com/docs/docker-compose">the local guide</a>
+explains exactly what's lost on a laptop and what isn't. On Windows,
+paste this in WSL or Git Bash.</p>
 
 <p align="center">Step-by-step walkthroughs:
 <a href="https://dispatchseo.com/docs/docker-compose">on your computer</a>
@@ -139,9 +142,10 @@ worth winning.
   requests, so git-based sites only; WordPress won't work.
 - A Claude subscription with Claude Code. Your agent is the engine and it
   runs on your existing plan.
-- A machine with Docker (~1 GB RAM). A laptop works for a test drive; the
-  automation runs on a schedule, so day-to-day you want something that
-  stays on - a $5 VPS, a Raspberry Pi, or a home server.
+- A machine with Docker (~1 GB RAM). A laptop works for a test drive, but
+  **we highly recommend a machine that stays on** for day-to-day use - a $5
+  VPS, a Raspberry Pi, or a home server. Schedules only run while the
+  machine is awake.
 - Google Search Console access to your site.
 
 ## Quick start

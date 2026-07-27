@@ -7,7 +7,8 @@ instance at `/docs` once you're running - so it works offline too. This
 file is just the map.
 
 The short version - run from any plain folder (not inside your website's
-repo; it creates its own `dispatchseo` folder):
+repo; it creates its own `dispatchseo` folder). **On a VPS, `ssh` in first
+and run this on the server**, not on your own computer:
 
 ```bash
 git clone https://github.com/NeoZi12/dispatchseo &&
@@ -16,19 +17,23 @@ git clone https://github.com/NeoZi12/dispatchseo &&
 ```
 
 Open the URL it prints (usually **http://localhost:4005**), choose a
-dashboard password, and the setup wizard takes it from there.
+dashboard password, and the setup wizard takes it from there. (The VPS
+guide below has a shorter one-line installer plus your own domain with
+automatic HTTPS - this block is the plain version that works anywhere.)
 
 ## The guide, page by page
 
 - **[Install on your own computer](https://dispatchseo.com/docs/docker-compose)** -
   Docker Desktop, the one command, what's running, the builder, upgrading.
   Includes the honest laptop-vs-always-on trade-off: builds catch up when a
-  laptop wakes, but daily rank checks leave gaps, so serious use wants a
-  machine that stays on (a ~$5 VPS, a Raspberry Pi, or a desktop that never
-  sleeps).
+  laptop wakes and GSC stats mostly catch up too, but daily rank checks
+  leave permanent gaps, so **we highly recommend a machine that stays on**
+  (a ~$5 VPS, a Raspberry Pi, or a desktop that never sleeps) for real use -
+  a laptop is fine for a first look, not for day-to-day.
 - **[Install on a VPS](https://dispatchseo.com/docs/vps)** - one line
   installs everything (Docker included), then one DNS record + one .env
-  line puts the dashboard on your subdomain with automatic HTTPS.
+  line puts the dashboard on your subdomain with automatic HTTPS. This is
+  the path we recommend once you're past trying it out.
 - **[The setup wizard, step by step](https://dispatchseo.com/docs/setup-wizard)** -
   what each screen asks for and why: your site, the Search Console service
   account, keyword data (free mode vs DataForSEO), publish mode, one-tap
