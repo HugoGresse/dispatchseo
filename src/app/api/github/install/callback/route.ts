@@ -15,11 +15,24 @@ import {
 import { db } from "@/lib/db";
 import { isCloudMode } from "@/lib/cloud";
 
-// GitHub redirects here after the App install/update flow - this URL is the
-// App's fixed "Setup URL" (set once in the App's own GitHub settings), so it
-// is hit both right after a fresh install AND whenever the owner revisits
-// GitHub to change which repos the App can see (setup_action distinguishes
-// the two, but both resolve the same way below).
+// GitHub redirects here after the App install/update flow. With "Request user
+// authorization (OAuth) during installation" enabled, this URL is the App's
+// "User authorization callback URL"; it is also set as the Setup URL, which
+// only matters for the update redirect. (GitHub's docs say the Setup URL field
+// is not even enterable once OAuth-on-install is ticked - an acknowledged gap
+// in their own documentation. Pointing both at this route sidesteps it.)
+//
+// Three arrivals, and they do NOT resolve the same way:
+//   setup_action=install  fresh install. Carries an OAuth `code`, plus our
+//                         signed `state` when the flow began at our own
+//                         /api/github/install/start. This is the only path
+//                         that binds an installation to a project.
+//   setup_action=update   repos added/removed from GitHub's settings UI.
+//                         Carries NEITHER state NOR code - GitHub does not run
+//                         the authorization step for an update - and needs no
+//                         write. Handled first, below.
+//   setup_action=request  org member asked an owner to approve. Nothing is
+//                         installed yet and no code exists.
 //
 // state only comes back when the flow started at our own
 // /api/github/install/start (the wizard's "Connect GitHub" button, which
@@ -42,9 +55,9 @@ export async function GET(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const installationIdRaw = url.searchParams.get("installation_id");
   const state = url.searchParams.get("state");
-  // GitHub always sends this ("install" | "update"); not branched on - a
-  // fresh install and a repo-selection update both resolve through the same
-  // logic below.
+  // "install" | "update" | "request". Undocumented on docs.github.com (GitHub
+  // Support confirms it only in support threads), so it is treated as a hint
+  // and never as the sole basis for a decision.
   const setupAction = url.searchParams.get("setup_action");
 
   const installationId = installationIdRaw ? Number(installationIdRaw) : NaN;
@@ -52,6 +65,43 @@ export async function GET(req: Request): Promise<Response> {
   try {
     if (!Number.isFinite(installationId)) {
       redirect("/onboarding?gh=error&msg=bad-installation-id");
+    }
+
+    // UPDATE redirects are handled before either branch below, because they
+    // satisfy neither one's assumptions. When someone adds or removes a repo
+    // from an existing installation via GitHub's own settings UI, "Redirect on
+    // update" sends them here with installation_id + setup_action=update and
+    // NOTHING ELSE - no signed state (they never came from our link) and no
+    // OAuth code (GitHub does not run the authorization step for an update;
+    // its docs promise `code` only for the install flow). Falling through
+    // would demand the proof code and answer "install-not-yours" for what is a
+    // completely routine permission change (2026-07-27).
+    //
+    // Nothing needs writing on this path either: the installation is already
+    // bound to whichever project claimed it, and repo membership is read live
+    // from GitHub every time we use it. So resolve it to a plain redirect.
+    //
+    // Safe against a forged setup_action=update carrying a victim's id: the
+    // only outcome is a redirect to a page the caller can already reach. No
+    // row is written, no binding is created, and the response is identical
+    // whether or not the id is known to us.
+    if (setupAction === "update") {
+      const { data: bound } = await db()
+        .from("projects")
+        .select("id")
+        .eq("github_installation_id", installationId)
+        .limit(1);
+      if ((bound ?? []).length > 0) redirect("/dashboard");
+      // Not bound to anything we know about - fall through and let the normal
+      // claim path decide, proof code and all.
+    }
+
+    // An org member requesting an install they cannot approve themselves gets
+    // setup_action=request: nothing is installed yet and GitHub issues no code,
+    // so there is genuinely nothing to claim. Say that plainly instead of
+    // failing the proof check with a misleading "not yours".
+    if (setupAction === "request") {
+      redirect(`/onboarding?gh=error&msg=${encodeURIComponent("Your organization still has to approve the DispatchSEO app. Once an owner approves it, come back and click Install again.")}`);
     }
 
     const slug = state ? await verifyState(state) : null;
@@ -82,7 +132,7 @@ export async function GET(req: Request): Promise<Response> {
       // the weaker path.
       const proofCode = url.searchParams.get("code") ?? "";
       if (userAuthConfigured() && !(await callerControlsInstallation(proofCode, installationId))) {
-        redirect("/onboarding?gh=error&msg=install-not-yours");
+        redirect(`/onboarding?gh=error&msg=${encodeURIComponent("We could not confirm that this GitHub installation belongs to you. Install the app from this page's button so we can verify it, rather than from github.com directly.")}`);
       }
 
       const installation = await getInstallation(installationId);
@@ -132,7 +182,7 @@ export async function GET(req: Request): Promise<Response> {
     // the weaker path.
     const proofCode = url.searchParams.get("code") ?? "";
     if (userAuthConfigured() && !(await callerControlsInstallation(proofCode, installationId))) {
-      redirect("/onboarding?gh=error&msg=install-not-yours");
+      redirect(`/onboarding?gh=error&msg=${encodeURIComponent("We could not confirm that this GitHub installation belongs to you. Install the app from this page's button so we can verify it, rather than from github.com directly.")}`);
     }
 
     const installation = await getInstallation(installationId);
