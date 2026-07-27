@@ -103,10 +103,19 @@ export async function applySubscriptionState(state: {
     row.provider_subscription_id = state.providerSubscriptionId;
   if (state.currentPeriodEnd !== undefined) row.current_period_end = state.currentPeriodEnd;
   const { error } = await db().from("subscriptions").upsert(row, { onConflict: "user_id" });
-  if (error) {
-    console.error(`[billing] subscription upsert failed: ${error.message}`);
-    return;
-  }
+  // THROW, do not swallow. This is the only write to `subscriptions` anywhere in
+  // the repo, and there is no reconciliation job to repair a dropped one - so a
+  // swallowed error here is permanent. Returning void meant the webhook route
+  // could not tell the write had failed and answered 200, Polar recorded a
+  // successful delivery, and it never redelivered. Both directions hurt: a
+  // customer who just paid is left with no plan (every cron gated, /plans still
+  // showing them pricing) while their card is charged monthly, and a lost
+  // cancellation strands the row at "active" forever, so a non-paying account
+  // keeps full access and keeps spending the platform's DataForSEO budget.
+  // Throwing gives the route a 500, which is exactly the signal Polar's retry
+  // schedule exists for; the upsert is idempotent on user_id, so redelivery is
+  // safe (2026-07-27).
+  if (error) throw new Error(`subscription upsert failed: ${error.message}`);
   const event = ["active", "trialing"].includes(state.status)
     ? "subscription_activated"
     : ["canceled", "revoked"].includes(state.status)

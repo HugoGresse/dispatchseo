@@ -1,5 +1,6 @@
 import { validateEvent, WebhookVerificationError } from "@polar-sh/sdk/webhooks";
 import { applySubscriptionState, tierForProductId } from "@/lib/billing";
+import { reportCronRun } from "@/lib/cron-alerts";
 
 // Polar webhook. Two event families, because neither alone is sufficient:
 //
@@ -35,6 +36,23 @@ const SUBSCRIPTION_EVENTS = new Set([
   "subscription.uncanceled",
 ]);
 
+// A failed subscription write is money-critical and must reach a human, not
+// just Polar's delivery log. The 500 gets Polar to retry (which covers a
+// transient blip); the cron_runs row gets the Home banner and the alert email
+// (which covers a persistent one, where Polar would otherwise exhaust its
+// retries in silence). reportCronRun never throws, so it cannot itself turn
+// this into a different failure.
+async function webhookWriteFailed(
+  e: unknown,
+  eventType: string,
+  userId: string,
+  status: string,
+): Promise<Response> {
+  const message = e instanceof Error ? e.message : String(e);
+  await reportCronRun("polar-webhook", { error: message, event: eventType, userId, status }, true);
+  return Response.json({ error: "subscription write failed" }, { status: 500 });
+}
+
 export async function POST(req: Request): Promise<Response> {
   const secret = process.env.POLAR_WEBHOOK_SECRET;
   if (!secret) return Response.json({ error: "webhook not configured" }, { status: 500 });
@@ -56,16 +74,25 @@ export async function POST(req: Request): Promise<Response> {
       // Store the subscription's real status - isActive() treats "active" and
       // "trialing" as access-granting, everything else (past_due, canceled,
       // revoked, incomplete) as gated.
-      await applySubscriptionState({
-        userId,
-        status: sub.status,
-        tier: tierForProductId(sub.productId),
-        providerCustomerId: sub.customerId ?? null,
-        providerSubscriptionId: sub.id,
-        currentPeriodEnd: sub.currentPeriodEnd
-          ? new Date(sub.currentPeriodEnd).toISOString()
-          : null,
-      });
+      try {
+        await applySubscriptionState({
+          userId,
+          status: sub.status,
+          tier: tierForProductId(sub.productId),
+          providerCustomerId: sub.customerId ?? null,
+          providerSubscriptionId: sub.id,
+          currentPeriodEnd: sub.currentPeriodEnd
+            ? new Date(sub.currentPeriodEnd).toISOString()
+            : null,
+        });
+      } catch (e) {
+        return await webhookWriteFailed(e, event.type, userId, sub.status);
+      }
+    } else {
+      // No externalId means we cannot tell WHICH account this belongs to, so
+      // the event is unusable - but dropping it into a 200 silently is how a
+      // paying customer ends up with no plan and nobody ever knows.
+      console.error(`[polar] ${event.type} ${sub.id} has no customer.externalId - event discarded`);
     }
     return Response.json({ ok: true });
   }
@@ -76,16 +103,20 @@ export async function POST(req: Request): Promise<Response> {
     const active = state.activeSubscriptions?.[0] ?? null;
     // Upgrade-only: never downgrade on an empty list (see header comment).
     if (userId && active) {
-      await applySubscriptionState({
-        userId,
-        status: "active",
-        tier: tierForProductId(active.productId),
-        providerCustomerId: state.id,
-        providerSubscriptionId: active.id,
-        currentPeriodEnd: active.currentPeriodEnd
-          ? new Date(active.currentPeriodEnd).toISOString()
-          : null,
-      });
+      try {
+        await applySubscriptionState({
+          userId,
+          status: "active",
+          tier: tierForProductId(active.productId),
+          providerCustomerId: state.id,
+          providerSubscriptionId: active.id,
+          currentPeriodEnd: active.currentPeriodEnd
+            ? new Date(active.currentPeriodEnd).toISOString()
+            : null,
+        });
+      } catch (e) {
+        return await webhookWriteFailed(e, event.type, userId, "active");
+      }
     }
   }
 

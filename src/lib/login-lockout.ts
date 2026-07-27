@@ -45,10 +45,24 @@ export async function clearLoginFailures(ip: string): Promise<void> {
 // spoof the leftmost token and evade the lockout. The "unknown" bucket (local
 // dev, exotic proxies) shares one counter, which at this scale is fine.
 export function clientIp(hdrs: Headers): string {
-  const vercel = hdrs.get("x-vercel-forwarded-for")?.split(",")[0]?.trim();
-  if (vercel) return vercel;
-  const real = hdrs.get("x-real-ip")?.trim();
-  if (real) return real;
+  // Trust the edge-set headers ONLY when we are actually behind that edge.
+  // Vercel sets x-vercel-forwarded-for and x-real-ip itself and strips inbound
+  // copies, so process.env.VERCEL is the precise condition under which they
+  // cannot be forged. Anywhere else they are simply whatever the client typed:
+  // `caddy reverse-proxy` (the bundled docker `domain` profile) adds only
+  // X-Forwarded-For/Proto/Host and neither sets nor strips X-Real-IP, so a
+  // self-hosted install trusted an attacker-authored value and returned from
+  // this function before ever reaching the hardened rightmost-XFF logic below.
+  // Incrementing X-Real-IP per request gave a fresh login_attempts row every
+  // time and the 5-strikes lock never tripped - on a dashboard whose only door
+  // is a password (2026-07-27; the rightmost-XFF hardening alone did not fix
+  // this, because these two headers are consulted first).
+  if (process.env.VERCEL) {
+    const vercel = hdrs.get("x-vercel-forwarded-for")?.split(",")[0]?.trim();
+    if (vercel) return vercel;
+    const real = hdrs.get("x-real-ip")?.trim();
+    if (real) return real;
+  }
   // RIGHTMOST, not leftmost. x-forwarded-for is append-only by convention: each
   // proxy tacks the address it saw onto the end, so the last entry is the one
   // written by the hop closest to us - the only entry in the list that a client

@@ -898,9 +898,24 @@ export async function deleteAccount(
     return { error: `Type ${user.email ?? "your email address"} exactly to confirm.` };
   }
 
-  const { getSubscription, isActive, polar, polarConfigured } = await import("@/lib/billing");
+  const { getSubscription, polar, polarConfigured } = await import("@/lib/billing");
   const sub = await getSubscription(user.id);
-  if (isActive(sub) && sub?.provider_subscription_id) {
+  // isActive() is the ACCESS test (active | trialing) - it is NOT the billing
+  // test, and using it here was wrong. A past_due, unpaid or incomplete
+  // subscription still exists at Polar: it can still recover, and it can still
+  // charge. Gating cancellation on isActive() therefore deleted the account and
+  // left the subscription running, with the dashboard that could have cancelled
+  // it now gone - the user's only remaining route is Polar support. Cancel
+  // anything that is not already in a terminal state (2026-07-27).
+  const CANCELLABLE_STATUSES = new Set([
+    "active",
+    "trialing",
+    "past_due",
+    "unpaid",
+    "incomplete",
+    "incomplete_expired",
+  ]);
+  if (sub?.provider_subscription_id && CANCELLABLE_STATUSES.has(String(sub.status))) {
     if (!polarConfigured()) {
       return {
         error:

@@ -8,6 +8,7 @@ import { buildsActive } from "@/lib/builder-status";
 import { backendBaseUrl } from "@/lib/pipeline-pack";
 import { openSeoPrs, dispatchResearch } from "@/lib/github";
 import { ownedProjectIds } from "@/lib/tenant-guard";
+import { isCloudMode } from "@/lib/cloud";
 
 // The open install PR, so the wizard can say "your move: merge this" with a
 // link instead of waiting silently. Cached 60s per repo: the wizard polls
@@ -165,6 +166,46 @@ export async function GET(req: Request): Promise<Response> {
   const openPr = project.pipeline_installed_at
     ? null
     : await openInstallPr(project);
+
+  // Branch-protected repos install as a PR, and that path used to dead-end.
+  // installPipelineToRepo skips the seo-setup dispatch when mode === "pr" (the
+  // workflow file isn't on the default branch yet, so dispatching would target
+  // nothing), and repository_dispatch is seo-setup.yml's ONLY trigger - so
+  // nothing re-fired it when the owner merged. The finale promised "the install
+  // finishes the moment it merges"; in reality pipeline_installed_at was never
+  // stamped, no conventions file was written, and no research, rank check or
+  // guide ever ran. The owner had merged exactly what they were asked to and
+  // the product simply stopped (2026-07-27).
+  //
+  // No open install PR + still not installed + a repo connected = the merge
+  // landed. Re-run the install: it is idempotent, sees the pack already
+  // up-to-date, skips straight to the dispatch it missed. Debounced through the
+  // same marker rows as the other first-run triggers so a 6-second poll cannot
+  // stack runs. Deliberately NOT a push trigger on seo-setup.yml: the cloud
+  // pack auto-update rewrites pipeline-version on every refresh and passes
+  // dispatchSetup:false precisely to avoid re-burning a Claude setup run.
+  if (
+    isCloudMode() &&
+    !project.pipeline_installed_at &&
+    project.github_repo &&
+    project.github_installation_id &&
+    !openPr &&
+    !recently(`install-resume--${project.slug}`)
+  ) {
+    await reportCronRun(
+      `install-resume--${project.slug}`,
+      { triggered: "seo-setup", reason: "install PR merged, dispatch was skipped at PR time" },
+      false,
+    );
+    after(async () => {
+      try {
+        const { installPipelineToRepo } = await import("@/lib/pipeline-install");
+        await installPipelineToRepo(project);
+      } catch (e) {
+        console.error(`[onboarding] install resume failed for ${project.slug}:`, e);
+      }
+    });
+  }
 
   return Response.json({
     // Agent-reported step stamps (mark_install_step) - {} on pre-0036 rows
