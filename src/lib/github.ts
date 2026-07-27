@@ -8,8 +8,7 @@
 //
 // Token resolution mirrors gsc.ts: the GH_MERGE_TOKEN env var wins when set
 // (classic installs); otherwise the encrypted copy the onboarding wizard
-// stores in instance_settings (0030). Cached per process; the connect
-// action busts it.
+// stores in instance_settings (0030).
 //
 // CLOUD_MODE: pass the project (a RepoRef object) instead of a bare repo
 // string and every call authenticates with a per-installation GitHub App
@@ -58,26 +57,24 @@ export async function tokenForRef(ref: RepoRef): Promise<string | null> {
   return mergeToken();
 }
 
-let tokenCache: { value: string | null } | null = null;
-
-export function bustGhTokenCache() {
-  tokenCache = null;
-}
-
+// Not cached: a freshly pasted token must reach the very next poll (same
+// reasoning as builderClaudeToken below). This used to cache the resolved
+// value indefinitely in a module-level variable, busted only by the connect
+// action - but Next.js can give a route handler and a server action separate
+// copies of this module's scope, so the bust never reached the copy
+// /api/builder/jobs read from: a token saved through the wizard kept
+// resolving to the pre-save null until the app process was restarted
+// (2026-07-27). instanceSettings() already has its own short-TTL cache, which
+// is enough - this is polled at most every few minutes.
 export async function mergeToken(): Promise<string | null> {
-  if (tokenCache) return tokenCache.value;
-  let token: string | null = process.env.GH_MERGE_TOKEN ?? null;
-  if (!token) {
-    try {
-      const settings = await instanceSettings();
-      const stored = settings?.gh_merge_token;
-      token = stored ? await decryptSecret(stored) : null;
-    } catch {
-      token = null;
-    }
+  const env = process.env.GH_MERGE_TOKEN;
+  if (env) return env;
+  try {
+    const stored = (await instanceSettings())?.gh_merge_token;
+    return stored ? await decryptSecret(stored) : null;
+  } catch {
+    return null;
   }
-  tokenCache = { value: token };
-  return token;
 }
 
 // The in-stack builder's Claude Code OAuth token (0037), handed to the

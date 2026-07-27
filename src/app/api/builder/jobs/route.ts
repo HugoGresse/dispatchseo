@@ -49,6 +49,17 @@ const CADENCE_HOURS: Record<string, number> = {
   "geo-scan": 156,
 };
 
+// A claim row (below) only means "handed to the builder", not "finished" -
+// the container is expected to overwrite it with the real outcome via
+// deploy-check within one headless Claude Code session, which never takes
+// anywhere near this long. If nothing supersedes it within the grace window
+// (dead container, bad token, crash before reporting), treat the job as
+// never having run rather than silently sitting "done" for the full
+// CADENCE_HOURS window - up to 156h (2026-07-27: a stale token cache handed
+// the builder a null GitHub token at the exact moment it claimed three
+// jobs; all three then read as complete for the rest of the week).
+const CLAIM_GRACE_HOURS = 3;
+
 export async function GET(req: Request): Promise<Response> {
   // Self-host only. This feeds the docker in-stack builder; cloud schedules run
   // through GitHub Actions instead. Refusing in CLOUD_MODE keeps every tenant's
@@ -100,14 +111,17 @@ export async function GET(req: Request): Promise<Response> {
     const dfsCreds = await credsForProject(p);
     const jobDataforseo = dfsCreds?.billedTo === "platform" ? null : dfsCreds;
 
-    // Health once per project; due-ness = no run row inside the window.
+    // Health once per project; due-ness = no run row inside the window - or
+    // the only row inside it is a claim that outlived its grace period,
+    // meaning the builder never actually finished the job it was handed.
     const health = await getCronHealth(p.slug);
-    const lastRun = (wf: string) => {
+    const due = (wf: string) => {
       const row = health.find((h) => h.job === `builder-${wf}--${p.slug}`);
-      return row ? new Date(row.last_run_at).getTime() : 0;
+      if (!row) return true;
+      const ageMs = Date.now() - new Date(row.last_run_at).getTime();
+      if (row.claimed_only) return ageMs > CLAIM_GRACE_HOURS * 3_600_000;
+      return ageMs > CADENCE_HOURS[wf] * 3_600_000;
     };
-    const due = (wf: string) =>
-      Date.now() - lastRun(wf) > CADENCE_HOURS[wf] * 3_600_000;
 
     const wanted: string[] = [];
     if (due("research")) wanted.push("research");
@@ -127,9 +141,10 @@ export async function GET(req: Request): Promise<Response> {
 
     for (const wf of wanted) {
       const key = `builder-${wf}--${p.slug}`;
-      // Claim: log the hand-out so the next poll skips it. The container
-      // overwrites this with the real outcome via deploy-check reporting.
-      if (claim) await reportCronRun(key, { claimed: "builder", handed_out: true }, false);
+      // Claim: log the hand-out so the next poll skips it (for CLAIM_GRACE_HOURS -
+      // see due() above). The container overwrites this with the real outcome
+      // via deploy-check reporting, which defaults claimedOnly to false.
+      if (claim) await reportCronRun(key, { claimed: "builder", handed_out: true }, false, true);
       jobs.push({
         key,
         workflow: wf,

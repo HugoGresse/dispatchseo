@@ -123,6 +123,10 @@ export type CronHealth = {
   // isPipelineUpdateNotice): dashboards and MCP consumers render it as an
   // informational update notice instead of a job failure.
   update_available: boolean;
+  // 0039: this is a builder handout marker, not a real completion - see
+  // reportCronRun's claimedOnly param. Only /api/builder/jobs's due() check
+  // reads this; every other consumer (banner, get_cron_health) can ignore it.
+  claimed_only: boolean;
 };
 
 // Pull the human-readable error strings out of a cron's result JSON: any
@@ -243,10 +247,14 @@ async function sendCustomerFailureEmail(
 }
 
 // The one call every cron route makes. Never throws.
+// claimedOnly (0039): true only for /api/builder/jobs's handout marker - a
+// row that says "the builder was given this job", not "this job finished".
+// getCronHealth's due-ness check treats a stale claim as if it never ran.
 export async function reportCronRun(
   job: string,
   result: Record<string, unknown>,
   hadError: boolean,
+  claimedOnly = false,
 ): Promise<void> {
   try {
     const errors = hadError ? collectErrors(result) : [];
@@ -322,6 +330,7 @@ export async function reportCronRun(
       ok: !hadError,
       errors,
       emailed_at: emailedAt,
+      claimed_only: claimedOnly,
     });
     // Tolerate a missing table (migration 0020 not applied yet) - same
     // posture as projects.ts / site-profile.ts.
@@ -370,7 +379,7 @@ export async function markCronFixed(job: string, projectSlug?: string): Promise<
 export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]> {
   const { data, error } = await db()
     .from("cron_runs")
-    .select("job, ok, errors, created_at")
+    .select("job, ok, errors, created_at, claimed_only")
     // 500 rows ≈ a week+ even with seo-auto-merge reporting every run -
     // wide enough that a sparse job's latest row (deploy-check only logs on
     // pushes) stays inside the window while frequent jobs pile rows on top.
@@ -439,6 +448,7 @@ export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]>
         last_run_at: row.created_at as string,
         errors,
         update_available: !row.ok && isPipelineUpdateNotice(job, errors),
+        claimed_only: Boolean(row.claimed_only),
       };
     });
   const heartbeat = await pipelineHeartbeatAlerts(
@@ -526,6 +536,7 @@ async function pipelineHeartbeatAlerts(
             "pipeline is installed but its workflows have never reported to the dashboard - the repo's secrets are likely wrong; re-run the setup command from Home to fix them",
           ],
           update_available: false,
+          claimed_only: false,
         });
       } else {
         const ageHours = staleAgeHours(new Date(hb.created_at as string).getTime());
@@ -537,6 +548,7 @@ async function pipelineHeartbeatAlerts(
             last_run_at: hb.created_at as string,
             errors: [],
             update_available: false,
+            claimed_only: false,
           });
         }
       }

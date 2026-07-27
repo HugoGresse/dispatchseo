@@ -17,7 +17,7 @@ import {
   assertRowsOwned,
 } from "@/lib/tenant-guard";
 import { remainingSites } from "@/lib/billing";
-import { bustGhTokenCache, dispatchToolBuild, mergePr } from "@/lib/github";
+import { dispatchToolBuild, mergePr } from "@/lib/github";
 import { getActiveProject, PROJECT_COOKIE } from "@/lib/active-project";
 import {
   AUTO_PRESET,
@@ -671,7 +671,6 @@ export async function connectGithubToken(
     };
   }
   bustInstanceCache();
-  bustGhTokenCache();
   revalidatePath("/", "layout");
   return { ok: true };
 }

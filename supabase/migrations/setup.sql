@@ -1084,3 +1084,17 @@ begin
   end if;
 end $$;
 
+-- ============ 0039_cron_claim_marker.sql ============
+-- Distinguishes a builder job "handed out" from one that actually finished.
+-- /api/builder/jobs logs a claim row the moment it hands a job to the
+-- in-stack builder container, so the next poll doesn't hand out the same
+-- job twice; the container is supposed to overwrite it with the real
+-- outcome via /api/cron/deploy-check. Without this column that claim row is
+-- indistinguishable from a genuine success, so a builder that dies before
+-- reporting back (bad token, crash, container restart) leaves the job
+-- silently "done" for its full cadence window - up to 156h for research
+-- (2026-07-27: a stale in-memory GitHub token handed the builder a null
+-- token at the exact moment it claimed research/build-guide/geo-scan; all
+-- three then sat "complete" for nearly a week with nothing having run).
+alter table cron_runs add column if not exists claimed_only boolean not null default false;
+
