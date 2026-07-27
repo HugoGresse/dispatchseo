@@ -15,9 +15,25 @@
 
 alter table suggestions
   add column if not exists source text not null default 'research';
-alter table suggestions drop constraint if exists suggestions_source_check;
-alter table suggestions
-  add constraint suggestions_source_check check (source in ('research', 'trend-scan'));
+-- The suggestions_source_check constraint deliberately lives in 0014, NOT
+-- here, even though this migration introduced the column.
+--
+-- setup.sql concatenates every migration and is REPLAYED IN FULL on every
+-- docker-stack boot (see migrations-vanilla-postgres.yml). Unlike
+-- `add column if not exists`, a standalone `add constraint ... check` re-runs
+-- and re-validates EVERY existing row each replay - so a narrower
+-- intermediate vocabulary here becomes a landmine the moment a later
+-- migration widens it. This migration used to add
+-- check (source in ('research', 'trend-scan')); 0014 then widened it to
+-- include 'manual'. Any database with a single manual idea in it therefore
+-- failed to replay setup.sql at THIS line - i.e. every self-host stack whose
+-- owner had ever used the dashboard's Add-idea form stopped booting
+-- (2026-07-27).
+--
+-- RULE: when a later migration widens a check constraint, the earlier
+-- narrower version must not survive in the replayed history. Only the final
+-- vocabulary is applied (0014), which every legal row satisfies by
+-- definition.
 
 alter table projects
   add column if not exists auto_trend boolean not null default true,

@@ -15,11 +15,13 @@ on:
     paths:
       - "supabase/migrations/**"
       - "scripts/generate-setup-sql.mjs"
+      - "scripts/ci-replay-seed.sql"
       - ".github/workflows/migrations-vanilla-postgres.yml"
   pull_request:
     paths:
       - "supabase/migrations/**"
       - "scripts/generate-setup-sql.mjs"
+      - "scripts/ci-replay-seed.sql"
 
 permissions:
   contents: read
@@ -54,6 +56,16 @@ jobs:
         env:
           PGPASSWORD: dispatch-ci
         run: psql -h localhost -U dispatch -d dispatchseo -v ON_ERROR_STOP=1 -q -f supabase/migrations/setup.sql
+      # The replay below must run against a database that HAS ROWS. On empty
+      # tables every check constraint and foreign key passes vacuously, so a
+      # bare re-apply proves almost nothing - that blind spot shipped the
+      # 0013/0014 source-check landmine, which broke docker boots for anyone
+      # with a manual idea while CI stayed green (2026-07-27). See the seed
+      # file's header for what belongs in it.
+      - name: seed representative rows (so the replay actually validates data)
+        env:
+          PGPASSWORD: dispatch-ci
+        run: psql -h localhost -U dispatch -d dispatchseo -v ON_ERROR_STOP=1 -q -f scripts/ci-replay-seed.sql
       - name: apply again (idempotency - the migrate container replays on every boot)
         env:
           PGPASSWORD: dispatch-ci

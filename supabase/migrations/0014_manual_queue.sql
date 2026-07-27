@@ -17,6 +17,13 @@
 alter table suggestions
   add column if not exists queue_position int;
 
+-- This is the ONLY place suggestions_source_check is established (0013 added
+-- the column but deliberately leaves the constraint to here - see its
+-- comment). setup.sql replays the whole history on every docker boot, and a
+-- standalone `add constraint ... check` re-validates every existing row, so
+-- the replayed history must contain exactly one, final vocabulary.
+-- WIDENING THIS LATER: edit the list HERE rather than adding the new value
+-- in a new migration, otherwise this line becomes the landmine 0013 was.
 alter table suggestions drop constraint if exists suggestions_source_check;
 alter table suggestions
   add constraint suggestions_source_check
