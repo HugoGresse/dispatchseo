@@ -167,6 +167,13 @@ export default async function BillingPage({
               <p className="mt-3 text-sm text-neutral-400">
                 check_serp today: {usage.check_serp_today} of {usage.check_serp_daily_cap}
               </p>
+              {usage.pacing !== "normal" ? (
+                <p className="mt-2 text-sm text-amber-400">
+                  {usage.pacing === "slowed"
+                    ? `On pace to exceed this month's budget (projected $${usage.projected_usd.toFixed(2)}) - rank checks have shifted to every other day so tracking never stops.`
+                    : `Projected spend ($${usage.projected_usd.toFixed(2)}) is past this month's budget - rank checks run as a weekly sweep until the period resets.`}
+                </p>
+              ) : null}
               <p className="mt-2 text-xs text-neutral-500">
                 Resets{" "}
                 {new Date(usage.resets_at).toLocaleDateString("en-US", {

@@ -20,6 +20,9 @@ import { planGate } from "./billing";
 import { platformBudgetGate, platformDataforseoEnv, recordDataforseoUsage } from "./dataforseo-usage";
 
 const BASE = "https://api.dataforseo.com/v3";
+// For dataforseo-tasks.ts (the task-queue sibling module) - keep every raw
+// HTTP caller on the same base + auth so creds handling never forks.
+export const DATAFORSEO_BASE = BASE;
 
 // Default market: United States, English. Rank tracking passes each
 // project's own location/language; the Labs helpers below still use the
@@ -62,12 +65,22 @@ export type DataforseoCreds = {
 // credentials - gated by plan coverage and this month's shared budget so a
 // free-tier or over-budget project still gets null and skips the paid
 // features gracefully, exactly like before.
-export async function credsForProject(project: {
-  id: string;
-  slug: string;
-  dataforseo_login: string | null;
-  dataforseo_password: string | null;
-}): Promise<DataforseoCreds | null> {
+// opts.skipBudgetGate bypasses ONLY the monthly spend cap, never the plan
+// gate. Two callers are allowed to use it: the serp-collect cron (retrieving
+// already-paid task results is free - gating it stranded paid tasks the
+// moment an owner crossed budget) and the rank queue's Monday sweep (the
+// pacing governor's terminal "weekly" level, a bounded ~$0.007/keyword/week
+// overrun that keeps the "tracking never stops mid-month" promise honest).
+// Everything else - keyword_ideas, check_serp, DR refresh - stays hard-gated.
+export async function credsForProject(
+  project: {
+    id: string;
+    slug: string;
+    dataforseo_login: string | null;
+    dataforseo_password: string | null;
+  },
+  opts: { skipBudgetGate?: boolean } = {},
+): Promise<DataforseoCreds | null> {
   if (project.dataforseo_login && project.dataforseo_password) {
     // The password is stored encrypted at rest; the login (an email) is not.
     // A missing/rotated key must not 500 the dashboard or a cron, so a decrypt
@@ -109,7 +122,7 @@ export async function credsForProject(project: {
     isCloudMode() &&
     platform &&
     (await planGate(project.id)).allowed &&
-    (await platformBudgetGate(project.id)).allowed
+    (opts.skipBudgetGate || (await platformBudgetGate(project.id)).allowed)
   ) {
     return {
       login: platform.login,
@@ -121,7 +134,7 @@ export async function credsForProject(project: {
   return null;
 }
 
-function authHeader(creds: DataforseoCreds): string {
+export function authHeader(creds: DataforseoCreds): string {
   return "Basic " + Buffer.from(`${creds.login}:${creds.password}`).toString("base64");
 }
 
@@ -269,7 +282,7 @@ export type AiOverviewData = {
   references: Array<{ domain: string; url: string | null; title: string | null }>;
 } | null;
 
-type SerpItem = {
+export type SerpItem = {
   type: string;
   rank_absolute?: number;
   title?: string;
@@ -283,8 +296,9 @@ type SerpItem = {
 
 // AI Overview references can sit on the ai_overview item itself or on its
 // nested elements; collect both, dedupe by url-or-domain. Shape verified
-// against a live advanced-endpoint response 2026-07-17.
-function parseAiOverview(items: SerpItem[]): NonNullable<AiOverviewData> {
+// against a live advanced-endpoint response 2026-07-17. Exported for the
+// serp-collect cron, which parses the same item shape out of task_get.
+export function parseAiOverview(items: SerpItem[]): NonNullable<AiOverviewData> {
   const overview = items.find((it) => it.type === "ai_overview");
   if (!overview) return { present: false, references: [] };
   const raw = [
@@ -333,39 +347,48 @@ type SerpRegularJson = {
 // check loses nothing. Single attempt per rung with a short fixed pause
 // (postOnce, not post - post's own backoff ladder on top of this one pushed
 // the slowest keyword chains past the function budget and 504'd the run).
-const SERP_DEPTH_LADDER = [100, 100, 30, 10];
 const SERP_LADDER_PAUSE_MS = 1000;
 
-// One live SERP call: the organic results for a keyword, top-down. Shared by
-// rank tracking (find the target domain) and the check_serp MCP tool (show the
-// agent who's on page 1). Stays on the REGULAR endpoint: DataForSEO bills per
-// 10 results, so depth 100 here is $0.006 - the advanced endpoint (the only
-// one that returns ai_overview) would be $0.02 for the same depth. AI
-// Overview checks therefore live in serpAiOverview below, a separate
-// depth-10 advanced call at $0.002. On a transient failure the depth steps
-// down (see SERP_DEPTH_LADDER) - a rank from a shallow rescue means "position
-// within the fallback depth", which for the sparse queries that trigger it is
-// the full SERP anyway.
+// The ladder is built from the caller's maxDepth: two tries at full depth
+// (pure blips), then shallower rescues. Callers that only display page 1
+// (check_serp) pass a small maxDepth and stop paying for the 90 results they
+// throw away - SERP billing is per 10 results actually returned.
+function depthLadder(maxDepth: number): number[] {
+  return [maxDepth, maxDepth, ...[30, 10].filter((d) => d < maxDepth)];
+}
+
+// One live SERP call: the organic results for a keyword, top-down. Used by
+// the check_serp MCP tool (show the agent who's on page 1) and as the SerpApi
+// counterpart in the provider layer; scheduled rank tracking now runs through
+// the cheap task queue instead (dataforseo-tasks.ts). Stays on the REGULAR
+// endpoint. Live billing is $0.002 per 10 results Google ACTUALLY returns
+// (measured 2026-07-27: sparse SERPs bill $0.004-0.006 at depth 100, rich
+// ones the full $0.02) - so callers should pass the smallest maxDepth they
+// really need. On a transient failure the depth steps down (see depthLadder) -
+// a rank from a shallow rescue means "position within the fallback depth",
+// which for the sparse queries that trigger it is the full SERP anyway.
 export async function serpOrganic(
   keyword: string,
   creds: DataforseoCreds,
   locationCode: number = LOCATION_CODE,
   languageCode: string = LANGUAGE_CODE,
+  maxDepth = 100,
 ): Promise<{ results: OrganicResult[]; cost: number }> {
   const task = { keyword, location_code: locationCode, language_code: languageCode };
+  const ladder = depthLadder(maxDepth);
   let json: SerpRegularJson | null = null;
   for (let i = 0; json === null; i++) {
     try {
       json = await postOnce<SerpRegularJson>(
         SERP_REGULAR_PATH,
-        [{ ...task, depth: SERP_DEPTH_LADDER[i] }],
+        [{ ...task, depth: ladder[i] }],
         creds,
       );
     } catch (e) {
       const transient = e instanceof DataforseoError && e.transient;
-      if (!transient || i >= SERP_DEPTH_LADDER.length - 1) throw e;
+      if (!transient || i >= ladder.length - 1) throw e;
       console.warn(
-        `[dataforseo] SERP fetch at depth ${SERP_DEPTH_LADDER[i]} failed transiently for ${JSON.stringify(keyword)}, trying depth ${SERP_DEPTH_LADDER[i + 1]}:`,
+        `[dataforseo] SERP fetch at depth ${ladder[i]} failed transiently for ${JSON.stringify(keyword)}, trying depth ${ladder[i + 1]}:`,
         e instanceof Error ? e.message : e,
       );
       await new Promise((r) => setTimeout(r, SERP_LADDER_PAUSE_MS));
@@ -373,7 +396,13 @@ export async function serpOrganic(
   }
 
   const items = json.tasks?.[0]?.result?.[0]?.items ?? [];
-  const results = items
+  return { results: mapOrganicItems(items), cost: json.cost };
+}
+
+// Organic SERP items -> OrganicResult rows, shared by the live path above and
+// the serp-collect cron (task_get returns the same item shape).
+export function mapOrganicItems(items: SerpItem[]): OrganicResult[] {
+  return items
     .filter((it) => it.type === "organic")
     .map((it) => ({
       position: it.rank_absolute ?? 0,
@@ -382,7 +411,27 @@ export async function serpOrganic(
       domain: it.domain ?? null,
     }))
     .filter((it) => it.position > 0);
-  return { results, cost: json.cost };
+}
+
+// The target domain's best (lowest) absolute position among organic results.
+// Exact domain or a real subdomain - a bare endsWith would let
+// "notclockedcode.com" match "clockedcode.com".
+export function bestPositionForDomain(
+  results: OrganicResult[],
+  targetDomain: string,
+): { position: number; url: string | null } | null {
+  const norm = (d?: string | null) => (d ?? "").replace(/^www\./, "").toLowerCase();
+  const target = norm(targetDomain);
+  const isTarget = (d: string) => d === target || d.endsWith(`.${target}`);
+  let best: { position: number; url: string | null } | null = null;
+  for (const it of results) {
+    if (isTarget(norm(it.domain))) {
+      if (!best || it.position < best.position) {
+        best = { position: it.position, url: it.url };
+      }
+    }
+  }
+  return best;
 }
 
 // Google's AI Overview for a keyword: one depth-10 advanced call ($0.002,
@@ -426,19 +475,7 @@ export async function serpRank(
   languageCode: string = LANGUAGE_CODE,
 ): Promise<SerpRank> {
   const { results, cost } = await serpOrganic(keyword, creds, locationCode, languageCode);
-  const norm = (d?: string | null) => (d ?? "").replace(/^www\./, "").toLowerCase();
-  const target = norm(targetDomain);
-  // Exact domain or a real subdomain - a bare endsWith would let
-  // "notclockedcode.com" match "clockedcode.com".
-  const isTarget = (d: string) => d === target || d.endsWith(`.${target}`);
-  let best: { position: number; url: string | null } | null = null;
-  for (const it of results) {
-    if (isTarget(norm(it.domain))) {
-      if (!best || it.position < best.position) {
-        best = { position: it.position, url: it.url };
-      }
-    }
-  }
+  const best = bestPositionForDomain(results, targetDomain);
   return {
     keyword,
     position: best?.position ?? null,

@@ -558,8 +558,9 @@ const mcpHandler = createMcpHandler(
       {
         title: "Track keywords",
         description:
-          "Upsert keywords into the tracking set (matched by keyword text). The daily rank " +
-          "cron checks every tracked keyword. Pass the metrics you have from research; " +
+          "Upsert keywords into the tracking set (matched by keyword text). The rank cron " +
+          "checks every tracked keyword: daily while it ranks in the top 30, plus a weekly " +
+          "full-depth sweep for everything. Pass the metrics you have from research; " +
           "omitted fields are left as-is on existing rows.",
         inputSchema: {
           keywords: z
@@ -1063,11 +1064,15 @@ const mcpHandler = createMcpHandler(
           );
         }
         try {
+          // Fetch only what this call displays: DataForSEO live bills per 10
+          // results returned, and the old fixed depth-100 fetch paid for up
+          // to 10 pages to show one (2026-07-27 cost audit).
           const { results, ai } = await providerOrganic(
             provider,
             keyword,
             p.location_code,
             p.language_code,
+            top ?? 10,
           );
           if (billedToPlatform) void recordCheckSerpCall(p.id);
           return ok({
@@ -1076,7 +1081,7 @@ const mcpHandler = createMcpHandler(
             results: results.slice(0, top ?? 10),
             // Google's AI Overview citations when this call carried them
             // (SerpApi mode). null = not measured here - DataForSEO mode
-            // records AI Overviews via the daily cron; read get_ai_visibility.
+            // records AI Overviews via the weekly sweep; read get_ai_visibility.
             ai_overview: ai,
           });
         } catch (e) {
@@ -1097,7 +1102,7 @@ const mcpHandler = createMcpHandler(
         title: "Get domain rank",
         description:
           "The site's cached DataForSEO Domain Rating snapshot (0-100 DR-equivalent, " +
-          "referring domains, backlinks, spam score) - refreshed daily by the domain-rating " +
+          "referring domains, backlinks, spam score) - refreshed weekly by the domain-rating " +
           "cron, never a live paid call. Use this for the research quality bar's dynamic KD " +
           "ceiling instead of calling a backlinks endpoint directly - it works the same " +
           "whether the project has its own DataForSEO account or runs on the platform's " +
@@ -1121,8 +1126,10 @@ const mcpHandler = createMcpHandler(
         description:
           "This project's DataForSEO billing status: who it's billed to (own connected " +
           "account, the platform's bundled plan, or neither), month-to-date spend against the " +
-          "plan's monthly budget when billed to the platform, and today's check_serp count " +
-          "against its daily cap. For a project on its own account (or self-host), usage " +
+          "plan's monthly budget when billed to the platform, the projected month-end spend " +
+          "with the rank cron's pacing level (normal / slowed / weekly - pacing thins the " +
+          "check cadence before the budget can run out, so tracking never stops mid-month), " +
+          "and today's check_serp count against its daily cap. For a project on its own account (or self-host), usage " +
           "isn't metered here - billed_to reads 'own' or null and the spend/budget fields " +
           "stay zero.",
         inputSchema: {},
@@ -1153,7 +1160,7 @@ const mcpHandler = createMcpHandler(
           "How AI answer engines see this site: per-engine summary (queries checked, AI " +
           "answers seen, citation rate), a per-day trend, the latest verbatim answers, and " +
           "the gap list - domains AI cites on queries where this site is NOT cited. Google " +
-          "AI Overview data comes from the daily rank cron automatically; other engines fill " +
+          "AI Overview data comes from the weekly rank sweep automatically; other engines fill " +
           "in when the geo-scan workflow runs. Use the gap list to pick what to write next.",
         inputSchema: {},
       },

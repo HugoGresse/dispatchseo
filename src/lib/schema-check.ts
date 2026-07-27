@@ -78,6 +78,7 @@ const PROBES: Probe[] = [
   { migration: "0039_cron_claim_marker", table: "cron_runs", column: "claimed_only" },
   { migration: "0040_pipeline_verified", table: "projects", column: "pipeline_verified" },
   { migration: "0041_backlink_status_changed", table: "backlink_prospects", column: "status_changed_at" },
+  { migration: "0042_serp_tasks", table: "serp_tasks" },
 ];
 
 // Migrations that genuinely CANNOT be probed through this mechanism, with the

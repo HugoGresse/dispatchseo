@@ -59,7 +59,7 @@ invented volumes, difficulties, positions, or stats, ever.
   perfectly). Applies only when volume data exists (DataForSEO projects).
 - KD ceiling is **DYNAMIC - it scales with the site's authority**. At the
   START of every research run, call the seo-manager MCP's \`get_domain_rank\`
-  tool for the site's cached DR-equivalent (0-100, refreshed daily by the
+  tool for the site's cached DR-equivalent (0-100, refreshed weekly by the
   domain-rating cron off the same DataForSEO backlinks summary this used to
   call directly - works identically whether DataForSEO is this repo's own
   account or the platform's bundled plan; a null \`dr\` means not indexed yet,

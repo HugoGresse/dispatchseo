@@ -29,10 +29,11 @@ export function DomainRatingCard({ dr }: { dr: DomainRating | null }) {
   const hasValue = value != null;
   const pct = hasValue ? Math.max(0, Math.min(100, value)) : 0;
   const spammy = dr?.spamScore != null && dr.spamScore > 30;
-  // DR runs on its own 24h cache, not the daily cron - the timer counts from
-  // when the cached API call actually fired.
+  // DR refreshes weekly (2026-07-27 cost cut; mirrors DR_TTL_MS in
+  // domain-rating.ts, not imported - that module is server-only). The timer
+  // counts from when the cached API call actually fired.
   const nextRefresh = dr?.fetchedAt
-    ? new Date(Date.parse(dr.fetchedAt) + 86_400_000).toISOString()
+    ? new Date(Date.parse(dr.fetchedAt) + 7 * 86_400_000).toISOString()
     : null;
 
   return (

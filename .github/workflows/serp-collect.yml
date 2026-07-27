@@ -1,0 +1,29 @@
+name: SERP task collector
+
+# Companion to the daily-ranks cron: daily-ranks POSTs cheap DataForSEO
+# standard-queue SERP tasks (they finish in minutes), and this hourly ping has
+# the backend fetch the results and write the rank rows. Hourly because rank
+# freshness is user-visible; the endpoint exits in one indexed query when
+# nothing is pending, so quiet hours cost seconds.
+
+on:
+  schedule:
+    - cron: "37 * * * *" # hourly at :37 - offset off the top-of-the-hour rush
+  workflow_dispatch:
+
+concurrency:
+  group: serp-collect
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger the serp-collect cron endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl --fail-with-body -sS --max-time 240 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            ${{ vars.BACKEND_URL || 'https://dispatchseo.com' }}/api/cron/serp-collect

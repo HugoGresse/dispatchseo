@@ -155,15 +155,25 @@ async function serpapiOrganic(
 // AI Overview citation state when this call happened to carry it. SerpApi
 // includes the overview inline at no extra credit; DataForSEO's regular
 // endpoint never returns it (ai: null = "not measured on this call" - the
-// daily cron makes the separate cheap serpAiOverview call instead).
+// weekly sweep records AI Overviews instead). maxDepth caps how many results
+// the DataForSEO call pays for - live billing is per 10 results returned, so
+// callers that only show page 1 should not buy 10 pages (SerpApi ignores it:
+// one credit buys the full 100 either way).
 export async function providerOrganic(
   provider: SerpProvider,
   keyword: string,
   locationCode: number,
   languageCode: string,
+  maxDepth = 100,
 ): Promise<{ results: OrganicResult[]; ai: AiOverviewData }> {
   if (provider.kind === "dataforseo") {
-    const { results } = await serpOrganic(keyword, provider.creds, locationCode, languageCode);
+    const { results } = await serpOrganic(
+      keyword,
+      provider.creds,
+      locationCode,
+      languageCode,
+      maxDepth,
+    );
     return { results, ai: null };
   }
   return serpapiOrganic(keyword, provider.apiKey, locationCode, languageCode);

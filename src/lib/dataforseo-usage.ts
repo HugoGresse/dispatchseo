@@ -140,6 +140,51 @@ export async function platformBudgetGate(
   return { allowed: true };
 }
 
+// ---- pacing governor -------------------------------------------------------
+// The budget gate above is a hard wall: hit it and every paid feature stops
+// until the month resets - which for a maxed-out project meant losing rank
+// tracking for days or weeks. The governor makes that wall unreachable: the
+// daily rank cron asks for the owner's pacing level BEFORE spending, and
+// thins its cadence (daily -> every-other-day -> weekly sweep only) as the
+// PROJECTED month-end spend approaches the budget. Tracking degrades to
+// sparser, never to stopped. Platform-billed projects only - BYO accounts
+// spend their own money at full cadence.
+
+export type PacingLevel = "normal" | "slowed" | "weekly";
+
+const PACING_SLOWED_AT = 0.85; // projected spend >= 85% of budget -> every-other-day
+
+export type PacingState = {
+  level: PacingLevel;
+  projected_usd: number;
+  budget_usd: number;
+};
+
+export async function platformPacingState(projectId: string): Promise<PacingState> {
+  const open: PacingState = { level: "normal", projected_usd: 0, budget_usd: 0 };
+  // Same fail-open tolerances as platformBudgetGate: pacing only ever applies
+  // to an active, covered cloud subscriber.
+  if (!isCloudMode() || !polarConfigured()) return open;
+  const ownerId = await ownerUserIdForProject(projectId);
+  if (!ownerId) return open;
+  const sub = await getSubscription(ownerId);
+  if (!isActive(sub)) return open;
+  const budgetUsd = TIER_BUDGET_MICROUSD[sub!.tier] / 1_000_000;
+  const spentUsd = (await monthToDateCostMicrousd(ownerId)) / 1_000_000;
+  const now = new Date();
+  const daysInMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
+  // Divide by at least 3 days: on the 1st-2nd a single research run projects
+  // to 15-30x itself and would spuriously throttle a healthy account.
+  const projectedUsd = (spentUsd * daysInMonth) / Math.max(now.getUTCDate(), 3);
+  const level: PacingLevel =
+    projectedUsd >= budgetUsd || spentUsd >= budgetUsd
+      ? "weekly"
+      : projectedUsd >= budgetUsd * PACING_SLOWED_AT
+        ? "slowed"
+        : "normal";
+  return { level, projected_usd: projectedUsd, budget_usd: budgetUsd };
+}
+
 // Would this project resolve to platform-billed DataForSEO right now, ignoring
 // the live spend gate above? Deliberately separate from credsForProject's real
 // decision: a status readout (the dashboard, get_dataforseo_usage) must keep
@@ -181,6 +226,10 @@ export type PlatformUsageStatus = {
   month_to_date_usd: number;
   budget_usd: number;
   percent_used: number;
+  // Straight-line projection of month-end spend, and the cadence level the
+  // rank cron is running at because of it (see platformPacingState).
+  projected_usd: number;
+  pacing: PacingLevel;
   check_serp_today: number;
   check_serp_daily_cap: number;
   resets_at: string;
@@ -197,12 +246,15 @@ export async function platformUsageStatus(projectId: string): Promise<PlatformUs
   const sub = ownerId ? await getSubscription(ownerId) : null;
   const budgetMicrousd = sub && isActive(sub) ? TIER_BUDGET_MICROUSD[sub.tier] : 0;
   const spentMicrousd = ownerId ? await monthToDateCostMicrousd(ownerId) : 0;
+  const pacing = await platformPacingState(projectId);
 
   return {
     billed_to: billedTo,
     month_to_date_usd: spentMicrousd / 1_000_000,
     budget_usd: budgetMicrousd / 1_000_000,
     percent_used: budgetMicrousd > 0 ? Math.round((spentMicrousd / budgetMicrousd) * 100) : 0,
+    projected_usd: pacing.projected_usd,
+    pacing: pacing.level,
     check_serp_today: await checkSerpCallsToday(projectId),
     check_serp_daily_cap: CHECK_SERP_DAILY_CAP,
     resets_at: nextMonthStartUtc(),

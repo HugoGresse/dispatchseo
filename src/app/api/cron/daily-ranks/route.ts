@@ -1,8 +1,10 @@
 import { db } from "@/lib/db";
 import { planGate } from "@/lib/billing";
-import { credsForProject, serpAiOverview, takeDecryptFailure } from "@/lib/dataforseo";
+import { credsForProject, takeDecryptFailure } from "@/lib/dataforseo";
+import { queueDailyRankTasks } from "@/lib/dataforseo-tasks";
+import { platformPacingState, type PacingLevel } from "@/lib/dataforseo-usage";
 import { serpProviderForProject, providerRank, takeSerpapiDecryptFailure } from "@/lib/serp";
-import { refreshDomainRating } from "@/lib/domain-rating";
+import { refreshDomainRatingIfStale } from "@/lib/domain-rating";
 import { getLatestSnapshot, gscQueryPositions, gscClientForProject } from "@/lib/gsc";
 import { gscCronReadiness, type GscReadiness } from "@/lib/gsc-readiness";
 import { checkCron } from "@/lib/cron-auth";
@@ -21,22 +23,25 @@ import { platformBalanceAlert } from "@/lib/dataforseo-balance";
 // next project.
 //  1. Ranks: for every tracking keyword, find the project domain's position and
 //     record a rank_checks row. The source follows the project's keyword_source:
-//     DataForSEO daily, SerpApi weekly (Mondays - so ~60 keywords fit the free
-//     250/mo quota), or GSC average position daily (free, but only for queries
-//     that actually got impressions).
+//     - DataForSEO: POSTs cheap standard-queue tasks (dataforseo-tasks.ts) and
+//       returns; the serp-collect cron writes the actual rank_checks rows
+//       ~30-60 min later. Daily depth-30 tasks for keywords seen in the top
+//       30, a Monday full-depth sweep (+ AI Overview) for everything, and the
+//       pacing governor thins the cadence before the monthly budget can run
+//       out (2026-07-27 cost cut - this replaced two live calls per keyword
+//       per day).
+//     - SerpApi: live checks weekly (Mondays - so ~60 keywords fit the free
+//       250/mo quota), AI Overview carried inline for free.
+//     - GSC: average position daily (free, but only for queries that actually
+//       got impressions).
 //  2. GSC: snapshot the most recent date with data into gsc_stats (skipped
 //     until the project has a GSC property connected).
-//  3. Domain Rating: refresh the domain_ratings snapshot so the dashboard reads
-//     it without ever paying for the DataForSEO call on render (the row stays
-//     under 24h old between daily runs). DataForSEO-only - free modes skip.
-// SERP calls run in parallel across keywords, but a DataForSEO keyword now
-// makes TWO sequential live calls (~6s each): the rank check plus the depth-10
-// AI Overview check - and on transient vendor errors each call may retry or
-// step down the depth ladder (dataforseo.ts), so the slowest chain can run
-// well past a minute. 60s here 504'd the run the first time the retries
-// actually fired (2026-07-21); 300 is the Hobby-with-Fluid ceiling and this
-// route bills nothing for the extra wall clock. If the combined keyword set
-// grows past ~30, move to task-based SERP - see LATER.md.
+//  3. Domain Rating: refresh the domain_ratings snapshot when it has aged past
+//     the weekly TTL, so the dashboard reads it without ever paying for the
+//     DataForSEO call on render. DataForSEO-only - free modes skip.
+// 300s: task posting is fast, but the SerpApi Monday path still chains live
+// calls and the GSC halves can be slow on big properties; the route bills
+// nothing for idle wall clock.
 
 export const maxDuration = 300;
 
@@ -93,38 +98,50 @@ async function runRanks(
     };
   }
 
-  // --- DataForSEO / SerpApi modes: live SERP via the provider layer ---
+  // --- DataForSEO: post cheap standard-queue tasks; serp-collect writes the
+  // rows. Creds are resolved with the monthly budget gate BYPASSED on
+  // purpose: the pacing governor is what enforces spend here (its terminal
+  // "weekly" level keeps only the bounded Monday sweep), so an owner who
+  // crossed the budget mid-month degrades to weekly tracking instead of
+  // losing rank tracking entirely - the gate still hard-stops every other
+  // paid feature (keyword_ideas, check_serp, DR refresh).
+  if (project.keyword_source === "dataforseo") {
+    const creds = await credsForProject(project, { skipBudgetGate: true });
+    if (!creds) {
+      // A decrypt failure (rotated ENCRYPTION_KEY, corrupted ciphertext)
+      // means creds that worked before are now broken - a regression, not a
+      // normal "not connected yet" state. Report it as a failed check
+      // (populating `failed` trips hadError below, same as any other
+      // rank-check error) instead of a silent informational skip
+      // (2026-07-27 audit).
+      const decryptErr = takeDecryptFailure(project.id);
+      if (decryptErr) return { failed: [decryptErr] };
+      return { skipped: "no DataForSEO connected" };
+    }
+    // The governor only ever throttles platform-billed projects - BYO
+    // accounts spend their own money at full cadence.
+    let pacing: PacingLevel = "normal";
+    if (creds.billedTo === "platform") {
+      pacing = (await platformPacingState(project.id)).level;
+    }
+    const queued = await queueDailyRankTasks(project, creds, tracked, pacing);
+    return { source: "dataforseo", ...queued };
+  }
+
+  // --- SerpApi: live checks via the provider layer, weekly ---
   const provider = await serpProviderForProject(project);
   if (!provider) {
-    // A decrypt failure (rotated ENCRYPTION_KEY, corrupted ciphertext) means
-    // creds that worked before are now broken - a regression, not a normal
-    // "not connected yet" state. Report it as a failed check (populating
-    // `failed` trips hadError below, same as any other rank-check error)
-    // instead of a silent informational skip (2026-07-27 audit).
-    const decryptErr =
-      project.keyword_source === "serpapi"
-        ? takeSerpapiDecryptFailure(project.id)
-        : takeDecryptFailure(project.id);
+    const decryptErr = takeSerpapiDecryptFailure(project.id);
     if (decryptErr) return { failed: [decryptErr] };
-    return {
-      skipped:
-        project.keyword_source === "serpapi"
-          ? "no SerpApi key connected"
-          : "no DataForSEO connected",
-    };
+    return { skipped: "no SerpApi key connected" };
   }
-  if (provider.kind === "serpapi" && !isSerpapiCheckDay()) {
+  if (!isSerpapiCheckDay()) {
     return { skipped: "SerpApi runs weekly (Mondays) to stay inside the free quota" };
   }
 
   const aiRows: AiSnapshotInput[] = [];
-  // Counts the DataForSEO AI-Overview sub-call specifically (serpAiOverview),
-  // separately from the rank check it rides with - see the aiVisibility block
-  // below for why.
-  let aiAttempted = 0;
-  let aiFailed = 0;
   const checks = await Promise.allSettled(
-    // Wrapped so every failure names its keyword - a bare "task error 40101"
+    // Wrapped so every failure names its keyword - a bare provider error
     // in the alert email gives the owner nothing to act on.
     tracked.map((kw) => (async () => {
       const rank = await providerRank(
@@ -141,28 +158,8 @@ async function runRanks(
         url: rank.url,
       });
       if (insErr) throw new Error(insErr.message);
-      // Google AI Overview snapshot. SerpApi carries it inline in the rank
-      // pull (free); DataForSEO needs a separate depth-10 advanced call
-      // ($0.002, vs $0.02 to fold it into the depth-100 rank call). Best
-      // effort: an AI-check failure must never fail the rank it rides with.
-      let ai = rank.ai;
-      if (!ai && provider.kind === "dataforseo") {
-        aiAttempted += 1;
-        try {
-          ai = (
-            await serpAiOverview(
-              kw.keyword,
-              provider.creds,
-              project.location_code,
-              project.language_code,
-            )
-          ).ai;
-        } catch (e) {
-          aiFailed += 1;
-          console.error(`[daily-ranks] AI Overview check failed for "${kw.keyword}":`, e);
-        }
-      }
-      if (ai) aiRows.push(buildGoogleAiSnapshot(kw.keyword, project.domain, ai));
+      // SerpApi carries the Google AI Overview inline in the rank pull, free.
+      if (rank.ai) aiRows.push(buildGoogleAiSnapshot(kw.keyword, project.domain, rank.ai));
       return { keyword: kw.keyword, position: rank.position };
     })().catch((e: unknown) => {
       throw new Error(`"${kw.keyword}": ${e instanceof Error ? e.message : String(e)}`);
@@ -175,18 +172,7 @@ async function runRanks(
   // AI-visibility write is best-effort: a missing 0025 migration or a bad
   // insert must never fail the rank half it rides on.
   let aiVisibility: Record<string, unknown> = { snapshots: 0 };
-  if (aiRows.length === 0 && aiAttempted > 0 && aiFailed === aiAttempted) {
-    // Every attempted AI-Overview check errored (broken creds, a DataForSEO
-    // endpoint change) - previously indistinguishable from the equally
-    // aiRows.length===0 case of "no keyword happened to show an Overview",
-    // and neither ever surfaced anywhere since the per-keyword catch above
-    // only console.errors (2026-07-27 audit). Still never fails the rank
-    // half - just makes the difference visible in the stored result.
-    aiVisibility = {
-      snapshots: 0,
-      error: `AI Overview check failed for all ${aiAttempted} keyword(s) checked`,
-    };
-  } else if (aiRows.length > 0) {
+  if (aiRows.length > 0) {
     const rec = await recordAiSnapshots(project.id, aiRows);
     aiVisibility =
       "error" in rec
@@ -253,9 +239,10 @@ async function runProject(project: Project): Promise<Record<string, unknown>> {
     result.gsc = { error: e instanceof Error ? e.message : String(e) };
   }
 
-  // --- 3. Domain Rating (billed to the project's own DataForSEO account).
-  // Independent of keyword_source: any project with DataForSEO creds gets DR;
-  // free modes without creds skip - there is no free backlink index.
+  // --- 3. Domain Rating (weekly refresh, billed like the project's other
+  // DataForSEO calls). Independent of keyword_source: any project with
+  // DataForSEO creds gets DR; free modes without creds skip - there is no
+  // free backlink index.
   const creds = await credsForProject(project);
   if (!creds) {
     // Same regression-vs-not-configured distinction as the ranks half above:
@@ -269,12 +256,18 @@ async function runProject(project: Project): Promise<Record<string, unknown>> {
     }
   } else {
     try {
-      const dr = await refreshDomainRating(project.id, project.domain, creds);
-      if (dr) {
-        result.dr = { dr: dr.dr, referringDomains: dr.referringDomains };
-      } else {
+      const { rating, refreshed, failed } = await refreshDomainRatingIfStale(
+        project.id,
+        project.domain,
+        creds,
+      );
+      if (failed) {
         result.hadError = true;
         result.dr = { error: "DataForSEO returned no backlinks summary" };
+      } else if (refreshed && rating) {
+        result.dr = { dr: rating.dr, referringDomains: rating.referringDomains };
+      } else {
+        result.dr = { fresh: true, dr: rating?.dr ?? null };
       }
     } catch (e) {
       result.hadError = true;

@@ -26,6 +26,7 @@ import { listProjects, effectiveAutomations } from "./projects";
 export type CronJob =
   | "daily-ranks"
   | "hourly-gsc"
+  | "serp-collect"
   | "weekly-opportunities"
   | "deploy-check";
 
@@ -134,6 +135,7 @@ export function jobProjectSlug(job: string): string | null {
 const DEBOUNCE_HOURS: Record<string, number> = {
   "daily-ranks": 24,
   "hourly-gsc": 24,
+  "serp-collect": 24, // hourly like hourly-gsc - one email per broken day, not one per run
   "weekly-opportunities": 24,
   "deploy-check": 0,
 };

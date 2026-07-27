@@ -31,8 +31,8 @@ export const AUTOMATIONS: Automation[] = [
     id: "rank-check",
     name: "Nightly rank check",
     status: "live",
-    what: "Checks where your site ranks on Google for every tracked keyword and saves the position.",
-    schedule: "Every night around 04:00 UTC",
+    what: "Checks where your site ranks on Google for every tracked keyword and saves the position. Keywords ranking in the top 30 are checked nightly; everything gets a full top-100 sweep every Monday, so deep climbers still show up without paying for daily deep checks.",
+    schedule: "Every night around 04:00 UTC · full sweep Mondays",
     flow: ["Tracked keywords", "Google search check", "Rank history", "Keywords screen"],
     control: { locked: "Always on - collects data, publishes nothing." },
   },
@@ -49,10 +49,10 @@ export const AUTOMATIONS: Automation[] = [
     id: "ai-visibility",
     name: "AI visibility check",
     status: "live",
-    what: "Tracks whether AI assistants cite your site. Alongside each nightly rank check it looks at whether Google shows an AI answer for your tracked keywords and who that answer cites; a weekly Claude scan asks the questions your customers would ask an AI assistant and records the same.",
-    schedule: "Google nightly with the rank check · Claude scan Wednesdays 06:00 UTC",
+    what: "Tracks whether AI assistants cite your site. The Monday rank sweep records whether Google shows an AI answer for each tracked keyword and who that answer cites; a weekly Claude scan asks the questions your customers would ask an AI assistant and records the same.",
+    schedule: "Google with the Monday rank sweep · Claude scan Wednesdays 06:00 UTC",
     flow: ["Tracked keywords", "AI answer check", "Citations saved", "AI visibility on Home"],
-    note: "The Google check adds about $0.002 per keyword per day on your DataForSEO account (SerpApi mode gets it free with the weekly rank pull; GSC-only mode skips it). The Claude scan runs on your own Claude subscription.",
+    note: "The Google check rides the weekly sweep at no extra call (SerpApi mode gets it free with the weekly rank pull; GSC-only mode skips it). The Claude scan runs on your own Claude subscription.",
     control: { locked: "Always on - collects data, publishes nothing." },
   },
   {
@@ -245,7 +245,7 @@ export async function gatherEvidence(
   // Tolerates migration 0025 not being applied yet (query error -> no data).
   evidence["ai-visibility"] = lastAi.data?.checked_at
     ? `Last check ${shortDate(lastAi.data.checked_at as string)}.`
-    : "No AI checks recorded yet - starts with the next nightly rank check.";
+    : "No AI checks recorded yet - starts with the next Monday rank sweep.";
 
   // Tolerates migration 0013 not being applied yet (query error -> no data).
   evidence["trend-scan"] = lastTrendScan.data?.last_trend_scan_at

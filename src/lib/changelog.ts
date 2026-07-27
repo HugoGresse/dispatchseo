@@ -30,6 +30,35 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-27.2",
+    date: "2026-07-27",
+    title: "Rank tracking that never runs out of budget",
+    summary:
+      "Smarter, much cheaper SERP checks - and if spend ever runs hot, tracking slows down instead of stopping.",
+    changes: [
+      {
+        kind: "improved",
+        text:
+          "Rank checks moved to a smarter schedule: keywords ranking in the top 30 are still " +
+          "checked every day, and everything gets a full-depth sweep (including Google AI " +
+          "Overview citations) every Monday. Same charts, a fraction of the DataForSEO cost.",
+      },
+      {
+        kind: "new",
+        text:
+          "Budget pacing: if a project's DataForSEO spend is on track to hit its monthly " +
+          "budget, checks automatically thin to every-other-day (then weekly) instead of " +
+          "cutting out mid-month. The Billing page shows when pacing is active.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Domain Rating now refreshes weekly - it moves on a monthly scale, and the daily " +
+          "re-check was paid money for a number that almost never changed overnight.",
+      },
+    ],
+  },
+  {
     version: "2026-07-27",
     date: "2026-07-27",
     title: "A nudge to install Claude for Chrome",

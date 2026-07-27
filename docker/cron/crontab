@@ -1,8 +1,22 @@
 # Self-hosted cron schedule - mirrors the cloud deployment's split between
-# vercel.json (daily-ranks) and .github/workflows (hourly-gsc,
-# weekly-opportunities). Times are container-local (UTC). Output is redirected
-# to PID 1's stdout so `docker compose logs cron` shows every run (BusyBox
-# crond otherwise discards job output).
+# vercel.json (daily-ranks) and .github/workflows (hourly-gsc). Times are
+# container-local (UTC). Output is redirected to PID 1's stdout so
+# `docker compose logs cron` shows every run (BusyBox crond otherwise
+# discards job output).
+#
+# weekly-opportunities is deliberately NOT scheduled here. The route is
+# retired (its own header says so - the Claude weekly-research run replaced
+# it) and has no trigger on the cloud deployment, but this crontab kept
+# firing it every Monday on self-host only. Three problems, all silent:
+# it is hard-scoped to DEFAULT_PROJECT_ID, so on a multi-site install only
+# the first site ever got it; it duplicates the research the in-stack
+# builder already claims on its own cadence; and it spends the owner's
+# DataForSEO balance (keywordIdeas, 200 rows) for an automation that appears
+# nowhere in the automations registry and has no toggle to turn off. The
+# route stays callable by hand - it just no longer runs behind anyone's back.
 0 4 * * * /bin/sh /usr/local/bin/hit.sh daily-ranks >> /proc/1/fd/1 2>&1
 7 */3 * * * /bin/sh /usr/local/bin/hit.sh hourly-gsc >> /proc/1/fd/1 2>&1
-0 5 * * 1 /bin/sh /usr/local/bin/hit.sh weekly-opportunities >> /proc/1/fd/1 2>&1
+# Collects the finished DataForSEO standard-queue SERP tasks that daily-ranks
+# posts (see dataforseo-tasks.ts) - without this, self-host rank tracking
+# would queue tasks that never land. Mirrors .github/workflows/serp-collect.yml.
+37 * * * * /bin/sh /usr/local/bin/hit.sh serp-collect >> /proc/1/fd/1 2>&1

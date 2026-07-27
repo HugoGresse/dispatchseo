@@ -1,6 +1,6 @@
 // Weekly AI-visibility sampling: does an AI assistant cite {{SITE_NAME}} when
 // asked the questions its customers actually ask? Google's AI Overview side
-// needs no agent - the daily rank cron parses it from the same SERP pull that
+// needs no agent - the weekly SERP sweep parses it from the same data that
 // checks positions. This workflow covers the chat engines, starting with the
 // one the agent IS: Claude, sampled on the owner's own subscription via web
 // search, so the check costs the platform nothing.
@@ -21,8 +21,8 @@ Search is splitting: a growing share of the queries this site targets get
 answered by an AI assistant instead of ten blue links. This workflow measures
 the side of that shift the crons cannot: what a chat assistant actually
 answers, and whether {{DOMAIN}} is among its cited sources. (Google's AI
-Overview side is already covered - the daily rank cron records it from the
-same SERP data that checks positions.)
+Overview side is already covered - the weekly SERP sweep records it from the
+same data that checks positions.)
 
 You are the instrument here: you sample the questions with YOUR OWN web
 search on the owner's subscription. Do not fabricate answers from memory -
