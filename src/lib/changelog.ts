@@ -30,6 +30,21 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-27",
+    date: "2026-07-27",
+    title: "A nudge to install Claude for Chrome",
+    summary:
+      "The \"Get it on Google\" card now points new users at the Chrome extension it needs.",
+    changes: [
+      {
+        kind: "improved",
+        text:
+          "The indexing card links straight to the Claude for Chrome install page the first " +
+          "time it shows up, so the paste-and-go step actually works on the first try.",
+      },
+    ],
+  },
+  {
     version: "2026-07-26.4",
     date: "2026-07-26",
     title: "Setup can't touch the wrong site",

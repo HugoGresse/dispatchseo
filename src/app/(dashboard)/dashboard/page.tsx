@@ -58,6 +58,7 @@ import { mcpAddCommand, setupCommand } from "@/lib/mcp-connect";
 import { PacingLine } from "@/components/pacing-info";
 import { AgentStatus } from "@/components/agent-status";
 import { DockerAccessTip } from "@/components/docker-access-tip";
+import { ChromeExtensionTip } from "@/components/chrome-extension-tip";
 import { FirstRunBackground } from "@/components/first-run-background";
 import AiVisibilitySection from "./ai-visibility-section";
 
@@ -1298,10 +1299,13 @@ export default async function Home() {
                     <span className="flex h-5 w-5 shrink-0 select-none items-center justify-center rounded-md bg-neutral-800 text-xs font-medium text-neutral-400">
                       2
                     </span>
-                    <p className="text-sm text-neutral-400">
-                      Paste it into Claude Code (the VS Code prompt box). It clicks through
-                      Search Console in Chrome, so be signed in there.
-                    </p>
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <p className="text-sm text-neutral-400">
+                        Paste it into Claude Code (the VS Code prompt box). It clicks through
+                        Search Console in Chrome, so be signed in there.
+                      </p>
+                      <ChromeExtensionTip />
+                    </div>
                   </li>
                   <li className="flex items-center gap-3">
                     <span className="flex h-5 w-5 shrink-0 select-none items-center justify-center rounded-md bg-neutral-800 text-xs font-medium text-neutral-400">
