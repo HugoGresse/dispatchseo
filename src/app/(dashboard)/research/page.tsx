@@ -116,7 +116,7 @@ export default async function ResearchPage() {
             sub={
               nextGuide
                 ? `next up: ${nextGuide.title}`
-                : "the Monday research run refills this"
+                : "research refills this automatically when it empties"
             }
           />
           <BigStatTile
@@ -152,7 +152,7 @@ export default async function ResearchPage() {
                 "Queue is empty - your keyword research is running and fills this in a few minutes, then automatically every week. Nothing to run yourself."
               ) : (
                 <>
-                  Queue is empty - the Monday research run refills it, or run{" "}
+                  Queue is empty - research refills it automatically within a few hours, or run{" "}
                   <Mono>/seo-research</Mono> in Claude Code.
                 </>
               )}

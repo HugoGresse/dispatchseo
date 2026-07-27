@@ -898,8 +898,20 @@ export async function deleteAccount(
     return { error: `Type ${user.email ?? "your email address"} exactly to confirm.` };
   }
 
-  const { getSubscription, polar, polarConfigured } = await import("@/lib/billing");
-  const sub = await getSubscription(user.id);
+  const { getSubscriptionOrThrow, polar, polarConfigured } = await import("@/lib/billing");
+  let sub: Awaited<ReturnType<typeof getSubscriptionOrThrow>>;
+  try {
+    sub = await getSubscriptionOrThrow(user.id);
+  } catch {
+    // Abort rather than read "couldn't check" as "nothing to cancel" - the
+    // latter deletes the account and leaves the subscription charging. Same
+    // posture as the owned-projects read further down. Nothing is destroyed
+    // yet, so retrying is free.
+    return {
+      error:
+        "Couldn't check your billing status, so nothing was deleted. Try again in a moment - if it keeps failing, cancel your plan in the billing portal first.",
+    };
+  }
   // isActive() is the ACCESS test (active | trialing) - it is NOT the billing
   // test, and using it here was wrong. A past_due, unpaid or incomplete
   // subscription still exists at Polar: it can still recover, and it can still
@@ -907,15 +919,14 @@ export async function deleteAccount(
   // left the subscription running, with the dashboard that could have cancelled
   // it now gone - the user's only remaining route is Polar support. Cancel
   // anything that is not already in a terminal state (2026-07-27).
-  const CANCELLABLE_STATUSES = new Set([
-    "active",
-    "trialing",
-    "past_due",
-    "unpaid",
-    "incomplete",
-    "incomplete_expired",
-  ]);
-  if (sub?.provider_subscription_id && CANCELLABLE_STATUSES.has(String(sub.status))) {
+  // DENYLIST, not an allowlist. An allowlist silently skips any status it was
+  // not told about - Polar's `paused` was already missing, and a provider can
+  // add one at any time. Listing only the states where cancelling is genuinely
+  // pointless means an unknown status errs toward "try to cancel it", which is
+  // the safe direction: a redundant revoke is a no-op we already tolerate,
+  // while a missed one keeps charging a card whose owner deleted their account.
+  const TERMINAL_STATUSES = new Set(["canceled", "cancelled", "revoked", "incomplete_expired"]);
+  if (sub?.provider_subscription_id && !TERMINAL_STATUSES.has(String(sub.status))) {
     if (!polarConfigured()) {
       return {
         error:

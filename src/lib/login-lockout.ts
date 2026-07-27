@@ -35,15 +35,14 @@ export async function clearLoginFailures(ip: string): Promise<void> {
 }
 
 // Client IP for the lockout/rate-limit key. Order matters for spoof-resistance:
-// prefer x-vercel-forwarded-for (set by Vercel's edge, never client-supplied),
-// then x-real-ip (also edge-set), and only fall back to the leftmost
-// x-forwarded-for token last. On Vercel all three are identical and Vercel
-// OVERWRITES inbound x-forwarded-for, so the value is the real client IP either
-// way - this change is a no-op for the cloud deploy. It hardens SELF-HOST:
-// behind your own reverse proxy (nginx/Caddy/Docker) you MUST have that proxy
-// overwrite inbound x-forwarded-for (or set x-real-ip); otherwise a client can
-// spoof the leftmost token and evade the lockout. The "unknown" bucket (local
-// dev, exotic proxies) shares one counter, which at this scale is fine.
+// on Vercel, prefer the edge-set headers (x-vercel-forwarded-for, then
+// x-real-ip) - Vercel writes them itself and strips inbound copies, so they are
+// the real client IP and cannot be forged. ANYWHERE ELSE those two headers are
+// simply whatever the client typed, so they are ignored entirely and the
+// RIGHTMOST x-forwarded-for token is used instead: proxies append, so the last
+// entry is the one written by the hop nearest us and the only one a client
+// could not author. The "unknown" bucket (local dev, exotic proxies) shares one
+// counter, which at this scale is fine.
 export function clientIp(hdrs: Headers): string {
   // Trust the edge-set headers ONLY when we are actually behind that edge.
   // Vercel sets x-vercel-forwarded-for and x-real-ip itself and strips inbound

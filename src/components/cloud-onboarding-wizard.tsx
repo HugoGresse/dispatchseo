@@ -255,7 +255,9 @@ export function CloudOnboardingWizard(props: {
       return (
         <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.07] p-3.5 text-sm text-amber-100/90">
           <b className="font-semibold text-amber-200">Your move:</b> your repo&apos;s branch
-          protection requires a pull request - merge it to finish.
+          protection requires a pull request - merge it, then come back to this page
+          and hit Retry below. Setup starts from here, so it can&apos;t begin until the
+          pipeline is on your default branch.
           {installResult.pr_url ? (
             <>
               {" "}
@@ -269,6 +271,16 @@ export function CloudOnboardingWizard(props: {
               </a>
             </>
           ) : null}
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={fireInstall}
+              disabled={installPending}
+              className="cursor-pointer rounded-lg bg-neutral-800 px-4 py-2 text-sm font-semibold text-neutral-200 transition-colors hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {installPending ? "Checking..." : "I merged it - continue"}
+            </button>
+          </div>
         </div>
       );
     }

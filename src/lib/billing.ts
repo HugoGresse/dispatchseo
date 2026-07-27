@@ -72,6 +72,23 @@ export async function getSubscription(userId: string): Promise<Subscription | nu
   return (data as Subscription) ?? null;
 }
 
+// Error-SURFACING twin of getSubscription, for the one caller where "couldn't
+// read it" must never be mistaken for "there isn't one": account deletion.
+// getSubscription stays deliberately tolerant - its other callers gate access
+// and failing open is right there - but deleteAccount uses the answer to decide
+// whether to cancel billing, so a transient read error would delete the account
+// and leave the card being charged with no dashboard left to cancel from. That
+// is the precise outcome deleteAccount's own header calls unrecoverable.
+export async function getSubscriptionOrThrow(userId: string): Promise<Subscription | null> {
+  const { data, error } = await db()
+    .from("subscriptions")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as Subscription) ?? null;
+}
+
 export function isActive(sub: Subscription | null): boolean {
   return sub?.status === "active" || sub?.status === "trialing";
 }
@@ -115,7 +132,20 @@ export async function applySubscriptionState(state: {
   // Throwing gives the route a 500, which is exactly the signal Polar's retry
   // schedule exists for; the upsert is idempotent on user_id, so redelivery is
   // safe (2026-07-27).
-  if (error) throw new Error(`subscription upsert failed: ${error.message}`);
+  if (error) {
+    // Carry the Postgres code so the webhook can tell a PERMANENT failure from
+    // a transient one. 23503 (foreign-key violation) means the auth user row is
+    // gone - subscriptions.user_id cascades from auth.users, so deleting an
+    // account removes the row, and any later Polar event for that customer
+    // (the revoke we ourselves triggered, or a renewal) can never be written.
+    // Retrying that forever would burn all 10 of Polar's attempts and get the
+    // endpoint auto-disabled for EVERY customer.
+    const err = new Error(`subscription upsert failed: ${error.message}`) as Error & {
+      pgCode?: string;
+    };
+    err.pgCode = error.code;
+    throw err;
+  }
   const event = ["active", "trialing"].includes(state.status)
     ? "subscription_activated"
     : ["canceled", "revoked"].includes(state.status)

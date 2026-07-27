@@ -49,8 +49,24 @@ async function webhookWriteFailed(
   status: string,
 ): Promise<Response> {
   const message = e instanceof Error ? e.message : String(e);
-  await reportCronRun("polar-webhook", { error: message, event: eventType, userId, status }, true);
-  return Response.json({ error: "subscription write failed" }, { status: 500 });
+  // A foreign-key violation means the account this event belongs to no longer
+  // exists, so no retry can ever succeed. Answer 200 for that one: Polar
+  // disables an endpoint after 10 CONSECUTIVE non-2xx deliveries, and a single
+  // deleted account produces exactly such a poison event (its own revoke, then
+  // every later renewal) - which would silently take billing webhooks down for
+  // every other customer. Everything else still 500s, because that is the
+  // signal Polar's retry schedule exists for. Either way the failure is
+  // recorded and alerted, so nothing goes quiet.
+  const permanent = (e as { pgCode?: string } | null)?.pgCode === "23503";
+  await reportCronRun(
+    "polar-webhook",
+    { error: message, event: eventType, userId, status, permanent },
+    true,
+  );
+  return Response.json(
+    { error: "subscription write failed", permanent },
+    { status: permanent ? 200 : 500 },
+  );
 }
 
 export async function POST(req: Request): Promise<Response> {
