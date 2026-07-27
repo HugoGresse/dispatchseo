@@ -173,6 +173,11 @@ export function collectErrors(value: unknown, path = ""): string[] {
   return out;
 }
 
+// Pseudo-job for the run-log alarm below. Deliberately never written to
+// cron_runs - writing there is precisely what is broken when it fires - so it
+// only ever names an email, and can never collide with a real job's history.
+const RUN_LOG_JOB = "cron-run-log";
+
 async function sendFailureEmail(job: string, errors: string[]): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY;
   const to = process.env.ALERT_EMAIL;
@@ -180,29 +185,91 @@ async function sendFailureEmail(job: string, errors: string[]): Promise<boolean>
   const from = process.env.ALERT_EMAIL_FROM ?? "DispatchSEO <onboarding@resend.dev>";
   const list = errors.slice(0, 20).map((e) => `- ${e}`).join("\n");
   const isDeploy = job === "deploy-check";
+  // The stock body points at the Home banner for detail. When the run log is
+  // the thing that's down, that advice is actively wrong - the banner is
+  // frozen on the last state that was written - so this branch says so.
+  const isRunLog = job === RUN_LOG_JOB;
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       from,
       to,
-      subject: isDeploy
-        ? "DispatchSEO deploy check failed"
-        : `DispatchSEO job failed: ${job}`,
+      subject: isRunLog
+        ? "DispatchSEO cron alerting is blind - run log is not writable"
+        : isDeploy
+          ? "DispatchSEO deploy check failed"
+          : `DispatchSEO job failed: ${job}`,
       text:
-        (isDeploy
-          ? `The post-deploy smoke test just failed - the code that went live is broken.\n\n`
-          : `The ${job} job just failed.\n\n`) +
+        (isRunLog
+          ? `Cron outcomes cannot be written to the database, so every job's ` +
+            `result is being thrown away as it finishes.\n\n`
+          : isDeploy
+            ? `The post-deploy smoke test just failed - the code that went live is broken.\n\n`
+            : `The ${job} job just failed.\n\n`) +
         `${list || "(no error detail captured)"}\n\n` +
-        `Latest runs show on the dashboard Home banner; full logs are in ` +
-        `your Vercel function logs or the job's GitHub Actions run. While a ` +
-        `job keeps failing its emails are debounced, so you may not get one ` +
-        `per failure - the banner always shows the latest state.`,
+        (isRunLog
+          ? `Until this is fixed the Home banner and get_cron_health are BLIND: ` +
+            `they show the last state that was successfully written, so a job ` +
+            `that is failing right now can still look healthy there. This email ` +
+            `is the only signal you will get.\n\n` +
+            `The usual cause is an unapplied migration (the insert writes every ` +
+            `cron_runs column, so one missing column fails all of them). Run ` +
+            `supabase/migrations/setup.sql - idempotent, safe to re-run - then ` +
+            `hit /api/cron/deploy-check to confirm schema_migrations reads ok.`
+          : `Latest runs show on the dashboard Home banner; full logs are in ` +
+            `your Vercel function logs or the job's GitHub Actions run. While a ` +
+            `job keeps failing its emails are debounced, so you may not get one ` +
+            `per failure - the banner always shows the latest state.`),
     }),
     signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) throw new Error(`Resend HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
   return true;
+}
+
+// The run log itself failed to write. This is the one failure that cannot ride
+// the normal rails, because the normal rails ARE what is down: the banner,
+// get_cron_health, the per-job email debounce and mark_cron_fixed all read
+// cron_runs. It used to be a bare console.error in a log nobody tails, which
+// on 2026-07-27 meant ~5.5h of every cron returning HTTP 200 while its outcome
+// was silently discarded (migration 0039 unapplied - the insert sends
+// claimed_only, so one missing column failed every write).
+//
+// So: email directly, and debounce in memory, since the per-job debounce lives
+// in the table we cannot write to. Module-level state resets on cold start, so
+// the worst case is one email per warm instance per hour - noisier than the
+// DB-backed debounce on purpose, and still bounded. Best-effort throughout:
+// reporting must never fail the cron that called it.
+const RUN_LOG_ALARM_DEBOUNCE_MS = 60 * 60 * 1000;
+let lastRunLogAlarmAt = 0;
+
+async function alertRunLogBroken(
+  job: string,
+  err: { message?: string; code?: string },
+): Promise<void> {
+  const message = err.message ?? "unknown error";
+  console.error(`[cron-alerts] ${job} run log insert failed:`, message);
+  // A missing cron_runs TABLE is "migrations were never applied" - an install
+  // that has not finished yet, which the /setup wizard already owns as a
+  // user-facing card. Per CLAUDE.md, unmet setup is informational and never
+  // emails; loudness is for regressions. A missing COLUMN is the opposite: the
+  // table exists, this instance has been logging runs successfully, and a
+  // deploy just moved past its schema - exactly the 0039 case, and worth
+  // waking the owner. Anything else (permissions, connection) is loud too.
+  const code = err.code ?? "";
+  const tableMissing =
+    code === "42P01" || code === "PGRST205" || /could not find the table/i.test(message);
+  if (tableMissing) return;
+  if (Date.now() - lastRunLogAlarmAt < RUN_LOG_ALARM_DEBOUNCE_MS) return;
+  lastRunLogAlarmAt = Date.now();
+  try {
+    await sendFailureEmail(RUN_LOG_JOB, [
+      `cron_runs insert failed while logging "${job}": ${message}`,
+    ]);
+  } catch (e) {
+    console.error(`[cron-alerts] run-log alarm could not be emailed either:`, e);
+  }
 }
 
 // Cloud bundle: the project owner behind a per-tenant job (job names carry the
@@ -355,9 +422,10 @@ export async function reportCronRun(
       emailed_at: emailedAt,
       claimed_only: claimedOnly,
     });
-    // Tolerate a missing table (migration 0020 not applied yet) - same
-    // posture as projects.ts / site-profile.ts.
-    if (error) console.error(`[cron-alerts] ${job} run log insert failed:`, error.message);
+    // The insert still never fails the cron (migration 0020 not applied yet is
+    // a legitimate state - same posture as projects.ts / site-profile.ts), but
+    // it no longer fails QUIETLY: see alertRunLogBroken.
+    if (error) await alertRunLogBroken(job, error);
   } catch (e) {
     console.error(`[cron-alerts] ${job} reporting failed:`, e);
   }

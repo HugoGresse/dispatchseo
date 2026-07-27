@@ -11,6 +11,11 @@ import { db } from "./db";
 //
 // RULE: every new migration adds a probe here, same discipline as bumping
 // INSTRUCTIONS_VERSION. Probe = the migration's most distinctive artifact.
+// If a migration has no queryable artifact (constraints, policies), record it
+// in UNPROBEABLE below with the reason instead. The rule was previously honor-
+// system and four migrations had quietly skipped it, so it is now enforced:
+// `node scripts/generate-setup-sql.mjs --check` (pnpm build + the vanilla-
+// postgres CI job) fails on any migration missing from both lists.
 //
 // Column probes select the column with limit(0): PostgREST answers 42703 /
 // "column ... does not exist" without transferring rows. Table probes use a
@@ -63,8 +68,38 @@ const PROBES: Probe[] = [
   { migration: "0035_dataforseo_usage", table: "dataforseo_usage" },
   { migration: "0036_install_progress", table: "projects", column: "install_progress" },
   { migration: "0037_builder_claude_token", table: "instance_settings", column: "builder_claude_token" },
+  // 0039's absence is the one that bites hardest and shows least: every
+  // reportCronRun insert sends claimed_only, so a missing column made EVERY
+  // cron_runs write fail - and that insert tolerates its own error by design
+  // (a logging failure must never fail the cron). Result on 2026-07-27: ~5.5h
+  // where crons ran fine, returned 200, and their outcomes were discarded -
+  // no banner, no alert emails, the whole alerting rail silently dead while
+  // this very file (which had no probe for 0039) reported the schema complete.
+  { migration: "0039_cron_claim_marker", table: "cron_runs", column: "claimed_only" },
+  { migration: "0040_pipeline_verified", table: "projects", column: "pipeline_verified" },
   { migration: "0041_backlink_status_changed", table: "backlink_prospects", column: "status_changed_at" },
 ];
+
+// Migrations that genuinely CANNOT be probed through this mechanism, with the
+// reason. db() speaks PostgREST, which can only ask "does this table/column
+// answer a select?" - a migration whose entire artifact is a constraint, a
+// policy, or a function is invisible to it. Listed explicitly rather than
+// omitted so the coverage guard in scripts/generate-setup-sql.mjs can tell a
+// deliberate exemption from the oversight that let 0039 slip through, and so
+// nobody re-audits these two every time the list is reviewed.
+export const UNPROBEABLE: Record<string, string> = {
+  // Rewrites foreign keys to ON DELETE CASCADE. No table or column changes -
+  // its artifact lives in pg_constraint. Failure mode if unapplied is a
+  // failed project delete (loud, immediate, user-facing), not silent drift.
+  "0006_cascade_deletes":
+    "FK constraint changes only - artifact is in pg_constraint, not queryable via PostgREST",
+  // Creates RLS policies + project_owned_by_caller(), Supabase-only and
+  // DO-block guarded. Inert by construction: every caller today is the
+  // service-role key, which bypasses RLS regardless of policy count, so
+  // there is no behavior for a probe to detect even in principle.
+  "0038_rls_owner_policies":
+    "RLS policies + function, artifact is in pg_policies; inert under the service-role key anyway",
+};
 
 async function probeMissing(p: Probe): Promise<boolean> {
   try {
