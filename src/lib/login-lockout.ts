@@ -34,51 +34,51 @@ export async function clearLoginFailures(ip: string): Promise<void> {
   await db().from("login_attempts").delete().eq("ip", ip);
 }
 
-// Client IP for the lockout/rate-limit key. Order matters for spoof-resistance:
-// on Vercel, prefer the edge-set headers (x-vercel-forwarded-for, then
-// x-real-ip) - Vercel writes them itself and strips inbound copies, so they are
-// the real client IP and cannot be forged. ANYWHERE ELSE those two headers are
-// simply whatever the client typed, so they are ignored entirely and the
-// RIGHTMOST x-forwarded-for token is used instead: proxies append, so the last
-// entry is the one written by the hop nearest us and the only one a client
-// could not author. The "unknown" bucket (local dev, exotic proxies) shares one
-// counter, which at this scale is fine.
+// Client IP for the lockout/rate-limit key. One rule for every deployment:
+// the RIGHTMOST x-forwarded-for entry, which is non-forgeable on Vercel (the
+// edge overwrites the header) and on the bundled Caddy (which appends). The
+// "unknown" bucket (local dev, exotic proxies) shares one counter, which at
+// this scale is fine. See the function body for why no other header is read.
 export function clientIp(hdrs: Headers): string {
-  // Trust the edge-set headers ONLY when we are actually behind that edge.
-  // Vercel sets x-vercel-forwarded-for and x-real-ip itself and strips inbound
-  // copies, so process.env.VERCEL is the precise condition under which they
-  // cannot be forged. Anywhere else they are simply whatever the client typed:
-  // `caddy reverse-proxy` (the bundled docker `domain` profile) adds only
-  // X-Forwarded-For/Proto/Host and neither sets nor strips X-Real-IP, so a
-  // self-hosted install trusted an attacker-authored value and returned from
-  // this function before ever reaching the hardened rightmost-XFF logic below.
-  // Incrementing X-Real-IP per request gave a fresh login_attempts row every
-  // time and the 5-strikes lock never tripped - on a dashboard whose only door
-  // is a password (2026-07-27; the rightmost-XFF hardening alone did not fix
-  // this, because these two headers are consulted first).
-  if (process.env.VERCEL) {
-    const vercel = hdrs.get("x-vercel-forwarded-for")?.split(",")[0]?.trim();
-    if (vercel) return vercel;
-    const real = hdrs.get("x-real-ip")?.trim();
-    if (real) return real;
-  }
-  // RIGHTMOST, not leftmost. x-forwarded-for is append-only by convention: each
-  // proxy tacks the address it saw onto the end, so the last entry is the one
-  // written by the hop closest to us - the only entry in the list that a client
-  // could not have authored. The leftmost is whatever the CLIENT sent.
+  // ONE rule, both deployment shapes: the RIGHTMOST x-forwarded-for entry.
   //
-  // This matters for the bundled docker stack specifically: Caddy's
-  // reverse_proxy APPENDS to an inbound x-forwarded-for rather than replacing
-  // it, and it does not set x-real-ip at all. So on the documented `domain`
-  // profile, reading leftmost handed the lockout a fully attacker-controlled
-  // key - rotate the header per request and 5-strikes-per-IP never trips, on a
-  // dashboard whose only door is a password the owner chose (2026-07-27).
+  // x-forwarded-for is append-only by convention - each proxy adds the address
+  // it saw to the end - so the last entry is the one written by the hop nearest
+  // us, and the only entry in the list a client cannot author. The leftmost is
+  // whatever the CLIENT sent.
   //
-  // Behind two or more proxies (e.g. Cloudflare in front of your own nginx)
-  // this keys on the nearest proxy instead of the true client, which buckets
-  // more attempts together than strictly necessary. That is the safe direction
-  // to be wrong in for a single-owner dashboard: it over-throttles an attacker,
-  // it cannot hand one unlimited guesses.
+  // On Vercel this is correct because the edge REPLACES the header: "we
+  // currently overwrite the X-Forwarded-For header and do not forward external
+  // IPs. This restriction is in place to prevent IP spoofing" (Vercel request-
+  // headers docs). Whatever a client sends is discarded before the function
+  // runs, so the value here is Vercel's own computed client IP.
+  //
+  // Behind the bundled Caddy (the docker `domain` profile) it is correct for
+  // the opposite reason: `caddy reverse-proxy` APPENDS to an inbound value
+  // rather than replacing it, so the client controls every entry except the
+  // last.
+  //
+  // Deliberately NOT gated on process.env.VERCEL, and deliberately not reading
+  // x-real-ip or x-vercel-forwarded-for:
+  //  - Vercel exposes VERCEL/VERCEL_ENV only when a project setting ("Enable
+  //    access to System Environment Variables") is ticked, and Vercel's current
+  //    docs do not state its default. An auth control must not hinge on a flag
+  //    whose value we cannot confirm - if it were off, the branch would silently
+  //    take the other path in production, which is exactly the class of quiet
+  //    degradation this whole sweep existed to remove.
+  //  - x-real-ip is set by Vercel but NOT by Caddy, which neither sets nor
+  //    strips it. Consulting it first therefore handed a self-hosted install a
+  //    fully attacker-authored key: increment it per request and the
+  //    5-strikes-per-15-minutes lock never trips, on a dashboard whose only door
+  //    is a password. Since the rightmost XFF token is already correct on both
+  //    platforms, these headers add no information and only add a forgeable
+  //    path (2026-07-28).
+  //
+  // Behind two or more proxies (Cloudflare in front of your own nginx) this
+  // keys on the nearest proxy rather than the true client, bucketing more
+  // attempts together than strictly necessary. That is the safe direction to be
+  // wrong in for a single-owner dashboard: it over-throttles an attacker, it
+  // can never hand one unlimited guesses.
   const chain = hdrs.get("x-forwarded-for")?.split(",") ?? [];
   const last = chain[chain.length - 1]?.trim();
   return last || "unknown";
