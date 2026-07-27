@@ -5,6 +5,7 @@ import { gscCronReadiness } from "@/lib/gsc-readiness";
 import { checkCron } from "@/lib/cron-auth";
 import { reportCronRun } from "@/lib/cron-alerts";
 import { recoverStuckBuilds } from "@/lib/build-recovery";
+import { refillEmptyGuideQueues } from "@/lib/queue-refill";
 import { listProjectsChecked, type Project } from "@/lib/projects";
 
 // Hourly GSC refresh, triggered by the hourly-gsc GitHub Action (Vercel Hobby
@@ -142,6 +143,13 @@ export async function GET(req: Request): Promise<Response> {
   // so it also runs the stuck-build recovery sweep (see build-recovery.ts).
   // Best-effort by contract - it must never affect the GSC result.
   await recoverStuckBuilds();
+
+  // ...and the queue-empty refill (see queue-refill.ts): a project whose guide
+  // queue has run dry gets research fired for it, instead of the daily builder
+  // finding nothing and exiting "success" until the next weekly cron happens to
+  // land. Reported under the sweep's own per-project marker rows, so a failure
+  // is loud on the banner without failing the GSC result around it.
+  result._queue_refill = await refillEmptyGuideQueues();
 
   console.log("[hourly-gsc]", JSON.stringify(result));
   await reportCronRun("hourly-gsc", result, hadError);

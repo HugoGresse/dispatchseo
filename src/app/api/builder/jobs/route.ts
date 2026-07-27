@@ -5,6 +5,7 @@ import { credsForProject } from "@/lib/dataforseo";
 import { mergeToken, builderClaudeToken } from "@/lib/github";
 import { listProjects, fetchProjectToken, effectiveAutomations } from "@/lib/projects";
 import { isCloudMode } from "@/lib/cloud";
+import { guideQueueDry } from "@/lib/queue-refill";
 
 export const dynamic = "force-dynamic";
 
@@ -115,16 +116,24 @@ export async function GET(req: Request): Promise<Response> {
     // the only row inside it is a claim that outlived its grace period,
     // meaning the builder never actually finished the job it was handed.
     const health = await getCronHealth(p.slug);
-    const due = (wf: string) => {
+    const due = (wf: string, cadenceOverrideHours?: number) => {
       const row = health.find((h) => h.job === `builder-${wf}--${p.slug}`);
       if (!row) return true;
       const ageMs = Date.now() - new Date(row.last_run_at).getTime();
       if (row.claimed_only) return ageMs > CLAIM_GRACE_HOURS * 3_600_000;
-      return ageMs > CADENCE_HOURS[wf] * 3_600_000;
+      return ageMs > (cadenceOverrideHours ?? CADENCE_HOURS[wf]) * 3_600_000;
     };
 
     const wanted: string[] = [];
-    if (due("research")) wanted.push("research");
+    // Queue-empty self-heal, the in-stack twin of queue-refill.ts. Research on
+    // a 156h cadence drains to zero by day 7 exactly like the weekly cron did,
+    // and the builder would then hand out build-guide jobs that find nothing
+    // and exit clean - a week of "successful" runs and no published post.
+    // A dry queue collapses the cadence to daily; it does NOT bypass due(),
+    // so the claim row and its grace window still stop this re-handing research
+    // on every 10-minute poll. null (count failed) is never treated as dry.
+    const dryQueue = (await guideQueueDry(p.id)) === true;
+    if (due("research", dryQueue ? 20 : undefined)) wanted.push("research");
     if (flags.auto_build_guides && due("build-guide")) wanted.push("build-guide");
     if (flags.auto_build_tools && due("build-tool")) {
       // Tool runs only when there is something to build - a scheduled
