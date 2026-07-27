@@ -2,6 +2,9 @@ import { requireDashboard } from "@/lib/auth-gate";
 import { revalidatePath } from "next/cache";
 import { requireOnboarded } from "@/lib/onboarding-gate";
 import { getActiveProject } from "@/lib/active-project";
+import { getProjectBySlug } from "@/lib/projects";
+import { isCloudMode } from "@/lib/cloud";
+import { assertProjectOwned } from "@/lib/tenant-guard";
 import {
   disconnectProject,
   oauthConfigured,
@@ -26,12 +29,21 @@ async function disconnect() {
   revalidatePath("/google");
 }
 
+// Takes the slug explicitly rather than reading getActiveProject(): the page
+// renders this form for one specific project, and the active-project cookie
+// is forgiving-by-design (falls back to the owner's first project on a stale
+// slug) - fine for rendering, wrong for picking which project's tracked GSC
+// property this overwrites (see wizardSetGscProperty in actions.ts).
 async function useProperty(formData: FormData) {
   "use server";
   await requireDashboard();
   const siteUrl = String(formData.get("siteUrl") ?? "");
   if (!siteUrl) return;
-  const project = await getActiveProject();
+  const slug = String(formData.get("slug") ?? "");
+  if (!slug) return;
+  const project = await getProjectBySlug(slug);
+  if (!project) return;
+  if (isCloudMode()) await assertProjectOwned(project.id);
   await setTrackedProperty(project.id, siteUrl);
   revalidatePath("/google");
 }
@@ -154,6 +166,7 @@ export default async function GooglePage({
                       ) : (
                         <form action={useProperty} className="shrink-0">
                           <input type="hidden" name="siteUrl" value={s.siteUrl} />
+                          <input type="hidden" name="slug" value={project.slug} />
                           <button className="rounded border border-neutral-700 px-2 py-1 text-xs font-sans text-neutral-300 hover:border-neutral-500 sm:px-1.5 sm:py-0.5 sm:text-[11px]">
                             use this property
                           </button>

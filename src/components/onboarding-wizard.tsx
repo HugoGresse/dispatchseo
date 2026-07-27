@@ -268,7 +268,7 @@ export function OnboardingWizard({
 
   function confirmMode() {
     startMode(async () => {
-      await setProjectMode(modeChoice);
+      await setProjectMode(modeChoice, created?.slug ?? "");
       setScreen("s_gh");
     });
   }

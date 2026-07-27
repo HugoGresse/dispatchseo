@@ -70,10 +70,12 @@ function AutomationCard({
   a,
   evidence,
   flags,
+  slug,
 }: {
   a: Automation;
   evidence: string;
   flags: AutomationFlags;
+  slug: string;
 }) {
   // A toggleable automation that is switched off renders dimmed and "paused";
   // the card itself stays fully visible so what's NOT running is as obvious
@@ -98,7 +100,7 @@ function AutomationCard({
         <div className="flex items-center gap-3">
           <p className="text-xs text-neutral-500">{a.schedule}</p>
           {a.control && "flag" in a.control ? (
-            <AutomationToggle flag={a.control.flag} enabled={enabled} />
+            <AutomationToggle flag={a.control.flag} enabled={enabled} slug={slug} />
           ) : a.control && "locked" in a.control ? (
             <LockChip reason={a.control.locked} />
           ) : null}
@@ -151,7 +153,13 @@ export default async function AutomationsPage() {
             return toggleable(a) - toggleable(b);
           })
           .map((a) => (
-            <AutomationCard key={a.id} a={a} evidence={evidence[a.id] ?? ""} flags={flags} />
+            <AutomationCard
+              key={a.id}
+              a={a}
+              evidence={evidence[a.id] ?? ""}
+              flags={flags}
+              slug={project.slug}
+            />
           ))}
       </div>
     </div>

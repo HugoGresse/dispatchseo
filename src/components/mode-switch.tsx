@@ -10,7 +10,7 @@ import { setProjectMode } from "@/app/actions";
 // preset. Switching DOWN to semi is instant (de-escalating trust should never
 // need a dialog); switching UP to auto asks for one confirmation, because
 // from that moment content publishes to the live site without a human.
-export function ModeSwitch({ mode }: { mode: "semi" | "auto" | "custom" }) {
+export function ModeSwitch({ mode, slug }: { mode: "semi" | "auto" | "custom"; slug: string }) {
   const [confirming, setConfirming] = useState(false);
   const [, startTransition] = useTransition();
   const router = useRouter();
@@ -47,7 +47,7 @@ export function ModeSwitch({ mode }: { mode: "semi" | "auto" | "custom" }) {
     setFailed(false);
     startTransition(async () => {
       try {
-        await setProjectMode(next);
+        await setProjectMode(next, slug);
         router.refresh();
       } catch {
         setOptimistic(null); // roll back to the real mode

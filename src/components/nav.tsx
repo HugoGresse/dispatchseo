@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import posthog from "posthog-js";
 import { DispatchMark } from "@/components/logo";
 
 // Vercel-style navigation: an icon sidebar on desktop (Sidebar), a slide-out
@@ -308,10 +309,17 @@ function SidebarLink({ link, pathname }: { link: NavLink; pathname: string }) {
 // the user out, and <Link> would PREFETCH it - logging them out on hover. A
 // full navigation is also what we want here (drops the client router cache
 // after sign-out). No active state - it's an action, not a page.
+//
+// posthog.reset() on click, not just server-side cookie clearing: PostHog's
+// own distinct-id/session state lives in the browser (localStorage/cookies),
+// so on a shared computer the next person to sign in would otherwise be
+// identify()'d on top of this person's still-linked PostHog identity
+// (PostHogIdentify fires on every dashboard mount but never resets first).
 function LogoutLink() {
   return (
     <a
       href="/logout"
+      onClick={() => posthog.reset()}
       className="flex items-center gap-3.5 rounded-lg px-3.5 py-2.5 text-[15px] text-neutral-400 transition-colors hover:bg-neutral-900 hover:text-neutral-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400"
     >
       <LogoutIcon className="h-5 w-5 shrink-0 text-neutral-500" />

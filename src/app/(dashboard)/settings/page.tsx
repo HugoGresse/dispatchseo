@@ -170,7 +170,10 @@ export default async function SettingsPage() {
           />
           {/* Feeds the site-age readout (Journey) - 0015 backfills it from
               created_at, so pre-existing sites need this corrected once. */}
-          <SiteLaunchedRow current={project.site_launched_at ?? project.created_at} />
+          <SiteLaunchedRow
+            current={project.site_launched_at ?? project.created_at}
+            slug={project.slug}
+          />
         </div>
       </section>
 

@@ -184,7 +184,7 @@ export function CloudOnboardingWizard(props: {
   const [pendingMode, startMode] = useTransition();
   function confirmMode() {
     startMode(async () => {
-      await setProjectMode(modeChoice);
+      await setProjectMode(modeChoice, created?.slug ?? "");
       setScreen("c5");
     });
   }
@@ -573,6 +573,7 @@ export function CloudOnboardingWizard(props: {
                   <div className="mt-3.5">
                     <p className="mb-2 text-base font-medium text-neutral-200">Which property is this?</p>
                     <form action={gscPropAction} className="space-y-1.5">
+                      <input type="hidden" name="slug" value={created?.slug ?? ""} />
                       {gscPropState && "error" in gscPropState ? <ErrorLine msg={gscPropState.error} /> : null}
                       {gscSites.map((s) => (
                         <label

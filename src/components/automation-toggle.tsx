@@ -16,9 +16,11 @@ import type { AutomationFlags } from "@/lib/projects";
 export function AutomationToggle({
   flag,
   enabled,
+  slug,
 }: {
   flag: keyof AutomationFlags;
   enabled: boolean;
+  slug: string;
 }) {
   const [, startTransition] = useTransition();
   const [on, setOn] = useState(enabled);
@@ -37,7 +39,7 @@ export function AutomationToggle({
     setOn(next); // move the knob now
     startTransition(async () => {
       try {
-        await setAutomationToggle(flag, next);
+        await setAutomationToggle(flag, next, slug);
         router.refresh();
       } catch {
         setOn(!next); // write failed - put it back

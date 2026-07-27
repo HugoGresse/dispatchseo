@@ -1204,10 +1204,12 @@ export async function addSiteAndStartSetup(
 // agent approvals to pending when the type's approval flag is off
 // (auto_approve for guides, auto_approve_tools for tools), and the project
 // repo's CI asks /api/project-mode before building or merging.
-export async function setProjectMode(mode: "semi" | "auto") {
+export async function setProjectMode(mode: "semi" | "auto", slug: string) {
   await assertAuthed();
   if (mode !== "semi" && mode !== "auto") throw new Error("Bad mode");
-  const project = await getActiveProject();
+  const project = await getProjectBySlug(slug);
+  if (!project) throw new Error("Unknown project.");
+  if (isCloudMode()) await assertProjectOwned(project.id);
   const preset = mode === "auto" ? AUTO_PRESET : SEMI_PRESET;
   let { error } = await db()
     .from("projects")
@@ -1228,13 +1230,15 @@ export async function setProjectMode(mode: "semi" | "auto") {
 // (Journey, pacing.ts's siteAgeDays; the pace itself is flat one-guide-a-day
 // and no longer age-based) - migration 0015 backfills it from created_at,
 // which is only right for sites that went live the day they joined.
-export async function setSiteLaunchedAt(date: string) {
+export async function setSiteLaunchedAt(date: string, slug: string) {
   await assertAuthed();
   const parsed = new Date(date);
   if (Number.isNaN(parsed.getTime()) || parsed.getTime() > Date.now()) {
     throw new Error("Launch date must be a valid date in the past");
   }
-  const project = await getActiveProject();
+  const project = await getProjectBySlug(slug);
+  if (!project) throw new Error("Unknown project.");
+  if (isCloudMode()) await assertProjectOwned(project.id);
   const { error } = await db()
     .from("projects")
     .update({ site_launched_at: parsed.toISOString() })
@@ -1246,7 +1250,11 @@ export async function setSiteLaunchedAt(date: string) {
 // Per-automation toggle on the Automations page. The mode label is derived:
 // a flag set matching a preset IS that preset ("check everything from semi
 // and you're simply auto"), anything else shows as "custom" in the topbar.
-export async function setAutomationToggle(flag: keyof AutomationFlags, enabled: boolean) {
+export async function setAutomationToggle(
+  flag: keyof AutomationFlags,
+  enabled: boolean,
+  slug: string,
+) {
   await assertAuthed();
   const allowed: (keyof AutomationFlags)[] = [
     "auto_approve",
@@ -1256,7 +1264,9 @@ export async function setAutomationToggle(flag: keyof AutomationFlags, enabled: 
     "auto_merge",
   ];
   if (!allowed.includes(flag)) throw new Error("Bad automation flag");
-  const project = await getActiveProject();
+  const project = await getProjectBySlug(slug);
+  if (!project) throw new Error("Unknown project.");
+  if (isCloudMode()) await assertProjectOwned(project.id);
   const next = { ...effectiveAutomations(project), [flag]: Boolean(enabled) };
   let { error } = await db()
     .from("projects")
@@ -1276,9 +1286,11 @@ export async function setAutomationToggle(flag: keyof AutomationFlags, enabled: 
 // The Instructions page's template controls (block toggles, shape rotation,
 // house rules). saveContentPrefs normalizes and validates; the same lib call
 // backs the set_content_prefs MCP tool.
-export async function setContentPrefs(prefs: unknown) {
+export async function setContentPrefs(prefs: unknown, slug: string) {
   await assertAuthed();
-  const project = await getActiveProject();
+  const project = await getProjectBySlug(slug);
+  if (!project) throw new Error("Unknown project.");
+  if (isCloudMode()) await assertProjectOwned(project.id);
   const { error } = await saveContentPrefs(project, prefs);
   if (error) throw new Error(error);
   revalidatePath("/instructions");
@@ -1467,6 +1479,12 @@ export type WizardGscPropertyState = { ok: true } | { error: string } | null;
 // `sc-domain:` guess to the property the connected Google account really
 // has. Validated against the live property list, same as /google's button;
 // setTrackedProperty is also the set_gsc_property MCP tool's backing call.
+//
+// Takes the slug explicitly, same reasoning as runPipelineInstall/
+// connectClaudeToken/chooseGithubRepo just above: this is a wizard step,
+// mid-flow for exactly one project, and getActiveProject()'s cookie fallback
+// is forgiving-by-design for rendering, not for picking which project's GSC
+// property gets overwritten.
 export async function wizardSetGscProperty(
   _prev: WizardGscPropertyState,
   formData: FormData,
@@ -1474,7 +1492,10 @@ export async function wizardSetGscProperty(
   await assertAuthed();
   const siteUrl = String(formData.get("site_url") ?? "").trim();
   if (!siteUrl) return { error: "Pick a property." };
-  const project = await getActiveProject();
+  const slug = String(formData.get("slug") ?? "").trim();
+  if (!slug) return { error: "No project specified." };
+  const project = await getProjectBySlug(slug);
+  if (!project) return { error: "Unknown project." };
   if (isCloudMode()) await assertProjectOwned(project.id);
   if (!project.gsc_oauth_refresh_token) {
     return { error: "Connect Google first - then pick the property." };

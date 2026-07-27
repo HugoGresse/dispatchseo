@@ -16,6 +16,10 @@ export async function GET(req: NextRequest) {
   }
   const jar = await cookies();
   jar.delete("dash_auth");
+  // Otherwise a stale slug survives sign-out and, per active-project.ts's
+  // forgiving fallback, can retarget the NEXT person who signs in on this
+  // browser at whichever project this cookie last named (shared-device risk).
+  jar.delete("dash_project");
   const url = req.nextUrl.clone();
   // Account deletion forwards the repos whose pipeline teardown didn't finish
   // so /login can name them. Only that one param survives the wipe - the rest

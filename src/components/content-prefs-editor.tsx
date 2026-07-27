@@ -40,11 +40,13 @@ export function ContentPrefsEditor({
   palette,
   url,
   siteName,
+  slug,
 }: {
   prefs: ContentPrefs;
   palette: TemplatePalette;
   url: string;
   siteName: string;
+  slug: string;
 }) {
   const [, startTransition] = useTransition();
   const [prefs, setPrefs] = useState(saved);
@@ -60,7 +62,7 @@ export function ContentPrefsEditor({
     setPrefs(next); // move now
     startTransition(async () => {
       try {
-        await setContentPrefs(next);
+        await setContentPrefs(next, slug);
         router.refresh();
       } catch {
         setPrefs(prev); // write failed - put it back
@@ -164,7 +166,13 @@ export function ContentPrefsEditor({
 // injects ({{OWNER_PREFS_GUIDE}} / {{OWNER_PREFS_TOOL}}) - content-prefs.ts is
 // pure, so the client runs the same renderer the backend does, live per
 // keystroke, before anything is saved.
-export function HouseRulesEditor({ prefs: saved }: { prefs: ContentPrefs }) {
+export function HouseRulesEditor({
+  prefs: saved,
+  slug,
+}: {
+  prefs: ContentPrefs;
+  slug: string;
+}) {
   const [pending, startTransition] = useTransition();
   const [rules, setRules] = useState(saved.house_rules);
   const [error, setError] = useState<string | null>(null);
@@ -184,7 +192,7 @@ export function HouseRulesEditor({ prefs: saved }: { prefs: ContentPrefs }) {
     setError(null);
     startTransition(async () => {
       try {
-        await setContentPrefs({ ...saved, house_rules: rules });
+        await setContentPrefs({ ...saved, house_rules: rules }, slug);
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Save failed");

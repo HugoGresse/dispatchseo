@@ -105,7 +105,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               <PageTitle />
             </div>
             <div className="flex shrink-0 items-center justify-end">
-              {active && <ModeSwitch mode={active.mode} />}
+              {active && <ModeSwitch mode={active.mode} slug={active.slug} />}
             </div>
           </div>
         </header>

@@ -8,7 +8,7 @@ import { setSiteLaunchedAt } from "@/app/actions";
 // created_at (when the project joined DispatchSEO), which undercounts any
 // site that existed before - this row is where the owner corrects it so the
 // site-age readout (Journey) reflects the real age.
-export function SiteLaunchedRow({ current }: { current: string }) {
+export function SiteLaunchedRow({ current, slug }: { current: string; slug: string }) {
   const initial = current.slice(0, 10);
   const [value, setValue] = useState(initial);
   const [pending, startTransition] = useTransition();
@@ -22,7 +22,7 @@ export function SiteLaunchedRow({ current }: { current: string }) {
     setError(null);
     startTransition(async () => {
       try {
-        await setSiteLaunchedAt(value);
+        await setSiteLaunchedAt(value, slug);
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Save failed");

@@ -252,6 +252,7 @@ export default async function InstructionsPage() {
               palette={palette}
               url={`${project.domain}/guides/...`}
               siteName={project.name}
+              slug={project.slug}
             />
           </Hero>
           <Hero
@@ -272,7 +273,7 @@ export default async function InstructionsPage() {
         <SectionTitle sub="Your standing instructions, in plain English - guides and tools both obey them.">
           House rules
         </SectionTitle>
-        <HouseRulesEditor prefs={prefs} />
+        <HouseRulesEditor prefs={prefs} slug={project.slug} />
       </section>
 
       <section className="space-y-4">
