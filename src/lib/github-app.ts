@@ -236,11 +236,20 @@ export async function callerControlsInstallation(
       }),
       signal: AbortSignal.timeout(10000),
     });
-    if (!tokenRes.ok) return false;
+    if (!tokenRes.ok) {
+      console.error(`[github-install] code exchange HTTP ${tokenRes.status}`);
+      return false;
+    }
     // GitHub answers 200 with {error: "bad_verification_code"} on a spent or
     // forged code, so the status alone proves nothing.
     const token = (await tokenRes.json()) as { access_token?: string; error?: string };
-    if (!token.access_token) return false;
+    if (!token.access_token) {
+      // GitHub answers 200 with {error} on a spent/forged code or bad creds -
+      // naming it here is the difference between "someone tried something" and
+      // "our client id/secret is wrong", which look identical from outside.
+      console.error(`[github-install] code exchange returned no token: ${token.error ?? "unknown"}`);
+      return false;
+    }
 
     // Paginate: an account can administer more installations than one page.
     for (let page = 1; page <= 5; page++) {
@@ -252,11 +261,20 @@ export async function callerControlsInstallation(
         },
         signal: AbortSignal.timeout(10000),
       });
-      if (!res.ok) return false;
+      if (!res.ok) {
+        console.error(`[github-install] /user/installations HTTP ${res.status}`);
+        return false;
+      }
       const body = (await res.json()) as { installations?: Array<{ id?: number }> };
       const list = body.installations ?? [];
       if (list.some((i) => i.id === installationId)) return true;
-      if (list.length < 100) return false; // last page, not found
+      if (list.length < 100) {
+        console.error(
+          `[github-install] installation ${installationId} not in the installer's own list ` +
+            `(saw ${list.length} on page ${page})`,
+        );
+        return false; // last page, not found
+      }
     }
     return false;
   } catch {

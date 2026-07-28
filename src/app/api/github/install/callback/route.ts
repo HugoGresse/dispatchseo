@@ -125,13 +125,24 @@ export async function GET(req: Request): Promise<Response> {
       // exchanges for a token belonging to the installer, whose
       // GET /user/installations lists what they can actually administer.
       //
-      // Enforced only when the App is configured for it, so self-host and any
-      // deployment without the client credentials keeps working on the freshness
-      // gate alone. When it IS configured the code is REQUIRED - accepting a
-      // missing code would hand every attacker a one-parameter downgrade back to
-      // the weaker path.
+      // No code at all means GITHUB's redirect did not carry one - an App
+      // CONFIGURATION fact about us, not evidence about the caller. Failing
+      // closed on it blocked every legitimate install the moment the client
+      // credentials were set (2026-07-28, launch morning). Absence now falls
+      // through to the freshness/suspension gate, which is exactly the
+      // protection that shipped before the OAuth proof existed and still closes
+      // every orphan-installation class. A code that IS present and does not
+      // verify is real evidence, and still fails closed.
       const proofCode = url.searchParams.get("code") ?? "";
-      if (userAuthConfigured() && !(await callerControlsInstallation(proofCode, installationId))) {
+      if (!proofCode && userAuthConfigured()) {
+        console.error(
+          `[github-install] no ?code on the callback for installation ${installationId} ` +
+            `(setup_action=${setupAction ?? "none"}, state=${state ? "present" : "none"}). ` +
+            `Falling back to the freshness gate. Check that "Request user authorization (OAuth) ` +
+            `during installation" is enabled on the App and that its Callback URL points here.`,
+        );
+      }
+      if (proofCode && !(await callerControlsInstallation(proofCode, installationId))) {
         redirect(`/onboarding?gh=error&msg=${encodeURIComponent("We could not confirm that this GitHub installation belongs to you. Install the app from this page's button so we can verify it, rather than from github.com directly.")}`);
       }
 
@@ -180,8 +191,16 @@ export async function GET(req: Request): Promise<Response> {
     // gate alone. When it IS configured the code is REQUIRED - accepting a
     // missing code would hand every attacker a one-parameter downgrade back to
     // the weaker path.
+    // Same reasoning as the state path above: a missing code is our
+    // configuration, a failing code is the caller's problem.
     const proofCode = url.searchParams.get("code") ?? "";
-    if (userAuthConfigured() && !(await callerControlsInstallation(proofCode, installationId))) {
+    if (!proofCode && userAuthConfigured()) {
+      console.error(
+        `[github-install] no ?code on the stateless callback for installation ${installationId} ` +
+          `(setup_action=${setupAction ?? "none"}). Falling back to the freshness gate.`,
+      );
+    }
+    if (proofCode && !(await callerControlsInstallation(proofCode, installationId))) {
       redirect(`/onboarding?gh=error&msg=${encodeURIComponent("We could not confirm that this GitHub installation belongs to you. Install the app from this page's button so we can verify it, rather than from github.com directly.")}`);
     }
 
