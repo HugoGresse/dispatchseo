@@ -8,7 +8,9 @@ file is just the map.
 
 The short version - run from any plain folder (not inside your website's
 repo; it creates its own `dispatchseo` folder). **On a VPS, `ssh` in first
-and run this on the server**, not on your own computer:
+and run this on the server**, not on your own computer. **On Windows,
+paste it into [Git Bash](https://git-scm.com/downloads/win)** - it comes
+with Git, and plain PowerShell can't run this command:
 
 ```bash
 git clone https://github.com/NeoZi12/dispatchseo &&

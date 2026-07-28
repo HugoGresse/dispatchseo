@@ -1,0 +1,12 @@
+# Files executed or parsed on Linux (Git Bash, the containers, psql) must
+# check out LF everywhere: Git for Windows defaults to core.autocrlf=true,
+# and a CRLF start.sh kills `sh start.sh` at the first \r - before the
+# quickstart's first step ever runs.
+* text=auto
+*.sh text eol=lf
+*.sql text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+.env.docker.example text eol=lf
+.env.local.example text eol=lf
+Dockerfile text eol=lf

@@ -928,7 +928,7 @@ export default async function Home() {
                   Open <ExtLink href="https://resend.com/api-keys">resend.com/api-keys</ExtLink>,
                   click Create API Key, and copy the key it shows (starts with re_).
                 </>,
-                "In the folder DispatchSEO was installed from (on a VPS: over SSH), paste the command below with both values swapped in. The email must be the one you signed up to Resend with - alerts go out through Resend's built-in sender, which only delivers to its own account's address.",
+                "In the folder DispatchSEO was installed from (on a VPS: over SSH, on Windows: in Git Bash), paste the command below with both values swapped in. The email must be the one you signed up to Resend with - alerts go out through Resend's built-in sender, which only delivers to its own account's address.",
               ]}
               command={'[ -f start.sh ] && echo "RESEND_API_KEY=re_PASTE-YOUR-KEY-HERE" >> .env && echo "ALERT_EMAIL=you@example.com" >> .env && sh start.sh || echo "Wrong folder - run this inside the dispatchseo folder (on a VPS: ssh in first)"'}
               closing="At most one email per job per day, and a machine that was asleep or off never counts as broken. No email means everything is working."

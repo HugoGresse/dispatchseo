@@ -26,7 +26,8 @@ export function DockerAccessTip() {
         <b className="font-medium text-neutral-200">Pro tip:</b> this dashboard lives at{" "}
         <b className="font-medium text-neutral-200">{origin}</b> whenever Docker is running -
         bookmark it. Ever find it down? Re-run{" "}
-        <code className="font-mono text-neutral-300">sh start.sh</code> in the install folder.
+        <code className="font-mono text-neutral-300">sh start.sh</code> in the install folder
+        (Git Bash on Windows).
       </p>
       <button
         type="button"

@@ -35,7 +35,9 @@ where you stay in control.
 
 <p align="center">Self-hosting is one command on any machine with Docker - on
 a VPS, <code>ssh</code> in first, then run this there instead of on your
-own computer. Run it from any plain folder (not inside your website's
+own computer. On Windows, paste it into <b>Git Bash</b> (comes with
+<a href="https://git-scm.com/downloads/win">Git</a>) - plain PowerShell
+can't run it. Run it from any plain folder (not inside your website's
 repo; it creates its own <code>dispatchseo</code> folder):</p>
 
 ```bash
@@ -51,8 +53,7 @@ use - a $5 VPS, a Raspberry Pi, a desktop that never sleeps. The
 <a href="https://dispatchseo.com/docs/vps">VPS guide</a> has a shorter
 one-line installer plus your own domain with automatic HTTPS;
 <a href="https://dispatchseo.com/docs/docker-compose">the local guide</a>
-explains exactly what's lost on a laptop and what isn't. On Windows,
-paste this in WSL or Git Bash.</p>
+explains exactly what's lost on a laptop and what isn't.</p>
 
 <p align="center">Step-by-step walkthroughs:
 <a href="https://dispatchseo.com/docs/docker-compose">on your computer</a>
