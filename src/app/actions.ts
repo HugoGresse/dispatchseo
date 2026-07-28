@@ -1575,6 +1575,15 @@ export async function runPipelineInstall(
   const project = await getProjectBySlug(slug);
   if (!project) return { error: "Unknown project." };
   await assertProjectOwned(project.id);
+  // Reaching the finale is what unlocks the dashboard (onboarding-gate keys
+  // on onboarding_screen === "c5"), and this action fires on every finale
+  // arrival - so stamp the screen HERE, server-side, not only via the
+  // wizard's fire-and-forget setWizardScreen POST. That POST is exactly the
+  // kind a full-page navigation can cancel (the c1 install-link gotcha of
+  // 2026-07-23), and losing it would bounce "Explore your dashboard" back
+  // into the wizard. Errors are ignored like setWizardScreen's: on a
+  // pre-0030 database the gate grandfathers screenless rows anyway.
+  await db().from("projects").update({ onboarding_screen: "c5" }).eq("id", project.id);
   if (project.pipeline_installed_at) {
     return { ok: true, mode: "already-installed", setup_dispatched: true, claude_token_present: true };
   }

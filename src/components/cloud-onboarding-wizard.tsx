@@ -836,16 +836,19 @@ export function CloudOnboardingWizard(props: {
             Installing the pipeline into {created?.name ?? "your"}&apos;s repo now - no more
             pastes needed. This runs on GitHub and usually takes{" "}
             <b className="font-medium text-neutral-200">5-15 minutes</b>. You can leave this page
-            and come back - setup finishes on its own, and your dashboard unlocks the moment
-            it&apos;s done.
+            and come back - setup finishes on its own, and your dashboard fills in as the
+            data lands.
           </p>
           <StepHelp href="/docs/day-to-day" label="What happens next?" />
 
           <div className="rounded-xl bg-neutral-900 p-4">{renderInstallBanner()}</div>
 
-          {/* The dashboard unlocks the moment the repo is connected (which it is
-              by now), so don't trap the owner on this page - the background run
-              keeps going and the dashboard shows its own "setting up" banner. */}
+          {/* The dashboard unlocks at this finale - the gate keys on the c5
+              stamp, which runPipelineInstall wrote server-side when it fired
+              just above - so don't trap the owner on this page: the background
+              run keeps going and the dashboard shows its own "setting up"
+              banner. Earlier screens stay locked on purpose; abandoning the
+              wizard mid-flow bounces back here, not to a dashboard of zeros. */}
           <div className="mt-4 flex justify-center">
             <a
               href="/dashboard"

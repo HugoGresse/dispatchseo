@@ -39,11 +39,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
   ]);
 
   const billing = isCloudMode();
-  // Cloud unlocks the dashboard as soon as a repo is connected (onboarding-gate),
-  // so the owner can explore while the background setup run personalizes their
-  // site. Show a top banner in exactly that window - repo connected but the run
-  // hasn't stamped pipeline_installed_at yet - so the half-filled dashboard
-  // reads as "still setting up", not "broken".
+  // Cloud unlocks the dashboard when the wizard reaches its finale
+  // (onboarding-gate keys on the c5 stamp), so the owner can explore while
+  // the background setup run personalizes their site. Show a top banner in
+  // exactly that window - finale reached but the run hasn't stamped
+  // pipeline_installed_at yet - so the half-filled dashboard reads as
+  // "still setting up", not "broken".
   // Top progress banner: during setup (pipeline not installed yet) AND the
   // first-data window after install, while the auto-fired research + rank checks
   // are still landing. BOTH branches are time-bounded so long-established

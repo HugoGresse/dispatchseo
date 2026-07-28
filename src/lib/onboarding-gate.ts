@@ -6,11 +6,12 @@ import { isCloudMode } from "./cloud";
 import { scopedProjects } from "./active-project";
 
 // "The wizard is a must": the dashboard stays locked until the OWNER'S side
-// of setup is genuinely done - which means the pipeline install completed
-// (the agent stamps pipeline_installed_at after the install PR merges).
-// Until then every dashboard page funnels back to /onboarding, which
-// resumes at the exact screen the owner stood on. Settings and the wizard
-// itself stay reachable.
+// of setup is genuinely done. On self-host that means the pipeline install
+// completed (the agent stamps pipeline_installed_at after the install PR
+// merges); on cloud it means the wizard was walked to its finale, where the
+// install fires itself and runs in the background. Until then every
+// dashboard page funnels back to /onboarding, which resumes at the exact
+// screen the owner stood on. Settings and the wizard itself stay reachable.
 //
 // Grandfathering + tolerance: projects created before the wizard tracked
 // screens (onboarding_screen null, pre-0030) pass on a connected repo
@@ -23,9 +24,24 @@ export const hasConfiguredProject = cache(async (): Promise<boolean> => {
   // the request-cached user+projects lookup the layout and active-project
   // already share - reusing it makes this gate free instead of a second
   // auth round-trip + projects query on every page.
+  //
+  // "Finished" on cloud means the wizard reached its FINALE - c5, the screen
+  // that fires the background pipeline install (stamped server-side by
+  // runPipelineInstall, so a cancelled setWizardScreen POST can't lose it) -
+  // or the install has already completed. A connected repo alone is NOT
+  // enough: that's true from the repo-pick step on, and it used to unlock
+  // the dashboard for owners who abandoned the wizard mid-flow - they came
+  // back to a Home of zeros and a "setting up in the background" banner for
+  // a run that was never fired (2026-07-28). Screenless rows still pass on a
+  // repo alone: same pre-0030 grandfathering as self-host below.
   if (isCloudMode()) {
     const mine = await scopedProjects();
-    return mine.some((p) => p.pipeline_installed_at != null || Boolean(p.github_repo));
+    return mine.some(
+      (p) =>
+        p.pipeline_installed_at != null ||
+        p.onboarding_screen === "c5" ||
+        (Boolean(p.github_repo) && p.onboarding_screen == null),
+    );
   }
   try {
     const { data, error } = await db()
