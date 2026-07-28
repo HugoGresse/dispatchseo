@@ -386,7 +386,6 @@ export default async function LandingPage({
                 <li>Domain rating tracking</li>
                 <li>Backlink prospecting</li>
                 <li>Trending topic scans</li>
-                <li>Weekly opportunity digest</li>
                 <li>Content quality checks</li>
                 <li>Approve or full-auto mode</li>
                 <li>Everything ships as PRs</li>
@@ -415,7 +414,6 @@ export default async function LandingPage({
                 <li>Domain rating tracking</li>
                 <li>Backlink prospecting</li>
                 <li>Trending topic scans</li>
-                <li>Weekly opportunity digest</li>
                 <li>Content quality checks</li>
                 <li>Approve or full-auto mode</li>
                 <li>Everything ships as PRs</li>
@@ -464,14 +462,6 @@ export default async function LandingPage({
                   <td><b>100</b> keywords</td>
                   <td className="pm-pick"><b>300</b> keywords</td>
                   <td><b>1,000</b> keywords</td>
-                </tr>
-                <tr>
-                  <td className="pm-off">
-                    <span aria-hidden="true">&mdash;</span>
-                    <span className="ld-sr">No weekly digest</span>
-                  </td>
-                  <td className="pm-pick">Weekly digest</td>
-                  <td>Weekly digest</td>
                 </tr>
                 <tr>
                   <td>Email support</td>
