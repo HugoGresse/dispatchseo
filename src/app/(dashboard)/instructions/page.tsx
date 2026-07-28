@@ -1,6 +1,7 @@
 import { requireDashboard } from "@/lib/auth-gate";
 import { requireOnboarded } from "@/lib/onboarding-gate";
 import { getActiveProject } from "@/lib/active-project";
+import { mcpServerName } from "@/lib/mcp-connect";
 import { loadConventions, type ConventionsData } from "@/lib/conventions";
 import {
   WORKFLOW_STEPS,
@@ -89,7 +90,7 @@ function FactsStrip({ data, updatedAt }: { data: ConventionsData; updatedAt: str
   );
 }
 
-function SetupCard() {
+function SetupCard({ slug }: { slug: string }) {
   return (
     <div className="rounded-xl bg-neutral-900/60 p-5">
       <p className="text-sm font-medium text-neutral-100">Not adapted to this site yet</p>
@@ -97,7 +98,7 @@ function SetupCard() {
         Run <Mono>/seo-setup</Mono> in your site&apos;s repo - the one DispatchSEO publishes to,
         not this dashboard&apos;s. (No <Mono>/seo-setup</Mono> there yet? The pipeline install
         adds it; until then paste{" "}
-        <Mono>Call the seo-manager MCP tool get_instructions with workflow setup and follow it exactly</Mono>
+        <Mono>{`Call the ${mcpServerName(slug)} MCP tool get_instructions with workflow setup and follow it exactly`}</Mono>
         .) Your Claude Code reads your stack, theme, and voice, writes{" "}
         <Mono>.dispatchseo/conventions.md</Mono>, and mirrors the facts here - the previews below
         pick up your colors the moment it does.
@@ -227,7 +228,7 @@ export default async function InstructionsPage() {
         {conventions ? (
           <FactsStrip data={conventions.data} updatedAt={conventions.updatedAt} />
         ) : (
-          <SetupCard />
+          <SetupCard slug={project.slug} />
         )}
       </div>
 

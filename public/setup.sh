@@ -267,7 +267,10 @@ say "opens a pull request and may ask you questions along the way)."
 say ""
 say "Launch Claude Code now to finish? [y/n]"
 ask
-INSTALL_PROMPT="Call the seo-manager MCP tool get_instructions with workflow install and follow it exactly."
+# $NAME, not "seo-manager": the prompt must name the server exactly as it
+# was just registered - agents take the name literally and refuse on a
+# name they cannot find.
+INSTALL_PROMPT="Call the $NAME MCP tool get_instructions with workflow install and follow it exactly."
 if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
   exec claude "$INSTALL_PROMPT" < /dev/tty
 else

@@ -54,7 +54,8 @@ import {
   type IndexingPageRow,
 } from "@/lib/indexing";
 import { getPacing } from "@/lib/pacing";
-import { mcpAddCommand, setupCommand } from "@/lib/mcp-connect";
+import { mcpAddCommand, mcpServerName, setupCommand, setupCommandPS } from "@/lib/mcp-connect";
+import { ShellCommandTabs } from "@/components/shell-command-tabs";
 import { PacingLine } from "@/components/pacing-info";
 import { AgentStatus } from "@/components/agent-status";
 import { DockerAccessTip } from "@/components/docker-access-tip";
@@ -92,6 +93,7 @@ function SetupStep({
   why,
   commandLabel,
   command,
+  commandPs,
   command2Label,
   command2,
   steps,
@@ -106,6 +108,10 @@ function SetupStep({
   why: string;
   commandLabel?: string;
   command?: string;
+  // PowerShell twin of `command` - when present the card renders shell
+  // tabs instead of a single box, because the paste runs on the owner's
+  // machine and bash chains die in the default Windows terminal.
+  commandPs?: string;
   // A second copy box (e.g. connect command + the paste that uses it).
   command2Label?: string;
   command2?: string;
@@ -125,7 +131,13 @@ function SetupStep({
       </div>
       <p className={`text-sm ${coming ? "text-neutral-500" : "text-neutral-400"}`}>{why}</p>
       {commandLabel ? <p className="pt-0.5 text-xs text-neutral-500">{commandLabel}</p> : null}
-      {command ? <CopyBlock text={command} /> : null}
+      {command ? (
+        commandPs ? (
+          <ShellCommandTabs bash={command} powershell={commandPs} box="card" />
+        ) : (
+          <CopyBlock text={command} />
+        )
+      ) : null}
       {command2 ? (
         <>
           <p className="pt-0.5 text-xs text-neutral-500">{command2Label}</p>
@@ -589,6 +601,9 @@ export default async function Home() {
   const setupCmd = mcpToken
     ? setupCommand(project.slug, dashOrigin, mcpToken, isCloudMode())
     : null;
+  const setupCmdPs = mcpToken
+    ? setupCommandPS(project.slug, dashOrigin, mcpToken, isCloudMode())
+    : null;
 
   // The funding card is the better surface for a low balance, so suppress the
   // amber nudge in Next actions whenever it shows.
@@ -931,6 +946,7 @@ export default async function Home() {
                 "In the folder DispatchSEO was installed from (on a VPS: over SSH, on Windows: in Git Bash), paste the command below with both values swapped in. The email must be the one you signed up to Resend with - alerts go out through Resend's built-in sender, which only delivers to its own account's address.",
               ]}
               command={'[ -f start.sh ] && echo "RESEND_API_KEY=re_PASTE-YOUR-KEY-HERE" >> .env && echo "ALERT_EMAIL=you@example.com" >> .env && sh start.sh || echo "Wrong folder - run this inside the dispatchseo folder (on a VPS: ssh in first)"'}
+              commandPs={'if (Test-Path start.sh) { [IO.File]::AppendAllText("$PWD/.env", "RESEND_API_KEY=re_PASTE-YOUR-KEY-HERE`nALERT_EMAIL=you@example.com`n"); .\\start.cmd } else { "Wrong folder - run this inside the dispatchseo folder (on a VPS: ssh in first)" }'}
               closing="At most one email per job per day, and a machine that was asleep or off never counts as broken. No email means everything is working."
             />
           ) : null}
@@ -971,7 +987,7 @@ export default async function Home() {
             <SetupStep
               title="Fill in your backlink playbook"
               why="The Backlinks tab lists the best free and paid backlinks you can set up today, with every submission prefilled with your product's copy. Paste this in Claude Code, in your site's repo (not this dashboard's) - it researches your product and personalizes all of it. This card watches the saved profile and disappears the moment your agent writes it; still here means that run hasn't happened yet."
-              command="Call the seo-manager MCP tool get_instructions with workflow setup and follow it exactly."
+              command={`Call the ${mcpServerName(project.slug)} MCP tool get_instructions with workflow setup and follow it exactly.`}
             />
           ) : null}
           {needsFirstPage ? (
@@ -1012,6 +1028,7 @@ export default async function Home() {
               why={`The automations - daily guides, weekly tools, validation, auto-merge - run as GitHub Actions in your site's repo, on your own Claude Code subscription. One command sets up everything: it talks you through each step, checks every value actually works before saving it, then your own agent installs the pipeline and marks this card done.`}
               commandLabel={`Paste in a terminal, inside your site's repo${project.github_repo ? ` (${project.github_repo})` : ""}:`}
               command={setupCmd ?? undefined}
+              commandPs={setupCmdPs ?? undefined}
               steps={[
                 <>
                   Run it inside your site&apos;s repo

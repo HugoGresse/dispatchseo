@@ -2,7 +2,8 @@
 
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { JOURNEY_STAGES, STAGE_META } from "@/lib/journey-meta";
-import { mcpAddCommand, ghPermissionCommand } from "@/lib/mcp-connect";
+import { connectCommand, connectCommandPS, mcpAddCommand, mcpServerName } from "@/lib/mcp-connect";
+import { ShellCommandTabs } from "./shell-command-tabs";
 import { FirstRunStatus } from "@/components/first-run-status";
 import {
   chooseGscOnly,
@@ -78,8 +79,13 @@ const META: Record<Exclude<Screen, "s5">, { name: string; time: string }> = {
 // mixed up, so the second one is gone. The old curl|bash setup path also
 // kept stranding owners at interactive prompts half-buried in a terminal;
 // the agent chat is where this belongs.
-const INSTALL_COMMAND =
-  "Call the seo-manager MCP tool get_instructions with workflow install and follow it exactly.";
+// The prompt names the configured server exactly (dispatchseo-<slug>):
+// agents take the name literally, and a session asked for a "seo-manager"
+// MCP it can't find refuses instead of resolving by capability - the first
+// Windows e2e died on exactly that.
+function installCommand(slug: string): string {
+  return `Call the ${mcpServerName(slug)} MCP tool get_instructions with workflow install and follow it exactly.`;
+}
 
 // The honest SEO timeline, month by month - the same stage copy the Home
 // journey card and get_overview use (journey-meta.ts is the one source of
@@ -253,9 +259,9 @@ export function OnboardingWizard({
   // connecting a second site never collides with or shadows the first one's
   // token, whatever config scope they add it at. Default (local) scope still
   // ties the connection to the folder it is run in - which is why the copy
-  // says to run it in the SITE's repo. The slash commands reference the
-  // server descriptively ("the seo-manager MCP"), and agents resolve tools
-  // by capability, not by the configured name, so the per-slug name is safe.
+  // says to run it in the SITE's repo. Pasted prompts name the server
+  // exactly (installCommand above) - agents take the name literally and
+  // refuse on a name they can't find rather than resolving by capability.
   const mcpCommand = created ? mcpAddCommand(created.slug, origin, created.mcpToken) : "";
 
   function skipSerpapi() {
@@ -1280,12 +1286,9 @@ export function OnboardingWizard({
                     <b className="font-medium text-neutral-200">1.</b>{" "}
                     Connect Claude Code (in your site&apos;s repo):
                   </p>
-                  <CopyBox
-                    text={
-                      created
-                        ? `${mcpAddCommand(created.slug, origin, created.mcpToken)} && ${ghPermissionCommand()}`
-                        : ""
-                    }
+                  <ShellCommandTabs
+                    bash={created ? connectCommand(created.slug, origin, created.mcpToken) : ""}
+                    powershell={created ? connectCommandPS(created.slug, origin, created.mcpToken) : ""}
                   />
                 </div>
                 <div className="space-y-2">
@@ -1293,7 +1296,7 @@ export function OnboardingWizard({
                     <b className="font-medium text-neutral-200">2.</b>{" "}
                     Paste into Claude Code:
                   </p>
-                  <CopyBox text={INSTALL_COMMAND} />
+                  <CopyBox text={created ? installCommand(created.slug) : ""} />
                 </div>
               </div>
             </details>
@@ -1319,19 +1322,18 @@ export function OnboardingWizard({
                 cta="Install Claude Code and gh"
               />
 
-              <div className="mt-4 space-y-2">
-                <p className="text-[15px] text-neutral-300">
-                  <b className="font-semibold text-neutral-100">1.</b>{" "}
-                  Connect Claude Code to this project and let it run{" "}
-                  <code className="font-mono text-neutral-200">gh</code> here - run this in a
-                  terminal, <b className="font-medium text-neutral-100">inside your site&apos;s repo</b>:
+              <div className="mt-5 space-y-2">
+                <p className="text-lg font-semibold tracking-tight text-neutral-100">
+                  1. Paste this in a terminal, inside your site&apos;s repo
                 </p>
-                <CopyBox
-                  text={
-                    created
-                      ? `${mcpAddCommand(created.slug, origin, created.mcpToken)} && ${ghPermissionCommand()}`
-                      : ""
-                  }
+                <p className="text-sm text-neutral-400">
+                  Connects Claude Code to this project and lets it run{" "}
+                  <code className="font-mono text-neutral-300">gh</code> there. Any terminal
+                  works - pick your system&apos;s tab.
+                </p>
+                <ShellCommandTabs
+                  bash={created ? connectCommand(created.slug, origin, created.mcpToken) : ""}
+                  powershell={created ? connectCommandPS(created.slug, origin, created.mcpToken) : ""}
                 />
                 <p className="text-[13px] text-neutral-500">
                   Already had Claude Code open in that repo? Close and reopen it after this
@@ -1340,13 +1342,16 @@ export function OnboardingWizard({
                 </p>
               </div>
 
-              <div className="mt-4 space-y-2">
-                <p className="text-[15px] text-neutral-300">
-                  <b className="font-semibold text-neutral-100">2.</b>{" "}
-                  Open Claude Code in that repo (type{" "}
-                  <b className="font-medium text-neutral-100">claude</b>) and paste:
+              <div className="mt-5 space-y-2">
+                <p className="text-lg font-semibold tracking-tight text-neutral-100">
+                  2. Paste this into Claude Code
                 </p>
-                <CopyBox emphasis text={INSTALL_COMMAND} />
+                <p className="text-sm text-neutral-400">
+                  Open Claude Code in that same repo (type{" "}
+                  <b className="font-medium text-neutral-100">claude</b> in the terminal) and
+                  paste:
+                </p>
+                <CopyBox emphasis text={created ? installCommand(created.slug) : ""} />
               </div>
 
               <div className="mt-4 space-y-2 rounded-xl border border-violet-500/25 bg-violet-500/[0.06] px-4 py-3.5 text-sm text-neutral-300">

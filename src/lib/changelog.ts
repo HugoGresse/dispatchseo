@@ -30,6 +30,36 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-28",
+    date: "2026-07-28",
+    title: "Windows works out of the box",
+    summary:
+      "Every command DispatchSEO asks you to paste now has a Windows (PowerShell) version, and the connect prompt names your project's server exactly.",
+    changes: [
+      {
+        kind: "new",
+        text:
+          "Install and restart from plain PowerShell: the quickstart has a Windows paste, and " +
+          "start.cmd in the install folder boots the stack from any Windows terminal (or a " +
+          "double-click) - no Git Bash needed.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Commands the wizard and dashboard ask you to paste on your own computer now show " +
+          "Mac/Linux and Windows (PowerShell) tabs, defaulting to your system, and the final " +
+          "wizard step spells out where each paste goes.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "The 'paste into Claude Code' prompt named a server (seo-manager) that doesn't match " +
+          "what the connect command registers (dispatchseo-<your site>), so a fresh agent " +
+          "session could refuse to start. Every prompt now uses your project's exact server name.",
+      },
+    ],
+  },
+  {
     version: "2026-07-27.3",
     date: "2026-07-27",
     title: "Your queue refills itself, and setup tells the truth",

@@ -42,6 +42,26 @@ export function ghPermissionCommand(): string {
   return `mkdir -p .claude && test -f .claude/settings.local.json || printf '%s\\n' '{' '  "permissions": {' '    "allow": ["Bash(gh *)"]' '  }' '}' > .claude/settings.local.json`;
 }
 
+// The one paste shown wherever connect + gh permission ship together. Two
+// shells because this paste runs on the owner's own machine, where the
+// default Windows terminal is PowerShell: `&&`, `test` and `printf` are
+// POSIX-only, so Windows gets a native twin instead of a broken paste.
+export function connectCommand(slug: string, origin: string, token: string): string {
+  return `${mcpAddCommand(slug, origin, token)} && ${ghPermissionCommand()}`;
+}
+
+// PowerShell twin: `;` for chaining (PowerShell 5.1 has no `&&`),
+// Set-Content for the write (Out-File would emit UTF-16, which JSON
+// readers reject), same only-if-missing guard so it never clobbers an
+// existing settings file.
+export function connectCommandPS(slug: string, origin: string, token: string): string {
+  return (
+    `${mcpAddCommand(slug, origin, token)}; ` +
+    `New-Item -ItemType Directory -Force .claude | Out-Null; ` +
+    `if (!(Test-Path .claude/settings.local.json)) { Set-Content .claude/settings.local.json '{ "permissions": { "allow": ["Bash(gh *)"] } }' }`
+  );
+}
+
 // The one-command onboarding: public/setup.sh checks the folder and tools,
 // connects Claude Code, saves every Actions secret (each value verified
 // before it is stored), enables PR permissions, and hands off to the
@@ -53,4 +73,16 @@ export function ghPermissionCommand(): string {
 // Settings later if they want unmetered usage.
 export function setupCommand(slug: string, origin: string, token: string, bundled = false): string {
   return `curl -fsSL ${origin}/setup.sh | bash -s -- ${token} ${slug} ${origin} ${bundled ? "1" : "0"}`;
+}
+
+// PowerShell twin of the one-command onboarding. setup.sh is a bash script,
+// so on Windows it runs through the bash bundled with Git (already required
+// for the repo) - same lookup order start.cmd uses, machine- then user-level
+// install.
+export function setupCommandPS(slug: string, origin: string, token: string, bundled = false): string {
+  return (
+    `$b = "$env:ProgramFiles\\Git\\bin\\bash.exe"; ` +
+    `if (!(Test-Path $b)) { $b = "$env:LocalAppData\\Programs\\Git\\bin\\bash.exe" }; ` +
+    `& $b -c '${setupCommand(slug, origin, token, bundled)}'`
+  );
 }
