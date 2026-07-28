@@ -52,10 +52,13 @@ git clone https://github.com/NeoZi12/dispatchseo &&
   sh start.sh
 ```
 
-**On Windows**, paste this version instead - same thing, PowerShell-friendly:
+**On Windows**, paste this version instead - same thing, PowerShell-friendly.
+The `cd ~` first means it installs into your user folder no matter where
+the window opened (some PowerShell windows start in a system folder git
+can't write to):
 
 ```powershell
-git clone https://github.com/NeoZi12/dispatchseo; cd dispatchseo; .\start.cmd
+cd ~; git clone https://github.com/NeoZi12/dispatchseo; cd dispatchseo; .\start.cmd
 ```
 
 The first boot downloads the prebuilt images (or builds them from source

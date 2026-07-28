@@ -17,10 +17,11 @@ git clone https://github.com/NeoZi12/dispatchseo &&
 ```
 
 On Windows, paste this version instead - it works in plain PowerShell
-([Git](https://git-scm.com/downloads/win) must be installed):
+([Git](https://git-scm.com/downloads/win) must be installed) and installs
+into your user folder no matter where the window opened:
 
 ```powershell
-git clone https://github.com/NeoZi12/dispatchseo; cd dispatchseo; .\start.cmd
+cd ~; git clone https://github.com/NeoZi12/dispatchseo; cd dispatchseo; .\start.cmd
 ```
 
 Open the URL it prints (usually **http://localhost:4005**), choose a

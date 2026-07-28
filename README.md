@@ -46,10 +46,11 @@ git clone https://github.com/NeoZi12/dispatchseo &&
 
 <p align="center">On Windows, paste this version instead - it works in plain
 PowerShell (<a href="https://git-scm.com/downloads/win">Git</a> must be
-installed):</p>
+installed) and installs into your user folder no matter where the window
+opened:</p>
 
 ```powershell
-git clone https://github.com/NeoZi12/dispatchseo; cd dispatchseo; .\start.cmd
+cd ~; git clone https://github.com/NeoZi12/dispatchseo; cd dispatchseo; .\start.cmd
 ```
 
 <p align="center">When it finishes it prints your dashboard URL - open it
