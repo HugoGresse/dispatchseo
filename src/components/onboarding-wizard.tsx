@@ -1336,8 +1336,11 @@ export function OnboardingWizard({
                   powershell={created ? connectCommandPS(created.slug, origin, created.mcpToken) : ""}
                 />
                 <p className="text-[13px] text-neutral-500">
-                  Already had Claude Code open in that repo? Close and reopen it after this
-                  command - it only loads connections at startup, so an open session can&apos;t
+                  <b className="font-semibold text-neutral-300">
+                    Restart Claude Code after pasting this - close any open session in that repo
+                    and reopen it.
+                  </b>{" "}
+                  Connections load only at startup, so a session that was already open can&apos;t
                   see the one you just added.
                 </p>
               </div>
