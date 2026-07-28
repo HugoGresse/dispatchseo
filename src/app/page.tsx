@@ -9,6 +9,7 @@ import { LandingNav } from "./landing-nav";
 import { PixelDispatcher } from "@/components/pixel-dispatcher";
 import { WhyCard } from "@/components/why-card";
 import { dashboardAuth, maybeSignedIn } from "@/lib/auth-gate";
+import { hasConfiguredProject } from "@/lib/onboarding-gate";
 import {
   foundingOffer,
   foundingPriceLabel,
@@ -198,9 +199,17 @@ export default async function LandingPage({
     redirect(`/auth/callback?${forward.toString()}`);
   }
 
-  if (params.home === undefined && (await maybeSignedIn()) && (await dashboardAuth())) {
+  const signedIn = (await maybeSignedIn()) && Boolean(await dashboardAuth());
+  if (params.home === undefined && signedIn) {
     redirect("/dashboard");
   }
+
+  // A signed-in owner whose setup never finished (?home=1 is the wizard's
+  // Home exit) gets the way back into the wizard right on the hero, instead
+  // of retyping /onboarding or bouncing through /dashboard. Anonymous
+  // traffic pays nothing here: maybeSignedIn's cookie hint short-circuits
+  // before any session or project lookup.
+  const midSetup = signedIn && !(await hasConfiguredProject());
 
   // null = no offer (self-host, billing unconfigured, past the end date, or
   // the 50 seats are gone). Every founding surface below is gated on it, so
@@ -238,6 +247,13 @@ export default async function LandingPage({
 
         <div className="wrap">
           <PixelDispatcher />
+          {midSetup ? (
+            <a className="resume-pill" href="/onboarding">
+              <span className="rp-dot" aria-hidden="true" />
+              Your site is mid-setup — pick up where you left off
+              <span aria-hidden="true">→</span>
+            </a>
+          ) : null}
           {/* .br-desk: the composed two-line break is a desktop luxury - phones
               drop it so the headline reflows to whatever fits. */}
           <h1>Automate your SEO<br className="br-desk" /> with <span className="hl">Claude Code</span></h1>
