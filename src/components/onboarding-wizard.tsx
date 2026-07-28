@@ -1247,12 +1247,28 @@ export function OnboardingWizard({
             // overwhelming (owner feedback), with the checklist below carrying
             // the detail.
             <div className="mb-2.5 mt-1 rounded-xl border border-violet-500/30 bg-violet-500/[0.07] px-5 py-5">
-              <p className="text-xl font-semibold text-white">Let your agent work.</p>
-              <p className="mt-2 text-[15px] leading-relaxed text-neutral-300">
+              <div className="flex items-center gap-3">
+                <span
+                  aria-hidden
+                  className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-violet-400/25 border-t-violet-400"
+                />
+                <p className="text-xl font-semibold text-white">Let your agent work.</p>
+              </div>
+              <p className="mt-2.5 text-[15px] leading-relaxed text-neutral-300">
                 It&apos;s installing your pipeline and running your first keyword research -
-                typically 10-20 minutes, up to an hour if it&apos;s building your blog from
-                scratch. Keep the Claude Code chat visible: it&apos;ll ask you to approve its
-                plan and merge one PR. The checklist below fills itself in as it goes.
+                typically <b className="font-medium text-neutral-100">10-20 minutes</b>, up
+                to an hour if it&apos;s building your blog from scratch.{" "}
+                <b className="font-medium text-neutral-100">Long is normal here</b> - it&apos;s
+                building real infrastructure, not stuck.
+              </p>
+              <p className="mt-2 text-[15px] leading-relaxed text-neutral-300">
+                Keep the Claude Code chat visible: it&apos;ll ask you to approve its plan and
+                merge one PR -{" "}
+                <b className="font-medium text-neutral-100">
+                  merge requests also land in your email
+                </b>
+                , so keep an eye on your inbox. The checklist below ticks itself as steps
+                verify; no refresh needed.
               </p>
             </div>
           ) : (

@@ -257,7 +257,14 @@ to ~10-15.
    they are the known-good reference. The owner runs
    \`gh secret set DATAFORSEO_LOGIN --repo {{REPO}}\` (and PASSWORD) so the
    values never transit this conversation.
-4. **Smoke-test the secrets once the install PR merges:** dispatch
+4. **The moment the install PR merges, LOCAL BACKEND ONLY: disable the
+   phone-home workflows FIRST**, before anything else - the exact list is in
+   Part 4's workflow-states line. In the gap between the merge and that
+   disable, a check event can fire seo-auto-merge, which cannot reach a
+   local backend and emails the owner a scary "run failed" mid-install.
+   (Current packs also self-skip on local backends, but never rely on that
+   alone - the repo may hold an older pack.) Then
+   **smoke-test the secrets:** dispatch
    \`gh workflow run seo-trend-scan.yml --repo {{REPO}}\` and watch it. A bad
    Claude token fails within ~20 seconds with \`authentication_failed\`; a
    healthy run takes 3-6 minutes and puts real topics on the Trends radar.
