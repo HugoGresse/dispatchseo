@@ -1341,7 +1341,10 @@ export function OnboardingWizard({
                     and reopen it.
                   </b>{" "}
                   Connections load only at startup, so a session that was already open can&apos;t
-                  see the one you just added.
+                  see the one you just added. Using the VS Code extension and it still can&apos;t
+                  see the server? Do step 2 from a plain terminal instead (open the repo folder,
+                  type <code className="font-mono text-neutral-400">claude</code>) - or fully
+                  reload the VS Code window.
                 </p>
               </div>
 

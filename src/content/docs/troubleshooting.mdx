@@ -21,6 +21,24 @@ The commands on this page use bash syntax - on Windows, run them in
 not PowerShell. Anywhere one ends in `sh start.sh`, running `.\start.cmd`
 from PowerShell afterwards works too.
 
+## The agent says the DispatchSEO server isn't connected
+
+You pasted the connect command, but Claude Code answers that no
+`dispatchseo-...` server exists. In order of likelihood:
+
+- **The session predates the connection.** Claude Code loads connections
+  only at startup - close every open session in that repo and start a
+  fresh one. Check with `claude mcp list` in the repo folder: your
+  `dispatchseo-<site>` entry should show a ✓.
+- **You're in the VS Code extension.** Its session runtime can miss a
+  just-added connection even after a chat restart. Run the paste from a
+  plain terminal instead (open the repo folder, type `claude`) - or fully
+  reload the VS Code window.
+- **Wrong folder.** The connection is pinned to the folder you ran the
+  connect command in - both pastes must happen inside your site's repo.
+- **The key rotted.** Keys change when a project is recreated. Copy the
+  current connect command from **Settings → Project key** and re-run it.
+
 ## Get emailed when something breaks
 
 Optional, two minutes, and strongly recommended if you picked **Automatic**
