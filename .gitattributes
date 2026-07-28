@@ -4,6 +4,7 @@
 # quickstart's first step ever runs.
 * text=auto
 *.sh text eol=lf
+*.cmd text eol=crlf
 *.sql text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf

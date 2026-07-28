@@ -35,15 +35,21 @@ where you stay in control.
 
 <p align="center">Self-hosting is one command on any machine with Docker - on
 a VPS, <code>ssh</code> in first, then run this there instead of on your
-own computer. On Windows, paste it into <b>Git Bash</b> (comes with
-<a href="https://git-scm.com/downloads/win">Git</a>) - plain PowerShell
-can't run it. Run it from any plain folder (not inside your website's
+own computer. Run it from any plain folder (not inside your website's
 repo; it creates its own <code>dispatchseo</code> folder):</p>
 
 ```bash
 git clone https://github.com/NeoZi12/dispatchseo &&
   cd dispatchseo &&
   sh start.sh
+```
+
+<p align="center">On Windows, paste this version instead - it works in plain
+PowerShell (<a href="https://git-scm.com/downloads/win">Git</a> must be
+installed):</p>
+
+```powershell
+git clone https://github.com/NeoZi12/dispatchseo; cd dispatchseo; .\start.cmd
 ```
 
 <p align="center">When it finishes it prints your dashboard URL - open it

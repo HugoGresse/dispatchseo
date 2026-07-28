@@ -1439,7 +1439,8 @@ export function OnboardingWizard({
               lives at <b className="font-medium text-neutral-200">{origin}</b> whenever
               Docker is running - bookmark it. Ever find it down? Re-run{" "}
               <code className="font-mono text-neutral-300">sh start.sh</code> in the install
-              folder (Git Bash on Windows) and it comes back.
+              folder (Windows: double-click <code className="font-mono text-neutral-300">start.cmd</code>)
+              and it comes back.
             </p>
           ) : null}
 

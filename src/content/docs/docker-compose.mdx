@@ -37,11 +37,9 @@ docker --version
 <Step title="Run the command">
 
 Open a terminal. On Mac that's the **Terminal** app (press `Cmd+Space`, type
-"terminal"). On Windows you need either
-[Git Bash](https://git-scm.com/downloads/win) - the simpler option, it comes
-with Git and installs like any app - or
-[WSL](https://learn.microsoft.com/windows/wsl/install). Plain PowerShell
-can't run this command, so install one of those two first if you haven't.
+"terminal"). On Windows press Start, type "powershell", and open **Windows
+PowerShell** - just install [Git](https://git-scm.com/downloads/win) first
+if you haven't (the command fetches the code with it).
 
 Run it from any plain folder (your Desktop is fine) - **not inside your
 website's own repository**. It creates a new `dispatchseo` folder where
@@ -52,6 +50,12 @@ point at it later from the setup wizard.
 git clone https://github.com/NeoZi12/dispatchseo &&
   cd dispatchseo &&
   sh start.sh
+```
+
+**On Windows**, paste this version instead - same thing, PowerShell-friendly:
+
+```powershell
+git clone https://github.com/NeoZi12/dispatchseo; cd dispatchseo; .\start.cmd
 ```
 
 The first boot downloads the prebuilt images (or builds them from source
@@ -142,7 +146,9 @@ on your own computer and paste the `sk-ant-oat...` token it prints into the
 field there. No terminal on the server, no file to edit - the builder picks it
 up within a few minutes, nothing to restart.
 
-**Terminal alternative.** Prefer an env var? In the `dispatchseo` folder:
+**Terminal alternative.** Prefer an env var? In the `dispatchseo` folder
+(on Windows, run these in **Git Bash** - it comes with Git; the one-liners
+below use bash syntax PowerShell doesn't have):
 
 **a.** Create the token (builds run on your existing Claude subscription -
 DispatchSEO bills nothing):
@@ -190,6 +196,8 @@ POSTGRES_PASSWORD=   # your own database password - set BEFORE the first start
 ```bash
 git pull && sh start.sh
 ```
+
+On Windows, in PowerShell: `git pull; .\start.cmd`
 
 The script rebuilds what changed; schema changes apply automatically on
 boot. Your data lives in the `dispatch-pgdata` volume and survives rebuilds.
