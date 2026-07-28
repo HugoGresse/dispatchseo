@@ -15,7 +15,7 @@
 <p align="center">
   <a href="https://dispatchseo.com">Website</a>
   &nbsp;&middot;&nbsp;
-  <a href="https://dispatchseo.com/docs">Quickstart</a>
+  <a href="#quick-start">Quickstart</a>
   &nbsp;&middot;&nbsp;
   <a href="https://dispatchseo.com/docs/docker-compose">Self-hosting guide</a>
   &nbsp;&middot;&nbsp;
@@ -33,42 +33,11 @@ content pipeline that ships pull requests, rank tracking, and a dashboard
 where you stay in control.
 </p>
 
-<p align="center">Self-hosting is one command on any machine with Docker - on
-a VPS, <code>ssh</code> in first, then run this there instead of on your
-own computer. Run it from any plain folder (not inside your website's
-repo; it creates its own <code>dispatchseo</code> folder):</p>
-
-```bash
-git clone https://github.com/NeoZi12/dispatchseo &&
-  cd dispatchseo &&
-  sh start.sh
-```
-
-<p align="center">On Windows, paste this version instead - it works in plain
-PowerShell (<a href="https://git-scm.com/downloads/win">Git</a> must be
-installed) and installs into your user folder no matter where the window
-opened:</p>
-
-```powershell
-cd ~; git clone https://github.com/NeoZi12/dispatchseo; cd dispatchseo; .\start.cmd
-```
-
-<p align="center">When it finishes it prints your dashboard URL - open it
-and the setup wizard takes it from there. Your laptop is fine for trying
-it out, but <b>we highly recommend a machine that stays on</b> for real
-use - a $5 VPS, a Raspberry Pi, a desktop that never sleeps. The
-<a href="https://dispatchseo.com/docs/vps">VPS guide</a> has a shorter
-one-line installer plus your own domain with automatic HTTPS;
-<a href="https://dispatchseo.com/docs/docker-compose">the local guide</a>
-explains exactly what's lost on a laptop and what isn't.</p>
-
-<p align="center">Step-by-step walkthroughs:
-<a href="https://dispatchseo.com/docs/docker-compose">on your computer</a>
-&nbsp;·&nbsp;
-<a href="https://dispatchseo.com/docs/vps">on a VPS</a></p>
-
 <p align="center"><i>Self-hosted has zero feature limitations. Everything the
 paid cloud will do, this repo does today, in your own accounts, at $0.</i></p>
+
+<p align="center"><b><a href="#quick-start">One command installs it</a></b>
+- the Quick start below has the paste for Mac, Linux, VPS, and Windows.</p>
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=1gCXPxPqfy0">
@@ -158,19 +127,48 @@ worth winning.
 
 ## Quick start
 
-The one command above is the whole install
-([the docs](https://dispatchseo.com/docs) are the full guide). Database,
-migrations, schedules, and a headless Claude Code builder are all bundled;
-open the dashboard and the setup wizard takes over. Nothing on the internet
-needs to reach your machine, so there is no domain or port forwarding to
-set up.
+Self-hosting is one command on any machine with Docker - on a VPS, `ssh`
+in first and run this there instead of on your own computer. Run it from
+any plain folder (not inside your website's repo; it creates its own
+`dispatchseo` folder):
+
+```bash
+git clone https://github.com/NeoZi12/dispatchseo &&
+  cd dispatchseo &&
+  sh start.sh
+```
+
+On Windows, paste this version instead - it works in plain PowerShell
+([Git](https://git-scm.com/downloads/win) must be installed) and installs
+into your user folder no matter where the window opened:
+
+```powershell
+cd ~; git clone https://github.com/NeoZi12/dispatchseo; cd dispatchseo; .\start.cmd
+```
+
+When it finishes it prints your dashboard URL - open it and the setup
+wizard takes it from there. That one command really is the whole install
+([the docs](https://dispatchseo.com/docs) are the full guide): database,
+migrations, schedules, and a headless Claude Code builder are all bundled,
+and nothing on the internet needs to reach your machine, so there is no
+domain or port forwarding to set up.
+
+Your laptop is fine for trying it out, but **we highly recommend a machine
+that stays on** for real use - a $5 VPS, a Raspberry Pi, a desktop that
+never sleeps. The [VPS guide](https://dispatchseo.com/docs/vps) has a
+shorter one-line installer plus your own domain with automatic HTTPS;
+[the local guide](https://dispatchseo.com/docs/docker-compose) explains
+exactly what's lost on a laptop and what isn't.
 
 The last step is pasting one command into Claude Code inside your site's
 repo. Your agent does the rest of the install itself, including writing its
 own workflow files and setting its own secrets.
 
-There's also an [llms.txt](public/llms.txt) and a [SKILL.md](SKILL.md) if
-you'd rather point an agent at this repo and let it figure the setup out.
+Step-by-step walkthroughs:
+[on your computer](https://dispatchseo.com/docs/docker-compose) ·
+[on a VPS](https://dispatchseo.com/docs/vps). There's also an
+[llms.txt](public/llms.txt) and a [SKILL.md](SKILL.md) if you'd rather
+point an agent at this repo and let it figure the setup out.
 
 ## Developing (from source)
 
