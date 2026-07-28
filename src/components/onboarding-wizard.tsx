@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState, useTransition } from "react";
 import { JOURNEY_STAGES, STAGE_META } from "@/lib/journey-meta";
 import { connectCommand, connectCommandPS, mcpAddCommand, mcpServerName } from "@/lib/mcp-connect";
 import { ShellCommandTabs } from "./shell-command-tabs";
+import { PixelDispatcher } from "./pixel-dispatcher";
 import { FirstRunStatus } from "@/components/first-run-status";
 import {
   chooseGscOnly,
@@ -1241,37 +1242,12 @@ export function OnboardingWizard({
           </StepIcon>
           <h2 className="text-2xl font-semibold tracking-tight">You&apos;re live.</h2>
 
-          {agentWorking ? (
-            // The agent is demonstrably working - a calm, prominent banner
-            // replaces the dense kickoff list so the page stops feeling
-            // overwhelming (owner feedback), with the checklist below carrying
-            // the detail.
-            <div className="mb-2.5 mt-1 rounded-xl border border-violet-500/30 bg-violet-500/[0.07] px-5 py-5">
-              <div className="flex items-center gap-3">
-                <span
-                  aria-hidden
-                  className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-violet-400/25 border-t-violet-400"
-                />
-                <p className="text-xl font-semibold text-white">Let your agent work.</p>
-              </div>
-              <p className="mt-2.5 text-[15px] leading-relaxed text-neutral-300">
-                It&apos;s installing your pipeline and running your first keyword research -
-                typically <b className="font-medium text-neutral-100">10-20 minutes</b>, up
-                to an hour if it&apos;s building your blog from scratch.{" "}
-                <b className="font-medium text-neutral-100">Long is normal here</b> - it&apos;s
-                building real infrastructure, not stuck.
-              </p>
-              <p className="mt-2 text-[15px] leading-relaxed text-neutral-300">
-                Keep the Claude Code chat visible: it&apos;ll ask you to approve its plan and
-                merge one PR -{" "}
-                <b className="font-medium text-neutral-100">
-                  merge requests also land in your email
-                </b>
-                , so keep an eye on your inbox. The checklist below ticks itself as steps
-                verify; no refresh needed.
-              </p>
-            </div>
-          ) : (
+          {/* While the agent works, the calm status card (dispatcher +
+              spinner) lives at the BOTTOM of this screen - the top stays
+              reserved for anything still actionable (the collapsed pastes,
+              the builder-token step). Owner feedback: waiting vibes must
+              never sit above a command someone still has to run. */}
+          {agentWorking ? null : (
             <p className="mb-2.5 text-base text-neutral-400">
               Two pastes and your Claude Code takes care of the rest.
             </p>
@@ -1563,6 +1539,29 @@ export function OnboardingWizard({
             </ul>
           </details>
           {created ? <FirstRunStatus slug={created.slug} /> : null}
+
+          {agentWorking ? (
+            <div className="mt-5 rounded-xl border border-violet-500/30 bg-violet-500/[0.07] px-5 py-5">
+              <PixelDispatcher working className="mx-auto w-[min(220px,70vw)]" />
+              <div className="mt-3 flex items-center justify-center gap-2.5">
+                <span
+                  aria-hidden
+                  className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-violet-400/25 border-t-violet-400"
+                />
+                <p className="text-lg font-semibold text-white">Your agent is working.</p>
+              </div>
+              <p className="mx-auto mt-2 max-w-md text-center text-[15px] leading-relaxed text-neutral-300">
+                Typically <b className="font-medium text-neutral-100">10-20 minutes</b> - up to
+                an hour if it&apos;s building your blog from scratch. Long is normal; it&apos;s
+                not stuck.
+              </p>
+              <p className="mx-auto mt-1.5 max-w-md text-center text-[15px] leading-relaxed text-neutral-300">
+                Watch the terminal for its questions, and{" "}
+                <b className="font-medium text-neutral-100">your email for the PR to merge</b>.
+                This page updates itself.
+              </p>
+            </div>
+          ) : null}
         </section>
       ) : null}
     </div>
