@@ -279,10 +279,18 @@ export default async function OnboardingPage({
     <main className="min-h-screen px-5 py-8 sm:px-6 sm:py-10">
       <div className="mx-auto w-full max-w-3xl">
         <div className="mb-8 flex items-center justify-between">
-          <p className="flex items-center gap-2.5 text-lg font-semibold text-white">
+          {/* The way OUT of the wizard. ?home=1 matters: a bare "/" bounces a
+              signed-in visitor to /dashboard, whose onboarding gate sends
+              anyone mid-setup right back here - an exit that loops. Progress
+              is saved server-side (onboarding_screen), so leaving is free and
+              the next visit resumes where they stood. */}
+          <a
+            href="/?home=1"
+            className="flex items-center gap-2.5 text-lg font-semibold text-white transition-opacity hover:opacity-80"
+          >
             <DispatchMark className="h-7 w-auto" />
             DispatchSEO
-          </p>
+          </a>
           <div className="flex items-center gap-4">
             {/* The way out for someone who does not want a site here at all -
                 see strandedNoSites above. Only rendered when they own none,
