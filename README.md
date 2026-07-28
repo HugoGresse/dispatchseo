@@ -15,7 +15,7 @@
 <p align="center">
   <a href="https://dispatchseo.com">Website</a>
   &nbsp;&middot;&nbsp;
-  <a href="#quick-start">Quickstart</a>
+  <a href="https://dispatchseo.com/docs">Quickstart</a>
   &nbsp;&middot;&nbsp;
   <a href="https://dispatchseo.com/docs/docker-compose">Self-hosting guide</a>
   &nbsp;&middot;&nbsp;
