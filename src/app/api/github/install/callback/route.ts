@@ -10,6 +10,7 @@ import {
   installationClaimable,
   listInstallationRepos,
   makeInstallNonce,
+  requireInstallProof,
   userAuthConfigured,
 } from "@/lib/github-app";
 import { db } from "@/lib/db";
@@ -138,11 +139,12 @@ export async function GET(req: Request): Promise<Response> {
         console.error(
           `[github-install] no ?code on the callback for installation ${installationId} ` +
             `(setup_action=${setupAction ?? "none"}, state=${state ? "present" : "none"}). ` +
-            `Falling back to the freshness gate. Check that "Request user authorization (OAuth) ` +
-            `during installation" is enabled on the App and that its Callback URL points here.`,
+            `Check that "Request user authorization (OAuth) during installation" is enabled on ` +
+            `the App and that its Callback URL points here. ` +
+            `${requireInstallProof() ? "REFUSING (GITHUB_APP_REQUIRE_INSTALL_PROOF=1)." : "Falling back to the freshness gate."}`,
         );
       }
-      if (proofCode && !(await callerControlsInstallation(proofCode, installationId))) {
+      if (!proofCode ? requireInstallProof() : !(await callerControlsInstallation(proofCode, installationId))) {
         redirect(`/onboarding?gh=error&msg=${encodeURIComponent("We could not confirm that this GitHub installation belongs to you. Install the app from this page's button so we can verify it, rather than from github.com directly.")}`);
       }
 
@@ -197,10 +199,11 @@ export async function GET(req: Request): Promise<Response> {
     if (!proofCode && userAuthConfigured()) {
       console.error(
         `[github-install] no ?code on the stateless callback for installation ${installationId} ` +
-          `(setup_action=${setupAction ?? "none"}). Falling back to the freshness gate.`,
+          `(setup_action=${setupAction ?? "none"}). ` +
+          `${requireInstallProof() ? "REFUSING (GITHUB_APP_REQUIRE_INSTALL_PROOF=1)." : "Falling back to the freshness gate."}`,
       );
     }
-    if (proofCode && !(await callerControlsInstallation(proofCode, installationId))) {
+    if (!proofCode ? requireInstallProof() : !(await callerControlsInstallation(proofCode, installationId))) {
       redirect(`/onboarding?gh=error&msg=${encodeURIComponent("We could not confirm that this GitHub installation belongs to you. Install the app from this page's button so we can verify it, rather than from github.com directly.")}`);
     }
 

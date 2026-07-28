@@ -216,6 +216,27 @@ export function userAuthConfigured(): boolean {
   return Boolean(process.env.GITHUB_APP_CLIENT_ID && process.env.GITHUB_APP_CLIENT_SECRET);
 }
 
+// Whether a MISSING ?code should refuse the install outright.
+//
+// Two-state on purpose. A present-but-invalid code is always refused - that is
+// evidence about the caller and needs no opt-in. A missing code is ambiguous:
+// it means GitHub's redirect did not carry one, which is far more often our own
+// App configuration than an attacker stripping a parameter. Failing closed on
+// it blocked every legitimate install on launch morning.
+//
+// So enforcement of the ambiguous case is opt-in, and the operator turns it on
+// only after seeing a real install verify successfully (the Vercel log prints
+// which branch ran). Until then the callback falls back to the freshness /
+// suspension gate, which still closes every orphan-installation class.
+//
+// This is deliberately an explicit, documented, operator-controlled state
+// rather than a silent permanent downgrade - the difference between "we chose
+// the weaker check for now and wrote it down" and "the strong check quietly
+// stopped applying". Set GITHUB_APP_REQUIRE_INSTALL_PROOF=1 to close it.
+export function requireInstallProof(): boolean {
+  return userAuthConfigured() && process.env.GITHUB_APP_REQUIRE_INSTALL_PROOF === "1";
+}
+
 export async function callerControlsInstallation(
   code: string,
   installationId: number,
