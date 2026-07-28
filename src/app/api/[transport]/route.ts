@@ -2487,6 +2487,14 @@ async function authed(req: Request): Promise<Response> {
   // header at all (anthropics/claude-code#50464) - a URL survives every
   // shell-quoting and header-handling bug there is, so the Windows connect
   // command uses this form. Header wins when both are present.
+  //
+  // Deliberate secrets-in-URL tradeoff (2026-07-28 security review): the
+  // client cannot do an exchange flow (the CLI stores a static URL), and
+  // URL-embedded keys are the standard MCP connect pattern for exactly that
+  // reason. Exposure delta: self-host logs belong to the same owner the
+  // token protects; on cloud only the platform's own request logs see it.
+  // Rules that keep this safe: this route must never log req.url, and the
+  // eventual revocation story is a rotate-key action (LATER.md).
   const headerToken = header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
   const token = headerToken || (new URL(req.url).searchParams.get("key") ?? "");
   const project = token ? await getProjectByToken(token) : null;

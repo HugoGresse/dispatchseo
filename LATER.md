@@ -130,3 +130,5 @@ chatbot in dashboard, charts libraries, dark mode, settings pages, mobile app.
   sustained 404s - deferred because deletes/renames are rare, GSC
   impressions dropping to zero already hints at it, and false demotions
   (WAF, transient outage) are worse than a stale "live".
+
+- **Project key rotation** - a "rotate key" action on Settings (+ matching MCP tool per the parity rule): generates a new mcp_token, shows the new connect command, old token dies instantly. The revocation story for URL-borne keys (?key= connect form) and for any leaked token; today the only revocation is deleting the project.
