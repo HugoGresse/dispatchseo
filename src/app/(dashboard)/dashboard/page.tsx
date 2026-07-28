@@ -55,6 +55,7 @@ import {
 } from "@/lib/indexing";
 import { getPacing } from "@/lib/pacing";
 import { mcpAddCommand, mcpServerName, setupCommand, setupCommandPS } from "@/lib/mcp-connect";
+import { requestOrigin } from "@/lib/request-origin";
 import { ShellCommandTabs } from "@/components/shell-command-tabs";
 import { PacingLine } from "@/components/pacing-info";
 import { AgentStatus } from "@/components/agent-status";
@@ -593,7 +594,7 @@ export default async function Home() {
   // project (dispatchseo-<slug>, via mcpAddCommand) so connecting a second
   // site never collides with or silently shadows the first one's token.
   const hdrs = await headers();
-  const dashOrigin = `${hdrs.get("x-forwarded-proto") ?? "https"}://${hdrs.get("host") ?? "dispatchseo.com"}`;
+  const dashOrigin = requestOrigin(hdrs);
   const connectCommand = mcpToken ? mcpAddCommand(project.slug, dashOrigin, mcpToken) : null;
   // The one-command onboarding (public/setup.sh): connect + verified secrets
   // + agent hand-off, run inside the site's repo. Cloud projects skip the

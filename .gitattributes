@@ -11,3 +11,6 @@
 .env.docker.example text eol=lf
 .env.local.example text eol=lf
 Dockerfile text eol=lf
+# Mounted straight into the cron container as /etc/crontabs/root - a CRLF
+# checkout makes busybox crond silently skip every line.
+docker/cron/crontab text eol=lf

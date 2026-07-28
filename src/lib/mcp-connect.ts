@@ -26,7 +26,24 @@ export function mcpAddCommand(slug: string, origin: string, token: string): stri
   // with several projects connected would have every one of them active at
   // once in an unrelated repo, and the install workflow's repo-remote check
   // would keep failing against the wrong project's token.
-  return `claude mcp add --transport http --scope local ${mcpServerName(slug)} ${origin}/api/mcp --header "Authorization: Bearer ${token}"`;
+  // Name comes IMMEDIATELY after `add`: the CLI's parser has a known
+  // argument-order bug where options before the name throw "missing
+  // required argument 'name'" (anthropics/claude-code#2341; GitHub's own
+  // MCP install guide documents the same reorder for Windows).
+  return `claude mcp add ${mcpServerName(slug)} ${origin}/api/mcp --transport http --scope local --header "Authorization: Bearer ${token}"`;
+}
+
+// Windows variant: the key rides IN THE URL (?key=) instead of a --header.
+// Two reasons, both researched and sourced on 2026-07-28: (a) header args
+// are the #1 quoting casualty across cmd/PowerShell/the npm .cmd shim, and
+// (b) Claude Code on Windows has a long-lived bug where the header is
+// stored, `claude mcp list` shows Connected, and actual tool calls send NO
+// Authorization header at all (anthropics/claude-code#50464) - a URL
+// survives all of it. The gate accepts ?key= for exactly this
+// (route.ts authed()). One line, no continuation - neither cmd nor
+// PowerShell honors the docs' bash-style trailing backslash.
+export function mcpAddCommandPS(slug: string, origin: string, token: string): string {
+  return `claude mcp add ${mcpServerName(slug)} "${origin}/api/mcp?key=${token}" --transport http --scope local`;
 }
 
 // Lets Claude Code run `gh` in this repo before the install agent's first
@@ -56,7 +73,7 @@ export function connectCommand(slug: string, origin: string, token: string): str
 // existing settings file.
 export function connectCommandPS(slug: string, origin: string, token: string): string {
   return (
-    `${mcpAddCommand(slug, origin, token)}; ` +
+    `${mcpAddCommandPS(slug, origin, token)}; ` +
     `New-Item -ItemType Directory -Force .claude | Out-Null; ` +
     `if (!(Test-Path .claude/settings.local.json)) { Set-Content .claude/settings.local.json '{ "permissions": { "allow": ["Bash(gh *)"] } }' }`
   );
@@ -83,6 +100,6 @@ export function setupCommandPS(slug: string, origin: string, token: string, bund
   return (
     `$b = "$env:ProgramFiles\\Git\\bin\\bash.exe"; ` +
     `if (!(Test-Path $b)) { $b = "$env:LocalAppData\\Programs\\Git\\bin\\bash.exe" }; ` +
-    `& $b -c '${setupCommand(slug, origin, token, bundled)}'`
+    `if (!(Test-Path $b)) { "Git (with Git Bash) is required - install it from https://git-scm.com/downloads/win and run this again" } else { & $b -c '${setupCommand(slug, origin, token, bundled)}' }`
   );
 }

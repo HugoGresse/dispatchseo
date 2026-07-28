@@ -77,7 +77,10 @@ NAME="dispatchseo-$SLUG"
 # entry from an older run gets found and cleaned up too.
 claude mcp remove --scope local "$NAME" >/dev/null 2>&1
 claude mcp remove --scope user "$NAME" >/dev/null 2>&1
-claude mcp add --transport http --scope local "$NAME" "$BASE/api/mcp" \
+# Name immediately after `add`: the CLI's parser is order-fragile
+# (anthropics/claude-code#2341 - options before the name can throw
+# "missing required argument 'name'").
+claude mcp add "$NAME" "$BASE/api/mcp" --transport http --scope local \
   --header "Authorization: Bearer $TOKEN" >/dev/null 2>&1 || \
   die "Could not add the connection to Claude Code (claude mcp add failed)."
 say "  Connected (key verified against the server)."

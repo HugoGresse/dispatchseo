@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { getActiveProjectOrNull, scopedProjects } from "@/lib/active-project";
 import { isCloudMode } from "@/lib/cloud";
 import { fetchProjectToken } from "@/lib/projects";
+import { requestOrigin } from "@/lib/request-origin";
 import { OnboardingWizard, type WizardResume } from "@/components/onboarding-wizard";
 import {
   CloudOnboardingWizard,
@@ -196,12 +197,11 @@ export default async function OnboardingPage({
     }
   }
 
-  // The MCP connect command needs this deployment's public origin. Behind
-  // Vercel the forwarded headers are trustworthy; localhost falls out naturally.
+  // The MCP connect command needs this deployment's public origin - one
+  // shared rule (request-origin.ts) so the wizard, Settings and the
+  // dashboard cards can never disagree about http vs https.
   const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
-  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  const origin = `${proto}://${host}`;
+  const origin = requestOrigin(h);
 
   const isNew = params.new;
   const cloud = isCloudMode();

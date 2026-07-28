@@ -91,6 +91,13 @@ the build-tool workflow and must never be picked up here.
    why - the recent mix plus the SERP - in the run report and the PR body.
 4. **THIN-CONTENT GATE + INTENT CONTRACT (before writing a word).** Re-pull
    the live SERP top 5 for the primary keyword (research may be days old).
+   **Free mode - no SERP source connected (check_serp answers "not
+   configured" and no dataforseo MCP is available): do NOT stall or refuse
+   here.** Build the intent contract from the keyword's plain reading, this
+   site's own Search Console queries, and product knowledge instead; write
+   "SERP gate: skipped (free mode - no SERP source)" in the run report AND
+   the PR body; every other bar in this step still applies in full. Never
+   fabricate SERP claims you did not fetch.
    List concretely what each page 1 result covers. That list is not just a
    bar to clear - it is the INTENT CONTRACT: the subtopics every top result
    shares are what the searcher actually came to do, and the draft must let

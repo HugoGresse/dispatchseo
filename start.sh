@@ -27,16 +27,35 @@ fi
 
 [ -f .env ] || cp .env.docker.example .env
 
+# Notepad (and friends) save CRLF, and docker compose reads .env raw - a \r
+# inside any value poisons whatever consumes it (a domain with \r breaks
+# caddy, a port with \r breaks the probe). Normalize the whole file once
+# per boot so hand-edits on Windows can never wedge the stack.
+if grep -q "$(printf '\r')" .env 2>/dev/null; then
+  tr -d '\r' < .env > .env.crlf-fix && mv .env.crlf-fix .env
+fi
+
 # The one required secret. Generated once; re-runs keep the existing value.
+# /dev/urandom fallback: a box without openssl must not write an empty
+# secret (set -e does not catch a failed $(...) inside echo).
 if ! grep -q '^CRON_SECRET=..*' .env; then
-  echo "CRON_SECRET=$(openssl rand -hex 24)" >> .env
+  if command -v openssl >/dev/null 2>&1; then
+    SECRET=$(openssl rand -hex 24)
+  else
+    SECRET=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
+  fi
+  [ -n "$SECRET" ] || { echo "Could not generate CRON_SECRET (no openssl, no /dev/urandom)"; exit 1; }
+  echo "CRON_SECRET=$SECRET" >> .env
 fi
 
 # Host port for the dashboard. An explicit DISPATCH_PORT in .env always
 # wins; otherwise probe from 4005 upward and take the first free port.
 # "Connection refused" (curl exit 7) is the free signal - anything that
 # answers or hangs means the port is taken. Without curl, stay on 4005.
-PORT=$(grep '^DISPATCH_PORT=..*' .env | tail -1 | cut -d= -f2)
+# tr -d '\r': a Windows owner hand-editing .env in Notepad saves CRLF, and
+# a carried \r poisons the value ("4005\r" breaks the probe URL, a domain
+# with \r breaks caddy). Same guard on DOMAIN below.
+PORT=$(grep '^DISPATCH_PORT=..*' .env | tail -1 | cut -d= -f2 | tr -d '\r')
 if [ -z "$PORT" ]; then
   PORT=4005
   if command -v curl >/dev/null 2>&1; then
@@ -61,7 +80,7 @@ fi
 # certificates fetch and renew themselves, APP_URL follows the domain, and
 # nothing needs installing on the host. Needs the domain's DNS A record
 # pointing at this machine, with ports 80/443 reachable.
-DOMAIN=$(grep '^DOMAIN=..*' .env | tail -1 | cut -d= -f2)
+DOMAIN=$(grep '^DOMAIN=..*' .env | tail -1 | cut -d= -f2 | tr -d '\r')
 PROFILE=""
 if [ -n "$DOMAIN" ]; then
   PROFILE="--profile domain"

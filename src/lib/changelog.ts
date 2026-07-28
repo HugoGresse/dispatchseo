@@ -30,6 +30,49 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-28.2",
+    date: "2026-07-28",
+    title: "The launch-day audit sweep",
+    summary:
+      "A full audit of the self-host path: Windows connect is now immune to a known Claude Code header bug, free mode builds without a SERP source, and a dozen edge cases got hardened.",
+    changes: [
+      {
+        kind: "new",
+        text:
+          "Your project key can now ride in the connect URL itself (?key=...) - the Windows " +
+          "connect command uses this, sidestepping a long-standing Claude Code bug where a " +
+          "configured auth header is silently dropped on Windows.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Free mode (no DataForSEO, no SerpApi) no longer stalls the builder at the SERP " +
+          "gate - guides and tools build from Search Console data and product knowledge, and " +
+          "say so in the PR.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "On plain-HTTP installs (localhost, LAN, VPS before HTTPS), Settings and the " +
+          "dashboard no longer hand out https:// connect commands that can't connect.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Trend radar on a localhost install now says plainly that it needs a public " +
+          "address instead of reporting a scan that could never arrive.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Self-host hardening: schedules survive Windows checkouts (line-ending pin), " +
+          "hand-edited .env files are CRLF-normalized on boot, a rotated Claude token " +
+          "reaches the builder without a restart, and hung GitHub calls can no longer " +
+          "wedge the build loop.",
+      },
+    ],
+  },
+  {
     version: "2026-07-28",
     date: "2026-07-28",
     title: "Windows works out of the box",

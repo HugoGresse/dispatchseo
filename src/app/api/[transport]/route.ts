@@ -2481,7 +2481,14 @@ const mcpHandler = createMcpHandler(
 // The resolved project rides an AsyncLocalStorage the tools read.
 async function authed(req: Request): Promise<Response> {
   const header = req.headers.get("authorization") ?? "";
-  const token = header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
+  // The key also rides as ?key=<token> in the URL. Claude Code on Windows
+  // has a long-lived bug where a configured Authorization header is stored,
+  // `claude mcp list` says Connected, and the actual tool calls send NO
+  // header at all (anthropics/claude-code#50464) - a URL survives every
+  // shell-quoting and header-handling bug there is, so the Windows connect
+  // command uses this form. Header wins when both are present.
+  const headerToken = header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
+  const token = headerToken || (new URL(req.url).searchParams.get("key") ?? "");
   const project = token ? await getProjectByToken(token) : null;
   if (!project) {
     // Spell out WHICH way auth failed: an MCP client renders both cases as a

@@ -1,7 +1,9 @@
 import { requireDashboard } from "@/lib/auth-gate";
 import { headers } from "next/headers";
 import { instanceCronSecret } from "@/lib/dashboard-auth";
-import { mcpAddCommand } from "@/lib/mcp-connect";
+import { mcpAddCommand, mcpAddCommandPS } from "@/lib/mcp-connect";
+import { requestOrigin } from "@/lib/request-origin";
+import { ShellCommandTabs } from "@/components/shell-command-tabs";
 import { getActiveProjectOrNull } from "@/lib/active-project";
 import { credsForProject } from "@/lib/dataforseo";
 import { DEFAULT_PROJECT_ID, fetchProjectToken } from "@/lib/projects";
@@ -134,7 +136,7 @@ export default async function SettingsPage() {
   const lastSiteWhileSubscribed =
     isCloudMode() && account?.siteCount === 1 && account.subscribed;
   const hdrs = await headers();
-  const dashOrigin = `${hdrs.get("x-forwarded-proto") ?? "https"}://${hdrs.get("host") ?? "dispatchseo.com"}`;
+  const dashOrigin = requestOrigin(hdrs);
 
   return (
     <div className="mx-auto max-w-xl space-y-8">
@@ -215,7 +217,11 @@ export default async function SettingsPage() {
             Connect Claude Code to this project (the server name carries the project slug, so
             every connected site keeps its own entry):
           </p>
-          <CopyBlock text={mcpAddCommand(project.slug, dashOrigin, mcpToken)} />
+          <ShellCommandTabs
+            bash={mcpAddCommand(project.slug, dashOrigin, mcpToken)}
+            powershell={mcpAddCommandPS(project.slug, dashOrigin, mcpToken)}
+            box="card"
+          />
         </section>
       ) : null}
 

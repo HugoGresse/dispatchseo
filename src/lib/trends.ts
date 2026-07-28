@@ -5,7 +5,29 @@
 
 import { db } from "@/lib/db";
 import { dispatchTrendExpand, dispatchTrendScan } from "@/lib/github";
+import { isCloudMode } from "@/lib/cloud";
 import type { Project } from "@/lib/projects";
+
+// Trend runs live in the SITE repo's GitHub workflows, and those run on
+// GitHub's cloud - they call back into this backend over the public
+// internet. A self-host without a public address (plain localhost / LAN
+// install) can dispatch the workflow, but the run can never reach back, so
+// "subjects land in a few minutes" would be a false promise. Say so up
+// front instead of reporting a success that cannot happen. (2026-07-28
+// launch audit; the in-stack builder does not serve trend jobs yet.)
+const LOCAL_URL = /^https?:\/\/(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i;
+
+function trendsUnreachable(): { ok: false; message: string } | null {
+  if (isCloudMode()) return null;
+  const appUrl = process.env.APP_URL ?? "";
+  if (!LOCAL_URL.test(appUrl)) return null;
+  return {
+    ok: false,
+    message:
+      `Trend runs execute in your repo's GitHub Actions, which can't reach this dashboard at ${appUrl}. ` +
+      "Give the install a public address (add DOMAIN=... to .env and re-run start.sh - see the VPS guide at /docs/vps) and this lights up.",
+  };
+}
 
 // Both trend triggers share a cooldown: each CI run costs Actions minutes and
 // a slice of the Claude subscription, so a double-click or an impatient
@@ -40,6 +62,8 @@ export async function requestTrendScan(
       message: `A scan already ran in the last ${TREND_COOLDOWN_MIN} minutes - the radar is current.`,
     };
   }
+  const unreachable = trendsUnreachable();
+  if (unreachable) return unreachable;
   const result = await dispatchTrendScan(project);
   if (result.ok) {
     // Stamp fire-and-forget: on a pre-0016 schema the column is missing and
@@ -79,6 +103,8 @@ export async function requestTrendExpand(
       message: "Ideas were already requested for this subject - they land here when the run finishes.",
     };
   }
+  const unreachable = trendsUnreachable();
+  if (unreachable) return unreachable;
   const result = await dispatchTrendExpand(project, topic.id, topic.title);
   if (result.ok) {
     await db()

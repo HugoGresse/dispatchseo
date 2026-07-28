@@ -78,7 +78,11 @@ swapping words and buttons is a build failure, not a shortcut.
    page 1 - if a competitor tool exists, list concretely what ours does
    better (polish, completeness, presets, zero-login). If it cannot clearly
    win, DO NOT BUILD: \`update_suggestion(id, status="pending")\`, state
-   why, stop.
+   why, stop. **Free mode - no SERP source connected (check_serp answers
+   "not configured" and no dataforseo MCP): do NOT stall or refuse; judge
+   winnability from the tool idea itself and product knowledge, and write
+   "SERP gate: skipped (free mode - no SERP source)" in the run report AND
+   the PR body. Never fabricate SERP claims you did not fetch.**
 5. **THEME (know the host site before styling anything).** The tool must
    look native to the site it ships on, and the site's design system is read
    fresh each build - never assumed from memory or carried over from another

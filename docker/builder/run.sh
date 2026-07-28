@@ -55,11 +55,14 @@ report() { # report <job-key> <ok|fail> [message]
 # own working branch from there.
 sync_repo() { # sync_repo <owner/repo> <dir> -> 0/1
   url="https://x-access-token:${GH_TOKEN}@github.com/$1.git"
+  # timeout on every network call: a hung clone/fetch would wedge the whole
+  # sequential loop for every project (the agent itself already runs under
+  # timeout 5400 below).
   if [ ! -d "$2/.git" ]; then
-    git clone --quiet "$url" "$2" || return 1
+    timeout 300 git clone --quiet "$url" "$2" || return 1
   fi
   git -C "$2" remote set-url origin "$url"
-  git -C "$2" fetch --quiet --prune origin || return 1
+  timeout 300 git -C "$2" fetch --quiet --prune origin || return 1
   git -C "$2" remote set-head origin -a >/dev/null 2>&1
   branch=$(git -C "$2" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
   [ -n "$branch" ] || branch=main
@@ -82,7 +85,7 @@ DENY='^\.github/|^\.dispatchseo/|(^|/)package\.json$|pnpm-lock\.yaml|yarn\.lock|
 # thought to ban. Reference-stack layout is the fallback when the file is
 # absent. Fetched per sweep so an owner's edit takes effect without a restart.
 publish_prefixes() { # publish_prefixes <owner/repo>
-  prefixes=$(gh api "repos/$1/contents/.dispatchseo/publish-paths" \
+  prefixes=$(timeout 120 gh api "repos/$1/contents/.dispatchseo/publish-paths" \
     -H "Accept: application/vnd.github.raw" 2>/dev/null \
     | grep -v '^[[:space:]]*#' | grep -v '^[[:space:]]*$')
   if [ -z "$prefixes" ]; then
@@ -108,14 +111,14 @@ within_publish_paths() { # within_publish_paths <files> <prefixes>
 
 merge_sweep() { # merge_sweep <slug> <owner/repo>
   allowed=$(publish_prefixes "$2")
-  gh pr list --repo "$2" --label seo --state open \
+  timeout 120 gh pr list --repo "$2" --label seo --state open \
     --json number,labels \
     --jq '.[] | select([.labels[].name] | index("seo-tool") | not) | .number' \
   | while read -r n; do
       [ -n "$n" ] || continue
       # Every check green (gh exits 0 only then; pending=8, failing/none=1).
-      if ! gh pr checks "$n" --repo "$2" >/dev/null 2>&1; then continue; fi
-      changed=$(gh pr diff "$n" --repo "$2" --name-only)
+      if ! timeout 120 gh pr checks "$n" --repo "$2" >/dev/null 2>&1; then continue; fi
+      changed=$(timeout 120 gh pr diff "$n" --repo "$2" --name-only)
       if ! within_publish_paths "$changed" "$allowed"; then
         log "PR #$n in $2 touches files outside the publish dirs (structural change) - leaving it for the owner"
         continue
@@ -124,7 +127,7 @@ merge_sweep() { # merge_sweep <slug> <owner/repo>
         log "PR #$n in $2 touches protected files - leaving it for the owner"
         continue
       fi
-      if gh pr merge "$n" --repo "$2" --squash --delete-branch >/dev/null 2>&1; then
+      if timeout 120 gh pr merge "$n" --repo "$2" --squash --delete-branch >/dev/null 2>&1; then
         log "auto-merged green guide PR #$n in $2"
         report "builder-merge--$1" ok
       else
@@ -228,6 +231,12 @@ set_git_identity() { # commit as the GH_TOKEN's real user, cached per token
   fi
 }
 
+# Remember which Claude token source we booted with. The loop exports the
+# resolved token for the agent, and without this sentinel that export would
+# make every later iteration take the env branch - so a token rotated on
+# the dashboard would never be picked up until a container restart.
+ENV_CLAUDE_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN:-}"
+
 while :; do
   # A non-claiming poll FIRST: it carries the tokens (gh + claude) and never
   # costs a cadence window, so resolving/validating the Claude token here can
@@ -244,7 +253,7 @@ while :; do
   # on the dashboard's automatic-builds step never touch .env or hunt for the
   # install folder. Poll every 5 min while unconfigured so a freshly pasted
   # token goes live quickly, instead of the long idle a settled builder uses.
-  CLAUDE_TOK="${CLAUDE_CODE_OAUTH_TOKEN:-$(echo "$probe" | jq -r '.claude_token // empty')}"
+  CLAUDE_TOK="${ENV_CLAUDE_TOKEN:-$(echo "$probe" | jq -r '.claude_token // empty')}"
   case "$CLAUDE_TOK" in
     "") log "idle - no Claude token yet. Paste it on the dashboard's 'Turn on automatic builds' step (or set CLAUDE_CODE_OAUTH_TOKEN in .env)."
        sleep 300; continue ;;
@@ -297,6 +306,8 @@ while :; do
     fi
   fi
 
-  POLL=$(echo "$feed" | jq -r '.poll_seconds // 600')
+  # BUILDER_POLL_SECONDS (documented in the header) wins over the backend's
+  # suggested cadence - it was documented but dead before this line read it.
+  POLL="${BUILDER_POLL_SECONDS:-$(echo "$feed" | jq -r '.poll_seconds // 600')}"
   sleep "$POLL"
 done
