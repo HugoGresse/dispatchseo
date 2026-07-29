@@ -1,0 +1,322 @@
+---
+title: Schedules
+description: What runs on a timer, when, and what you see when it works or when it fails.
+---
+
+DispatchSEO's automation runs across three different schedulers, not one -
+and the split isn't arbitrary. Vercel's Hobby plan (what the hosted
+dispatchseo.com and most Vercel self-hosts run on) caps scheduled jobs at
+once a day and two jobs total, so anything that needs to run more often
+than that lives in GitHub Actions instead - either this repo's own
+workflows (for the backend's own data crons) or the 11 workflows installed
+into your connected site's repo (for the content pipeline). A self-hosted
+Docker install has neither constraint, but it has a different one: a home
+machine or a fresh VPS usually has no public URL for GitHub Actions to call
+back into, so it runs its own cron container plus an in-stack builder
+instead, both of which only ever make outbound connections.
+
+## Backend crons
+
+These are the jobs that keep your numbers current - rank tracking, Search
+Console stats, and the post-deploy smoke test. They loop over every project
+on the instance; nothing here is specific to one site.
+
+<Meta>
+<MetaItem label="Runs">Vercel: daily at 04:00 UTC (`vercel.json`). Docker: the `cron` container, same schedule.</MetaItem>
+<MetaItem label="Needs">Nothing to be turned on - it loops every project and skips per-project gates on its own.</MetaItem>
+<MetaItem label="If it fails">Red banner on Home, alert email if configured, shown in `get_cron_health` as `daily-ranks`.</MetaItem>
+</Meta>
+
+**daily-ranks** checks where you rank for every tracked keyword, using
+whichever source your project is set to: DataForSEO mode posts cheap
+standard-queue tasks here and the actual rank rows land later via
+serp-collect below; SerpApi mode checks live, but only on Mondays, to stay
+inside the free 250-search monthly quota; GSC mode reads average position
+from Search Console, for free, on every run. The same pass also snapshots
+yesterday's Search Console clicks and impressions, and refreshes your
+domain rating once it's aged past a week.
+
+<Meta>
+<MetaItem label="Runs">Cloud: GitHub Actions every 3 hours at :07. Docker: the `cron` container, same cadence.</MetaItem>
+<MetaItem label="Needs">Search Console connected - skips as an informational no-op otherwise.</MetaItem>
+<MetaItem label="If it fails">Same rails as daily-ranks, job name `hourly-gsc`.</MetaItem>
+</Meta>
+
+**hourly-gsc** re-snapshots the last few days of Search Console data (
+today's numbers are provisional and firm up as the day goes on), checks up
+to 10 newly-published pages to see if Google has indexed them yet, and
+piggybacks two maintenance sweeps: recovering any build that got stuck
+mid-way, and firing fresh research for a project whose guide queue has run
+completely dry.
+
+<Meta>
+<MetaItem label="Runs">Cloud: GitHub Actions hourly at :37. Docker: the `cron` container, same cadence.</MetaItem>
+<MetaItem label="Needs">DataForSEO connected with tasks actually pending - most projects on GSC or SerpApi have nothing to collect and don't appear in the report at all.</MetaItem>
+<MetaItem label="If it fails">Same rails, job name `serp-collect`.</MetaItem>
+</Meta>
+
+**serp-collect** is daily-ranks' companion: it fetches the DataForSEO
+standard-queue SERP tasks daily-ranks posted and writes the actual
+`rank_checks` rows, usually 30-60 minutes later. Without this job,
+DataForSEO-mode rank tracking would queue tasks that simply never land.
+
+<Meta>
+<MetaItem label="Runs">After every push to main (cloud) - the workflow polls until the pushed commit is actually live, then runs the check.</MetaItem>
+<MetaItem label="Needs">Nothing - runs automatically on every deploy.</MetaItem>
+<MetaItem label="If it fails">Same rails, job name `deploy-check`.</MetaItem>
+</Meta>
+
+**deploy-check** is the post-deploy smoke test: it confirms the core
+tables are reachable, projects resolve correctly, GSC credentials still
+parse, and (in cloud mode) that billing and the GitHub App are configured.
+It also doubles as the generic outcome-reporting door for everything else
+on this page - every workflow below, on both schedulers, reports its own
+success or failure back through this same endpoint under its own job name,
+which is how a broken workflow in your site's repo shows up on your
+dashboard instead of dying quietly in the GitHub Actions tab.
+
+`weekly-opportunities` is retired - it's not on any schedule anymore (the
+Monday research workflow described below replaced it), but the route still
+answers if you call it by hand. It only ever covered the instance's default
+project and has no toggle, so nothing else on your dashboard depends on it.
+
+## Workflows in your site's repo
+
+When you connect a site, DispatchSEO installs 11 GitHub Actions workflows
+into that repo's `.github/workflows/` folder. These are what actually do
+the work of the pipeline - researching keywords, writing guides, building
+tools, validating them, and merging the result - while the backend crons
+above only track your numbers. Because they run on GitHub's own runners,
+they need a public URL to call back into your dashboard; that's exactly
+the constraint the self-hosted Docker builder (below) exists to route
+around when you don't have one.
+
+<Meta>
+<MetaItem label="Runs">Up to three times a day (05:13, 12:13, 19:13 UTC) - later attempts are a no-op once one has already built today.</MetaItem>
+<MetaItem label="Needs">An approved guide or tool suggestion waiting, and no SEO PR already open.</MetaItem>
+<MetaItem label="If it fails">Reports `job=seo-daily` to your dashboard - banner, email, and `get_cron_health`.</MetaItem>
+</Meta>
+
+**SEO daily builder** (`seo-daily.yml`) builds the oldest approved
+suggestion into a PR: `get_instructions` → template → live SERP gate →
+humanizer voice pass → PR. Ships at most one guide a day, and the three
+same-day attempts exist so a Claude usage-limit hit is a quiet deferral
+instead of a lost day.
+
+<Meta>
+<MetaItem label="Runs">Event-driven - the moment any check reports, plus an hourly backstop sweep.</MetaItem>
+<MetaItem label="Needs">Hands-off publishing turned on, an open PR labeled `seo`, every check green, and (for guides) every changed file under your repo's own `.dispatchseo/publish-paths`.</MetaItem>
+<MetaItem label="If it fails">Reports `job=seo-auto-merge`.</MetaItem>
+</Meta>
+
+**SEO auto-merge** (`seo-auto-merge.yml`) is the hands-off publish gate. A
+tool PR additionally needs the `tool-validated` label from SEO tool
+validation below before this workflow will touch it - structural changes
+outside the publish paths are never auto-merged, regardless of this
+setting.
+
+<Meta>
+<MetaItem label="Runs">Mondays, up to three attempts (06:23, 13:23, 20:23 UTC) so a dropped run self-heals the same day instead of losing the week.</MetaItem>
+<MetaItem label="Needs">Nothing you have to enable - this is what fills the queue in the first place.</MetaItem>
+<MetaItem label="If it fails">Reports `job=seo-weekly-research`.</MetaItem>
+</Meta>
+
+**SEO weekly research** (`seo-weekly-research.yml`) reads your product as
+it exists that week, derives keyword ideas from it, validates them through
+DataForSEO, tracks the winners, and queues suggestions - guides
+pre-approved, tool ideas pending your review. It also fires on demand the
+moment your guide queue runs completely dry, so a missed Monday run never
+leaves the daily builder with nothing to publish.
+
+<Meta>
+<MetaItem label="Runs">Wednesdays, up to three attempts (06:27, 13:27, 20:27 UTC).</MetaItem>
+<MetaItem label="Needs">Nothing you have to enable.</MetaItem>
+<MetaItem label="If it fails">Reports `job=seo-geo-scan`.</MetaItem>
+</Meta>
+
+**SEO geo scan** (`seo-geo-scan.yml`) measures AI visibility: it builds the
+questions your customers would ask an AI assistant, answers each one with
+real web search on your own Claude subscription, and records which answers
+cite your site. No PR - results land directly on the dashboard's
+AI-visibility section.
+
+<Meta>
+<MetaItem label="Runs">Instantly when you approve a tool suggestion, plus a Wednesday weekly sweep (05:42, 12:42, 19:42 UTC) as a backstop.</MetaItem>
+<MetaItem label="Needs">An approved tool suggestion waiting.</MetaItem>
+<MetaItem label="If it fails">Reports `job=seo-tools`.</MetaItem>
+</Meta>
+
+**SEO tool builder** (`seo-tools.yml`) builds the oldest approved tool idea
+into a PR - template, live SERP gate, theme discovery, an execution plan
+held against the pipeline's value bar (a reskinned template or a
+canned-output widget fails this check), then the build itself, labeled
+`seo` and `seo-tool`.
+
+<Meta>
+<MetaItem label="Runs">On every tool PR (opened, updated, reopened, or labeled).</MetaItem>
+<MetaItem label="Needs">A PR labeled `seo-tool` - guide PRs never trigger this.</MetaItem>
+<MetaItem label="If it fails">Labels the PR `tool-validation-failed` with the concrete failures as a comment - no dashboard alert, since a failing tool PR is a normal, actionable outcome, not a broken schedule. Only the merge job reports to the dashboard (`job=seo-tool-validate`); the validation job itself runs LLM-authored PR code and deliberately holds no secrets.</MetaItem>
+</Meta>
+
+**SEO tool validation** (`seo-tool-validate.yml`) is the functional
+reviewer for tool PRs: it builds the branch for production, exercises the
+tool in a real browser, and only a pass earns the `tool-validated` label
+that auto-merge requires.
+
+<Meta>
+<MetaItem label="Runs">Daily at 04:18 UTC, ahead of the 05:13 builder.</MetaItem>
+<MetaItem label="Needs">Nothing you have to enable.</MetaItem>
+<MetaItem label="If it fails">Reports two job names: `seo-token-check` (a dead Claude token) and `seo-pipeline-version` (an outdated pipeline pack - shown as an update notice, not a failure).</MetaItem>
+</Meta>
+
+**SEO health check** (`seo-token-check.yml`) proves your Claude token still
+works with one minimal model call, before the day's build attempts depend
+on it, and checks whether your installed pipeline is a version behind.
+Because it runs every day without fail, its own silence over time is a
+useful signal too - see the pipeline heartbeat note below.
+
+<Meta>
+<MetaItem label="Runs">Once, dispatched by the backend right after it installs the pipeline (cloud zero-touch onboarding), or by hand.</MetaItem>
+<MetaItem label="Needs">Nothing - this workflow is the setup step.</MetaItem>
+<MetaItem label="If it fails">Reports `job=seo-setup`.</MetaItem>
+</Meta>
+
+**SEO setup** (`seo-setup.yml`) is the one-time personalization run: it
+reads your repo, finds or scaffolds the content home, writes
+`.dispatchseo/conventions.md`, fills in the site profile, then confirms
+itself back to the backend. Safe to re-run any time - it reconciles rather
+than duplicating.
+
+<Meta>
+<MetaItem label="Runs">Once, dispatched by `setup.sh` at the end of an install.</MetaItem>
+<MetaItem label="Needs">Nothing.</MetaItem>
+<MetaItem label="If it fails">Fails visibly in the GitHub Actions tab during install - this is a one-time proof, not an ongoing schedule, so it isn't something you'll see fail months later.</MetaItem>
+</Meta>
+
+**SEO install canary** (`seo-canary.yml`) opens a real, throwaway PR from
+inside a workflow - the exact permission GitHub's default settings block on
+brand-new repos - then closes it and deletes the branch. Nothing is ever
+merged. If any repo permission is wrong, this is where the install fails,
+in front of you, instead of three days later at 05:00.
+
+<Meta>
+<MetaItem label="Runs">Manual only - fires when you click "Scan now" on the Trends page.</MetaItem>
+<MetaItem label="Needs">Nothing - always available, no schedule on purpose.</MetaItem>
+<MetaItem label="If it fails">Reports `job=seo-trend-scan`.</MetaItem>
+</Meta>
+
+**SEO trend scan** (`seo-trend-scan.yml`) is stage one of the trend radar:
+it reads your niche for subjects being talked about right now - launches,
+Reddit and Hacker News buzz, Google Trends - and puts them on the radar
+with evidence. It proposes no guide ideas and spends no SERP budget; that's
+stage two, below.
+
+<Meta>
+<MetaItem label="Runs">Fires when you click "Get takes" on a trend-radar subject.</MetaItem>
+<MetaItem label="Needs">A subject on the radar for you to pick.</MetaItem>
+<MetaItem label="If it fails">Reports `job=seo-trend-expand`.</MetaItem>
+</Meta>
+
+**SEO trend expand** (`seo-trend-expand.yml`) is stage two: it turns the
+one subject you picked into 3-5 validated guide angles, queued as pending
+suggestions - this is where SERP validation spends money, which is exactly
+why it only ever runs on a subject you chose.
+
+## Self-hosted Docker
+
+A Docker install runs neither the Vercel cron nor the GitHub Actions
+workflows above by default - it has its own `cron` container and its own
+`builder` container, both defined in `docker-compose.yml`, that only ever
+make outbound connections. That's what makes a fully-automatic install
+possible on a machine with no public URL at all.
+
+<Meta>
+<MetaItem label="Runs">BusyBox crond, hitting the same three endpoints as the cloud schedule above: daily-ranks at 04:00 UTC, hourly-gsc every 3 hours at :07, serp-collect hourly at :37.</MetaItem>
+<MetaItem label="Needs">Nothing - always on.</MetaItem>
+<MetaItem label="If it fails">Same banner/email/`get_cron_health` rails as every other job on this page. `docker compose logs cron` shows every hit as it fires.</MetaItem>
+</Meta>
+
+The **cron container** (`docker/cron/crontab`) deliberately does **not**
+schedule `weekly-opportunities`, even though it's part of the same file:
+that route is retired, hard-scoped to a single project, duplicates
+research the builder below already runs on its own cadence, and spends
+DataForSEO balance with no toggle to turn it off. It stays callable by
+hand; it just no longer runs behind your back.
+
+<Meta>
+<MetaItem label="Runs">Polls `/api/builder/jobs` every `BUILDER_POLL_SECONDS` (default 600s / 10 minutes) and executes whatever comes back.</MetaItem>
+<MetaItem label="Needs">A Claude Code OAuth token (dashboard "Turn on automatic builds" step, or `CLAUDE_CODE_OAUTH_TOKEN` in `.env`) - without one it idles and says exactly what it's waiting for.</MetaItem>
+<MetaItem label="If it fails">Each job reports under `builder-<job>--<slug>`, same rails as everything above.</MetaItem>
+</Meta>
+
+The **builder** container is the in-stack replacement for the four
+schedule-driven workflows above (research, build-guide, build-tool,
+geo-scan) - the scheduling logic lives entirely on the backend, so cadence
+fixes ship as ordinary backend deploys, never as "rebuild your builder
+image." It runs each job with headless Claude Code inside a clone of your
+site's repo: research and geo-scan roughly every 6.5 days, build-guide and
+build-tool roughly daily (20-hour windows, so a run that fired a bit early
+yesterday is still due today). If the builder claims a job and then dies
+before reporting back - a crash, a bad token - the claim expires after 3
+hours and the job becomes due again, rather than sitting falsely "done"
+for the rest of its whole cadence window.
+
+It also runs its own **merge sweep** for auto-merge projects: it checks
+every open, green `seo`-labeled PR against your repo's own
+`.dispatchseo/publish-paths`, and merges the ones that qualify -
+functionally the same gate GitHub's `seo-auto-merge.yml` enforces on cloud,
+just running from inside the stack instead.
+
+## What happens when a job fails
+
+Every job on this page - backend cron, workflow, or builder job - reports
+its outcome through the same function, `reportCronRun()`. A run always
+gets logged to the `cron_runs` table; a failed run additionally triggers,
+in order:
+
+1. A red banner on the dashboard **Home** page.
+2. An email through Resend, if you've set up
+   [failure alerts](/docs/troubleshooting#get-emailed-when-something-breaks) -
+   debounced so a job that stays broken doesn't spam you: 24 hours for the
+   three backend data crons, 6 hours by default for everything reported
+   from GitHub Actions or the builder, and every single time for
+   deploy-check, since each of its failures is a distinct human push. A
+   one-off vendor blip (a transient DataForSEO or SerpApi error) gets one
+   free pass too - the email only goes out if the same job also failed on
+   its previous run.
+3. Visibility in the `get_cron_health` MCP tool, so your agent can see
+   exactly what's broken and, once you've actually fixed and verified it,
+   clear the alert itself with `mark_cron_fixed`.
+
+See [Troubleshooting](/docs/troubleshooting) for the fixes to the specific
+failures you're most likely to hit.
+
+## Setup-incomplete vs. a real failure
+
+A cron or workflow that hits a prerequisite you haven't finished setting up
+yet - no Search Console connected, no DataForSEO credentials, a project
+still mid-wizard - returns an informational "skipped: setup incomplete"
+result and stops there. That is never treated as a failure: no red banner,
+no email, no HTTP 500. Being half set up is a completely normal, expected
+state while you're onboarding - the dashboard's Home page has its own
+"Initial setup" cards for exactly this, and a cron that panicked every time
+a project wasn't fully configured yet would make every fresh install look
+broken from minute one.
+
+Loudness is reserved for regressions instead: a capability that has
+demonstrably worked before - data rows already exist, credentials were
+validated when you saved them - and then fails is treated as broken and
+alerts every time, because that's the difference between "you haven't
+gotten here yet" and "something that used to work just stopped."
+
+## Running on a machine that sleeps
+
+If you're self-hosting on a laptop rather than an always-on VPS, a missed
+schedule is a delay, not a failure. Docker's staleness checks measure how
+long the app container has actually been running, not wall-clock time - so
+a machine that was asleep for ten hours wakes up owing ten hours of
+schedules, not flagged as broken for having missed them. Content builds
+catch up on their own once the machine wakes (the builder checks what's
+due within its next poll), and only a job that misses its window **while
+the stack is actually up** counts as a real failure. You'll never get an
+alert for a job that was simply powered off.

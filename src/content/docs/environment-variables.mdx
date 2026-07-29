@@ -1,0 +1,577 @@
+---
+title: Environment variables
+description: Every variable DispatchSEO reads, what it does, and where to get the value.
+---
+
+<Callout type="tip" title="Most installs set almost nothing">
+
+The setup wizard generates `MCP_API_KEY`, `CRON_SECRET`, and your dashboard
+password the moment you first open the app, and stores all three in the
+database. Nearly everything below is an **override**, not a requirement -
+you only set an env var when you want to force a specific value, or when a
+feature (Search Console, DataForSEO, email alerts) needs a credential the
+wizard has no way to generate for you. Self-hosted Docker installs need
+exactly one required variable, `CRON_SECRET`, and `start.sh` writes that
+for you automatically.
+
+</Callout>
+
+There are two example files, matching the two ways to run DispatchSEO:
+
+- [`.env.local.example`](https://github.com/NeoZi12/dispatchseo/blob/main/.env.local.example) -
+  for a Vercel deploy (copy to `.env.local` for local dev; set the same keys
+  in Vercel's project settings for production).
+- [`.env.docker.example`](https://github.com/NeoZi12/dispatchseo/blob/main/.env.docker.example) -
+  for the self-hosted Docker stack (copy to `.env` next to `docker-compose.yml`).
+
+Fields below are tagged **Cloud only** or **Docker only** where a variable
+is meaningless outside that mode. An untagged field applies to both a
+self-hosted Vercel deploy and DispatchSEO's own cloud.
+
+## Database
+
+Self-hosted Docker skips this whole section - it bundles its own Postgres
+and PostgREST (see [Install on your computer](/docs/docker-compose)) and
+never talks to Supabase. This section matters if you deploy your own
+instance to Vercel, or if you're looking at what backs the hosted
+dispatchseo.com.
+
+<Fields>
+
+<Field name="SUPABASE_URL" type="string" required="true" tag="Vercel">
+
+Your Supabase project's URL, e.g. `https://your-project-ref.supabase.co`.
+Create a free project at [supabase.com](https://supabase.com), then apply
+the migrations in `supabase/migrations/`. Find the URL on the project's
+**Settings → API** page.
+
+</Field>
+
+<Field name="SUPABASE_SERVICE_ROLE_KEY" type="string" required="true" tag="Vercel">
+
+The `service_role` secret key from the same **Settings → API** page - not
+the `anon` key. It bypasses row-level security, which is intentional: every
+caller in this codebase is trusted server code (MCP tools and crons), and
+there is no end-user auth model to enforce.
+
+The Vercel Marketplace's Supabase integration injects this same value under
+a different name, `SUPABASE_SECRET_KEY`, when you connect a project through
+it instead of pasting the key yourself. Both names work - the code checks
+`SUPABASE_SERVICE_ROLE_KEY` first and falls back to `SUPABASE_SECRET_KEY`,
+so you never need to rename anything either integration gives you.
+
+</Field>
+
+</Fields>
+
+## Authentication and secrets
+
+<Fields>
+
+<Field name="MCP_API_KEY" type="string" tag="">
+
+The bearer token an external Claude Code agent uses to authenticate to your
+`/api/mcp` endpoint. Fresh deploys generate this at `/setup` and store it in
+the database - most installs never set this env var. Set it yourself
+(`openssl rand -hex 24`) only to force a specific value, which overrides
+whatever is stored; that is how a pre-wizard install keeps working.
+
+</Field>
+
+<Field name="CRON_SECRET" type="string" required="true">
+
+Authenticates scheduled requests to every `/api/cron/*` route. Self-hosted
+Docker: required - `start.sh` generates one into `.env` for you, or you can
+set your own with `openssl rand -hex 24`; the app container refuses to
+start without it. Vercel/cloud: same wizard-generated-and-stored pattern as
+`MCP_API_KEY` above, so you rarely need to touch it - except that Vercel's
+own cron scheduler and any GitHub Actions workflow you run against your
+instance can only send a value they were explicitly given, not read your
+database. If you want those higher-frequency schedules to authenticate
+against a self-hosted Vercel deploy, set this as a real env var and use the
+same value as the matching GitHub Actions secret.
+
+</Field>
+
+<Field name="APP_URL" type="string" tag="">
+
+Overrides this deploy's own URL. Normally you never set this: the setup
+wizard captures the deploy's own URL at claim time and every connected
+repo's pipeline uses that automatically (falling back to Vercel's
+`VERCEL_PROJECT_PRODUCTION_URL` for installs claimed before that column
+existed); on Docker, `start.sh` fills it in and the in-stack builder never
+even needs it to be publicly reachable. Set it only to force a specific
+domain - for example, you front the deploy with a custom domain the claim
+request never saw.
+
+</Field>
+
+<Field name="DASHBOARD_PASSWORD" type="string" tag="">
+
+Overrides the dashboard's login gate. Fresh deploys choose this at `/setup`
+and store a hash of it; setting the env var overrides the stored one, which
+is how pre-wizard installs keep working. If you do set it, make it strong -
+on a self-hosted, non-cloud install it is the only thing standing between
+the internet and your data.
+
+</Field>
+
+</Fields>
+
+## Google Search Console
+
+<Fields>
+
+<Field name="GSC_SERVICE_ACCOUNT_JSON" type="string" tag="">
+
+The full service-account JSON key, pasted as a single line. Create one in
+[Google Cloud Console](https://console.cloud.google.com/) (APIs & Services
+→ Credentials → Create service account → Keys → Add key → JSON), then add
+that service account's email as a **Restricted** user on your Search
+Console property - the setup wizard walks you through exactly this step.
+Free; no paid Google API involved.
+
+</Field>
+
+<Field name="GSC_SITE_URL" type="string" tag="">
+
+Your Search Console property identifier, in the exact format Search
+Console uses: `sc-domain:example.com` for a domain property, or
+`https://example.com/` (trailing slash required) for a URL-prefix property.
+Getting the format wrong is the most common cause of "no GSC data" - see
+[Troubleshooting](/docs/troubleshooting#search-console).
+
+</Field>
+
+<Field name="GOOGLE_OAUTH_CLIENT_ID" type="string" tag="">
+
+Client ID for the dashboard's "Connect Search Console" button - an
+alternative to pasting a service-account JSON, mainly relevant to cloud and
+demo installs. Self-hosters normally use the service-account path above
+instead. Create an OAuth client (**Web application** type) in Google Cloud
+Console, with redirect URI `https://<your-domain>/api/oauth/google/callback`.
+
+</Field>
+
+<Field name="GOOGLE_OAUTH_CLIENT_SECRET" type="string" tag="">
+
+The matching secret from the same OAuth client in Google Cloud Console.
+
+</Field>
+
+<Field name="OAUTH_STATE_SECRET" type="string" tag="">
+
+Any long random string (`openssl rand -hex 32` works) - signs the CSRF
+state for the Google OAuth flow above. Cloud deploys set this so
+`DASHBOARD_PASSWORD` can be removed entirely in favor of real accounts;
+self-hosters can leave it empty, since the dashboard password already
+doubles as the signing key in that mode.
+
+</Field>
+
+</Fields>
+
+## Keyword data (DataForSEO)
+
+Leaving all of these empty runs DispatchSEO in GSC-only free mode - paid
+features skip gracefully instead of failing. See the data tiers table in
+[Day to day](/docs/day-to-day#data-tiers) for what each tier actually
+unlocks.
+
+<Fields>
+
+<Field name="DATAFORSEO_LOGIN" type="string" tag="">
+
+Your DataForSEO account email.
+
+</Field>
+
+<Field name="DATAFORSEO_PASSWORD" type="string" tag="">
+
+The **auto-generated API password** from
+[app.dataforseo.com/api-access](https://app.dataforseo.com/api-access) -
+this is not your dashboard login password, and pasting the login password
+here is the single most common DataForSEO setup mistake. Only the default
+project falls back to this pair from the environment; every other project
+brings its own DataForSEO account, since each project's calls bill its own
+owner.
+
+</Field>
+
+<Field name="DATAFORSEO_ENC_KEY" type="string" tag="">
+
+Encrypts per-project DataForSEO API passwords at rest (AES-256-GCM).
+Generate with `openssl rand -base64 32`, and use the same value in local
+dev and in Vercel - rotating it makes already-stored passwords
+undecryptable. Not needed in the GitHub Actions pipeline your site's repo
+runs; those workflows carry their own `DATAFORSEO_*` secrets directly.
+
+Since migration 0027 this is fully optional: a claimed instance
+auto-generates a key into `instance_settings.enc_key`, and the env var only
+overrides it.
+
+<Callout type="warning" title="Setting this after credentials are saved breaks them">
+
+If you set `DATAFORSEO_ENC_KEY` **after** a project has already saved
+DataForSEO credentials under the auto-generated key, those credentials
+become permanently undecryptable - they will show as "not connected" on the
+dashboard with no error explaining why. If this happens to you, reconnect
+the credentials on the dashboard after switching keys; there is no way to
+recover the old ciphertext.
+
+</Callout>
+
+</Field>
+
+<Field name="SEED_KEYWORDS" type="string" tag="">
+
+Comma-separated topics around your product (e.g. `time tracking,invoicing
+for freelancers`) that give the weekly research run extra starting points.
+Optional - research already seeds itself from your tracked keywords and
+your top Search Console queries; use this to nudge it toward topics you
+don't rank for yet.
+
+</Field>
+
+</Fields>
+
+## GitHub
+
+<Fields>
+
+<Field name="GH_MERGE_TOKEN" type="string" tag="">
+
+A GitHub personal access token (`repo` scope) that lets the dashboard's
+merge and re-run-validation buttons act directly, instead of only linking
+out to the PR or Action on GitHub for you to click through. Without it
+those buttons still show - they just open GitHub instead of firing in one
+tap. Create one at
+[github.com/settings/tokens](https://github.com/settings/tokens).
+
+</Field>
+
+<Field name="SEO_TARGET_REPO" type="string" tag="">
+
+An `owner/repo` string, e.g. `you/your-site`. This one isn't in either
+example file - it's read directly in `src/lib/projects.ts`, and only by the
+synthetic "env fallback" project that the app builds in memory on the rare
+occasion its `projects` table query fails (usually because migration 0004
+hasn't been applied yet). Normal project resolution never touches it. Set
+it only if you've hit that specific fallback and want it to point at the
+right repo instead of nothing; nearly every install can ignore this
+variable completely.
+
+</Field>
+
+</Fields>
+
+For cloud's one-click "Connect GitHub" install flow, see the `GITHUB_APP_*`
+variables under Cloud-only settings below - that's a separate integration
+from the personal-access-token path here.
+
+## Email alerts
+
+Optional, but strongly recommended once you're running in automatic
+publish mode - see
+[Get emailed when something breaks](/docs/troubleshooting#get-emailed-when-something-breaks)
+for the full two-minute walkthrough.
+
+<Fields>
+
+<Field name="RESEND_API_KEY" type="string" tag="">
+
+A free API key from [resend.com/api-keys](https://resend.com/api-keys) -
+no credit card, no domain setup required to get started.
+
+</Field>
+
+<Field name="ALERT_EMAIL" type="string" tag="">
+
+Where failure emails go - at most one per job per 24 hours. Must be **the
+same email you signed up to Resend with**, unless you've verified your own
+domain there (see `ALERT_EMAIL_FROM` below).
+
+</Field>
+
+<Field name="ALERT_EMAIL_FROM" type="string" tag="">
+
+Leave empty to send from Resend's shared test sender. Once you verify your
+own domain in Resend, set this to something like
+`DispatchSEO <alerts@your-domain.com>` to send from it, and to any address
+rather than only your own.
+
+</Field>
+
+</Fields>
+
+## Docker-only settings
+
+None of these apply to a Vercel deploy - they configure the bundled
+container stack described in
+[Install on your computer](/docs/docker-compose).
+
+<Fields>
+
+<Field name="DISPATCH_PORT" type="number" tag="Docker only">
+
+The host port the dashboard is published on (the container always listens
+on 3000 internally). Leave unset and `start.sh` picks 4005, or the next
+free port up if something already holds it. Set it to pin a specific port.
+
+</Field>
+
+<Field name="DISPATCH_BIND" type="string" tag="Docker only">
+
+The host interface the dashboard is published on. Defaults to `127.0.0.1` -
+reachable from the machine running Docker and nowhere else, which is what
+you want, since it holds your GitHub and Claude tokens. Only set this to
+`0.0.0.0` if you deliberately want it reachable on your LAN and you have a
+firewall in front of it - Docker's published ports bypass tools like `ufw`,
+so "I enabled my firewall" isn't the protection it sounds like.
+
+</Field>
+
+<Field name="DOMAIN" type="string" tag="Docker only">
+
+Puts the dashboard on your own domain with automatic HTTPS. Point the
+domain's DNS A record at the machine, set this, and re-run `start.sh` - the
+bundled Caddy proxy (the `domain` compose profile) handles certificates and
+renewal on its own. Leave unset if you run your own reverse proxy instead
+(then set `APP_URL` above).
+
+</Field>
+
+<Field name="BUILD_FROM_SOURCE" type="1" tag="Docker only">
+
+Forces building the app and builder images from your own clone's source
+instead of pulling the prebuilt ones from GHCR. Set this if you forked the
+repo and changed code - otherwise `start.sh` prefers the prebuilt images
+when they're pullable, and your local changes would silently not run.
+
+</Field>
+
+<Field name="CLAUDE_CODE_OAUTH_TOKEN" type="string" tag="Docker only">
+
+Your Claude Code OAuth token - lets the in-stack `builder` container run
+your agent headlessly, on your own existing Claude subscription. Get one by
+running `claude setup-token` on your own machine and copying the
+`sk-ant-oat...` token it prints, with no line breaks. **Easiest path:**
+skip this entirely and paste the token on the dashboard's "Turn on
+automatic builds" step instead - it's stored encrypted and the builder
+picks it up within a few minutes, no file to edit. Setting it here still
+works and overrides the dashboard-stored value, which is handy for
+scripted or headless installs. Without either, the builder idles and tells
+you so in its logs.
+
+</Field>
+
+<Field name="BUILDER_GH_TOKEN" type="string" tag="Docker only">
+
+Overrides the GitHub token the builder uses to clone, push, and open PRs.
+Normally not needed - the builder reuses the token you connected in the
+setup wizard's "One-tap merge" step.
+
+</Field>
+
+<Field name="BUILDER_POLL_SECONDS" type="number" tag="Docker only">
+
+How often the builder asks the backend whether anything is due, in
+seconds. Default `600` (10 minutes). Lower it if you want a build to start
+sooner after you approve something; the backend's own suggested cadence
+takes over once this is unset.
+
+</Field>
+
+<Field name="POSTGRES_PASSWORD" type="string" tag="Docker only">
+
+Password for the bundled Postgres container. **Only takes effect before
+the first boot** - it's baked into the `dispatch-pgdata` volume at
+creation, and changing it afterward requires wiping that volume
+(`docker compose down -v`, which deletes all data). The default is fine for
+most setups: Postgres is reachable only inside the compose network, never
+from the host or the internet.
+
+</Field>
+
+</Fields>
+
+## Cloud-only settings
+
+Everything in this section only matters for `CLOUD_MODE=true` deploys - the
+hosted dispatchseo.com and anyone running their own multi-tenant instance
+of it. Self-hosters running a single site leave all of this unset.
+
+<Fields>
+
+<Field name="CLOUD_MODE" type="true" tag="Cloud only">
+
+Switches the dashboard from a single self-host password to real multi-user
+accounts: Supabase Auth sign-in, per-user project ownership (migration
+0031), and billing. Self-hosters leave this unset.
+
+</Field>
+
+<Field name="LANDING_ENABLED" type="true" tag="Cloud only">
+
+Serves the marketing landing page and cloud waitlist at `/` instead of
+going straight to the dashboard login. Self-hosted installs leave this
+unset.
+
+</Field>
+
+<Field name="SUPABASE_ANON_KEY" type="string" tag="Cloud only">
+
+The same Supabase project's anon/publishable key, from **Settings → API**.
+Auth sessions run through this; server code keeps using the service-role
+key from the Database section above.
+
+</Field>
+
+<Field name="POLAR_ACCESS_TOKEN" type="string" tag="Cloud only">
+
+Billing access token from [polar.sh](https://polar.sh) → Settings → API.
+
+</Field>
+
+<Field name="POLAR_WEBHOOK_SECRET" type="string" tag="Cloud only">
+
+The secret from the webhook endpoint you create in Polar, pointed at
+`https://<domain>/api/polar/webhook`, subscribed to the
+`customer.state_changed` event.
+
+</Field>
+
+<Field name="POLAR_SERVER" type="string" tag="Cloud only">
+
+Set to `sandbox` to switch to Polar's test environment. Leave unset for the
+live one.
+
+</Field>
+
+<Field name="POLAR_PRODUCT_STARTER" type="string" tag="Cloud only">
+
+The Polar product id for the Starter tier.
+
+</Field>
+
+<Field name="POLAR_PRODUCT_GROWTH" type="string" tag="Cloud only">
+
+The Polar product id for the Growth tier.
+
+</Field>
+
+<Field name="POLAR_PRODUCT_SCALE" type="string" tag="Cloud only">
+
+The Polar product id for the Scale tier.
+
+</Field>
+
+<Field name="POLAR_FOUNDING_DISCOUNT_ID" type="string" tag="Cloud only">
+
+The Polar discount id for the "50% off, locked for life" founding offer
+advertised on the pricing page. In the Polar dashboard: **Discounts → New**,
+type Percentage, 50%, duration **Forever** (not "Once" or "Repeating" - the
+promise is for life), applied to all three products, no redemption limit.
+Leave unset and checkout charges full list price with no discount applied.
+
+</Field>
+
+<Field name="GITHUB_APP_ID" type="string" tag="Cloud only">
+
+The App ID from your GitHub App's settings page, once you've created one
+for the one-click "Connect GitHub" install flow.
+
+</Field>
+
+<Field name="GITHUB_APP_SLUG" type="string" tag="Cloud only">
+
+The App's URL name (`github.com/apps/<slug>`) - if unset, the install link
+404s.
+
+</Field>
+
+<Field name="GITHUB_APP_PRIVATE_KEY" type="string" tag="Cloud only">
+
+The full PEM private key from the App's settings page, newlines and all -
+paste it whole. The code tolerates Vercel's `\n`-escaping of multi-line env
+values.
+
+</Field>
+
+<Field name="GITHUB_APP_WEBHOOK_SECRET" type="string" tag="Cloud only">
+
+The secret you set when pointing the App's webhook at
+`https://<domain>/api/github/webhook`.
+
+</Field>
+
+<Field name="GITHUB_APP_CLIENT_ID" type="string" tag="Cloud only">
+
+Required alongside the four `GITHUB_APP_*` variables above. The App must
+also have "Request user authorization (OAuth) during installation" enabled,
+with its Callback URL set to `<origin>/api/github/install/callback`. This
+proves the person who clicked Install actually controls the installation
+being claimed; without it, claim verification falls back to a weaker
+freshness heuristic, and the deploy check alarms in `CLOUD_MODE` if it's
+missing.
+
+</Field>
+
+<Field name="GITHUB_APP_CLIENT_SECRET" type="string" tag="Cloud only">
+
+The matching secret for `GITHUB_APP_CLIENT_ID` above.
+
+</Field>
+
+<Field name="GITHUB_APP_REQUIRE_INSTALL_PROOF" type="1" tag="Cloud only">
+
+Set to `1` **only** after you've watched a real install verify
+successfully. A callback that carries a `?code` and fails verification is
+always refused regardless of this flag - it only controls the ambiguous
+case of a callback arriving with no code at all, which usually means the
+App isn't actually configured for user authorization. Left unset, that case
+falls back to the freshness/suspension gate instead of a hard refusal,
+which still closes every orphan-installation class; turning this on before
+confirming the App is configured correctly risks blocking honest
+customers.
+
+</Field>
+
+<Field name="DATAFORSEO_PLATFORM_LOGIN" type="string" tag="Cloud only">
+
+Your own bundled DataForSEO account that bills every paid project which
+never connected its own credentials. Per-tier budgets (migration 0035) cap
+the spend.
+
+</Field>
+
+<Field name="DATAFORSEO_PLATFORM_PASSWORD" type="string" tag="Cloud only">
+
+The matching API password for `DATAFORSEO_PLATFORM_LOGIN`, from the same
+[app.dataforseo.com/api-access](https://app.dataforseo.com/api-access) page
+described above.
+
+</Field>
+
+</Fields>
+
+## Analytics
+
+<Fields>
+
+<Field name="NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN" type="string" tag="">
+
+Project API token from your PostHog project settings. Self-hosters can
+point this at their own PostHog project, or leave it empty to run with
+none - both the client and server instrumentation no-op without a token.
+
+</Field>
+
+<Field name="NEXT_PUBLIC_POSTHOG_HOST" type="string" tag="">
+
+`https://us.i.posthog.com` for US Cloud, `https://eu.i.posthog.com` for EU
+Cloud - match whichever region your PostHog project is on.
+
+</Field>
+
+</Fields>

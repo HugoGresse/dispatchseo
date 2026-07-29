@@ -2,3 +2,9 @@ User-agent: *
 Allow: /
 
 Sitemap: https://dispatchseo.com/sitemap.xml
+
+# For agents and LLM tooling: /llms.txt indexes every docs page, and
+# /llms-full.txt is the entire documentation set in a single fetch. Any docs
+# page is also available as plain markdown by appending .md to its URL.
+# https://dispatchseo.com/llms.txt
+# https://dispatchseo.com/llms-full.txt

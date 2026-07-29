@@ -1,0 +1,190 @@
+---
+title: Keyword data sources
+description: The three stacking tiers for keyword data - what each costs, what it unlocks, and how to switch later.
+---
+
+DispatchSEO never has just one keyword data source. It has three, and they
+stack: everyone starts on the free floor, and you add a key only when you
+want a sharper signal than the free tier gives you.
+
+<Callout type="note" title="The honest framing">
+Free mode finds keywords you can win. Paid mode also knows which ones are
+worth winning. Neither is wrong - it depends whether you'd rather spend time
+or money finding out.
+</Callout>
+
+## The three tiers
+
+| Tier | Costs | You get |
+| --- | --- | --- |
+| **Search Console only** (default) | $0 | Rankings from GSC, keyword ideas from Google Autocomplete plus your own impression data |
+| **+ SerpApi key** | $0 (250 searches/month) | Live SERP checks: real positions weekly, page-1 recon before writing |
+| **+ DataForSEO** | pay per call, prepaid | Search volume, keyword difficulty, domain rating |
+
+### Search Console only
+
+This is where every project starts, and it's a real, working mode - not a
+crippled trial. Your agent mines keywords two ways: Google Autocomplete
+(free, no key, works everywhere) and your own Search Console impressions
+(queries Google already shows your pages for, which is the single best
+signal that a keyword is reachable).
+
+What you don't get here is a number. No search volume, no difficulty score -
+your agent judges a keyword by what it can see in the actual results, not by
+a database estimate. That's a real limitation for prioritizing between fifty
+candidates, but it's not a limitation for finding good ones.
+
+Nothing to set up. This is simply what happens with no keys connected. See
+[Google Search Console](/docs/search-console) for how the GSC connection
+itself works.
+
+### + a free SerpApi key
+
+One optional upgrade while staying at $0: a [SerpApi](https://serpapi.com)
+key gives your agent a live look at the actual Google results page before it
+writes anything. If page 1 is thin forum posts and old listicles, the
+keyword is winnable. If it's five major brands and a review site, skip it.
+That's a judgment call no autocomplete list can make for you.
+
+The free tier is 250 searches a month, no credit card. It also unlocks real
+weekly rank tracking through a live SERP check, instead of relying on Search
+Console's impression-weighted average position (which is real data, but
+lagged and not a true rank).
+
+Add the key any time in Settings, or during the wizard's keyword-data step -
+see
+[Step 3 of the setup wizard](/docs/setup-wizard#step-3-pick-a-keyword-data-source).
+
+### + DataForSEO
+
+The paid tier, and the only one with real numbers: monthly search volume,
+keyword difficulty (KD), CPC, and domain rating for your own site. This is
+what lets your agent rank fifty keyword candidates by how much traffic
+they're actually worth and how hard they'll actually be to win, instead of
+reasoning from the SERP alone.
+
+A typical site tracking around 30 keywords spends about $2-5/month. New
+DataForSEO accounts start with free trial credit, no card required.
+
+<Callout type="tip" title="Each project bills itself">
+Free-tier DIY means exactly that: every project brings its own DataForSEO
+account, and every call bills that project's own balance -
+`credsForProject()` in `src/lib/dataforseo.ts` is the one place this is
+resolved. Only the **default project** (the instance's first site) falls
+back to the `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD` environment
+variables, if they're set. Every other project needs its own connected
+account or its own env fallback doesn't apply. A project with no DataForSEO
+connected gets `null` creds and every paid feature (rank checks, keyword
+ideas, domain rating) skips gracefully - never an error, never a broken
+cron. You'll see this reflected honestly on the dashboard: paid numbers
+simply aren't there until a key is connected.
+</Callout>
+
+#### Getting the API password (the part that trips people up)
+
+DataForSEO's login is your account email, but the password is **not** your
+dashboard login password - it's a separate API password DataForSEO
+generates for you.
+
+<Steps>
+
+<Step title="Create an account">
+
+Sign up at [app.dataforseo.com](https://app.dataforseo.com). New accounts
+start with free trial credit, no card needed.
+
+</Step>
+
+<Step title="Open the API Access page">
+
+Go to [app.dataforseo.com/api-access](https://app.dataforseo.com/api-access)
+and copy the password shown there. This is generated specifically for API
+calls - it is not the password you use to log into the DataForSEO dashboard,
+and using the wrong one is the single most common reason a connection fails
+its first check.
+
+</Step>
+
+<Step title="If the password field looks blank">
+
+DataForSEO hides it about 24 hours after signup. Click **Send by e-mail** on
+the same page and it lands in your inbox.
+
+</Step>
+
+<Step title="Paste both into DispatchSEO">
+
+Login (your account email) and API password go into the wizard's keyword-data
+step, or Settings later. Both are checked live against DataForSEO before
+saving, so a green check means tonight's rank check will actually work.
+
+</Step>
+
+</Steps>
+
+Because the API password isn't your dashboard login, it can't be used to
+sign into or take over your DataForSEO account - it only makes API calls
+against your own prepaid balance, and you can regenerate it any time to cut
+DispatchSEO off.
+
+## Watching what it costs
+
+Once DataForSEO is connected, the `get_dataforseo_usage` MCP tool (and the
+matching dashboard view) answers three questions:
+
+- **Who's billed** - your own connected account, the platform's bundled plan
+  (cloud only), or nobody (nothing connected).
+- **This month's spend**, when billed to the platform - month-to-date
+  against the plan's monthly budget.
+- **Today's `check_serp` count**, against its daily cap (see below).
+
+On a self-hosted project running its own DataForSEO account, usage isn't
+metered here at all - it's your account, your balance, check it directly at
+app.dataforseo.com.
+
+If a cloud project's projected month-end spend starts closing in on its
+plan's budget, a pacing governor thins the rank-check cadence automatically
+(normal, then slowed, then weekly-only) so tracking degrades gracefully
+instead of stopping mid-month the moment the budget is hit.
+
+## The cloud version: bundled, capped, not metered
+
+On the hosted product at dispatchseo.com, DataForSEO isn't something you
+connect - it's bundled into the subscription (`DATAFORSEO_PLATFORM_LOGIN` /
+`DATAFORSEO_PLATFORM_PASSWORD` server-side, never written into your repo,
+never returned to a client). You get real search volume and difficulty
+without ever touching an API password.
+
+The trade-off is a rate cap, not a spend cap: `check_serp` (the live,
+interactive "show me page 1 right now" tool) is capped at **30 calls a day**
+per project on the shared plan. That's deliberate - a live SERP lookup is
+cheap and meant for interactive research, and the real spend guard is the
+monthly budget above, not this cap. Anything worth tracking on an ongoing
+basis goes through `track_keywords` instead, which the daily rank cron
+checks for you at no extra cost against the cap.
+
+Connecting your own DataForSEO account on a cloud project is also possible,
+and once connected it's billed and metered exactly like self-host - your own
+account, your own balance, no platform cap.
+
+## Changing your source later
+
+The keyword source is a per-project setting, switchable any time in
+Settings - it isn't a one-way decision made during onboarding. See
+[Step 3 of the setup wizard](/docs/setup-wizard#step-3-pick-a-keyword-data-source)
+for what the wizard itself asks, and the wizard always verifies new
+credentials against the real service before saving them.
+
+## Next
+
+<CardGrid cols="3">
+  <Card title="Google Search Console" href="/docs/search-console">
+    The free floor every tier builds on.
+  </Card>
+  <Card title="The setup wizard" href="/docs/setup-wizard">
+    Where you pick a tier for the first time.
+  </Card>
+  <Card title="Day to day" href="/docs/day-to-day">
+    What using DispatchSEO looks like once it's running.
+  </Card>
+</CardGrid>

@@ -225,6 +225,18 @@ export default async function InstructionsPage() {
           title="Instructions"
           hint={`How your Claude Code builds for ${project.domain} - served live, so every run follows the newest playbook.`}
         />
+        <p className="text-sm text-neutral-500">
+          Every workflow here has a matching command you can run yourself -{" "}
+          <a
+            href="/docs/agent-commands"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-violet-400 underline underline-offset-2 hover:text-violet-300"
+          >
+            see the agent commands
+          </a>
+          .
+        </p>
         {conventions ? (
           <FactsStrip data={conventions.data} updatedAt={conventions.updatedAt} />
         ) : (

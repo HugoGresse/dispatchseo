@@ -1,0 +1,108 @@
+---
+title: Cloud or self-hosted
+description: Two ways to run DispatchSEO, what actually differs between them, and how to pick without regretting it later.
+---
+
+Self-hosting has no feature limitations. Everything the paid cloud does, this
+repo does today, in your own accounts, at $0.
+
+That's the honest headline, and it's worth stating before anything else,
+because the answer to "which is better" is usually "whichever you'll actually
+keep running."
+
+## The short version
+
+<CardGrid cols="2">
+  <Card title="Self-hosted" href="/docs/docker-compose" badge="Free">
+    One Docker command on a machine you control. Your database, your Google
+    credentials, your data. Costs nothing beyond the machine.
+  </Card>
+  <Card title="Cloud" href="https://dispatchseo.com" badge="Paid">
+    We run it. Search data is bundled into the bill, Google connects with one
+    click, and there's no machine to keep awake.
+  </Card>
+</CardGrid>
+
+## What actually differs
+
+| | Self-hosted | Cloud |
+| --- | --- | --- |
+| Features | All of them | All of them |
+| Price | $0 | Subscription |
+| Where data lives | Your machine | Our Postgres |
+| Keyword and SERP data | Bring your own keys, or run free on Search Console only | Bundled into the subscription |
+| Google Search Console | Create a service account, paste the JSON | One click, OAuth |
+| GitHub connection | A merge token you create | One-click GitHub App install |
+| Who keeps it running | You | Us |
+| Upgrades | You pull a new image | Automatic |
+| Backups | Yours to take | Handled |
+| Schedules run when | Your machine is awake | Always |
+
+Both run the same code from the same repo. The cloud sells convenience, not
+capability.
+
+## Pick self-hosted if
+
+- You have a machine that can stay on - a $5 VPS, a Raspberry Pi, a desktop
+  that doesn't sleep.
+- You want your Search Console credentials and your data to stay yours.
+- You're comfortable pasting a service-account JSON once.
+- You like paying $0.
+
+The setup is longer, mostly because of Google's service-account flow. Budget
+about twenty minutes for the whole thing, most of it in the Google Cloud
+console.
+
+## Pick cloud if
+
+- You don't want to run or maintain a machine.
+- You'd rather one bill covered the search data than manage a DataForSEO
+  balance.
+- The Google service-account dance is not how you want to spend your evening.
+
+<Callout type="note" title="You still bring your own Claude">
+Both versions run on your Claude Code subscription. Neither one bills you for
+agent usage, and neither can work without it.
+</Callout>
+
+## The laptop question
+
+You can absolutely install this on a laptop to try it, and plenty of people
+do. Just know what you're signing up for: **schedules only run while the
+machine is awake.**
+
+That's less bad than it sounds. Missed schedules are delays, not failures -
+content builds catch up on their own when the machine wakes, and the health
+checks only flag a job that missed its window while the stack was actually
+running. You'll never be warned about a job that was simply powered off.
+
+But day to day, something that stays on is better. A cheap VPS is the usual
+answer, and [the VPS guide](/docs/vps) covers it including a domain with
+automatic HTTPS.
+
+## Can I switch later?
+
+Yes, in both directions, with some manual work.
+
+Your content is the part that matters and it never lived in DispatchSEO
+anyway - it's in your own Git repo, committed and merged. Moving means
+standing up the other version, reconnecting Search Console and GitHub, and
+re-running research. The rankings history stays behind unless you move the
+database yourself.
+
+[Upgrading and backups](/docs/upgrading) covers moving a self-hosted install
+between machines.
+
+## Next
+
+<CardGrid cols="3">
+  <Card title="Install on your computer" href="/docs/docker-compose">
+    One command, no cloud accounts.
+  </Card>
+  <Card title="Install on a VPS" href="/docs/vps">
+    Recommended for daily use.
+  </Card>
+  <Card title="Try the cloud" href="https://dispatchseo.com">
+    Nothing to install.
+  </Card>
+</CardGrid>

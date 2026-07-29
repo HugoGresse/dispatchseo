@@ -151,14 +151,32 @@ files and setting its own secrets.
 Step-by-step walkthroughs, with screenshots:
 [install on your computer](https://dispatchseo.com/docs/docker-compose) ·
 [install on a VPS](https://dispatchseo.com/docs/vps). The VPS guide also covers
-your own domain with automatic HTTPS. If you'd rather point an agent at this
-repo and let it work the setup out, there's an
-[llms.txt](https://dispatchseo.com/llms.txt) and a [SKILL.md](SKILL.md).
+your own domain with automatic HTTPS.
 
 **Stuck?** The [troubleshooting page](https://dispatchseo.com/docs/troubleshooting)
 covers the errors people actually hit. If yours isn't there, ask in
 [Discussions](https://github.com/NeoZi12/dispatchseo/discussions) - questions get
 answered and usually turn into a docs fix.
+
+## 📖 Documentation
+
+Everything is at **[dispatchseo.com/docs](https://dispatchseo.com/docs)** - every
+page, every setting, every tool.
+
+| | |
+| --- | --- |
+| **New here** | [What DispatchSEO is](https://dispatchseo.com/docs/introduction) · [How it works](https://dispatchseo.com/docs/how-it-works) · [Cloud or self-hosted](https://dispatchseo.com/docs/choosing-how-to-run-it) |
+| **Install** | [Your own computer](https://dispatchseo.com/docs/docker-compose) · [A VPS](https://dispatchseo.com/docs/vps) · [From source](https://dispatchseo.com/docs/local-development) |
+| **Set up** | [Install Claude Code](https://dispatchseo.com/docs/install-claude-code) · [The setup wizard](https://dispatchseo.com/docs/setup-wizard) · [Search Console](https://dispatchseo.com/docs/search-console) · [Keyword data](https://dispatchseo.com/docs/keyword-data) · [Publishing](https://dispatchseo.com/docs/publishing) · [Connect your site](https://dispatchseo.com/docs/connect-your-site) |
+| **Use it** | [Day to day](https://dispatchseo.com/docs/day-to-day) · [The dashboard](https://dispatchseo.com/docs/dashboard) · [Automations](https://dispatchseo.com/docs/automations) · [Agent commands](https://dispatchseo.com/docs/agent-commands) |
+| **Reference** | [Concepts](https://dispatchseo.com/docs/concepts) · [MCP tools](https://dispatchseo.com/docs/mcp-tools) · [Environment variables](https://dispatchseo.com/docs/environment-variables) · [Schedules](https://dispatchseo.com/docs/schedules) · [Architecture](https://dispatchseo.com/docs/architecture) |
+| **Help** | [Troubleshooting](https://dispatchseo.com/docs/troubleshooting) · [Common questions](https://dispatchseo.com/docs/faq) · [Security](https://dispatchseo.com/docs/security) · [Upgrading](https://dispatchseo.com/docs/upgrading) |
+
+**Pointing an agent at this?** Add `.md` to any docs URL for clean markdown, or
+fetch the entire documentation set in one request:
+**[llms-full.txt](https://dispatchseo.com/llms-full.txt)**. There's an index at
+[llms.txt](https://dispatchseo.com/llms.txt) and a [SKILL.md](SKILL.md) that
+walks an agent through connecting a site.
 
 ## 🗓️ Using it day to day
 
@@ -176,15 +194,15 @@ out what to do when you open it.
 
 ## 🧰 What's in the box
 
-- **MCP server** with ~40 tools: the queue, keywords, rankings, pages, GSC
-  stats, backlink prospects, trend topics, site profile. Anything the
-  dashboard can do, your agent can do over MCP; parity between the two is a
-  hard rule in this codebase.
+- **MCP server** with [52 tools](https://dispatchseo.com/docs/mcp-tools): the
+  queue, keywords, rankings, pages, GSC stats, backlink prospects, trend
+  topics, site profile. Anything the dashboard can do, your agent can do over
+  MCP; parity between the two is a hard rule in this codebase.
 - **Trend radar**: scan for rising topics in your niche, expand a topic into
   concrete guide angles, and queue the good ones.
-- **Guide and tool builders**: guides publish on a pace matched to your
-  site's age (so a three-week-old blog doesn't suddenly ship 30 posts);
-  free-tool ideas build on approval.
+- **Guide and tool builders**: guides publish at most one per day, flat and
+  permanent (so a queue of thirty approved ideas doesn't become thirty posts
+  in a week); free-tool ideas build on approval.
 - **Backlink playbook**: a prospect list prefilled with your product's copy,
   tracked per submission.
 - **Multi-site**: one deployment manages any number of sites. Each project
@@ -236,6 +254,8 @@ Supabase in the cloud version), `mcp-handler` for the MCP server at `/api/mcp`.
 Schedules and builds run in-stack (cron + builder containers) or on GitHub
 Actions. One deployment is multi-tenant: the MCP bearer token selects the
 project, crons loop over all projects, the dashboard switches with a cookie.
+
+[Architecture](https://dispatchseo.com/docs/architecture) covers this properly.
 [CLAUDE.md](CLAUDE.md) has the full conventions; it's written for agents, which
 turns out to make it decent documentation for people.
 

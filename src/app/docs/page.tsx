@@ -128,6 +128,7 @@ const INSTALL_PATHS = [
 const THEN_STEPS = [
   { href: "/docs/search-console", title: "Connect Search Console" },
   { href: "/docs/connect-your-site", title: "Connect your site" },
+  { href: "/docs/day-to-day", title: "Learn the weekly rhythm" },
 ];
 
 export default function DocsQuickstart() {
@@ -136,6 +137,16 @@ export default function DocsQuickstart() {
       <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Quickstart</h1>
       <p className="mt-3 max-w-lg text-neutral-400">
         Get DispatchSEO running, then hand it to your agent.
+      </p>
+
+      {/* Escape hatch for repo traffic: the quickstart assumes you already
+          know what this is, and a lot of arrivals from GitHub don't. */}
+      <p className="mt-4 text-sm text-neutral-500">
+        New here?{" "}
+        <Link href="/docs/introduction" className={INLINE_LINK}>
+          Start with what DispatchSEO is
+        </Link>{" "}
+        - two minutes, and the rest of these pages will make more sense.
       </p>
 
       <p

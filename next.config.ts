@@ -8,6 +8,14 @@ const nextConfig: NextConfig = {
   // The dashboard cookie lives 30 days and SameSite=Lax does not stop the
   // page being framed - without these an attacker can iframe the logged-in
   // dashboard and clickjack Approve/Merge/Delete buttons.
+  // Agent-facing markdown mirror: /docs/<slug>.md serves the raw MDX the page
+  // renders from. The ".md" suffix is the convention LLM tooling probes for,
+  // but a folder named "[slug].md" is not a legal App Router segment - hence a
+  // rewrite onto a plain API route. The slug pattern matches getDoc's own
+  // validation, so a crafted path can never reach the filesystem read.
+  async rewrites() {
+    return [{ source: "/docs/:slug([a-z0-9-]+).md", destination: "/api/docs-md/:slug" }];
+  },
   async headers() {
     return [
       {

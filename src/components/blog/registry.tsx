@@ -42,6 +42,17 @@ import { AutomationPricingScorecard } from "./automation-pricing-scorecard";
 import { HeadlessFlagGrid } from "./headless-flag-grid";
 import { PrintModeEnvelopeFactRow } from "./print-mode-envelope-fact-row";
 import { ClassifyOutcomeBranches } from "./classify-outcome-branches";
+import {
+  Callout,
+  CardGrid,
+  Card,
+  Fields,
+  Field,
+  Symptom,
+  Meta,
+  MetaItem,
+  Pill,
+} from "@/components/docs/mdx";
 import { slugify } from "@/lib/slugify";
 
 // The components every blog MDX file renders with: typographic defaults that
@@ -122,6 +133,18 @@ export const mdxComponents: MDXComponents = {
     />
   ),
   Link,
+  // Docs building blocks (src/components/docs/mdx.tsx) - callouts, card
+  // grids, reference rows. Registered here because /docs renders through this
+  // same registry, so a doc page and a blog post never diverge visually.
+  Callout,
+  CardGrid,
+  Card,
+  Fields,
+  Field,
+  Symptom,
+  Meta,
+  MetaItem,
+  Pill,
   McpAnatomyGrid,
   TransportScorecard,
   McpRequestFlow,

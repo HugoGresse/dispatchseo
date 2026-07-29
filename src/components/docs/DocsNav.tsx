@@ -10,10 +10,11 @@ import { usePathname } from "next/navigation";
 // active when its href matches the current pathname exactly (not prefix
 // match, so /docs doesn't light up for every /docs/* page).
 
-type Nav = { section: string; items: { slug: string; title: string }[] }[];
+type Nav = { section: string; items: { slug: string; title: string; href?: string }[] }[];
 
-function hrefFor(slug: string) {
-  return slug ? `/docs/${slug}` : "/docs";
+function hrefFor(item: { slug: string; href?: string }) {
+  if (item.href) return item.href;
+  return item.slug ? `/docs/${item.slug}` : "/docs";
 }
 
 function NavList({ nav, pathname, onNavigate }: { nav: Nav; pathname: string; onNavigate?: () => void }) {
@@ -26,21 +27,41 @@ function NavList({ nav, pathname, onNavigate }: { nav: Nav; pathname: string; on
           </p>
           <ul className="mt-2.5 space-y-0.5">
             {section.items.map((item) => {
-              const href = hrefFor(item.slug);
-              const active = pathname === href;
+              const href = hrefFor(item);
+              // An off-docs entry (item.href) is never "the current page" -
+              // /docs never renders it - so it skips the active treatment and
+              // carries a small outbound arrow instead.
+              const active = !item.href && pathname === href;
+              const cls = `-ml-px flex items-center gap-1.5 rounded-md border-l-2 py-1.5 pl-3 pr-2 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-violet-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 ${
+                active
+                  ? "border-violet-400 font-medium text-neutral-100"
+                  : "border-transparent text-neutral-400 hover:border-neutral-700 hover:text-neutral-200"
+              }`;
               return (
                 <li key={href}>
                   <Link
                     href={href}
                     onClick={onNavigate}
                     aria-current={active ? "page" : undefined}
-                    className={`-ml-px block rounded-md border-l-2 py-1.5 pl-3 pr-2 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-violet-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 ${
-                      active
-                        ? "border-violet-400 font-medium text-neutral-100"
-                        : "border-transparent text-neutral-400 hover:border-neutral-700 hover:text-neutral-200"
-                    }`}
+                    className={cls}
                   >
                     {item.title}
+                    {item.href && (
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        className="size-3 shrink-0 text-neutral-600"
+                      >
+                        <path
+                          d="M6 3h7v7M13 3L4 12"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    )}
                   </Link>
                 </li>
               );
@@ -66,7 +87,9 @@ export function DocsSidebar({ nav }: { nav: Nav }) {
 // without giving up a quarter of a narrow screen to a permanent sidebar.
 export function DocsMobileNav({ nav, className = "" }: { nav: Nav; className?: string }) {
   const pathname = usePathname();
-  const current = nav.flatMap((s) => s.items).find((item) => hrefFor(item.slug) === pathname);
+  const current = nav
+    .flatMap((s) => s.items)
+    .find((item) => !item.href && hrefFor(item) === pathname);
 
   return (
     <details className={`group rounded-xl bg-neutral-900 ${className}`}>

@@ -19,10 +19,25 @@ export type DocHeading = { id: string; text: string };
 // Sidebar order is editorial, not alphabetical - defined here, not in
 // frontmatter, so reordering is one edit. The quickstart lives at /docs
 // itself (a custom page, not MDX), so it appears here with slug "".
-export const DOCS_NAV: { section: string; items: { slug: string; title: string }[] }[] = [
+// A nav item is normally an MDX page (slug -> src/content/docs/<slug>.mdx).
+// An item carrying `href` instead is a link out of the docs tree - it has no
+// MDX file, so it is skipped by getDocSlugs/getAllDocs and by the prev/next
+// footer, and the sidebar renders it as a plain anchor.
+export type DocsNavItem = { slug: string; title: string; href?: string };
+
+export const DOCS_NAV: { section: string; items: DocsNavItem[] }[] = [
   {
     section: "Getting started",
-    items: [{ slug: "", title: "Quickstart" }],
+    // "What it is" leads because the docs are the landing page for repo
+    // traffic - someone arriving from GitHub needs the product explained
+    // before being asked to choose an install path. The quickstart keeps the
+    // bare /docs URL (deep-linked from the README button and start.sh).
+    items: [
+      { slug: "introduction", title: "What DispatchSEO is" },
+      { slug: "", title: "Quickstart" },
+      { slug: "how-it-works", title: "How it works" },
+      { slug: "choosing-how-to-run-it", title: "Cloud or self-hosted" },
+    ],
   },
   {
     section: "Installation",
@@ -42,6 +57,8 @@ export const DOCS_NAV: { section: string; items: { slug: string; title: string }
       { slug: "install-claude-code", title: "Install Claude Code" },
       { slug: "setup-wizard", title: "The setup wizard" },
       { slug: "search-console", title: "Google Search Console" },
+      { slug: "keyword-data", title: "Keyword data sources" },
+      { slug: "publishing", title: "Publishing and GitHub" },
       { slug: "connect-your-site", title: "Connect your site" },
     ],
   },
@@ -49,7 +66,32 @@ export const DOCS_NAV: { section: string; items: { slug: string; title: string }
     section: "Using it",
     items: [
       { slug: "day-to-day", title: "Day to day" },
+      { slug: "dashboard", title: "The dashboard, page by page" },
+      { slug: "automations", title: "Automations and modes" },
+      { slug: "agent-commands", title: "Agent commands" },
+    ],
+  },
+  {
+    section: "Reference",
+    items: [
+      { slug: "concepts", title: "Concepts and glossary" },
+      { slug: "mcp-tools", title: "MCP tools" },
+      { slug: "environment-variables", title: "Environment variables" },
+      { slug: "schedules", title: "Schedules and jobs" },
+      { slug: "architecture", title: "Architecture" },
+      // Lives outside /docs (it reads from src/lib/changelog.ts and is linked
+      // from the dashboard's update banner), but it belongs in this list -
+      // "what changed in the last release" is a reference question.
+      { slug: "", title: "Changelog", href: "/changelog" },
+    ],
+  },
+  {
+    section: "Help",
+    items: [
       { slug: "troubleshooting", title: "Troubleshooting" },
+      { slug: "faq", title: "Common questions" },
+      { slug: "security", title: "Security and your data" },
+      { slug: "upgrading", title: "Upgrading and backups" },
     ],
   },
 ];
@@ -57,7 +99,27 @@ export const DOCS_NAV: { section: string; items: { slug: string; title: string }
 const DOCS_DIR = join(process.cwd(), "src/content/docs");
 
 export function getDocSlugs(): string[] {
-  return DOCS_NAV.flatMap((s) => s.items.map((i) => i.slug)).filter(Boolean);
+  return DOCS_NAV.flatMap((s) => s.items)
+    .filter((i) => !i.href)
+    .map((i) => i.slug)
+    .filter(Boolean);
+}
+
+// Every MDX page in sidebar order, content included. Feeds the agent-facing
+// mirrors (/llms.txt, /llms-full.txt, /docs/<slug>.md) so an agent that
+// fetches one URL gets the same docs a human reads, in the same order. Pages
+// whose file is missing are skipped rather than throwing - a nav entry can
+// legitimately point at the custom quickstart page, which has no MDX file.
+export function getAllDocs(): { section: string; meta: DocMeta; content: string }[] {
+  const out: { section: string; meta: DocMeta; content: string }[] = [];
+  for (const section of DOCS_NAV) {
+    for (const item of section.items) {
+      if (!item.slug || item.href) continue;
+      const doc = getDoc(item.slug);
+      if (doc) out.push({ section: section.section, meta: doc.meta, content: doc.content });
+    }
+  }
+  return out;
 }
 
 export function getDoc(slug: string): { meta: DocMeta; content: string } | null {

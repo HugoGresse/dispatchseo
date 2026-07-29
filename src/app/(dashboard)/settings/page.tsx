@@ -217,6 +217,18 @@ export default async function SettingsPage() {
             Connect Claude Code to this project (the server name carries the project slug, so
             every connected site keeps its own entry):
           </p>
+          <p className="text-sm text-neutral-500">
+            Once connected, your agent can drive everything the dashboard does -{" "}
+            <a
+              href="/docs/mcp-tools"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-violet-400 underline underline-offset-2 hover:text-violet-300"
+            >
+              all 52 tools are documented here
+            </a>
+            .
+          </p>
           <ShellCommandTabs
             bash={mcpAddCommand(project.slug, dashOrigin, mcpToken)}
             powershell={mcpAddCommandPS(project.slug, dashOrigin, mcpToken)}

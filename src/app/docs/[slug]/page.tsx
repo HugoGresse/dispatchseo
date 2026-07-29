@@ -5,6 +5,7 @@ import { MDXRemote } from "next-mdx-remote/rsc";
 import { DOCS_NAV, getDoc, getDocSlugs, getDocHeadings } from "@/lib/docs";
 import { mdxComponents } from "@/components/blog/registry";
 import { TableOfContents } from "@/components/blog/TableOfContents";
+import { DocsPageActions } from "@/components/docs/DocsPageActions";
 
 // Public doc page. Static at build time (generateStaticParams) - no auth,
 // no DB, renders MDX from src/content/docs with the blog's registry (same
@@ -33,7 +34,10 @@ export async function generateMetadata({
 // Flattened page order (quickstart, then every DOCS_NAV item in editorial
 // order) - the single source for prev/next footer links, so reordering
 // DOCS_NAV automatically reorders the footer with it.
-const FLAT_PAGES = DOCS_NAV.flatMap((s) => s.items);
+// Off-docs entries (the Changelog link) are excluded - prev/next walks the
+// MDX reading order, and handing someone "Next: Changelog" mid-way through
+// the Reference section would drop them out of the docs entirely.
+const FLAT_PAGES = DOCS_NAV.flatMap((s) => s.items).filter((i) => !i.href);
 
 function hrefFor(slug: string) {
   return slug ? `/docs/${slug}` : "/docs";
@@ -64,6 +68,9 @@ export default async function DocPage({ params }: { params: Promise<{ slug: stri
           {doc.meta.description && (
             <p className="mt-2 text-lg text-neutral-400">{doc.meta.description}</p>
           )}
+          <div className="mt-5">
+            <DocsPageActions slug={slug} />
+          </div>
         </header>
 
         {showRail && (

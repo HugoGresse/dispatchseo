@@ -1,0 +1,119 @@
+---
+title: Upgrading and backups
+description: How to upgrade a Docker self-host install, back up your data, restore it, move machines, or uninstall cleanly.
+---
+
+Everything below is for the **self-hosted Docker** install. If you're
+on the hosted version at dispatchseo.com, skip to
+[the cloud version](#the-cloud-version) - none of this is on you there.
+
+## Upgrading a Docker install
+
+From inside the `dispatchseo` folder the install created:
+
+```bash
+git pull && sh start.sh
+```
+
+On Windows, in PowerShell: `git pull; .\start.cmd`
+
+You can actually get away with just `sh start.sh` on its own - the
+script pulls the latest `main` itself before doing anything else (it
+skips quietly on a fork with local commits, a tarball install, or an
+offline machine, and just boots what it has) - but running the explicit
+`git pull` first is the clearer habit and the one worth keeping.
+
+Each boot **prefers the prebuilt images** published to GHCR over
+compiling from source, so a normal upgrade is a fast image pull rather
+than a Next.js build. If it can't pull (private package, offline
+machine, no network), it falls back to building locally automatically.
+The one case that needs your own attention: if you've forked the repo
+and changed code, set `BUILD_FROM_SOURCE=1` in `.env` - otherwise
+`start.sh` happily pulls the upstream image over your own changes and
+your fork silently doesn't run.
+
+## Why upgrading matters
+
+Database migrations in this codebase are additive and zero-downtime by
+design - new columns get sane defaults, nothing is dropped out from
+under running code. They apply automatically: the one-shot `migrate`
+container replays the full schema on every boot (idempotent, so running
+it again changes nothing if you're already current) and then tells
+PostgREST to reload its schema cache, so new tables and columns become
+visible without restarting anything by hand. There's no separate
+migration command to remember - `sh start.sh` is the whole upgrade.
+
+Pulling regularly also matters for the reason any software does: fixes
+and new capabilities only reach you on `git pull`. See what changed on
+the [changelog](/changelog) - the same list also raises an in-dashboard
+banner (dismissible, once per release) whenever your install crosses a
+new version, so you don't have to go looking on a normal week.
+
+## Backing up
+
+The one thing worth backing up is your Postgres volume
+(`dispatch-pgdata`) - it holds everything: your projects, keywords,
+rankings, the suggestions queue, and every encrypted secret
+(the GitHub token, the builder's Claude Code token, your GSC service
+account, DataForSEO credentials). A plain SQL dump, from inside the
+`dispatchseo` folder:
+
+```bash
+docker compose exec postgres pg_dump -U dispatch dispatchseo > dispatchseo-backup.sql
+```
+
+Worth doing before any upgrade you're nervous about, and on whatever
+schedule matches how much a day of data loss would bother you - there's
+no automatic backup job bundled, so this one is on you.
+
+## Restoring
+
+Restoring means replaying that dump into a database that's usually not
+empty - a fresh install seeds one placeholder project the moment it
+boots, so a plain restore can collide with it. Stop everything but
+Postgres, recreate the database cleanly, then replay the dump:
+
+```bash
+docker compose stop app cron builder postgrest
+docker compose exec postgres dropdb -U dispatch --if-exists dispatchseo
+docker compose exec postgres createdb -U dispatch -O dispatch dispatchseo
+docker compose exec -T postgres psql -U dispatch dispatchseo < dispatchseo-backup.sql
+docker compose up -d
+```
+
+That last `up -d` restarts everything else against the restored data.
+
+## Moving to a different machine or to a VPS
+
+Same idea, on a fresh machine: install DispatchSEO there first
+([Install on your computer](/docs/docker-compose) or
+[Install on a VPS](/docs/vps)) so `sh start.sh` creates the folder and
+boots the stack, then follow the restore steps above using the backup
+file you copied over.
+
+Bring your `.env` file along too, not just the database dump - if you
+set any override values there (`DATAFORSEO_ENC_KEY`, a pinned
+`DASHBOARD_PASSWORD`, and so on), secrets encrypted under one machine's
+key won't decrypt under a different one. Copying `.env` alongside the
+backup keeps everything consistent.
+
+## Uninstalling cleanly
+
+```bash
+docker compose down        # stop everything, keep your data
+docker compose down -v     # stop AND delete all data - no undo
+```
+
+After `down -v`, deleting the `dispatchseo` folder itself removes the
+rest (the compose file, the scripts, the cloned repo). Nothing about
+this touches your website's own repo - your published guides and tools
+are ordinary commits there already, and they stay exactly as they are
+whether DispatchSEO keeps running or not. See
+[What happens if I stop using it?](/docs/faq#what-happens-if-i-stop-using-it)
+
+## The cloud version
+
+None of the above applies on dispatchseo.com. Upgrades roll out on
+their own, backups are the maintainer's responsibility, and the same
+[changelog](/changelog) and dashboard update banner tell you what
+shipped - you never touch a terminal for any of it.

@@ -1,0 +1,1053 @@
+---
+title: MCP tools
+description: Every tool the DispatchSEO MCP server exposes - what it does, its parameters, and what it returns.
+---
+
+Everything below is the same server your agent already talks to. This
+page exists so you can look up one tool's exact contract without asking
+your agent to read the source for you.
+
+## Overview
+
+The server lives at **`/api/mcp`** over streamable HTTP - no SSE, no
+Redis, one endpoint for every connected site. What tells your project's
+data from anyone else's is the bearer token you connect with: the token
+**is** the tenant. There's no separate "pick a project" step and no way
+for one token to see another project's rows.
+
+Every tool returns pretty-printed JSON as its response text, so your
+agent gets structured data back, not prose to parse. A call that fails
+comes back as an error with a plain-English message - usually naming the
+actual fix (a missing credential, a cooldown, a bad id) rather than a
+raw database error.
+
+The MCP is a door to **state**, not a research or writing tool. It reads
+and writes the suggestions queue, tracked keywords, published pages, GSC
+stats, and backlink prospects - the same tables the dashboard reads and
+writes. It does not call DataForSEO on your behalf and it does not
+generate content: your agent does the thinking, using its own research
+tools (including DataForSEO's own MCP server, if you run one) plus the
+two thin research primitives below - `check_serp` and `suggest_keywords`
+- that route through whatever keyword source your project is set up
+with.
+
+Parity is the rule that keeps the two faces of the product honest:
+anything the dashboard can do, your agent can do here, and vice versa.
+If a dashboard screen doesn't have a matching tool on this page, that's
+a gap worth reporting, not a feature you should expect to live without.
+
+### Connecting
+
+Your dashboard's Settings screen shows a ready-to-paste `claude mcp add`
+command with your project's slug, domain, and key already filled in -
+copy that one rather than typing this by hand:
+
+```bash
+claude mcp add dispatchseo-<slug> <your-domain>/api/mcp \
+  --transport http --scope local \
+  --header "Authorization: Bearer <token>"
+```
+
+`--scope local` pins the connection to the repo folder you run it in, so
+a second connected project never leaks into an unrelated repo and starts
+answering for the wrong site.
+
+<Callout type="note" title="Windows: use the URL variant">
+Claude Code on Windows has a long-lived bug where a configured
+`--header` is stored and `claude mcp list` reports Connected, but real
+tool calls go out with no Authorization header at all. The key can ride
+in the URL instead - `<your-domain>/api/mcp?key=<token>` - which
+survives that bug. The dashboard hands you this exact form on Windows,
+no `--header` involved.
+</Callout>
+
+## Suggestions queue
+
+The queue is the heart of the product: every idea - guide, tool,
+backlink, or update - starts here as `pending`, and a build workflow
+only ever touches what the owner (or auto-approve) moved to `approved`.
+
+### `get_suggestions`
+
+Lists items in the queue. Defaults to `approved` - which is what a build
+workflow asks for when it wants to know what to work on next. Items come
+back in build order (front-placed ideas first, then oldest first), so a
+workflow can simply take the first one.
+
+<Fields>
+  <Field name="status" type="string">
+    One of `pending`, `approved`, `rejected`, `in_progress`, `done`.
+    Defaults to `approved`.
+  </Field>
+  <Field name="type" type="string">
+    Filter to `guide`, `tool`, `backlink`, or `update`.
+  </Field>
+</Fields>
+
+Returns the matching rows, sorted in build order.
+
+### `propose_suggestion`
+
+Adds one new idea to the queue, normally landing as `pending` for the
+owner to decide on the dashboard. Use it after research - one call per
+idea.
+
+<Fields>
+  <Field name="type" type="string" required="true">
+    `guide`, `tool`, `backlink`, or `update`.
+  </Field>
+  <Field name="title" type="string" required="true">
+    The idea's title.
+  </Field>
+  <Field name="primary_keyword" type="string">
+    The keyword this idea targets.
+  </Field>
+  <Field name="volume" type="number">
+    Monthly search volume, if known.
+  </Field>
+  <Field name="kd" type="number">
+    Keyword difficulty, if known.
+  </Field>
+  <Field name="rationale" type="string">
+    Why it's worth doing - volume, KD, intent, the gap it fills.
+  </Field>
+  <Field name="spec" type="object">
+    A free-form brief: an outline/angle/SERP notes for a guide, the
+    functionality for a tool, the target url for a backlink. A take
+    grown from one specific viral post can add `spec.seed_url` (+
+    `spec.seed_stats`) - the guide builder writes from that source
+    directly: credits it, pulls real quotes, embeds it, then covers
+    what the original missed.
+  </Field>
+  <Field name="source" type="string" tag="Honor system">
+    `research` (the default), `trend-scan`, or `manual`. Trend
+    workflows must pass `trend-scan` - it's what puts the idea on the
+    Trend radar with the owner-only approval gate. `manual` is only for
+    ideas the site owner dictated in the current conversation
+    ("add a guide about X"), never for an autonomous run.
+  </Field>
+  <Field name="trend_topic_id" type="uuid">
+    Only from the trend-expand workflow - groups this take under its
+    radar subject.
+  </Field>
+  <Field name="approved" type="boolean" tag="Manual only">
+    Skips the pending gate and lands the idea straight in the build
+    queue. Only takes effect when `source` is `manual` - an autonomous
+    run passing `approved:true` without `source:"manual"` still lands
+    `pending`.
+  </Field>
+  <Field name="position" type="string">
+    `front` or `back`. `front` means "do this one next" - since guides
+    ship one per morning, front means tomorrow.
+  </Field>
+  <Field name="build" type="string">
+    `now` fires the tool builder immediately instead of queueing. Only
+    has an effect for `type:"tool"` combined with a manual approval.
+  </Field>
+</Fields>
+
+Returns the created row, or `{ note, suggestion }` when front-placement
+or an instant build changed what happened.
+
+### `update_suggestion`
+
+Updates a suggestion's status and/or attaches a PR url. A build workflow
+marks an item `in_progress` when it starts and `done` with
+`result_pr_url` when the PR opens.
+
+<Callout type="note" title="Approval coercion">
+An agent asking for `status:"approved"` normally lands as `pending`
+instead, so the owner still decides on the dashboard - the response
+says so, and that's success, not a failure to retry. Passing
+`decided_by:"owner"` is the one thing that unlocks a real approval: it
+means the site owner just made the call in this conversation ("approve
+that one", "reject it", "restore the X idea"). Never set it from an
+autonomous workflow run. Owner-approving a trend-scan idea also puts it
+at the front of its queue, and owner-approving a rejected item restores
+it from History.
+</Callout>
+
+<Fields>
+  <Field name="id" type="uuid" required="true">
+    The suggestion to update.
+  </Field>
+  <Field name="status" type="string">
+    `pending`, `approved`, `rejected`, `in_progress`, or `done`.
+    Approving/rejecting stamps `decided_at`; `done` stamps
+    `completed_at`.
+  </Field>
+  <Field name="result_pr_url" type="string">
+    The opened PR's url, typically paired with `status:"done"`.
+  </Field>
+  <Field name="decided_by" type="string" tag="Owner only">
+    `owner` or `agent`. Only `owner` bypasses the approval coercion
+    above.
+  </Field>
+</Fields>
+
+Returns the updated row, with a `note` when the approval was coerced to
+pending or when a tool build was (or wasn't) dispatched.
+
+### `reorder_queue`
+
+<Pill tone="amber">Owner only</Pill>
+
+Rewrites the build order of one queue - the MCP side of the dashboard's
+drag-to-reorder. Guides and tools are separate queues. Only use this
+when the site owner asked to re-prioritize in the current conversation,
+never from an autonomous run.
+
+<Fields>
+  <Field name="group" type="string" required="true">
+    `guide` or `tool`.
+  </Field>
+  <Field name="ordered_ids" type="array" required="true">
+    The queue's approved suggestion ids, in the exact order they should
+    build (first id builds next). Read the current order with
+    `get_suggestions` first. Ids you omit keep their place after the
+    ordered set.
+  </Field>
+</Fields>
+
+Returns `{ reordered: true, group, order }`.
+
+### `build_suggestion_now`
+
+<Pill tone="amber">Owner only</Pill> <Pill tone="neutral">Tools only</Pill>
+
+The dashboard's "Build now" button. Approves a **tool** suggestion (if
+it isn't already) and wakes the tool builder immediately. Guides have no
+instant build, by design: at most one guide ships per day so the
+publishing pace stays steady instead of bursty, so a guide id is instead
+approved and placed at the front of its queue - the next daily build
+picks it up, tomorrow at the latest. Only use this when the site owner
+explicitly asked for it in the current conversation; autonomous runs
+queue via `propose_suggestion` and wait.
+
+<Fields>
+  <Field name="id" type="uuid" required="true">
+    The suggestion to build now.
+  </Field>
+</Fields>
+
+Returns `{ ok: true, message }` for a tool, or `{ ok: true, note }` for a
+guide (explaining the front-of-queue placement instead).
+
+### `check_sameness`
+
+The pre-publish sameness gate: does this draft read like the guides this
+site already published? Pass the full guide markdown (frontmatter and
+code fences are ignored) plus its primary keyword, and the backend
+compares it against this project's most recently published guides for an
+identical opening, a heading skeleton that's the same once the topic is
+removed, and stock phrases repeated across the catalogue. A failure
+means rewrite the flagged elements and call again - never loosen the
+check. It fails open (passes, with a note) if the published corpus can't
+be read, so a network or database hiccup can never block a build.
+
+<Fields>
+  <Field name="markdown" type="string" required="true">
+    The full draft guide.
+  </Field>
+  <Field name="primary_keyword" type="string">
+    Stripped out of both the draft and the published corpus before
+    comparing, so two guides about different topics with the same
+    shape still get caught.
+  </Field>
+</Fields>
+
+Returns `pass` (boolean), `compared_against` (how many published guides
+it checked against), and `flags` - the exact offending strings when it
+fails.
+
+## Keywords and rankings
+
+The tracking set is separate from one-off research: what you track here
+is what the nightly rank cron checks going forward.
+
+### `track_keywords`
+
+Upserts keywords into the tracking set, matched by keyword text. The
+rank cron checks every tracked keyword daily while it ranks in the top
+30, plus a weekly full-depth sweep for everything else. Fields you omit
+are left as-is on existing rows.
+
+<Callout type="note">
+On the bundled cloud plan, tracked-keyword slots are capped per plan -
+but only **net-new** keywords count against it. Updating the metrics on
+an already-tracked keyword is always allowed, even at the cap.
+</Callout>
+
+<Fields>
+  <Field name="keywords" type="array" required="true">
+    One object per keyword: `keyword` (required), `volume`, `kd`, `cpc`,
+    `intent` (all optional).
+  </Field>
+</Fields>
+
+Returns `{ upserted, keywords }`.
+
+### `get_rankings`
+
+Rank history for tracked keywords over the last N days. Each keyword
+comes back with its current position, its earliest position in the
+window, and the change between them (positive means it improved, moving
+toward #1).
+
+<Callout type="warning" title="Read checked and position together">
+`checked:true` with `position:null` means confirmed not in the top 100.
+`checked:false` means the keyword was never successfully checked in this
+window - unknown, not "not ranking".
+</Callout>
+
+<Fields>
+  <Field name="keyword" type="string">
+    Scope to one keyword instead of every tracked one.
+  </Field>
+  <Field name="days" type="number">
+    Window size. Defaults to 30.
+  </Field>
+</Fields>
+
+Returns each keyword with its position history, best-position-first;
+keywords outside the top 100 are ordered last, by search volume, so the
+tail reads as an opportunity list.
+
+## Published pages
+
+### `log_page`
+
+Records a published page, matched by url (re-logging updates it). Call
+this right after a PR opens, not after it merges - the system already
+treats a freshly logged page as "awaiting publish" until its url first
+serves HTTP 200, which is verified automatically.
+
+<Fields>
+  <Field name="url" type="string" required="true">
+    Must be on this project's own domain.
+  </Field>
+  <Field name="title" type="string">
+    Page title.
+  </Field>
+  <Field name="type" type="string">
+    `guide`, `tool`, or `landing`.
+  </Field>
+  <Field name="primary_keyword" type="string">
+    The page's main target keyword.
+  </Field>
+  <Field name="pr_url" type="string">
+    The PR that shipped this page.
+  </Field>
+  <Field name="published_at" type="string">
+    ISO date/datetime. Only pass this when backfilling a page that
+    published earlier - omit it for a page shipping right now. The
+    daily publishing pace reads this field, so a backfill stamped "now"
+    wrongly eats today's build slot.
+  </Field>
+</Fields>
+
+Returns the upserted page row.
+
+### `get_pages`
+
+Lists every published page. Call this before writing new content, to
+pick 2-3 existing pages to link to and to avoid covering a topic twice.
+Takes no parameters.
+
+Each row carries `live:true|false` - `false` means the page was logged
+(its PR opened) but its url hasn't served 200 yet. Don't link to
+not-yet-live pages.
+
+### `mark_indexing_requested`
+
+Reports the outcome of a Search Console "Request indexing" browser
+session, so the dashboard's Get-it-on-Google card clears itself. Urls
+must match already-logged pages (`get_pages`); anything left over (daily
+quota hit, login wall) just stays on the card - omit it rather than
+guessing.
+
+<Fields>
+  <Field name="requested_urls" type="array">
+    Pages you clicked Request indexing for.
+  </Field>
+  <Field name="already_indexed_urls" type="array">
+    Pages the inspection showed were already on Google.
+  </Field>
+</Fields>
+
+Returns `{ requested_marked, already_indexed_marked, unknown_urls }` -
+`unknown_urls` is any url that matched no logged page, so it wasn't
+actually cleared.
+
+## Traffic and stats
+
+### `get_site_stats`
+
+Google Search Console snapshots for the last N days, newest first, plus
+a trend summary (totals and first-half vs second-half deltas for clicks
+and impressions). For the combined dashboard-style view (traffic,
+rankings, and per-page numbers in one call), see `get_overview` under
+Dashboard parity instead.
+
+<Fields>
+  <Field name="days" type="number">
+    Window size. Defaults to 28.
+  </Field>
+</Fields>
+
+Returns `{ summary, snapshots }`, plus a `note` explaining an empty
+window (Search Console not connected yet, access granted but no sync
+yet, or an unreachable property) instead of letting zeros read as a real
+traffic story.
+
+## Backlinks
+
+Backlink prospects (domains worth pursuing) and the curated backlink
+playbook (directories and paid placements) live together here - both
+feed the same Backlinks screen on the dashboard.
+
+### `add_backlink_prospect`
+
+Adds a domain worth pursuing a link from, status `new`. Deduplicates by
+normalized domain (case-insensitive, `www.` stripped) - a repeat call
+returns the existing row with `already_queued:true` instead of creating
+a second one.
+
+<Fields>
+  <Field name="domain" type="string" required="true">
+    The prospect's domain.
+  </Field>
+  <Field name="url" type="string">
+    The specific page worth targeting, if you have one.
+  </Field>
+  <Field name="reason" type="string">
+    Why it's relevant, or where it was found.
+  </Field>
+  <Field name="domain_rating" type="number">
+    The prospect's own DR, if known.
+  </Field>
+</Fields>
+
+Returns the new row, or the existing one with `already_queued:true`.
+
+### `get_backlink_prospects`
+
+Lists backlink prospects, newest first.
+
+<Fields>
+  <Field name="status" type="string">
+    `new`, `contacted`, `acquired`, or `rejected`.
+  </Field>
+</Fields>
+
+### `update_backlink_prospect`
+
+Moves a prospect through its pipeline: `new` to `contacted` to
+`acquired` (or `rejected`). Call it after outreach actually happened or a
+link actually went live.
+
+<Fields>
+  <Field name="id" type="uuid" required="true">
+    The prospect to update.
+  </Field>
+  <Field name="status" type="string" required="true">
+    `new`, `contacted`, `acquired`, or `rejected`.
+  </Field>
+</Fields>
+
+### `get_playbook`
+
+The curated backlink playbook: free directories and ROI-ranked paid
+placements, with this project's done/skipped progress. Without a slug
+you get the compact list; with one, the full submission brief -
+prefilled field copy personalized from the site profile, plain-English
+steps, gotchas, and a paste-ready `@browser` command.
+
+<Fields>
+  <Field name="slug" type="string">
+    An item's slug (from the compact list) for its full brief.
+  </Field>
+</Fields>
+
+### `set_playbook_status`
+
+Marks a playbook item `todo`, `done`, or `skipped` - the same checkbox
+as the dashboard's Backlinks screen. Call it after a submission actually
+went through (e.g. the `@browser` session finished), not before.
+
+<Fields>
+  <Field name="slug" type="string" required="true">
+    The playbook item (from `get_playbook`).
+  </Field>
+  <Field name="status" type="string" required="true">
+    `todo`, `done`, or `skipped`.
+  </Field>
+</Fields>
+
+## Research primitives
+
+Two of these work in every mode with no credentials
+(`suggest_keywords`, `check_serp` when a free SerpApi key is connected);
+the rest need a connected SERP/DataForSEO account of some kind - your own,
+or the platform's bundled plan on cloud.
+
+### `check_serp`
+
+Fetches live Google organic results for a keyword through the project's
+connected SERP provider, billed to the project's own account or quota.
+Use it to judge winnability before proposing content - page 1 full of
+Reddit threads and thin posts is winnable, page 1 full of big brands
+isn't. Unavailable in GSC-only mode.
+
+<Callout type="warning" title="Rate-capped on the bundled cloud plan">
+30 checks/day when billed to the platform's shared DataForSEO account,
+resetting at UTC midnight. Own-account and self-host projects aren't
+affected. Use `track_keywords` for anything worth ongoing monitoring
+instead of repeated ad-hoc checks - the rank cron checks tracked
+keywords daily for free. SerpApi's own free tier is separately capped at
+250 searches/month.
+</Callout>
+
+<Fields>
+  <Field name="keyword" type="string" required="true">
+    The keyword to check.
+  </Field>
+  <Field name="top" type="number">
+    How many results to return, up to 100. Defaults to 10.
+  </Field>
+</Fields>
+
+Returns `{ keyword, source, results, ai_overview }` - each result has
+position, title, url, and domain.
+
+### `get_domain_rank`
+
+The site's cached Domain Rating snapshot (0-100 DR-equivalent, referring
+domains, backlinks, spam score), refreshed weekly by a cron - never a
+live paid call. Takes no parameters. A `null` dr means the domain isn't
+indexed yet, or the cron hasn't run its first pass for this project.
+
+### `get_dataforseo_usage`
+
+This project's DataForSEO billing status: who it's billed to, month-to-
+date spend against the platform's monthly budget (when applicable), the
+projected month-end spend under the rank cron's current pacing, and
+today's `check_serp` count against its daily cap. Takes no parameters. A
+project on its own account (or self-host) isn't metered here - the spend
+fields stay zero.
+
+### `suggest_keywords`
+
+Expands a seed keyword into related searches via Google Autocomplete -
+free, works in every mode, no credentials needed. Returns real queries
+people type, without volume numbers. Pair it with `get_site_stats`'s top
+queries for seeds, then `check_serp` on the shortlist to judge
+winnability.
+
+<Fields>
+  <Field name="seed" type="string" required="true">
+    The seed keyword to expand.
+  </Field>
+  <Field name="modifiers" type="array">
+    Up to 8 modifier words to combine with the seed.
+  </Field>
+</Fields>
+
+### `keyword_ideas`
+
+Expands seed keywords into related searches with real monthly search
+volume and keyword difficulty, via DataForSEO. Works whenever the
+project has DataForSEO access - its own account, or the platform's
+bundled plan on cloud - so it's how bundled-plan projects get the
+numbers the quality bar gates on. Batch multiple seeds in one call: each
+call is one metered DataForSEO request regardless of how many seeds you
+send.
+
+<Fields>
+  <Field name="seeds" type="array" required="true">
+    1 to 20 seed keywords.
+  </Field>
+  <Field name="limit" type="number">
+    Max ideas returned, 1 to 200. Defaults to 100.
+  </Field>
+</Fields>
+
+Returns `{ seeds, ideas }`, sorted by volume, highest first. Returns an
+empty `ideas` list with a `note` (never an error) when the project has
+no DataForSEO access or its monthly budget is spent - fall back to
+`check_serp` and product judgment then.
+
+## AI visibility
+
+How AI answer engines see this site - the GEO half of the product.
+
+### `get_ai_visibility`
+
+Per-engine summary (queries checked, AI answers seen, citation rate), a
+per-day trend, the latest verbatim answers, and a gap list of domains AI
+cites on queries where this site isn't. Takes no parameters. Google AI
+Overview data arrives automatically from the weekly rank sweep; the
+other engines fill in only when a geo-scan workflow runs. Use the gap
+list to pick what to write next.
+
+### `record_ai_citations`
+
+Writes geo-scan results: for each query asked of an AI answer engine,
+whether an answer came back, whether it cited this site, and every
+source it cited. Called by the geo-scan workflow after sampling each
+query - `google_ai_overview` is cron-only and can't be written here.
+
+<Fields>
+  <Field name="results" type="array" required="true">
+    1 to 100 entries. Each has: `engine` (`claude`, `chatgpt`,
+    `perplexity`, or `gemini`, required), `query` (required),
+    `has_ai_answer` (required), `cited` (required), `cited_url`
+    (optional), `answer_excerpt` (optional - a short verbatim quote so
+    the owner can read the real answer behind the number), and
+    `citations` (optional, up to 30 `{ domain, url, title }` sources).
+  </Field>
+</Fields>
+
+Returns `{ recorded }`, the count written.
+
+## Trends
+
+The Trend radar is two stages: a scan finds trending subjects, then the
+owner picks one to expand into guide-idea takes.
+
+### `record_trend_scan`
+
+Stamps the project's `last_trend_scan_at` with now. Takes no
+parameters. Called by the trend-scan workflow itself at the end of every
+run, found something or not - it backs the Trend radar's "Scan now"
+cooldown, not something the owner calls directly.
+
+### `propose_trend_topic`
+
+Puts a trending subject on the Trend radar - a conversation the niche is
+having right now, not a guide idea. Called by the trend-scan workflow,
+once per shortlisted subject (up to 5 per scan). Deduplicates by title
+across every status - if the subject is already on the radar, the
+existing row comes back with a note instead of a duplicate.
+
+<Fields>
+  <Field name="title" type="string" required="true">
+    The trending subject.
+  </Field>
+  <Field name="why_now" type="string" required="true">
+    The trigger event and its date, leading the explanation.
+  </Field>
+  <Field name="signals" type="array">
+    Up to 8 threads/launches/trend lines actually seen.
+  </Field>
+  <Field name="sources" type="array">
+    Up to 8 vendor posts or threads that prove it.
+  </Field>
+  <Field name="seed_url" type="string">
+    The single most viral piece of content driving the subject - the
+    builder later writes from it directly (credit, quotes, embed).
+  </Field>
+  <Field name="seed_stats" type="string">
+    That content's public numbers and date, e.g. "512k views, Jul 12".
+  </Field>
+</Fields>
+
+### `get_trend_topics`
+
+Lists radar subjects, newest first.
+
+<Fields>
+  <Field name="status" type="string">
+    `new`, `expanding`, `expanded`, or `dismissed`.
+  </Field>
+</Fields>
+
+### `update_trend_topic`
+
+Moves a subject to `expanded` (the trend-expand workflow's last step) or
+`dismissed` (housekeeping for subjects older than 14 days, or the owner
+passing on one). `expanding` isn't settable here - that's what
+`expand_trend_topic` does, since picking a subject to expand is the
+owner's move.
+
+<Fields>
+  <Field name="id" type="uuid" required="true">
+    The subject to update.
+  </Field>
+  <Field name="status" type="string" required="true">
+    `expanded` or `dismissed` only.
+  </Field>
+</Fields>
+
+### `trigger_trend_scan`
+
+<Pill tone="amber">Owner only</Pill>
+
+The Trend radar's "Scan now" button. Wakes the project repo's trend-scan
+workflow; subjects appear on the radar (`get_trend_topics`) a few
+minutes later. Shares the dashboard's 30-minute cooldown - a refusal
+means the radar is already current, don't retry. Only use this when the
+site owner asked for a scan in the current conversation; the scan
+workflow itself must never call this (it reports back through
+`record_trend_scan` instead). Takes no parameters.
+
+### `expand_trend_topic`
+
+<Pill tone="amber">Owner only</Pill>
+
+The radar's "Get takes" button. Wakes the trend-expand workflow for one
+subject; its takes land in the suggestions queue a few minutes later,
+waiting `pending` like every trend idea. Refuses dismissed subjects and
+repeats within a 30-minute cooldown (per subject) - a refusal means
+takes are already on their way. Only use this when the site owner picked
+the subject in the current conversation.
+
+<Fields>
+  <Field name="id" type="uuid" required="true">
+    The radar subject to expand.
+  </Field>
+</Fields>
+
+## Site config and profile
+
+### `get_site_profile`
+
+Reads the site profile the backlink playbook personalizes from - name,
+tagline, descriptions, categories, tags. Takes no parameters. Returns
+`null` if `/seo-setup` hasn't written it yet.
+
+### `set_site_profile`
+
+Writes the site profile that prefills every directory submission and
+`@browser` command. Called by the `/seo-setup` command after researching
+the product.
+
+<Fields>
+  <Field name="name" type="string" required="true">
+    The site's name.
+  </Field>
+  <Field name="url" type="string" required="true">
+    Must be a valid url.
+  </Field>
+  <Field name="tagline" type="string" required="true">
+    Up to 60 characters.
+  </Field>
+  <Field name="short_description" type="string" required="true">
+    Up to 160 characters.
+  </Field>
+  <Field name="long_description" type="string" required="true">
+    300-600 characters is the target directories in the playbook
+    expect (the field itself accepts 100-700).
+  </Field>
+  <Field name="categories" type="array" required="true">
+    1 to 5 categories.
+  </Field>
+  <Field name="tags" type="array" required="true">
+    1 to 10 tags.
+  </Field>
+</Fields>
+
+### `set_gsc_property`
+
+Corrects which Google Search Console property this project tracks.
+Onboarding guesses `sc-domain:<domain>`, but plenty of real properties
+are URL-prefix (`https://example.com/`) - if GSC data never arrives and
+access checks keep failing, the guess was probably wrong.
+
+<Fields>
+  <Field name="site_url" type="string" required="true">
+    The property exactly as Search Console names it.
+  </Field>
+</Fields>
+
+### `set_github_repo`
+
+<Pill tone="violet">Cloud only</Pill>
+
+Picks which repository of the project's GitHub App installation the
+content pipeline lives in. Validated against the installation's live
+repo list - a repo outside the installation is refused. Self-host
+connects its repo during project creation instead, so this tool fails
+there on purpose.
+
+<Fields>
+  <Field name="repo" type="string" required="true">
+    `owner/repo`, must be part of this project's App installation.
+  </Field>
+</Fields>
+
+### `get_project`
+
+The project this token belongs to and how it's set up: domain, mode,
+the effective auto-approve flags, keyword source, whether a SERP
+provider and Search Console are connected, whether this repo has its own
+DataForSEO MCP server, the content-pipeline repo, and whether one-tap
+merge is available. Takes no parameters. Worth calling first in a
+session, since it tells you which of the other tools will actually work.
+Secrets are never returned - credentials stay dashboard-only.
+
+## Dashboard parity
+
+These read tools call the exact same modules the dashboard's screens
+render from, so the two views can never drift apart.
+
+### `get_overview`
+
+The dashboard Home/Analytics view in one call: 28-day traffic totals,
+live last-24h numbers, domain rating, the keyword ranking table, top
+search queries, and per-page traffic for every built guide and tool -
+plus the journey (which SEO stage the site is in, what to expect next)
+and this week's real movement. Takes no parameters. Start here for
+"what's going on with my SEO" - it's the whole picture. For raw daily
+GSC snapshots use `get_site_stats`; for rank history use `get_rankings`.
+
+### `get_activity`
+
+What the SEO manager has been doing. Takes no parameters. Returns
+`today` (a granular checklist since UTC midnight, each publish/approval
+named) and `week` (the last 7 days, aggregated into counts).
+
+### `get_automations`
+
+The automations registry: what runs on its own, on what schedule, and an
+evidence line per automation (last run, last snapshot, last build) drawn
+from the data it actually writes. Takes no parameters. Answers "is the
+nightly rank check running?" or "when does the guide builder fire?".
+
+### `get_cron_health`
+
+The latest run of this project's background jobs - deploy-check, the SEO
+GitHub workflows, the secrets canary, and (self-host only) the
+platform's own instance-wide crons too. Takes no parameters. Each entry
+carries ok/failed, error strings, and whether the job is stale. An empty
+result means no job has ever logged a run; an entry with
+`update_available:true` isn't a failure, just an installed pipeline pack
+a version behind.
+
+### `mark_cron_fixed`
+
+Clears a background-job alert after you've actually fixed and verified
+the underlying problem - logs a synthetic ok run for that job. Call this
+only after re-running the workflow (or hitting the endpoint) and seeing
+it succeed; if the problem persists, the next real failure or missed
+window re-raises the alert on its own.
+
+<Fields>
+  <Field name="job" type="string" required="true">
+    The exact job name from `get_cron_health`, including any
+    `--<project>` suffix. Fails if that job has no active alert.
+  </Field>
+</Fields>
+
+### `get_next_actions`
+
+Everything waiting on a human decision: suggestions awaiting approval,
+approved items waiting for their build, builds in progress, open SEO PRs
+ready to merge, and pages waiting for a Search Console "Request
+indexing" click. Takes no parameters.
+
+Returns `{ awaiting_approval, approved_waiting_build, building_now,
+open_seo_prs, indexing_queue }` - the indexing queue comes with a
+paste-ready `@browser` command; report the outcome with
+`mark_indexing_requested`.
+
+### `merge_pr`
+
+Squash-merges an open SEO PR on the project's repo - the dashboard's
+one-tap merge. Only merge PRs listed by `get_next_actions`, and only
+when the user asked for it or its checks are green. Requires the
+server's merge token to be configured; without it, this fails and the
+PR page link is the fallback.
+
+<Fields>
+  <Field name="number" type="number" required="true">
+    The PR number to merge.
+  </Field>
+</Fields>
+
+### `get_changelog`
+
+What shipped in DispatchSEO itself, newest first - the same list the
+dashboard shows at `/changelog`. This is about the product, not your
+site's own activity (for that, use `get_activity`).
+
+<Fields>
+  <Field name="limit" type="number">
+    Trims the list, 1 to 50. Defaults to 10.
+  </Field>
+</Fields>
+
+## Instructions and install
+
+The install/setup pipeline is served as content, not hardcoded into any
+repo - so an instructions update reaches every connected project's next
+run without touching a single user repo.
+
+### `get_instructions`
+
+The operating instructions for one SEO workflow, personalized to this
+project. Automations and agents must call this before running a
+workflow and follow the returned markdown exactly - it's the live
+version of the playbook.
+
+<Fields>
+  <Field name="workflow" type="string" required="true">
+    `install`, `setup`, `research`, `trend-scan`, `trend-expand`,
+    `build-guide`, `build-tool`, `report`, `backlinks`, or `geo-scan`.
+  </Field>
+</Fields>
+
+Returns `{ project, version, workflow, summary, markdown }`. The
+`project` field names who this token belongs to - confirm it matches
+the site you mean to operate on before following the playbook, since a
+mismatched token would act on another site's data. Site-specific facts
+live in the repo's `.dispatchseo/conventions.md`, which the setup
+workflow writes.
+
+### `get_pipeline_pack`
+
+The repo-side shim files (GitHub workflows, MCP configs, slash
+commands), personalized to this project. Call it with no arguments for
+the manifest - a list of file paths only, since the full pack overflows
+one response - then call it again with a path to get that one file's
+content, writing each one at a time.
+
+<Fields>
+  <Field name="path" type="string">
+    A path from the manifest. Omit for the manifest itself.
+  </Field>
+</Fields>
+
+### `mark_install_step`
+
+A progress ticker for the owner's wizard finale - stamp one step the
+moment you finish it, so the checklist the owner is watching ticks in
+real time instead of sitting dark for 20-60 minutes. Purely
+informational: it unlocks nothing (`mark_pipeline_installed` does that),
+and a failure here must never stop the install.
+
+<Fields>
+  <Field name="step" type="string" required="true">
+    `workflows`, `adaptation`, `repo_settings`, `content_home`,
+    `site_facts`, or `research`. Call once per step, right after
+    finishing it.
+  </Field>
+</Fields>
+
+### `mark_pipeline_installed`
+
+Stamps this project as pipeline-installed. Called once, by the install
+workflow's final step, only after its own verification checklist
+passes. Takes no parameters. This call unlocks the owner's dashboard, so
+it fails loudly - with the specific problem named - rather than
+stamping an unverified install.
+
+### `set_conventions`
+
+Mirrors the repo's `.dispatchseo/conventions.md` site facts to the
+backend, so the dashboard's Instructions page can show how DispatchSEO
+adapted to this site. Called by the setup workflow right after writing
+the repo file, with the complete current facts - this is a full
+replace, not a patch.
+
+<Fields>
+  <Field name="product_summary" type="string">
+    What the site/product is.
+  </Field>
+  <Field name="stack" type="string">
+    The repo's tech stack.
+  </Field>
+  <Field name="package_manager" type="string">
+    e.g. `pnpm`, `npm`.
+  </Field>
+  <Field name="build_command" type="string">
+    How to build/typecheck the repo.
+  </Field>
+  <Field name="guides_dir" type="string">
+    Where guide content lives.
+  </Field>
+  <Field name="tools_wiring" type="string">
+    How a new tool page gets wired in.
+  </Field>
+  <Field name="theme_tokens" type="array">
+    `{ name, value }` pairs - include resolved color values (hex/oklch)
+    where the token is a color, so the dashboard can render real
+    swatches.
+  </Field>
+  <Field name="fonts" type="array">
+    Font names in use.
+  </Field>
+  <Field name="voice_rules" type="array">
+    Style/voice rules content should follow.
+  </Field>
+  <Field name="exemplar_guides" type="array">
+    Example guide urls or paths worth imitating.
+  </Field>
+  <Field name="exemplar_visuals" type="array">
+    Example visual references.
+  </Field>
+  <Field name="tool_reference" type="string">
+    An existing tool page worth using as a pattern.
+  </Field>
+  <Field name="analytics" type="string">
+    How analytics is wired on the site.
+  </Field>
+  <Field name="notes" type="string">
+    Anything else worth recording.
+  </Field>
+</Fields>
+
+### `get_conventions`
+
+The site facts last mirrored via `set_conventions`, with `updated_at`.
+Takes no parameters. `null` data means the setup workflow hasn't run
+yet - the repo's own `.dispatchseo/conventions.md` remains the
+agent-facing source of truth; this copy exists for the dashboard and for
+agents working without the repo checked out.
+
+## Content preferences
+
+### `get_content_prefs`
+
+The owner's template controls from the dashboard's Instructions page:
+`house_rules` (free text injected into every build), `disabled_archetypes`
+(guide shapes removed from rotation), and `disabled_blocks` (skeleton
+parts dropped). Takes no parameters. Build workflows don't need to call
+this directly - the same preferences are already rendered into
+`get_instructions`.
+
+### `set_content_prefs`
+
+<Pill tone="amber">Owner only</Pill>
+
+Changes the owner's template controls. Use this only when the owner
+asked for the change in the current conversation - an autonomous build
+run must never adjust its own content preferences. Provided fields
+replace their current value wholesale; fields you omit keep their
+current value.
+
+<Fields>
+  <Field name="house_rules" type="string">
+    Up to 2000 characters, injected into every build.
+  </Field>
+  <Field name="disabled_archetypes" type="array">
+    Any of `tutorial`, `comparison`, `data-study`, `opinion`,
+    `reference`. At least 2 must stay enabled.
+  </Field>
+  <Field name="disabled_blocks" type="array">
+    Any of `tldr`, `comparison_table`, `visuals`, `faq`.
+  </Field>
+</Fields>
+
+### `join_waitlist`
+
+The odd one out in this section - it doesn't touch content preferences
+at all, it's just the last tool registered on the server. Adds an email
+to the DispatchSEO Cloud waitlist, the same list the public landing page
+feeds. Duplicate emails are fine; re-joining is a no-op, not an error.
+
+<Fields>
+  <Field name="email" type="string" required="true">
+    The email address to add.
+  </Field>
+</Fields>

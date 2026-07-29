@@ -20,6 +20,9 @@ const PUBLIC_FILES = new Set([
   "/install.sh",
   // Agent-facing site summary; crawlers and MCP clients read it logged-out.
   "/llms.txt",
+  // The same docs as one plain-text file, for agents that would rather fetch
+  // once than crawl. Same public-by-design reasoning as /docs itself.
+  "/llms-full.txt",
   "/icon.png",
   "/apple-icon.png",
   "/opengraph-image.png",

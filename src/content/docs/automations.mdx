@@ -1,0 +1,157 @@
+---
+title: Automations and modes
+description: The three publish modes, all 12 automations, the publishing pace, and the quality bar every build obeys.
+---
+
+The [Automations](/docs/dashboard#automations) page is where you decide how
+hands-off DispatchSEO runs. This page explains the modes, every automation
+in the registry, the pace content actually ships at, and the quality bar
+that keeps an unsupervised build honest.
+
+## The three modes
+
+The topbar's mode switch is really just a readout of five toggles
+underneath it - there's no separate "mode" setting, only a combination of
+flags that happens to match a name.
+
+- **Semi** - the agent researches and builds, you approve and merge.
+  Researched ideas wait for your decision, but once you approve one, both
+  the guide builder and the tool builder still run themselves; you just
+  press Merge on the finished PR.
+- **Auto** - fully hands-off. Researched ideas approve themselves, builds
+  run themselves, and a PR that passes every check merges itself. You
+  never have to open the dashboard for content to keep shipping.
+- **Custom** - what the pill shows when your own mix of toggles doesn't
+  match either preset. You never pick Custom directly; it's just the
+  honest label for "something in between," and matching a preset again
+  (by hand or by luck) flips the pill back to that preset's name on its
+  own.
+
+Switching down to Semi is instant - de-escalating trust never needs a
+confirmation. Switching up to Auto asks you to confirm once, because from
+that moment content starts publishing without a human reading it first.
+
+## The 12 automations
+
+Five of the twelve are toggles you control from this page. The other seven
+are locked - either because they only collect data and publish nothing, or
+because they're a safety gate every build has to pass through regardless of
+mode.
+
+| Automation | What it does | Schedule | Control |
+| --- | --- | --- | --- |
+| Nightly rank check | Checks this site's Google position for every tracked keyword. Top-30 rankings get checked nightly; everything gets a full top-100 sweep every Monday. | Nightly ~04:00 UTC, full sweep Mondays | Locked - always on |
+| Nightly traffic snapshot | Pulls yesterday's clicks and impressions from Search Console into the Home graph. | Nightly ~04:00 UTC | Locked - always on |
+| AI visibility check | Records whether Google's AI Overview cites the site (rides the Monday rank sweep at no extra cost) and runs a weekly scan asking the questions customers would ask an AI assistant, on the owner's own Claude subscription. | Google: with the Monday sweep. Claude scan: Wednesdays 06:00 UTC | Locked - always on |
+| Weekly research run | A Claude research agent reads the product as it exists that week, derives keyword ideas, validates them through DataForSEO, and queues suggestions. Also fires the moment the queue runs dry, so a missed weekly run never starves the builder. | Mondays 06:00 UTC, plus automatically whenever the queue empties (at most once a day) | Locked - required |
+| Trend radar | Two stages: **Scan now** finds the subjects your niche is talking about right now with evidence attached; **Get takes** turns a picked subject into 3-5 validated guide angles, pending your call. | On demand - your clicks only | Locked - manual-only |
+| Guide auto-approval | Approves the research run's guide ideas the moment they land, so builds start without you. Off means every researched guide idea waits pending on Home for your decision. | With every research run | Toggle |
+| Tool auto-approval | Approves the research run's tool ideas on their own - they still queue for the weekly tool build, not an instant one. Off means every tool concept waits for your greenlight; your own approvals always build instantly either way. | With every research run | Toggle |
+| Daily guide builder | Builds the guide at the top of the queue into a finished post - template, live SERP gate, bespoke visuals, a humanizer voice pass - and opens a PR. Ships at most one guide a day and pauses while any SEO PR is still open. | Every morning 05:00 UTC | Toggle |
+| Tool builder | Builds an approved tool idea through the tool pipeline. Your own approvals fire it instantly; auto-approved ideas wait for the weekly sweep. | Instant on your approval, weekly sweep Wednesdays 05:30 UTC | Toggle |
+| Tool validation | The functional reviewer for tool PRs: builds the branch for production, exercises the tool in a real browser, and posts a pass/fail verdict as a label and comment. A pass authorizes the merge. | On every tool PR | Locked - required |
+| Hands-off publishing | Merges PRs on their own once every automated check passes - build, preview deploy, code review, and (for tools) the live validation verdict. Off means green PRs wait for your Merge click on Home. | The moment checks finish, hourly sweep as backup | Toggle |
+| Auto-indexing ping | Tells Bing and Yandex about every new page the moment it ships. Google ignores this protocol, so new pages instead get a one-paste "Get it on Google" request on Home. | On every merged content PR | Locked - always on |
+
+## How fast content actually ships
+
+The pace is flat and permanent: **at most one guide per UTC calendar day**,
+site-wide - your own manual merge uses that day's slot exactly the same as
+an automated one, and it never bursts to catch up after a quiet stretch.
+
+It used to be different: publishing pace ramped up with the site's age on
+a rolling weekly budget. That got replaced because the only real effect of
+a rolling window was burst payback - a good launch week silenced the
+builder for days afterward while approved ideas sat queued, which helps
+no one.
+
+The reason it isn't tied to site age is Google's own guidance: velocity
+itself is neither a ranking signal nor a spam signal on its own - low
+value-per-page at scale is, and that risk is carried by the sameness,
+thin-content, and SERP-weakness gates below, not by a calendar. A few real
+competitor products in this space ship a flat daily cap or a drip queue for
+the same reason; none of them claw back budget after a good day. So: one
+guide a day, steady, forever - the gates below are what actually keeps a
+young site from reading as spam, not the pace.
+
+## The quality bar every build obeys
+
+Every guide and tool suggestion has to clear the same bar before it's
+allowed to auto-approve, whatever mode the project runs in:
+
+- **Volume floor**: search volume above 500/month, or above 300 only when
+  the search intent fits the product perfectly. This only applies when
+  volume data actually exists - DataForSEO-connected projects. A free
+  GSC-only project has no volume data, and "no data" is never treated as
+  "failed the bar."
+- **KD ceiling, and it's dynamic** - it scales with the site's own
+  authority. At the start of every research run the agent checks the
+  site's DR-equivalent (0-100, refreshed weekly) and applies the matching
+  row:
+
+  | Site's DR-equivalent | Auto-approve zone | Pending zone (needs you) |
+  | --- | --- | --- |
+  | Under 10 (including unindexed) | KD under 10 | KD 10-20 with strong SERP weakness |
+  | 10-19 | KD under 15 | KD 15-25 with strong SERP weakness |
+  | 20-34 | KD under 25 | KD 25-35 with strong SERP weakness |
+  | 35+ | KD under 35 | KD 35-45 with strong SERP weakness |
+
+  A newer, lower-authority site is held to a stricter ceiling; the bar
+  loosens as the site earns more authority. "Strong SERP weakness" means
+  page 1 shows at least two of: forum or Reddit threads, raw gists or
+  repos, thin or outdated listicles, or docs-only results with no
+  guide-shaped competitor - the agent has to name which signals it saw.
+  Above the pending zone, an idea isn't proposed at all, just noted as a
+  future target once the site's authority grows.
+- **Audience fit (the ICP test)** - a winnable SERP isn't enough. Every
+  proposal has to name who actually types that query and why that person
+  overlaps this site's buyer or user. Reader isn't always buyer: a
+  tutorial keyword can clear volume and KD while pulling in an audience
+  that will never need the product - the classic trap is writing about the
+  product's own tech stack, which attracts people building similar tech,
+  not people shopping for what it does. At most one tangential-audience
+  pick is allowed per research run, and only with a rationale for what it
+  does for the site.
+
+And the hard rules that never bend regardless of mode: never push to
+main - always a PR, always labeled `seo`; never fabricate data, ever; and
+don't touch an existing page's voice or styling unless the suggestion is
+explicitly type `update`.
+
+## The sameness gate
+
+Right before a guide PR opens, the builder calls `check_sameness` on the
+finished draft. It's a deterministic, dependency-free check - plain string
+math, no model judgment - that compares the draft against the site's last
+8 published guides on three things:
+
+- **Opening word-run** - an identical 6-word phrase at the start is the
+  clearest single tell that a draft reused a template.
+- **Heading skeleton** - H2s compared with the keyword itself stripped
+  out, so two guides on completely different topics still get caught
+  sharing the same "What is X? / How does X work? / X vs Y" shape.
+- **Stock phrases** - 5-word phrases repeated across most of the recent
+  catalogue, the prose crutches that harden into house style without
+  anyone noticing.
+
+This exists because template convergence across a site's **own** back
+catalogue - not against competitors - is exactly the scaled-content-abuse
+fingerprint search engines watch for. It's invisible reading any one
+article in isolation, and no commercial content tool checks for it either:
+Surfer, Clearscope, and MarketMuse all benchmark a draft against
+competitors, never against the site's own history.
+
+A fail returns the exact offending strings, so the fix is mechanical: a
+genuinely different opening, reworded and reordered headings, the named
+phrases gone. The builder gets three honest rewrite attempts; if it still
+fails after that, the topic itself substantially duplicates something
+already published, and the idea gets parked pending for you instead of
+forcing a duplicate through.
+
+<Callout type="warning" title="Before you flip on Auto">
+In Auto mode, content publishes without anyone reading it first - which
+also means nobody is casually opening the dashboard to notice if something
+breaks. Set up the two-minute failure email before you rely on Auto for
+real, so a broken job reaches you instead of silently piling up. See
+[Get emailed when something breaks](/docs/troubleshooting#get-emailed-when-something-breaks).
+</Callout>

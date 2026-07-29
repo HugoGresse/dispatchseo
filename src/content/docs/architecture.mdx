@@ -1,0 +1,139 @@
+---
+title: Architecture
+description: How the pieces fit together - the tenant model, what runs where, the data model, and the conventions that keep them honest.
+---
+
+For self-hosters, contributors, and any agent reading these docs to
+understand the system it's operating inside. [How it works](/docs/how-it-works)
+is the friendlier version of most of this page - start there if you just
+want the shape of the product. This page is the reference version.
+
+## The core idea
+
+DispatchSEO is state, scheduling, and an approval gate. It is deliberately
+not a writer, a researcher, or a strategist - every judgment call about
+which keywords are worth chasing, what angle to take, and whether a draft is
+any good happens in your Claude Code agent, connected over MCP.
+
+That split exists because the hard part of SEO content isn't the SEO - it's
+knowing the product. Your agent already has your repo open: your code, your
+README, your existing posts. It doesn't need to guess what you built or
+crawl your homepage for clues, the way a generic SEO tool has to. So the
+backend doesn't try to be smart about your product at all. It only supplies
+the part the agent genuinely lacks on its own: memory between sessions,
+a queue, a clock, and a human in the loop.
+
+## Three entry points, three ways of answering "which site"
+
+`src/lib/projects.ts` is the single place that answers "which site" for
+every operational table - every one of them carries a `project_id`. The
+three entry points each resolve a project a different way, then scope every
+query to it:
+
+| Entry point | Resolves project via | Code |
+| --- | --- | --- |
+| Dashboard | `dash_project` cookie -> slug | `active-project.ts` -> `getActiveProject()` |
+| MCP server | **the bearer token IS the tenant** | `getProjectByToken()` |
+| Crons | loop over every project | `listProjects()`, one pass per project |
+
+The MCP row is the one worth sitting with: there is no "switch project"
+concept over MCP, because there's nothing to switch - the token you
+authenticate with *is* the site you're working on, resolved once per request
+into an `AsyncLocalStorage` context (`mcp-context.ts`) that every tool reads
+from instead of taking a project parameter. One server, any number of sites,
+and a token can never see another site's rows.
+
+The default project (called ClockedCode, the operator's own site) has a
+fixed id, `00000000-0000-4000-8000-000000000001`, which also happens to be
+the column default on every table - so any write that predates
+multi-tenancy still lands somewhere valid instead of failing outright. A
+legacy `MCP_API_KEY` env token keeps resolving to that same project, which
+is why existing CI secrets never needed rotation when multi-tenancy shipped.
+
+## What runs where
+
+- **The app**: a single Next.js App Router deployment holds the dashboard,
+  the MCP server, and every cron endpoint - one process, one deploy, no
+  separate API service.
+- **The MCP server**, at `/api/mcp`: streamable HTTP, no SSE, no Redis - just
+  the app's own request/response cycle.
+- **The database**: Supabase (service-role access, RLS enabled with zero
+  policies - only the service-role key can touch anything) on the hosted
+  product; a bundled Postgres 17 container, fronted by PostgREST, on a
+  self-hosted install. Same schema either way, applied by the same numbered
+  SQL files.
+- **Crons**: Vercel's Hobby tier caps scheduled jobs at once a day and two
+  total, so the hosted deployment splits its schedule - `vercel.json` runs
+  only the once-daily rank check, and every higher-frequency job is a GitHub
+  Actions workflow in the connected repo that `curl`s the backend's cron
+  endpoints with `CRON_SECRET`.
+- **The self-hosted Docker stack** adds two containers with no cloud
+  equivalent: `cron`, a small BusyBox crond hitting those same endpoints on
+  the same schedules, and `builder`, a headless Claude Code process that
+  polls `/api/builder/jobs` for due work and executes it in-stack. The
+  builder exists specifically for installs with no public URL - a localhost
+  or LAN deployment that GitHub's own runners could never call back into.
+
+## The data model
+
+At a glance, the tables that carry a project and the state they hold:
+
+| Table | Holds |
+| --- | --- |
+| `projects` | The tenant row itself - domain, repo, keyword source, automation flags, encrypted credentials |
+| `suggestions` | The idea queue - pending, approved, rejected, in progress, done |
+| `keywords` | Every tracked keyword and its known volume/difficulty |
+| `rank_checks` | One row per keyword per check - the history behind Rankings |
+| `pages` | Published pages - url, type, when it went live, the PR that shipped it |
+| `gsc_stats` | Daily Search Console snapshots - clicks, impressions, top queries and pages |
+| `backlink_prospects` | Domains worth a link from, and their outreach stage |
+| `trend_topics` | What the trend radar is watching, and its scan history |
+| `ai_snapshots` | AI answer-engine citation checks - who got cited, on what query, by which engine |
+| `cron_runs` | The health log every scheduled job writes to - feeds the dashboard's failure banner and the alert email |
+
+## The MCP parity rule
+
+Anything the dashboard can do, the agent must be able to do over MCP, and
+the reverse. This is enforced as a codebase convention, not a runtime check:
+the logic for a feature lives in a `src/lib/` module, and both the
+dashboard's server action and a registered MCP tool call into it. A feature
+that only exists on one side is treated as half-shipped.
+
+The rule is about *state* - reads, writes, approvals, ordering, config - not
+a mandate to wire up literally everything. A purely visual chart with no
+underlying action doesn't need an MCP counterpart; the expectation is that
+the gap gets named explicitly rather than skipped quietly.
+
+## Migrations
+
+Schema changes live in `supabase/migrations/`, numbered and additive - a new
+numbered file per change, never an edit to an existing one. New columns ship
+with defaults (usually the ClockedCode project id, or a value that keeps
+older rows valid) so in-flight code never writes a broken row mid-deploy.
+
+The self-hosted Docker stack has no migration runner: its `migrate`
+container simply replays a single concatenated `supabase/migrations/setup.sql`
+on every boot, which is also how an existing install picks up new tables on
+upgrade. That means **every migration has to work on vanilla Postgres, not
+just Supabase** - anything Supabase-specific (the `auth` schema,
+`auth.uid()`, storage) has to sit behind a guard that checks the object
+exists first, or it breaks self-host at first boot. After any migration
+change, `node scripts/generate-setup-sql.mjs` regenerates `setup.sql`, and a
+CI workflow applies the regenerated file twice against a clean
+`postgres:17-alpine` container - so a migration that isn't genuinely
+idempotent fails the push instead of failing someone's first install.
+
+## Next
+
+<CardGrid cols="3">
+  <Card title="Source on GitHub" href="https://github.com/NeoZi12/dispatchseo">
+    The repo, issues, and discussions.
+  </Card>
+  <Card title="CLAUDE.md" href="https://github.com/NeoZi12/dispatchseo/blob/main/CLAUDE.md">
+    The full architecture notes this page is drawn from - written for
+    agents, precise enough for humans too.
+  </Card>
+  <Card title="Contributing" href="https://github.com/NeoZi12/dispatchseo/blob/main/CONTRIBUTING.md">
+    Ground rules before opening an issue or a PR.
+  </Card>
+</CardGrid>

@@ -1,0 +1,101 @@
+---
+title: Agent commands
+description: The slash commands and workflows the pipeline installs into your own repo, and why they stay so thin.
+---
+
+Everything on the dashboard runs on DispatchSEO's own servers. This page is
+about the other half: what the pipeline install actually puts into **your**
+site's repo, and how you drive it from Claude Code.
+
+## The six slash commands
+
+Each one is a thin shim: it calls the `get_instructions` MCP tool with a
+workflow name and follows whatever markdown comes back, word for word.
+None of them contain the actual playbook.
+
+| Command | What it does | When it runs |
+| --- | --- | --- |
+| `/seo-setup` | Writes `.dispatchseo/conventions.md` (the site facts file) from your repo's actual stack, theme, and voice, and personalizes the backlink playbook. | Once - right after install, and again any time the site changes enough to re-run it. |
+| `/seo-research` | Researches SEO keywords from product knowledge, tracks winners, and queues suggestions. | Weekly, automatically - or run it yourself any time. |
+| `/seo-build` | Builds the oldest approved guide suggestion into a PR. Guides only. | Daily, automatically - or on demand. |
+| `/seo-build-tool` | Builds the oldest approved tool suggestion into a PR. Tools only. | On approval, or the weekly sweep - or on demand. |
+| `/seo-backlinks` | Finds and queues backlink prospects for a keyword or competitor (takes an argument). | On demand. |
+| `/seo-report` | Summarizes rankings, GSC trends, and next SEO actions. | On demand. |
+
+## The four workflows with no slash command
+
+These fire from a dashboard button or a schedule instead of something you'd
+type - there's no matching command because nothing about them is meant to
+be run casually from a terminal.
+
+- **install** - the one-time pipeline install itself. Fired by the
+  one-line `setup.sh` command the dashboard shows, or by re-running it from
+  Home's install card. It has to exist before any slash command does, so
+  it can't be one.
+- **trend-scan** - fired by the **Scan now** button on Home or Trends.
+  Deliberately no schedule - the owner decides when to sweep the niche.
+- **trend-expand** - fired by **Get takes** on a picked radar subject. The
+  dashboard sends the subject's id and title along with the trigger.
+- **geo-scan** - the weekly AI-visibility scan. Runs Wednesdays, with two
+  same-day retries later if the morning attempt gets dropped or delayed by
+  GitHub's scheduler.
+
+## Why the shim design matters
+
+Your repo never holds the actual pipeline logic - only triggers, secrets,
+and these thin command files. The real playbooks - what "good" looks like,
+the quality bar, the exact steps for each workflow - live in
+`src/lib/instructions/` on the DispatchSEO backend, and every single run
+fetches them fresh through `get_instructions` before doing anything.
+
+That means improving a workflow is one edit on the backend, and every
+connected project picks it up on its very next run - no commits to a
+hundred connected repos, no version drift between sites, nothing for you
+to keep in sync. Each response is stamped with the instructions version it
+was built under, so if a run ever produces something odd, it can be traced
+back to exactly which instruction set produced it.
+
+## What install actually puts in your repo
+
+- **`.github/workflows/seo-*.yml`** - the real GitHub Actions workflows:
+  the daily guide builder, the weekly tool build, auto-merge, tool
+  validation, trend scan, trend expand, the geo scan, weekly research, a
+  token-health check, and a canary that proves the PR machinery works.
+- **`.github/mcp-ci.json`** - wires up the DispatchSEO MCP (this backend,
+  authenticated with your project's bearer token) alongside DataForSEO's
+  own MCP server, for workflows that need raw keyword and SERP research.
+- **`.github/mcp-validate.json`** - adds only the Playwright MCP
+  (headless, isolated) for the tool-validation workflow, which needs to
+  click around a real browser rather than call DataForSEO.
+- **`.claude/commands/seo-*.md`** - the six slash-command shims above.
+- **`.dispatchseo/conventions.md`** - the site facts file: stack, build
+  command, content directories, design tokens, voice rules. This is what
+  turns generic instructions into "how this specific repo builds."
+
+Two smaller files ride along outside the fetched pack on purpose, so a
+pack update can never clobber them: `.dispatchseo/publish-paths` (the
+allowlist auto-merge checks a guide PR against) and
+`.dispatchseo/pipeline-version` (lets a re-install skip rewriting files
+that are already current).
+
+## Just talking to the agent
+
+The slash commands exist for muscle memory and for triggering things from
+a schedule - they aren't the only way in. The same MCP tools are already
+loaded, so plain conversation works just as well:
+
+- "Research keywords for me" - the same thing `/seo-research` does.
+- "What should I write next?" - reads the current queue and its order.
+- "How are we ranking?" - the same summary `/seo-report` produces.
+
+## Alternate connect path: the Claude Code plugin
+
+`.claude-plugin/marketplace.json` registers a `dispatchseo` plugin as
+another way to connect, alongside the per-project `setup.sh` script and a
+manual `claude mcp add`. It wires the same MCP server through two
+environment variables - `DISPATCHSEO_URL` (defaults to
+`https://dispatchseo.com`) and `DISPATCHSEO_MCP_TOKEN` (your project's
+bearer token) - installed through Claude Code's plugin marketplace flow
+rather than pasted as a one-line command. Useful if you'd rather manage the
+connection as a plugin than run the setup script, but it connects to the
+exact same MCP server either way.

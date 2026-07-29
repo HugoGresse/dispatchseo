@@ -1,0 +1,198 @@
+---
+title: Security and your data
+description: The auth model, what DispatchSEO stores, what leaves your machine on a self-hosted install, and how to report a vulnerability.
+---
+
+The same codebase runs in two modes, and which one you're on changes
+what "secure" means. **Self-hosted** (the default) is a single-owner
+app: no user model, no signup, one person owns every project in the
+deployment. **Cloud** (`dispatchseo.com`) is genuinely multi-tenant:
+many customers' accounts and projects share one database, so tenant
+isolation is a real boundary there in a way it simply isn't on your own
+install. Everything below says which mode it applies to.
+
+## The auth model
+
+| Entry point | Self-hosted | Cloud (dispatchseo.com) |
+| --- | --- | --- |
+| Dashboard | One shared password | Supabase Auth (email/password or Google) |
+| Crons | `Authorization: Bearer CRON_SECRET` | Same |
+| MCP server | Per-project bearer token | Same |
+
+**Dashboard, self-hosted.** One password gates every page -
+`DASHBOARD_PASSWORD` if you set it as an env var, or the password you
+chose in the setup wizard (stored as a scrypt hash, never in plain
+text). The session cookie (`dash_auth`) is an HMAC of a fixed message
+keyed by that password or hash, so changing the password invalidates
+every existing session immediately, with no sessions table to clean up.
+There's no traditional `middleware.ts` doing the enforcement (Next 16
+renamed the file to `proxy.ts`, and DispatchSEO's version only checks
+whether the cookie is *present*, as a fast redirect to `/login`); the
+actual HMAC comparison happens inside each protected page itself, so a
+forged or stale cookie value doesn't get past that page's own check
+even if it slips past the redirect. Login is rate-limited: 5 failed
+attempts from one IP locks that IP out for 15 minutes, tracked in
+Postgres so it holds even across restarts.
+
+**Dashboard, cloud.** A Supabase Auth session, checked through one
+central gate, replaces the shared password entirely - there is no
+password to share on the hosted version. Every project row carries an
+`owner_user_id`, and any action that takes a project id or a row id
+asserts ownership before touching anything, so one customer's session
+can never reach another customer's rows by guessing or reusing an id.
+Cross-tenant reads *and* writes are treated as reportable
+vulnerabilities here, including subtler ones than plain data exposure -
+one tenant clearing another's alerts, or influencing another's
+scheduled work, both count.
+
+**Crons and MCP, both modes.** `CRON_SECRET` is one shared,
+instance-wide bearer token that authenticates the scheduled jobs. The
+MCP server uses a different model entirely: a 192-bit bearer token per
+project, and the token itself *is* the tenant - it can only ever touch
+its own project's rows, and the server is built never to reveal that
+any other project exists, even to a caller poking at it with a valid
+token for a different project.
+
+<Callout type="warning" title="The dashboard password is the whole gate">
+On a self-hosted install, that one password is the only thing standing
+between the internet and everything DispatchSEO knows - keywords,
+rankings, Search Console data, and every token described below. Make it
+long and random, and treat it like an admin password to a real system,
+because that's exactly what it is.
+</Callout>
+
+## Database access
+
+The application always talks to the database with a service-role
+client that bypasses row-level security - there is no per-user auth at
+the database layer, because every caller is trusted server code (the
+MCP tools and the crons). `src/lib/db.ts`, and anything that touches
+the service role, is kept out of any bundle that ships to a browser by
+design.
+
+What sits behind that service-role client differs by deployment. On
+the **cloud** service, it's Supabase: RLS is enabled on every table with
+*zero* policies, so isolation is enforced entirely in application code
+(the ownership checks described above), not by the database itself -
+which is exactly why those checks matter. On a **self-hosted Docker**
+stack there's no Supabase at all: it's the bundled Postgres plus
+PostgREST, and that PostgREST layer has no authentication configured
+because it's never exposed outside the Docker network in the first
+place - neither `postgres` nor `postgrest` publishes a port in
+`docker-compose.yml`, so nothing on your host or the internet can reach
+either container directly, regardless of firewall.
+
+## What DispatchSEO stores, and what it doesn't
+
+It stores state about your SEO, not your site: tracked keywords and
+their rankings, Search Console snapshots (queries, clicks, impressions,
+positions), the suggestions queue with its reasoning, a registry of
+pages it built (URL, target keyword, publish date), backlink prospects,
+your site's product profile, and project settings.
+
+It never stores your website's actual source or content. When the
+builder writes a guide or a tool, it works from a clone made locally (the
+in-stack builder on a self-hosted install) or on GitHub's own runners
+(GitHub Actions) - that clone lives outside DispatchSEO's own database
+entirely, which only ever records metadata about the page it produced,
+never the page's markup or copy. Your repo is the one and only source
+of truth for what you've published.
+
+## What leaves your machine on a self-hosted install
+
+Nothing needs to reach *in* - that's why there's no domain or port
+forwarding required by default. The dashboard container is the only one
+that publishes a port at all, and it's bound to `127.0.0.1` by default,
+reachable from the machine running Docker and nowhere else, unless you
+deliberately widen it (giving it a real domain via the bundled Caddy
+profile, or setting `DISPATCH_BIND=0.0.0.0` yourself, in front of a
+firewall you control).
+
+Outbound, the stack calls out to exactly the services you've connected
+it to, and nothing else:
+
+- **GitHub** - to clone your repo, and to open and merge pull requests,
+  using the token you provide.
+- **Anthropic** - the builder container runs your own Claude Code
+  headlessly, on your own subscription.
+- **Google** - the Search Console API, read-only, using your service
+  account.
+- **DataForSEO or SerpApi**, if you've connected either, for keyword
+  data.
+- **Resend**, if you've set up failure-alert email.
+
+That's the complete list. Your Postgres data itself never leaves the
+machine - it isn't among the calls above, and it can't be, since
+nothing external ever reaches the database container to begin with.
+
+<Callout type="warning" title="Never expose the stack directly to the internet">
+Don't bind the dashboard to `0.0.0.0` (or forward its port) without
+also putting it behind a real domain and HTTPS. The VPS install gives
+you both together - a domain with automatic HTTPS via the bundled Caddy
+profile - specifically so you're never tempted to skip straight to a
+bare, unencrypted port facing the world. See
+[Install on a VPS](/docs/vps).
+</Callout>
+
+## Google Search Console access
+
+Both connection methods request the same scope:
+`webmasters.readonly`. Self-hosted installs use a service account (a
+Google robot identity you create once, covered in
+[Google Search Console](/docs/search-console)); the cloud version uses
+one-click OAuth instead. Either way, DispatchSEO can list the Search
+Console properties the account can see and read search analytics -
+queries, clicks, impressions, position - and nothing else. It cannot
+verify a new property, change settings, or modify anything in your
+Google account; the code never calls anything but the read-only
+endpoints, regardless of what permission level Search Console shows the
+service account as holding. See also
+[how DispatchSEO uses Google data](/google-data), written for Google's
+own OAuth reviewers.
+
+## Tokens and secrets
+
+| Secret | Lives | What it can do | How to rotate |
+| --- | --- | --- | --- |
+| MCP project key | Encrypted in your database; shown on **Settings -> Project key** | Everything MCP tools can do for that one project - nothing else | No self-service regenerate yet; recreating the project issues a fresh one (see [Troubleshooting](/docs/troubleshooting)) |
+| `CRON_SECRET` | Your `.env` (self-host) or the wizard-generated instance row; instance-wide, shown on **Settings -> Cron key** | Triggers this instance's own scheduled jobs | Edit the value in `.env` and restart the stack (`sh start.sh`) |
+| GitHub token | Encrypted in your database; connected from the dashboard Home's **Connect GitHub** card | Clones your repo, opens and merges pull requests | Generate a new one on GitHub, paste it into the same card |
+| Claude Code token (builder) | Encrypted in your database, or `CLAUDE_CODE_OAUTH_TOKEN` in `.env` (env always wins) | Runs your own Claude Code headlessly to build content | Run `claude setup-token` again and paste it into Home's **Turn on automatic builds** card |
+
+Treat all four as equal-weight, full access to their surface - none of
+them is safe to paste into a chat, a screenshot, or a public issue.
+
+## No telemetry on a self-hosted install
+
+Self-hosted installs never initialize PostHog (the product analytics
+DispatchSEO's own team uses for the cloud service). The client-side
+init code checks for a project token before calling `posthog.init()` at
+all and skips entirely when it's unset; the server-side helpers no-op
+the same way. That token is never set on a self-hosted install: it
+isn't in `docker-compose.yml` or `.env.docker.example`, and the CI
+workflow that builds the public prebuilt image
+(`ghcr.io/neozi12/dispatchseo`) never passes it as a build argument
+either - so even the published image has no analytics token baked in.
+The Dockerfile also explicitly disables Next.js's own separate
+telemetry (`NEXT_TELEMETRY_DISABLED=1`). Vercel's page-view widget
+(`<Analytics />`) is present in every build but only sends data on
+Vercel's own infrastructure; on a self-hosted install it requests a
+script from your own server, gets a 404, and stops there.
+
+## Reporting a vulnerability
+
+Report it privately through GitHub's
+[private vulnerability reporting](https://github.com/NeoZi12/dispatchseo/security/advisories/new)
+(the "Report a vulnerability" button under the repo's Security tab) -
+never in a public issue. This is a solo-maintained project: you'll get
+an acknowledgment within a few days, and real vulnerabilities are
+prioritized over everything else, though there's no bug-bounty program.
+Only the latest `main` is supported, so keep your install
+[up to date](/docs/upgrading).
+
+Cross-tenant findings on the **hosted cloud** service are in scope and
+worth reporting, including subtle ones (see the auth model above).
+Multi-user findings against a **self-hosted** deployment ("user A can
+see user B's data") are out of scope - there is only one user there by
+design. Full policy in
+[`SECURITY.md`](https://github.com/NeoZi12/dispatchseo/blob/main/SECURITY.md).

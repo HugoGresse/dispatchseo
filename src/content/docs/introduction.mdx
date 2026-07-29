@@ -1,0 +1,117 @@
+---
+title: What DispatchSEO is
+description: An SEO manager your Claude Code agent drives - research, content that ships as pull requests, and rank tracking, on infrastructure you own.
+---
+
+DispatchSEO turns Claude Code into the person who handles your SEO.
+
+Your agent researches keywords, writes the guide, and opens a pull request
+against your site's repo. DispatchSEO is the backend it works against: the
+queue of ideas waiting for your yes or no, the rankings, the Search Console
+numbers, the schedules that make it happen without you asking, and the
+dashboard where you approve things.
+
+You spend a few minutes a week. It does the rest.
+
+![The DispatchSEO dashboard Home page, showing the current SEO journey stage, publishing pace, and live Search Console traffic for a connected site](/screenshots/home.png)
+
+## The part that makes it different
+
+Every other AI SEO tool has the same problem: it doesn't know your product. So
+it crawls your homepage, infers what you probably do, and writes from that
+guess. You can feel it in the output.
+
+Your agent doesn't have that problem. It has your codebase open. It knows what
+you built, who it's for, and which claims are actually true.
+
+So DispatchSEO doesn't try to be a writer. It gives that agent the half it's
+missing - real search data, a place to keep state between sessions, schedules
+that fire while you sleep, and a human approval gate - and gets out of the way.
+
+<Callout type="note" title="What this means in practice">
+The backend is deliberately boring. It stores things, it runs jobs on a timer,
+and it asks you before publishing. Every judgement call - which keyword is
+worth chasing, what angle to take, whether a draft is any good - happens in
+your agent, where your product knowledge already lives.
+</Callout>
+
+## The loop
+
+<Steps>
+  <Step title="Your agent researches">
+    Once a week it mines your Search Console data, Google Autocomplete, and
+    what it already knows about your product. Each idea lands in a queue with
+    the reasoning attached: the keyword, why it looks winnable, the angle.
+  </Step>
+  <Step title="You approve, or you don't">
+    Each idea is a card on the dashboard. Approve, reject, or drag it up the
+    queue. Or turn on automatic mode and skip this step entirely.
+  </Step>
+  <Step title="The builder ships a pull request">
+    Every morning, one approved idea becomes a real PR against your repo -
+    checked against the live search results first, and run through a sameness
+    reviewer so your twelfth guide doesn't read like your third.
+  </Step>
+  <Step title="It tracks what happened">
+    Daily rank checks, hourly Search Console snapshots, index verification.
+    When a scheduled job breaks, you get a red banner and an email rather
+    than silence.
+  </Step>
+</Steps>
+
+## Who this is for
+
+You'll get value out of this if:
+
+- **Your site's source lives in a Git repo.** Content arrives as pull requests,
+  so this has to be true.
+- **You already pay for Claude Code.** Your agent is the engine, and it runs on
+  the plan you have. DispatchSEO never bills you for agent usage.
+- **You'd rather own the thing than rent it.** One Docker command, your
+  machine, your data, AGPL-3.0.
+
+## Who this is not for
+
+Being honest saves you an install:
+
+- **WordPress, Webflow, Ghost, or any database-backed CMS.** There's no repo to
+  open a pull request against. This will not work, and there's no workaround
+  planned.
+- **Anyone wanting content published without review.** You can turn that on -
+  but the whole design assumes a human who occasionally says no.
+- **Anyone expecting results in two weeks.** SEO doesn't work that way, and the
+  product tells you so on the dashboard rather than pretending otherwise.
+
+## What it costs
+
+Nothing, unless you want paid data. The tiers stack:
+
+| Tier | Price | What you get |
+| --- | --- | --- |
+| Search Console only | **$0** | Rankings from GSC, keyword ideas from Autocomplete and your own impression data |
+| + SerpApi free key | **$0** | Live search-result checks, real positions weekly (250 free lookups a month) |
+| + DataForSEO | pay per call | Search volume, keyword difficulty, domain rating |
+
+Free mode finds keywords you can win. Paid mode also knows which ones are
+worth winning. See [Keyword data sources](/docs/keyword-data) for the detail.
+
+## Where to go next
+
+<CardGrid cols="3">
+  <Card title="Quickstart" href="/docs">
+    Pick an install path and get it running.
+  </Card>
+  <Card title="How it works" href="/docs/how-it-works">
+    The moving parts, in plain English.
+  </Card>
+  <Card title="Cloud or self-hosted" href="/docs/choosing-how-to-run-it">
+    Two ways to run it. What actually differs.
+  </Card>
+</CardGrid>
+
+<Callout type="tip" title="Reading this with an agent?">
+Every page here is available as plain markdown - add `.md` to any docs URL.
+The whole documentation set in one file lives at
+[/llms-full.txt](https://dispatchseo.com/llms-full.txt), and there's an index
+at [/llms.txt](https://dispatchseo.com/llms.txt).
+</Callout>

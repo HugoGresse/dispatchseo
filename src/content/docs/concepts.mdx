@@ -1,0 +1,256 @@
+---
+title: Concepts and glossary
+description: Every term DispatchSEO uses, defined plainly - what it means, where it lives, and why it exists.
+---
+
+DispatchSEO invents a few words and borrows a few others. This page defines all
+of them. If something in the dashboard or in your agent's output doesn't make
+sense, it's probably here.
+
+## The core objects
+
+### Project
+
+One managed website. A project owns its own keywords, queue, rankings,
+settings, and its own MCP token.
+
+One DispatchSEO install can run any number of projects. Which one a request
+belongs to is resolved three different ways: the dashboard uses a cookie, the
+MCP server uses the bearer token (the token *is* the site selector), and
+scheduled jobs simply loop over every project.
+
+### Suggestion
+
+One idea in the queue. It's the unit everything else revolves around.
+
+A suggestion has a **type** - `guide`, `tool`, `backlink`, or `update` - and a
+**status** that moves in one direction:
+
+`pending` → `approved` → `in_progress` → `done`, or `rejected` at any point.
+
+Your agent files suggestions as `pending`. You approve them on the
+[Queue](/docs/dashboard) page. The builder picks up `approved` ones in queue
+order. Each carries a rationale (why this is worth doing) and a spec (the
+brief: angle, outline, search-result notes).
+
+### Keyword
+
+A search term you're tracking. Carries search volume, difficulty, and intent
+when you have a paid data source connected, and a status of `tracking` or
+`paused`.
+
+### Rank check
+
+One measurement of where you placed for one keyword at one moment. Append-only
+- a keyword accumulates a history you can see as a trend line. A null position
+means you weren't in the top 100.
+
+### Page
+
+Something you published - a guide, a tool, a landing page. Recorded with its
+URL, type, target keyword, and the pull request that shipped it.
+
+A page is marked **live** only once its URL actually returns HTTP 200. Merged
+is not the same as published, and the dashboard tells the two apart.
+
+### Backlink prospect
+
+A domain worth trying to get a link from. Moves through `new` → `contacted` →
+`acquired`, or `rejected`.
+
+## Content and quality
+
+### Guide vs tool
+
+The two things the pipeline builds. A **guide** is an article. A **tool** is a
+small interactive widget - a calculator, a converter, a checker - that earns
+links because it's useful rather than because it's persuasive.
+
+Tools get an extra gate: a real headless-browser test that the thing actually
+works before the PR can merge.
+
+### Archetype
+
+The shape of a guide - tutorial, comparison, data study, opinion, reference.
+You can disable archetypes you don't want on the
+[Instructions](/docs/dashboard) page.
+
+### Quality bar
+
+The rule set every research and build run obeys. A search-volume floor, an
+audience-fit test, and a **difficulty ceiling that scales with your domain's
+strength** - so a three-week-old site isn't sent after keywords it has no
+chance at, and an established one isn't held back.
+
+Plus the hard rules: never push to main, always open a labeled pull request,
+never fabricate data.
+
+### Sameness gate
+
+A check that a draft doesn't read like a re-skin of your own existing posts.
+It compares the opening word run, the heading skeleton, and stock phrases
+against everything you've already published, and fails the draft if it
+converges.
+
+This is the fingerprint of scaled content that a competitor-only tool can't
+see, because it requires knowing your corpus.
+
+### Publishing pace
+
+At most **one guide per UTC calendar day**. Flat, permanent, not tied to your
+site's age.
+
+The pace isn't what protects you from looking spammy - the quality gates are.
+It exists so a queue of thirty approved ideas doesn't become thirty posts in a
+week.
+
+### Content preferences
+
+Your overrides on the above: free-text house rules injected into every build,
+archetypes you've disabled, and skeleton blocks (TL;DR, comparison table,
+visuals, FAQ) you don't want.
+
+## Automation
+
+### Mode
+
+How much you're in the loop:
+
+- **Semi-automatic** - the agent researches and builds, you approve ideas and
+  merge pull requests. The default.
+- **Automatic** - hands-off. Ideas self-approve, green PRs self-merge.
+- **Custom** - shown when your individual toggles don't match either preset.
+
+### Automation
+
+One toggleable behaviour - the nightly rank check, the weekly research run,
+auto-merge, and so on. Twelve of them, each with a schedule and evidence of
+when it last ran, on the [Automations](/docs/automations) page. Some are locked
+on because the product doesn't work without them.
+
+### Journey stage
+
+Where your site sits on the honest SEO timeline: `setup` → `foundation`
+(months 1-2) → `first signals` (month 3) → `traction` (months 4-7) →
+`compounding` (6-12+).
+
+It's derived only from things that can't go backwards - first-ever events and
+cumulative counts - so a bad week can never demote you.
+
+## The agent side
+
+### Playbook / instructions
+
+The versioned procedure your agent follows for a given job. Ten of them:
+`install`, `setup`, `research`, `build-guide`, `build-tool`, `report`,
+`backlinks`, `trend-scan`, `trend-expand`, `geo-scan`.
+
+These live on the backend, not in your repo. Your repo keeps only thin
+commands that fetch the current playbook before acting - so improvements reach
+every connected site on its next run without anyone updating anything.
+
+### Conventions
+
+Your site's facts, written by the agent during setup and kept in
+`.dispatchseo/conventions.md` in your own repo: the stack, the build command,
+where content lives, theme tokens, voice rules, example posts to imitate.
+
+This is what stops the agent guessing at your project's shape every time.
+
+### Site profile
+
+Your product's identity in the lengths directories ask for - name, tagline
+(60 characters), short description (160), long description (300-600),
+categories, tags. The backlink playbook fills submission forms from it.
+
+### Pipeline pack
+
+The set of files an install writes into your repo: the `seo-*` GitHub Actions
+workflows, the MCP configuration, the slash commands. Served from the backend
+so it stays current.
+
+### In-stack builder
+
+On a self-hosted Docker install, a container running headless Claude Code that
+polls for scheduled work. It exists because a machine at home has no public
+URL for GitHub Actions to call back into, so the schedule has to run inside
+your own stack instead.
+
+## Data and tracking
+
+### Keyword source
+
+Where difficulty and volume numbers come from: `gsc` (free, Search Console and
+Autocomplete only), `serpapi` (free tier, live search results), or
+`dataforseo` (paid, full metrics). See [Keyword data
+sources](/docs/keyword-data).
+
+### GSC stats
+
+A daily snapshot from Google Search Console - clicks, impressions,
+click-through rate, average position, and your top queries and pages. Free, so
+it's re-snapshotted every few hours.
+
+### Domain rating
+
+A 0-100 estimate of how strong your domain is, refreshed weekly. Feeds the
+dynamic difficulty ceiling in the quality bar.
+
+### AI visibility
+
+Whether AI answer engines - Google's AI Overview, ChatGPT, Claude, Perplexity,
+Gemini - cite your site when asked questions you should own. Sampled on a
+schedule and recorded per engine, along with which domains got cited instead
+of you.
+
+### Trend topic
+
+A subject the trend radar caught being talked about right now - not yet a
+guide idea.
+
+The radar runs in two stages on purpose. Stage one finds subjects with
+evidence (why now, what signals, which sources). Stage two takes one subject
+you picked and expands it into three to five concrete, validated angles. This
+keeps the noisy step cheap and the expensive step deliberate.
+
+### Cron run
+
+A logged execution of a scheduled job. Failures raise a banner on the
+dashboard and send an email. Read [Schedules and jobs](/docs/schedules) for
+what runs when.
+
+## Setup
+
+### Install progress
+
+The six-step checklist stamped while your agent installs the pipeline:
+workflows → adaptation → repo settings → content home → site facts → research.
+It's what the wizard's live progress screen is reading.
+
+Finishing all six is not the same as being installed - a separate,
+stricter check verifies the work before the dashboard unlocks.
+
+### Project key
+
+The per-project bearer token your agent uses to reach the MCP server. Viewable
+and rotatable on the Settings page. Anyone holding it can read and change that
+project's data, so treat it like a password.
+
+### Cron secret
+
+The shared secret scheduled jobs present when calling the backend. Generated
+during setup and stored in the database.
+
+## Next
+
+<CardGrid cols="3">
+  <Card title="MCP tools" href="/docs/mcp-tools">
+    All 52 tools, grouped by what they touch.
+  </Card>
+  <Card title="The dashboard" href="/docs/dashboard">
+    Every page, and what it's for.
+  </Card>
+  <Card title="Architecture" href="/docs/architecture">
+    How the pieces fit together.
+  </Card>
+</CardGrid>

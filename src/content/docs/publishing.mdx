@@ -1,0 +1,163 @@
+---
+title: Publishing and GitHub
+description: How an approved idea actually becomes a live page - the pull request, the checks, and who presses merge.
+---
+
+DispatchSEO never touches your live site directly. Everything it ships goes
+through GitHub, as a pull request, checked before it merges. This page covers
+the mechanics: what opens the PR, what decides whether it merges itself, and
+what happens after.
+
+## The flow
+
+1. You (or auto mode) approve a suggestion in the queue.
+2. The builder picks up the oldest approved idea and opens a **pull request**
+   against your site's own repo, labeled `seo`.
+3. Automated checks run against it - your repo's own build, a preview
+   deploy, a code review pass, and for tools a live functional test (below).
+4. You review it, or it merges itself. Either way, once it merges, the page
+   goes live on your site's next deploy.
+
+Never a direct push to your main branch. The label and the pull request are
+the review surface - even in fully automatic mode, "merged a green PR" is a
+different, safer claim than "committed straight to main," because it means
+every gate below actually ran and passed before anything shipped.
+
+## Publish modes
+
+Whether that merge needs you is a per-project setting, not a fixed behavior:
+
+- **Semi-automatic** (recommended to start): your agent researches and
+  builds on its own, but a PR only ships once you press **Merge** on the
+  dashboard.
+- **Automatic**: PRs whose checks all pass merge themselves. You watch the
+  activity feed and can still undo from the dashboard.
+
+Change it any time on [Automations and modes](/docs/automations), or from
+the dashboard's Semi/Auto toggle in the top bar - see
+[Step 5 of the setup wizard](/docs/setup-wizard#step-5-publish-mode) for what
+it means when you first pick it. It's never a final answer.
+
+## Auto-merge mechanics
+
+The actual merging - even in automatic mode - is done by
+`seo-auto-merge.yml`, a workflow the pipeline installs into your repo. It
+runs on an hourly schedule plus whenever a check reports, so a PR usually
+merges within a minute of its last check finishing, not on the hour.
+
+Each pass, for every open PR labeled `seo`:
+
+- It checks whether the project's `auto_merge` automation flag is actually
+  on right now (read live from the dashboard) - `off` means every eligible
+  PR just waits, checks and all.
+- It classifies the PR by shape: a **guide** PR must touch only files under
+  your repo's declared publish directories (`.dispatchseo/publish-paths`, or
+  the reference-stack defaults); a **tool** PR must carry the
+  `tool-validated` label from the validation workflow below. Anything else -
+  a structural change, an unvalidated tool - waits for you no matter what
+  the checks say.
+- It reads every check on the PR (your build, the preview deploy, code
+  review) into one verdict: any check still pending waits for the next pass,
+  any failing check leaves the PR for you, and **zero checks reported is
+  never treated as green** - no gate is the same as an unsafe gate.
+- Only when every check has actually passed does it squash-merge and delete
+  the branch.
+
+## Tool validation
+
+Guide PRs merge on the checks above. Tool PRs get one more gate first, run by
+`seo-tool-validate.yml`: a real production build, started for real, opened
+in a headless browser, with every interactive element on the new tool's page
+actually clicked and checked - inputs filled, outputs verified, edge cases
+(empty input, garbage input) confirmed not to break it, zero console errors.
+Pass, and the PR gets a `tool-validated` label; fail, and it gets
+`tool-validation-failed` plus a comment naming exactly what broke.
+
+That label is what `seo-auto-merge.yml` looks for before it will touch a
+tool PR at all - a widget that merely builds is not the same claim as a
+widget that was proven to work.
+
+<Callout type="note" title="Why validation holds no secrets">
+The validate job checks out and *runs* the tool PR's own code - code an LLM
+wrote, in a PR that could in principle contain anything. So it deliberately
+carries no secrets at all, not even the project's own MCP key: it can only
+read and label, never merge or report outcomes. A separate `merge` job, on a
+fresh runner that never checks out the PR's code, does the actual
+squash-merge and phones the result home to the dashboard. Untrusted code and
+write credentials never share a job.
+</Callout>
+
+## The one-tap Merge button
+
+On the dashboard (and over MCP via `merge_pr`), an open, green PR gets a
+one-click **Merge** button - useful in semi-automatic mode, where you're
+approving the merge yourself instead of waiting on the workflow above.
+
+It needs a GitHub token with write access to your repo (`GH_MERGE_TOKEN` on
+a classic install, or the pasted token from the wizard's GitHub step on
+Docker). Without one, the button degrades to a plain link to the PR on
+GitHub - you can still merge it there, DispatchSEO just can't do it for you.
+On a Docker install using the bundled builder, this same token is also how
+the builder reaches your repo at all to open PRs in the first place - see
+[Step 6 of the setup wizard](/docs/setup-wizard#step-6-connect-github) for
+what happens if it's skipped there.
+
+## After a PR merges
+
+Three things happen automatically, no button to press:
+
+1. **The page is logged** (`log_page`) - it enters the dashboard's Guides
+   list and the internal-linking picture your agent reads before writing the
+   next one.
+2. **Indexing is requested** - the page joins the "Get it on Google" queue
+   for a Search Console indexing request, and DispatchSEO starts checking
+   whether Google actually picked it up.
+3. **Its keyword starts being tracked** - it joins the daily rank-check
+   rotation, so its position shows up on Rankings without you doing anything
+   further.
+
+A freshly logged page shows as "awaiting publish" until its URL actually
+serves HTTP 200 - the merge and the live deploy aren't the same moment, and
+DispatchSEO waits for the real one before calling a page live.
+
+## Cloud vs self-host: connecting GitHub
+
+The mechanics above are identical either way; only how DispatchSEO
+authenticates to your repo differs:
+
+- **Cloud**: one-click install of the DispatchSEO GitHub App on your repo.
+  The platform commits the pipeline and manages PRs through the App - no
+  tokens to create or paste.
+- **Self-host**: you generate a personal access token once
+  (`GH_MERGE_TOKEN`, or pasted through the wizard) and DispatchSEO uses it
+  for merging, and on a Docker install, for the builder's own clone-and-push
+  access.
+
+See [Cloud or self-hosted](/docs/choosing-how-to-run-it) for the full
+comparison, and
+[Step 6 of the setup wizard](/docs/setup-wizard#step-6-connect-github) for
+exactly what that step asks for on a self-hosted install.
+
+## Publishing pace
+
+However fast ideas get approved, guides ship at a flat rate: **at most one
+guide per UTC calendar day**, permanently - not "while the site is new," a
+fixed ceiling. It's the single biggest protection against DispatchSEO ever
+reading as scaled, templated content: a queue of ten approved guides still
+surfaces as one PR a day, every day, whether the project is one week old or
+two years old. Tools aren't rate-limited the same way - a validated tool PR
+can ship the moment it passes.
+
+## Next
+
+<CardGrid cols="3">
+  <Card title="Automations and modes" href="/docs/automations">
+    Every toggle, including auto_merge, explained.
+  </Card>
+  <Card title="Day to day" href="/docs/day-to-day">
+    What approving and merging looks like week to week.
+  </Card>
+  <Card title="Schedules and jobs" href="/docs/schedules">
+    When the builder and auto-merge actually run.
+  </Card>
+</CardGrid>

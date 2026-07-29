@@ -1,66 +1,234 @@
 ---
 title: Troubleshooting
-description: Where to look when something breaks, and fixes for the common cases.
+description: What each failure actually means, why it happens, and the fix - grouped by where things go wrong.
 ---
+
+Every entry below follows the same shape: what you see, what it means, and
+what to do about it. If your problem isn't here,
+[Discussions](https://github.com/NeoZi12/dispatchseo/discussions) is the place
+to ask.
+
+<Callout type="note" title="Windows: use Git Bash">
+The commands on this page are bash. On Windows run them in **Git Bash** (it
+ships with [Git](https://git-scm.com/downloads/win)), not PowerShell. Anywhere
+one ends in `sh start.sh`, running `.\start.cmd` from PowerShell afterwards
+works too.
+</Callout>
 
 ## Where failures surface
 
 Every scheduled job logs its runs. Failures show as a red banner on the
-dashboard Home page, and - if you set up the failure email below - land in
-your inbox too, at most one email per job per day.
+dashboard Home page, and - if you set up the
+[failure email](#get-emailed-when-something-breaks) - land in your inbox too,
+at most one email per job per day.
 
-A skipped job is not a failed job: capabilities you haven't finished setting
-up (no Search Console yet, no DataForSEO) skip quietly by design, and the
-Home page's setup cards tell you what's missing. The same goes for delays:
-a machine that was asleep or powered off never emails you - schedules catch
-up on their own, and only a job that fails while the stack is actually
-running counts as broken.
+**A skipped job is not a failed job.** Capabilities you haven't finished
+setting up - no Search Console yet, no keyword data source - skip quietly by
+design, and the Home page's setup cards tell you what's missing. This is
+deliberate: half-configured is a normal state during onboarding, so it never
+raises an alarm.
 
-The commands on this page use bash syntax - on Windows, run them in
-**Git Bash** (it comes with [Git](https://git-scm.com/downloads/win)),
-not PowerShell. Anywhere one ends in `sh start.sh`, running `.\start.cmd`
-from PowerShell afterwards works too.
+**A delay is not a failure either.** A machine that was asleep or powered off
+never emails you. Schedules catch up on their own, and only a job that fails
+while the stack is actually running counts as broken.
 
-## The agent says the DispatchSEO server isn't connected
+## Start here
 
-You pasted the connect command, but Claude Code answers that no
-`dispatchseo-...` server exists. In order of likelihood:
+Three checks answer most problems in under a minute:
 
-- **The session predates the connection.** Claude Code loads connections
-  only at startup - close every open session in that repo and start a
-  fresh one. Check with `claude mcp list` in the repo folder: your
-  `dispatchseo-<site>` entry should show a ✓.
-- **You're in the VS Code extension.** Its session runtime can miss a
-  just-added connection even after a chat restart. Run the paste from a
-  plain terminal instead (open the repo folder, type `claude`) - or fully
-  reload the VS Code window.
-- **Wrong folder.** The connection is pinned to the folder you ran the
-  connect command in - both pastes must happen inside your site's repo.
-- **The key rotted.** Keys change when a project is recreated. Copy the
-  current connect command from **Settings → Project key** and re-run it.
+<Steps>
+  <Step title="Is everything running?">
+    In the `dispatchseo` folder: `docker compose ps`. Everything except the
+    one-shot `migrate` container should say `running`, and `app` should reach
+    `healthy` once it can talk to the database.
+  </Step>
+  <Step title="What does the dashboard say?">
+    The Home page names the single next action and shows a red banner for any
+    failed job. If it's asking for a setup step, that's your answer - nothing
+    is broken.
+  </Step>
+  <Step title="What do the logs say?">
+    `docker compose logs app`, or `logs cron`, or `logs builder`. The builder
+    in particular states plainly what it's waiting for.
+  </Step>
+</Steps>
+
+## Connecting your agent
+
+<Symptom error="No such tool / server dispatchseo-... is not connected">
+**What it means.** Claude Code loads MCP connections when a session starts. A
+session that was already open when you added the connection cannot see it.
+
+**Fixes, in order of likelihood:**
+
+1. **Restart the session.** Close every open Claude Code session in that repo
+   and start a fresh one. Confirm with `claude mcp list` in the repo folder -
+   your `dispatchseo-<site>` entry should show a check mark.
+2. **You're in the VS Code extension.** Its session runtime can miss a
+   just-added connection even after restarting the chat. Run the paste from a
+   plain terminal instead: open the repo folder and type `claude`. Or fully
+   reload the VS Code window.
+3. **Wrong folder.** The connection is pinned to the folder you ran the
+   connect command in. Both pastes have to happen inside your site's repo.
+4. **The key changed.** Keys rotate when a project is recreated. Copy the
+   current connect command from **Settings → Project key** and run it again.
+</Symptom>
+
+<Symptom error="401 Unauthorized from /api/mcp">
+**What it means.** The bearer token isn't valid for any project on this
+install.
+
+**Fix.** Get the current one from **Settings → Project key** and re-run the
+connect command. If you self-host and recently restored a database or started
+over with `docker compose down -v`, every previously issued key is gone -
+reconnect each site.
+</Symptom>
+
+## Installing and starting
+
+<Symptom error="Port 4005 is already in use">
+**What it means.** Something else on the machine holds that port - often a
+second DispatchSEO stack from an earlier attempt.
+
+**Fix.** Pick any free port:
+
+```bash
+echo "DISPATCH_PORT=4006" >> .env && sh start.sh
+```
+</Symptom>
+
+<Symptom error="Killed  /  exit code 137 during the build">
+**What it means.** The machine ran out of memory compiling from source. This
+happens on 1 GB servers when the prebuilt images can't be pulled.
+
+**Fix.** Give the machine swap - spillover memory on disk - then start again:
+
+```bash
+fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile &&
+  swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab
+sh start.sh
+```
+
+The build gets slower but finishes, and the swap stays useful afterwards.
+</Symptom>
+
+<Symptom error="A container keeps restarting, or app never turns healthy">
+**What it means.** Usually the app can't reach Postgres, or migrations
+haven't finished.
+
+**Fix.** `docker compose logs app` and `docker compose logs migrate` have the
+real error. If the database is corrupt or you're mid-experiment, starting
+clean is one command - **it deletes all data**:
+
+```bash
+docker compose down -v && sh start.sh
+```
+</Symptom>
+
+## Nothing is being built
+
+<Symptom error="The builder never opens a pull request">
+**What it means.** Almost always one of three things, and the logs say which:
+`docker compose logs builder`.
+
+**Fixes:**
+
+1. **No Claude token.** The builder needs `CLAUDE_CODE_OAUTH_TOKEN` in `.env`.
+   Generate one with `claude setup-token`.
+2. **The token got line-wrapped on paste.** This one is nasty because it looks
+   fine. Terminals wrap long tokens, and copying can bring a real newline with
+   it, which silently invalidates the value. Re-copy it in one piece and check
+   there's no line break in `.env`.
+3. **Setup isn't finished.** A project whose wizard never completed is skipped
+   on purpose. The Home page's setup cards say what's missing.
+</Symptom>
+
+<Symptom error="The queue is empty and stays empty">
+**What it means.** Research hasn't run, or it ran and rejected everything
+against the quality bar.
+
+**Fix.** Ask your agent directly: `/seo-research`, or just "research keywords
+for me". If it comes back with nothing, the difficulty ceiling is doing its
+job - your domain isn't strong enough yet for the candidates it found. That's
+information, not a bug. Adding a
+[keyword data source](/docs/keyword-data) widens what it can evaluate.
+</Symptom>
+
+<Symptom error="Approved ideas sit there for days">
+**What it means.** Publishing pace is one guide per UTC calendar day, always.
+A queue of ten approved ideas takes ten days to drain by design.
+
+**Fix.** None needed - this is intended. Tools are different: approving a
+tool triggers a build immediately.
+</Symptom>
+
+## Search Console
+
+<Symptom error="No GSC data after connecting">
+**What it means.** Either the service account isn't actually on the property,
+or the property string doesn't match its type.
+
+**Fix.** Check both:
+
+1. The service account's email is added as a user on the property.
+   **Restricted** is enough - it's what the wizard tells you to pick.
+2. `GSC_SITE_URL` matches the property type exactly: `sc-domain:example.com`
+   for a domain property, `https://example.com/` **with the trailing slash**
+   for a URL-prefix one.
+
+First data lands within an hour of a correct setup. See
+[Google Search Console](/docs/search-console) for the full walkthrough.
+</Symptom>
+
+<Symptom error="Traffic numbers look lower than Search Console shows">
+**What it means.** Google's own reporting lags by a couple of days, and
+DispatchSEO snapshots what the API returns at the time it asks.
+
+**Fix.** None - the gap closes on its own. Compare like-for-like date ranges
+before concluding something is wrong.
+</Symptom>
+
+## Pull requests
+
+<Symptom error="The Merge button is a plain link instead of a button">
+**What it means.** One-tap merge needs `GH_MERGE_TOKEN`. Without it the
+dashboard degrades gracefully to a link that opens the PR on GitHub.
+
+**Fix.** Add a GitHub token with repo scope as `GH_MERGE_TOKEN`, or keep
+merging on GitHub - nothing else depends on it.
+</Symptom>
+
+<Symptom error="Auto-merge is on but PRs aren't merging">
+**What it means.** Auto-merge only merges PRs that are labeled `seo` **and**
+green. A failing check, or a missing label, leaves it alone on purpose.
+
+**Fix.** Open the PR and look at the checks. If your repo requires reviews via
+branch protection, auto-merge cannot satisfy that - either approve manually or
+adjust the rule.
+</Symptom>
 
 ## Get emailed when something breaks
 
 Optional, two minutes, and strongly recommended if you picked **Automatic**
-publish mode: in auto mode nobody opens the dashboard on a normal day, so
-the email is what actually tells you a job broke. In semi-automatic mode
-you visit weekly anyway, so the red banner already has you covered - set
-this up if you'd rather not wait for your next visit.
+publish mode: in auto mode nobody opens the dashboard on a normal day, so the
+email is what actually tells you a job broke. In semi-automatic mode you visit
+weekly anyway, so the red banner already has you covered - set this up if
+you'd rather not wait for your next visit.
 
-**a. Create a free Resend account.** Emails are sent through
-[Resend](https://resend.com/signup) - free tier, no credit card, and no
-domain setup needed for this.
-
-**b. Create an API key.** After signing in, open
-[resend.com/api-keys](https://resend.com/api-keys), click
-**Create API Key**, name it `dispatchseo`, leave the defaults, and copy the
-key. It starts with `re_` and is shown only once.
-
-**c. Add two lines to `.env`.** On the machine running DispatchSEO
-(on a VPS: over SSH, not your own computer), inside the `dispatchseo`
-folder, run this with both values replaced - the key you just copied, and
-your email. The first part checks you're in the right folder before
-writing anything:
+<Steps>
+  <Step title="Create a free Resend account">
+    Emails go through [Resend](https://resend.com/signup) - free tier, no
+    credit card, no domain setup needed for this.
+  </Step>
+  <Step title="Create an API key">
+    Open [resend.com/api-keys](https://resend.com/api-keys), click **Create API
+    Key**, name it `dispatchseo`, leave the defaults, and copy the key. It
+    starts with `re_` and is shown only once.
+  </Step>
+  <Step title="Add two lines to .env">
+    On the machine running DispatchSEO (on a VPS: over SSH, not your own
+    computer), inside the `dispatchseo` folder. Replace both values. The first
+    part checks you're in the right folder before writing anything:
 
 ```bash
 [ -f start.sh ] &&
@@ -70,74 +238,44 @@ writing anything:
   echo "Wrong folder - run this inside the dispatchseo folder"
 ```
 
-One catch to know: `ALERT_EMAIL` must be **the same email you signed up to
-Resend with**. Alerts go out through Resend's built-in sender, which only
-delivers to its own account's address. (Verified a domain in Resend? Then
-you can send from it to any address - set `ALERT_EMAIL_FROM` to something
-like `DispatchSEO <alerts@your-domain.com>` in `.env` too.)
+  </Step>
+</Steps>
 
-That's it. From the next run onward, failures email you. No email means
-everything is working.
+<Callout type="warning" title="ALERT_EMAIL has to match your Resend signup">
+Alerts go out through Resend's built-in sender, which only delivers to its own
+account's address. If you've verified a domain in Resend you can send from it
+to any address - set `ALERT_EMAIL_FROM` to something like
+`DispatchSEO <alerts@your-domain.com>` in `.env` as well.
+</Callout>
 
-## Docker
+From the next run onward, failures email you. No email means everything is
+working.
 
-Every command in this section runs inside the `dispatchseo` folder the
-install created.
+## Docker reference
 
-**Something won't start.** `docker compose ps` shows the state - everything
-except the one-shot `migrate` container should be `running`, and `app`
-turns `healthy` once it can reach the database. `docker compose logs app`
-(or `logs cron`, `logs postgrest`) has the detail.
+Every command runs inside the `dispatchseo` folder the install created.
 
-**Port 4005 is taken.** Pick any free port instead:
+| What you want | Command |
+| --- | --- |
+| See what's running | `docker compose ps` |
+| App logs | `docker compose logs app` |
+| Schedule logs | `docker compose logs cron` |
+| Builder logs | `docker compose logs builder` |
+| Follow logs live | `docker compose logs -f app` |
+| Restart everything | `sh start.sh` |
+| Stop everything | `docker compose down` |
+| Delete everything, including data | `docker compose down -v` |
 
-```bash
-echo "DISPATCH_PORT=4006" >> .env && sh start.sh
-```
-
-**Cron jobs aren't running.** `docker compose logs cron` shows every hit -
-the schedule prints at startup, and each run logs a timestamped line. Cron
-failures also ride the dashboard banner + email rails like any other
-install.
-
-**Start over from scratch.** This deletes **all data**, then boots fresh:
-
-```bash
-docker compose down -v && sh start.sh
-```
-
-**The build died with `Killed` / exit code 137.** The machine ran out of
-memory compiling the app from source - it happens on 1 GB servers when
-the prebuilt images can't be pulled. Give the machine swap (spillover
-memory on disk), then start again:
-
-```bash
-fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile &&
-  swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab
-sh start.sh
-```
-
-The build gets slower but finishes, and the swap stays useful for the
-running stack too.
-
-**The builder isn't building.** `docker compose logs builder` says exactly
-what it's waiting for - usually the `CLAUDE_CODE_OAUTH_TOKEN` in `.env`, or
-a project whose setup wizard isn't finished yet.
-
-## Search Console
-
-**"No GSC data" after connecting.** Confirm the service account's email
-was added as a user on the property - **Restricted** is enough, and it is
-what the setup wizard tells you to pick - and that `GSC_SITE_URL`
-matches the property type exactly - `sc-domain:example.com` for domain
-properties, `https://example.com/` (trailing slash) for URL-prefix ones.
-First data lands within an hour of a correct setup.
+Cron failures ride the same banner and email rails as any other install, so
+you don't have to watch the logs to notice a problem.
 
 ## Still stuck
 
 Open a thread in
-[Discussions](https://github.com/NeoZi12/dispatchseo/discussions) - include
-the failing job's log lines if it's a cron issue. Vulnerabilities go
-through
+[Discussions](https://github.com/NeoZi12/dispatchseo/discussions) - include the
+failing job's log lines if it's a scheduling issue, and say whether you're on
+Docker, a VPS, or the cloud version.
+
+Vulnerabilities go through
 [private reporting](https://github.com/NeoZi12/dispatchseo/security/policy)
-instead.
+instead, not a public thread.

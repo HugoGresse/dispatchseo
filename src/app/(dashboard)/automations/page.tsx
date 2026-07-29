@@ -142,7 +142,16 @@ export default async function AutomationsPage() {
       <p className="text-sm text-neutral-400">
         Toggle a publishing gate off to keep a say - locked ones only collect data or guard
         quality. Matching a preset shows as Semi or Auto in the topbar; anything else shows
-        Custom.
+        Custom.{" "}
+        <a
+          href="/docs/automations"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-violet-400 underline underline-offset-2 hover:text-violet-300"
+        >
+          What each one does
+        </a>
+        .
       </p>
       <div className="space-y-4">
         {/* Toggleable gates first - the cards you can act on - then the

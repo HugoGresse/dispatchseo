@@ -48,8 +48,27 @@ automatic HTTPS - this block is the plain version that works anywhere.)
   merge, and the two pastes that connect Claude Code.
 - **[Day to day](https://dispatchseo.com/docs/day-to-day)** - what using it
   actually looks like after setup, plus the data tiers.
+- **[The dashboard, page by page](https://dispatchseo.com/docs/dashboard)** -
+  every screen, what it shows, and when to open it.
+- **[Automations and modes](https://dispatchseo.com/docs/automations)** - the
+  three modes, all twelve automations, publishing pace, and the quality gates.
 - **[Troubleshooting](https://dispatchseo.com/docs/troubleshooting)** -
-  where failures surface and fixes for the common cases.
+  what each failure means and how to fix it, symptom by symptom.
+- **[Upgrading and backups](https://dispatchseo.com/docs/upgrading)** -
+  pulling a new image, backing up Postgres, and moving to another machine.
+
+Reference, once you want the details:
+
+- **[Environment variables](https://dispatchseo.com/docs/environment-variables)** -
+  every variable, whether you need it, and where to get the value.
+- **[Schedules and jobs](https://dispatchseo.com/docs/schedules)** - what runs
+  when, and what you see when something fails.
+- **[MCP tools](https://dispatchseo.com/docs/mcp-tools)** - all 52 tools your
+  agent can call.
+- **[Security and your data](https://dispatchseo.com/docs/security)** - the
+  auth model, what is stored, and what leaves your machine.
+- **[Architecture](https://dispatchseo.com/docs/architecture)** - how the
+  pieces fit together.
 
 ## What you need
 
@@ -69,5 +88,8 @@ automatic HTTPS - this block is the plain version that works anywhere.)
 The wizard stores everything it collects (encrypted) in your own database,
 so a normal install needs no hand-set variables beyond what `start.sh`
 creates. An environment variable always wins over the wizard's stored
-value; the full annotated list lives in
-[`.env.docker.example`](../.env.docker.example).
+value.
+
+The full annotated list is on the docs site -
+**[Environment variables](https://dispatchseo.com/docs/environment-variables)** -
+and in [`.env.docker.example`](../.env.docker.example) as raw comments.

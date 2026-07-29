@@ -1,0 +1,189 @@
+---
+title: Common questions
+description: Honest answers about cost, fit, and what DispatchSEO actually does - including the ones where "no" is the right answer.
+---
+
+Straight answers, in the order people actually ask them. If you don't
+see yours, ask in
+[Discussions](https://github.com/NeoZi12/dispatchseo/discussions).
+
+## Does this work with WordPress?
+
+No. Content ships as pull requests against a Git repository, so your
+site's source has to live in a GitHub repo. WordPress and other
+database-backed CMSes can't receive a pull request, so there's no
+realistic way to bolt this on - be honest with yourself here rather than
+finding out after an install. If your site is Next.js, Astro, Hugo,
+Jekyll, or anything else whose source lives in git, you're the intended
+user. See [what you need](/docs#before-you-start) before installing.
+
+## Do I need to pay for anything?
+
+Not to run DispatchSEO itself. The free tier (Search Console only) costs
+$0 forever and self-hosting has no feature limits - see
+[Is the self-hosted version limited?](#is-the-self-hosted-version-limited-vs-the-cloud-one)
+below. You bring your own Claude subscription (next question); beyond
+that, DispatchSEO never bills you for agent usage - it isn't a
+per-token service on top of your plan.
+
+## What does it cost to run?
+
+The keyword-data tiers stack, and you decide how far up to go:
+
+| Tier | Cost | What you get |
+| --- | --- | --- |
+| Search Console only | $0 | Rankings from GSC, keyword ideas from Autocomplete plus your own impression data |
+| + a free SerpApi key | $0 (250 searches/month) | Live SERP checks, real positions weekly |
+| + DataForSEO | pay per call | Search volume, keyword difficulty, domain rating |
+
+Free mode finds keywords you can win; paid mode also knows which ones
+are worth winning. Full breakdown on
+[Google Search Console](/docs/search-console) and
+[Day to day](/docs/day-to-day).
+
+## Do I need a Claude subscription? Which plan?
+
+Yes - Claude Code is the engine, and it isn't part of the free Claude
+plan. Pro, Max, Team, and current Enterprise plans all include it; Pro
+is the cheapest way in if you're starting from nothing. See
+[Install Claude Code](/docs/install-claude-code) for the full plan table
+and the five-minute setup.
+
+## Can I run it on my laptop?
+
+Yes, for a test drive. DispatchSEO works on schedules, and schedules
+only run while the machine is on - a laptop that sleeps overnight is
+only running part time. Content builds catch up on their own once it
+wakes, and Search Console stats mostly catch up too, but daily rank
+checks are sampled live once a day: a day the machine slept through is a
+gap in that chart forever, with no way to backfill it. None of this
+shows up as a false alarm, though - missed schedules are delays, not
+failures, and the health checks know the difference between "this broke"
+and "the machine was off." For daily use we recommend something that
+stays on - a ~$5 VPS, a Raspberry Pi, or a desktop that never sleeps.
+See [Install on your computer](/docs/docker-compose) and
+[Install on a VPS](/docs/vps).
+
+## How is this different from SEObot / Outrank / Ahrefs?
+
+Most SEO content tools learn about your product by crawling your
+homepage - a shallow proxy for something your Claude Code agent already
+knows in depth, from working in your actual codebase. DispatchSEO
+doesn't try to replace that knowledge with its own crawler or its own
+writer model. It's a backend for the agent you already have: MCP tools
+holding the queue, the keywords, the rankings, and the Search Console
+data, plus crons that keep that state fresh. The research and the
+writing happen in your Claude Code, on your own subscription -
+DispatchSEO is state, scheduling, and an approval gate around it, not a
+competing content engine.
+
+## Will Google penalize AI-written content?
+
+Google's own guidance is that velocity and authorship aren't the
+signal - low-value, mass-produced pages are, whoever wrote them.
+DispatchSEO's guardrails target exactly that risk: a flat cap of one
+guide a day per site (no burst publishing), a deterministic sameness
+check that compares each new guide against your site's *own* back
+catalogue rather than just competitors' (which is as far as most
+commercial SEO tools check), a live SERP check before writing so the
+angle is actually winnable, and - unless you turn on full auto mode - a
+human approval step before anything ships. None of that is a guarantee.
+It's the same discipline a careful human writer would apply, applied
+consistently every time.
+
+## How long until I see results?
+
+SEO is slow, and DispatchSEO's dashboard says so in plain language
+instead of pretending otherwise. The honest shape of it:
+
+| Stage | Typically | What's happening |
+| --- | --- | --- |
+| Foundation | Months 1-2 | Content is being built and indexed |
+| First signals | Month 3 | Google starts showing your pages in results |
+| Earning clicks | Months 4-7 | Pages start earning real clicks |
+| Compounding | Months 6-12+ | Authority builds; every new guide starts from a stronger base |
+
+A real site can run ahead of or behind this - it's the typical
+schedule, not a promise - and the dashboard's Home page tells you which
+stage you're actually in, computed from your own data instead of a
+countdown timer.
+
+## Can I manage more than one site?
+
+Yes. One deployment manages any number of sites - each project gets its
+own MCP token, its own queue, its own data, and its own settings. Add
+the next one from the dashboard the same way you added the first. See
+[Connect your site](/docs/connect-your-site).
+
+## What happens if I stop using it?
+
+Nothing is locked in. Your published content already lives in your own
+repo as ordinary commits - it stays exactly as published whether
+DispatchSEO keeps running or not. Uninstalling removes the dashboard,
+the schedules, and DispatchSEO's own database; it never touches your
+site's repo. See
+[Uninstalling cleanly](/docs/upgrading#uninstalling-cleanly).
+
+## Is the self-hosted version limited vs the cloud one?
+
+No feature limits either way. Everything the paid cloud does, the
+self-hosted repo does today, in your own accounts, at $0 beyond
+whichever paid data tier you choose. The cloud version sells
+convenience, not capability: bundled keyword data on one bill, a
+one-click Google connection instead of the service-account ritual, and
+no machine of your own to keep running.
+
+## Can I edit or reject what the agent writes?
+
+Yes. Every guide or tool arrives as a normal pull request against your
+repo - review it, request changes, edit it directly, or close it, same
+as any other PR. In semi-automatic mode (the default) nothing merges
+without you pressing Merge; in automatic mode a page merges itself once
+its checks pass, but your repo's normal git history still lets you
+revert it. See [Day to day](/docs/day-to-day).
+
+## What model does it use? Can I change it?
+
+Whatever your own Claude Code is already configured to use. DispatchSEO
+doesn't pin a model - it runs your agent, on your plan, with whatever
+default or manually chosen model your Claude Code session already has.
+Change it the same way you'd change it for any other Claude Code work.
+
+## Where does my data live?
+
+Self-hosted: entirely in the Postgres container the install creates on
+your own machine, reachable only over Docker's internal network - never
+Supabase, never our servers. Hosted (dispatchseo.com): Supabase,
+operated by the maintainer. Either way, your site's actual content lives
+in your own GitHub repo, not in DispatchSEO's database. Full detail on
+[Security and your data](/docs/security).
+
+## Is it really open source?
+
+Yes -
+[AGPL-3.0](https://github.com/NeoZi12/dispatchseo/blob/main/LICENSE). In
+one sentence: use it, self-host it, fork it, but if you run a modified
+version as a service for other people, you have to share that source
+too.
+
+## What if my site doesn't have a blog yet?
+
+Not a blocker. The setup wizard asks, and "not sure" is a valid answer -
+Claude Code checks your repo during setup and decides what to add. See
+[The setup wizard, step by step](/docs/setup-wizard).
+
+## What happens when my GitHub token expires?
+
+Nothing breaks loudly - one-tap merging (and, on a Docker install using
+the bundled builder, all content building) quietly stops working on the
+date you picked when creating it. Come back to the GitHub connection
+step and paste a fresh token; nothing else needs redoing. See
+[Troubleshooting](/docs/troubleshooting).
+
+## What happens if a scheduled job breaks?
+
+You get a red banner on the dashboard's Home page, and an email if you
+set one up - never silence. A job that's merely skipped (setup
+incomplete, or a sleeping laptop) is treated differently from a job that
+actually failed, and DispatchSEO is careful to only alert on the second
+kind. See [Troubleshooting](/docs/troubleshooting).

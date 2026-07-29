@@ -144,6 +144,15 @@ function WhatsNewIcon({ className }: IconProps) {
   );
 }
 
+function DocsIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M4 4.5h6a2 2 0 0 1 2 2v13a1.6 1.6 0 0 0-1.6-1.6H4z" />
+      <path d="M20 4.5h-6a2 2 0 0 0-2 2v13a1.6 1.6 0 0 1 1.6-1.6H20z" />
+    </svg>
+  );
+}
+
 function SettingsIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
@@ -222,6 +231,9 @@ const GROUPS: NavGroup[] = [
       { href: "/automations", label: "Automations", Icon: AutomationsIcon },
       { href: "/instructions", label: "Instructions", Icon: InstructionsIcon },
       { href: "/google", label: "Search Console", Icon: SearchConsoleIcon },
+      // Opens in a new tab like What's new: reading a doc is a side quest, and
+      // losing an in-progress dashboard page to it is a bad trade.
+      { href: "/docs", label: "Docs", Icon: DocsIcon, external: true },
       { href: "/changelog", label: "What's new", Icon: WhatsNewIcon, external: true },
     ],
   },
