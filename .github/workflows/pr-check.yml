@@ -1,0 +1,63 @@
+# The check every pull request must pass. `pnpm build` runs tsc via
+# `next build`, so this is the typecheck as well as the build - CONTRIBUTING
+# tells contributors to run it before pushing, and this is what makes that
+# more than an honour system. Nothing here needs a secret: the build only
+# wants the NEXT_PUBLIC_* vars, and placeholders satisfy them (static pages
+# never call Supabase and the clients are lazy), so the job runs safely on
+# pull requests from forks.
+name: pr-check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A second push to the same PR cancels the first - no point burning minutes
+# on a build whose commit is already superseded.
+concurrency:
+  group: pr-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        # No version input on purpose: pnpm/action-setup reads the exact pin
+        # from package.json's packageManager field, so CI always runs the same
+        # pnpm as dev machines. (A version input alongside packageManager
+        # hard-errors on any mismatch - plain string compare.)
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      # `pnpm build` regenerates the pack itself, which would mask a stale
+      # commit - so assert freshness BEFORE the build rewrites it. Editing a
+      # file under templates/pipeline/ without committing the regenerated
+      # JSON means new installs keep getting the old shim.
+      - name: pipeline-pack.json is regenerated (not stale)
+        run: |
+          node scripts/generate-pipeline-pack.mjs --check || {
+            echo "::error::src/lib/pipeline-pack.json is stale - run 'node scripts/generate-pipeline-pack.mjs' and commit it alongside the template edit"
+            exit 1
+          }
+
+      - name: Build (typecheck)
+        run: pnpm build
+        env:
+          # Placeholder public env so `next build` never trips on missing vars.
+          NEXT_PUBLIC_SUPABASE_URL: "https://placeholder.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder-anon-key"
+          NEXT_PUBLIC_SITE_URL: "https://dispatchseo.com"
