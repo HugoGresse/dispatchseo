@@ -1,0 +1,20 @@
+{
+  "_readme": "Golden snapshot of every command DispatchSEO hands an owner. Regenerate with `node --experimental-strip-types scripts/agent-golden.mjs` and commit the diff alongside the change that caused it. Never edit by hand.",
+  "fixture": {
+    "slug": "goldensite",
+    "origin": "https://backend.example.test",
+    "token": "fixture-token-do-not-use"
+  },
+  "claude": {
+    "serverName": "dispatchseo-goldensite",
+    "mcpAdd": "claude mcp add dispatchseo-goldensite https://backend.example.test/api/mcp --transport http --scope local --header \"Authorization: Bearer fixture-token-do-not-use\"",
+    "mcpAddPowershell": "claude mcp add dispatchseo-goldensite \"https://backend.example.test/api/mcp?key=fixture-token-do-not-use\" --transport http --scope local",
+    "ghPermission": "mkdir -p .claude && test -f .claude/settings.local.json || printf '%s\\n' '{' '  \"permissions\": {' '    \"allow\": [\"Bash(gh *)\"]' '  }' '}' > .claude/settings.local.json",
+    "connect": "claude mcp add dispatchseo-goldensite https://backend.example.test/api/mcp --transport http --scope local --header \"Authorization: Bearer fixture-token-do-not-use\" && mkdir -p .claude && test -f .claude/settings.local.json || printf '%s\\n' '{' '  \"permissions\": {' '    \"allow\": [\"Bash(gh *)\"]' '  }' '}' > .claude/settings.local.json",
+    "connectPowershell": "claude mcp add dispatchseo-goldensite \"https://backend.example.test/api/mcp?key=fixture-token-do-not-use\" --transport http --scope local; New-Item -ItemType Directory -Force .claude | Out-Null; if (!(Test-Path .claude/settings.local.json)) { Set-Content .claude/settings.local.json '{ \"permissions\": { \"allow\": [\"Bash(gh *)\"] } }' }",
+    "setup": "curl -fsSL https://backend.example.test/setup.sh | bash -s -- fixture-token-do-not-use goldensite https://backend.example.test 0",
+    "setupBundled": "curl -fsSL https://backend.example.test/setup.sh | bash -s -- fixture-token-do-not-use goldensite https://backend.example.test 1",
+    "setupPowershell": "$b = \"$env:ProgramFiles\\Git\\bin\\bash.exe\"; if (!(Test-Path $b)) { $b = \"$env:LocalAppData\\Programs\\Git\\bin\\bash.exe\" }; if (!(Test-Path $b)) { \"Git (with Git Bash) is required - install it from https://git-scm.com/downloads/win and run this again\" } else { & $b -c 'curl -fsSL https://backend.example.test/setup.sh | bash -s -- fixture-token-do-not-use goldensite https://backend.example.test 0' }",
+    "setupPowershellBundled": "$b = \"$env:ProgramFiles\\Git\\bin\\bash.exe\"; if (!(Test-Path $b)) { $b = \"$env:LocalAppData\\Programs\\Git\\bin\\bash.exe\" }; if (!(Test-Path $b)) { \"Git (with Git Bash) is required - install it from https://git-scm.com/downloads/win and run this again\" } else { & $b -c 'curl -fsSL https://backend.example.test/setup.sh | bash -s -- fixture-token-do-not-use goldensite https://backend.example.test 1' }"
+  }
+}

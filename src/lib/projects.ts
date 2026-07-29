@@ -90,6 +90,13 @@ export type Project = {
   // the operator's, and gsc.ts uses exactly that to decide whether the shared
   // service account may be used for it.
   owner_user_id: string | null;
+  // Which coding agent drives this project's builders (migration 0044).
+  // NULLABLE, and never to be read directly: it is absent both on a database
+  // that hasn't run 0044 and on the COLS_PRE_0044 fallback tier, where the
+  // cast would leave it undefined behind a non-optional type. Read it through
+  // projectAgent() in @/lib/agents, which resolves absence to Claude - true by
+  // construction, since the column only exists because a second agent does.
+  agent: string | null;
   created_at: string;
 };
 
@@ -157,6 +164,13 @@ export const DEFAULT_PROJECT_ID = "00000000-0000-4000-8000-000000000001";
 
 // mcp_token deliberately excluded - only fetchProjectToken exposes it.
 const COLS =
+  "id, slug, name, domain, gsc_site_url, github_repo, content_mode, content_path_hint, dataforseo_login, dataforseo_password, keyword_source, serpapi_key, powerups_skipped, location_code, language_code, mode, auto_approve, auto_approve_tools, auto_build_guides, auto_build_tools, auto_merge, last_trend_scan_at, site_launched_at, pipeline_installed_at, pipeline_verified, content_prefs, gsc_oauth_refresh_token, github_installation_id, github_app_installed_at, install_progress, onboarding_screen, owner_user_id, agent, created_at";
+
+// COLS minus 0044's agent, for a DB that hasn't run that migration yet.
+// Newest column, so it is the FIRST thing dropped - a DB lagging only 0044
+// keeps everything else and simply reads as an all-Claude install, which is
+// exactly what it is.
+const COLS_PRE_0044 =
   "id, slug, name, domain, gsc_site_url, github_repo, content_mode, content_path_hint, dataforseo_login, dataforseo_password, keyword_source, serpapi_key, powerups_skipped, location_code, language_code, mode, auto_approve, auto_approve_tools, auto_build_guides, auto_build_tools, auto_merge, last_trend_scan_at, site_launched_at, pipeline_installed_at, pipeline_verified, content_prefs, gsc_oauth_refresh_token, github_installation_id, github_app_installed_at, install_progress, onboarding_screen, owner_user_id, created_at";
 
 // COLS minus 0040's pipeline_verified, for a DB that hasn't run that
@@ -192,8 +206,12 @@ async function selectProjects<T>(
     Boolean(e && e.message.includes("does not exist"));
   const first = await run(COLS);
   if (!missingCol(first.error)) return first;
-  // Drop only the newest column (0040) first, so a DB that lags 0040 alone
-  // keeps everything else; fall back further only if that still 404s.
+  // Drop only the newest column (0044's agent) first, so a DB that lags 0044
+  // alone keeps everything else and simply reads as all-Claude.
+  const agentless = await run(COLS_PRE_0044);
+  if (!missingCol(agentless.error)) return agentless;
+  // Then 0040, same reasoning one tier down; fall back further only if that
+  // still 404s.
   const second = await run(COLS_PRE_0040);
   if (!missingCol(second.error)) return second;
   const third = await run(COLS_PRE_0036);
@@ -247,6 +265,10 @@ function envFallbackProject(): Project {
     // env-backed project, never a tenant's, so it keeps service-account access
     // (see gscClientForProject).
     owner_user_id: null,
+    // Null, not "claude": this synthetic row stands in during a DB error, and
+    // projectAgent() already resolves null to Claude. Asserting a choice here
+    // would claim the owner made one.
+    agent: null,
     created_at: new Date(0).toISOString(),
   };
 }

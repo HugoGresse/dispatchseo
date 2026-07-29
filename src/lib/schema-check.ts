@@ -79,6 +79,10 @@ const PROBES: Probe[] = [
   { migration: "0040_pipeline_verified", table: "projects", column: "pipeline_verified" },
   { migration: "0041_backlink_status_changed", table: "backlink_prospects", column: "status_changed_at" },
   { migration: "0042_serp_tasks", table: "serp_tasks" },
+  // The column, not the CHECK constraint or the instance_settings sibling:
+  // projects.agent is the one artifact of 0044 PostgREST can actually see, and
+  // it is the one every read path depends on.
+  { migration: "0044_project_agent", table: "projects", column: "agent" },
 ];
 
 // Migrations that genuinely CANNOT be probed through this mechanism, with the
