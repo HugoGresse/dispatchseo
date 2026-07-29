@@ -94,19 +94,10 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     version: "2026-07-29.3",
     date: "2026-07-29",
-    title: "Drive DispatchSEO from any coding agent",
+    title: "The setup banner stops nagging sites that are already running",
     summary:
-      "A new command-line tool lets any coding agent run your SEO - not just Claude Code - and a live site no longer claims it's still setting up.",
+      "A live site no longer claims it's still setting up, and every setting your agent can pass now explains what it's for.",
     changes: [
-      {
-        kind: "new",
-        text:
-          "There's now a `dispatchseo` command you can install with `npm install -g dispatchseo`. " +
-          "Point it at your project with your project key and any coding agent that can run a " +
-          "terminal command can research keywords, queue ideas, and read your rankings - Codex, " +
-          "Cursor, Gemini CLI, whatever you use. Claude Code keeps working exactly as it does " +
-          "today; this is an extra door to the same data, not a replacement.",
-      },
       {
         kind: "fixed",
         text:
