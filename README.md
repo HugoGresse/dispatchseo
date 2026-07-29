@@ -10,6 +10,7 @@
   <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-7C5CFC?labelColor=1F2328&style=flat-square"></a>
   <a href="https://claude.com/product/claude-code"><img alt="Built for Claude Code" src="https://img.shields.io/badge/built%20for-Claude%20Code-D97757?logo=claude&logoColor=white&labelColor=1F2328&style=flat-square"></a>
   <a href="#-quick-start"><img alt="Self-host in one command" src="https://img.shields.io/badge/self--host-one%20command-2496ED?logo=docker&logoColor=white&labelColor=1F2328&style=flat-square"></a>
+  <a href="https://discord.gg/jqbtN98EHA"><img alt="Join the Discord" src="https://img.shields.io/badge/Discord-join%20the%20server-5865F2?logo=discord&logoColor=white&labelColor=1F2328&style=flat-square"></a>
 </p>
 
 <div align="center">
@@ -50,6 +51,8 @@
   <a href="https://dispatchseo.com/docs/docker-compose">Self-host on your computer</a>
   &nbsp;&middot;&nbsp;
   <a href="https://dispatchseo.com/docs/vps">Self-host on a VPS</a>
+  &nbsp;&middot;&nbsp;
+  <a href="https://discord.gg/jqbtN98EHA">Discord</a>
   &nbsp;&middot;&nbsp;
   <a href="https://github.com/NeoZi12/dispatchseo/discussions">Discussions</a>
   &nbsp;&middot;&nbsp;
@@ -154,7 +157,8 @@ Step-by-step walkthroughs, with screenshots:
 your own domain with automatic HTTPS.
 
 **Stuck?** The [troubleshooting page](https://dispatchseo.com/docs/troubleshooting)
-covers the errors people actually hit. If yours isn't there, ask in
+covers the errors people actually hit. If yours isn't there, ask in the
+[Discord](https://discord.gg/jqbtN98EHA) or in
 [Discussions](https://github.com/NeoZi12/dispatchseo/discussions) - questions get
 answered and usually turn into a docs fix.
 
@@ -263,8 +267,9 @@ turns out to make it decent documentation for people.
 
 Issues before PRs, and you must understand every line you submit, including the
 AI-assisted ones. Details in [CONTRIBUTING.md](CONTRIBUTING.md). Questions go to
-[Discussions](https://github.com/NeoZi12/dispatchseo/discussions); vulnerabilities
-go through [private reporting](SECURITY.md).
+[Discussions](https://github.com/NeoZi12/dispatchseo/discussions) or the
+[Discord](https://discord.gg/jqbtN98EHA); vulnerabilities go through
+[private reporting](SECURITY.md).
 
 ## 📄 License
 
