@@ -15,6 +15,7 @@ export const BUILD_GUIDE_STEPS = [
   { title: "Visuals", plain: "Builds 2-3 custom graphics about this exact topic, in your site's own colors and components - plus a cover it draws itself as vector art on your site's house style, so blog cards show the actual subject instead of generic AI imagery." },
   { title: "Humanize", plain: "Rewrites anything that reads AI-generated until it sounds like you wrote it." },
   { title: "Verify", plain: "Runs your site's build to prove nothing breaks - then checks the new guide against your whole back catalogue and rewrites it if it reads like a repeat, so your posts never converge into one template." },
+  { title: "Link back", plain: "If you've switched this on, it also adds a link from 2-3 of your closest older posts to the new one, so the new guide arrives with support instead of standing alone. It only wraps words already in a sentence you wrote - never rewrites - and leaves a post alone once it's carrying 5 such links. Off unless you turned it on, and it never changes when your pull request merges." },
   { title: "PR", plain: "Opens a pull request for your review - it never touches your live site directly." },
 ];
 
