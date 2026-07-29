@@ -34,6 +34,7 @@ import { saveContentPrefs } from "@/lib/content-prefs-store";
 import { encryptSecret } from "@/lib/crypto";
 import { validateSerpapiKey } from "@/lib/serp";
 import { placeAtFront, writeQueueOrder } from "@/lib/queue";
+import { duplicateNote, findDuplicateSuggestion, isDuplicateKeyError } from "@/lib/suggestion-dedupe";
 import { requestTrendExpand, requestTrendScan } from "@/lib/trends";
 import { fetchDomainRegistrationDate } from "@/lib/domain-age";
 import { bustGscCredCache, gscAccessProbe, type GscAccessProbe } from "@/lib/gsc";
@@ -142,6 +143,11 @@ export async function addManualSuggestion(
   const placement = String(formData.get("placement") ?? "back");
 
   const project = await getActiveProject();
+  // Same one-keyword-one-idea rule the MCP's propose_suggestion enforces
+  // (suggestion-dedupe.ts): adding a keyword that is already queued would put
+  // two builders on one target.
+  const dupe = await findDuplicateSuggestion(project.id, type, keyword);
+  if (dupe.active) return { error: duplicateNote(dupe.active) };
   const row = {
     project_id: project.id,
     type,
@@ -158,8 +164,16 @@ export async function addManualSuggestion(
     .insert({ ...row, source: "manual" })
     .select()
     .single();
-  if (error) {
+  if (error && !isDuplicateKeyError(error)) {
     ({ data, error } = await db().from("suggestions").insert(row).select().single());
+  }
+  // 0043's index catching a duplicate that landed between the check above and
+  // this insert - say what happened, not "23505".
+  if (isDuplicateKeyError(error)) {
+    const raced = await findDuplicateSuggestion(project.id, type, keyword);
+    return {
+      error: raced.active ? duplicateNote(raced.active) : "That keyword is already in the queue.",
+    };
   }
   if (error) return { error: error.message };
 

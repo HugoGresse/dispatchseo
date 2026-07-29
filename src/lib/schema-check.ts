@@ -100,6 +100,12 @@ export const UNPROBEABLE: Record<string, string> = {
   // there is no behavior for a probe to detect even in principle.
   "0038_rls_owner_policies":
     "RLS policies + function, artifact is in pg_policies; inert under the service-role key anyway",
+  // Adds a partial unique index on suggestions - artifact lives in pg_indexes,
+  // invisible to PostgREST. Unapplied it costs nothing: suggestion-dedupe.ts
+  // does the same check in app code before every insert, and this index only
+  // backstops the read-then-insert race.
+  "0043_suggestion_keyword_unique":
+    "partial unique index - artifact is in pg_indexes, not queryable via PostgREST",
 };
 
 async function probeMissing(p: Probe): Promise<boolean> {

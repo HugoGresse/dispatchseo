@@ -35,6 +35,7 @@ import { getPipelinePack, hasDataforseo } from "@/lib/pipeline-pack";
 import { effectiveAutomations, getProjectByToken } from "@/lib/projects";
 import { loadSiteProfile } from "@/lib/site-profile";
 import { currentProject, projectStore } from "@/lib/mcp-context";
+import { duplicateNote, findDuplicateSuggestion, isDuplicateKeyError } from "@/lib/suggestion-dedupe";
 import { isProjectUrl } from "@/lib/url-guard";
 import { isLive, refreshPageLiveness, type LivenessRow } from "@/lib/page-liveness";
 import { AGENT_ENGINES, getAiVisibility, recordAiSnapshots } from "@/lib/ai-visibility";
@@ -188,6 +189,15 @@ const mcpHandler = createMcpHandler(
       },
       async ({ type, title, primary_keyword, volume, kd, rationale, spec, source, trend_topic_id, approved, position, build }) => {
         const p = currentProject();
+        // One keyword, one queued idea. The instructions tell every research
+        // run to pull the existing queue first, but advice is not a guarantee -
+        // a run that checked only one status re-proposed an already-approved
+        // keyword and the queue showed the same guide twice (2026-07-29). This
+        // is the same check the dashboard's Add idea form runs.
+        const dupe = await findDuplicateSuggestion(p.id, type, primary_keyword);
+        if (dupe.active) {
+          return ok({ duplicate: true, note: duplicateNote(dupe.active), existing: dupe.active });
+        }
         // Only owner-dictated (manual) ideas can skip the pending gate - an
         // autonomous run passing approved:true without source 'manual' still
         // lands pending, same spirit as update_suggestion's approval coercion.
@@ -213,10 +223,24 @@ const mcpHandler = createMcpHandler(
           row,
         ];
         let data: { id: string } | null = null;
-        let error: { message: string } | null = null;
+        let error: { code?: string; message: string } | null = null;
         for (const attempt of attempts) {
           ({ data, error } = await db().from("suggestions").insert(attempt).select().single());
-          if (!error) break;
+          // A unique violation is 0043's index catching a duplicate that
+          // landed between the check above and this insert - retrying with
+          // fewer columns cannot fix it, and it is not a failure worth
+          // reporting as one.
+          if (!error || isDuplicateKeyError(error)) break;
+        }
+        if (error && isDuplicateKeyError(error)) {
+          const existing = await findDuplicateSuggestion(p.id, type, primary_keyword);
+          return ok({
+            duplicate: true,
+            note: existing.active
+              ? duplicateNote(existing.active)
+              : "Already in the queue for this keyword - nothing added.",
+            existing: existing.active,
+          });
         }
         if (error) return fail(error.message);
         let note: string | undefined;
