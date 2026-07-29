@@ -70,20 +70,24 @@ jobs:
             -H "Authorization: Bearer $SEO_MCP_API_KEY" \
             https://dispatchseo.com/api/project-mode)
           merge=on
+          linking=off
           if [ "$code" = "200" ]; then
             if [ "$(jq -r '.automations.auto_merge' /tmp/mode.json)" = "false" ]; then merge=off; fi
-            echo "Publish mode: $(jq -r '.mode' /tmp/mode.json) (auto_merge: $merge)"
+            if [ "$(jq -r '.internal_linking' /tmp/mode.json)" = "true" ]; then linking=on; fi
+            echo "Publish mode: $(jq -r '.mode' /tmp/mode.json) (auto_merge: $merge, internal_linking: $linking)"
           elif [ "$code" != "404" ]; then
             echo "::error::project-mode endpoint returned HTTP $code - check the DispatchSEO backend and SEO_MCP_API_KEY"
             exit 1
           fi
           echo "merge=$merge" >> "$GITHUB_OUTPUT"
+          echo "linking=$linking" >> "$GITHUB_OUTPUT"
 
       - name: Merge green SEO PRs
         if: steps.mode.outputs.merge != 'off'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
+          INTERNAL_LINKING: ${{ steps.mode.outputs.linking }}
         run: |
           set -euo pipefail
 
@@ -134,6 +138,27 @@ jobs:
                 echo "PR #$n touches $outside file(s) outside the allowed publish dirs (structural change) - leaving for manual review. If these paths are part of this repo's normal guide layout, add them to .dispatchseo/publish-paths."
                 echo "::endgroup::"
                 continue
+              fi
+              # 1b. Published-content gate. The path check above passes a
+              #     back-link edit straight through, because an edited old post
+              #     lives in exactly the same publish dir as a new one - so it
+              #     cannot be the thing that catches this. Ask the API for each
+              #     file's STATUS instead: a guide PR that only ADDS files is
+              #     purely additive and safe to merge unattended; anything
+              #     "modified"/"renamed"/"removed" means this PR changes content
+              #     the owner already published, and a human reads that diff.
+              #     Structural on purpose - it holds even if the builder forgets
+              #     the "Edits published posts: yes" line in the PR body.
+              #     Scoped to projects that opted into internal linking so
+              #     nobody else's merge behaviour changes.
+              if [ "${INTERNAL_LINKING:-off}" = "on" ]; then
+                touched=$(gh api "repos/$REPO/pulls/$n/files" --paginate \
+                  --jq '[.[] | select(.status != "added") | .filename] | join(", ")')
+                if [ -n "$touched" ]; then
+                  echo "PR #$n edits already-published content ($touched) - leaving for manual review. Back-link edits always get a human."
+                  echo "::endgroup::"
+                  continue
+                fi
               fi
             fi
 

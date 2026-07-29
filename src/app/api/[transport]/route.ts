@@ -32,7 +32,7 @@ import {
 import { saveContentPrefs } from "@/lib/content-prefs-store";
 import { renderInstructions, WORKFLOWS } from "@/lib/instructions";
 import { getPipelinePack, hasDataforseo } from "@/lib/pipeline-pack";
-import { effectiveAutomations, getProjectByToken } from "@/lib/projects";
+import { effectiveAutomations, getProjectByToken, internalLinkingEnabled } from "@/lib/projects";
 import { loadSiteProfile } from "@/lib/site-profile";
 import { currentProject, projectStore } from "@/lib/mcp-context";
 import { duplicateNote, findDuplicateSuggestion, isDuplicateKeyError } from "@/lib/suggestion-dedupe";
@@ -1749,6 +1749,49 @@ const mcpHandler = createMcpHandler(
     );
 
     server.registerTool(
+      "set_internal_linking",
+      {
+        title: "Set internal back-linking",
+        description:
+          "Turn internal back-linking on or off for this project. When ON, the " +
+          "guide builder edits 2-3 of the closest ALREADY-PUBLISHED posts in the " +
+          "same PR so they link to each new guide - one sentence changed per " +
+          "post, nothing else touched - which is what turns a set of posts into " +
+          "a cluster that compounds. This is the only DispatchSEO behaviour that " +
+          "modifies pages the owner already published, so it is OFF by default " +
+          "and separate from the semi/auto automation flags; a PR that edits " +
+          "published posts is never auto-merged regardless of auto_merge. Ask " +
+          "the owner before turning this on - do not enable it on your own " +
+          "initiative because it would make a run tidier.",
+        inputSchema: {
+          enabled: z.boolean().describe("true to allow editing published posts, false to stop"),
+        },
+      },
+      async ({ enabled }) => {
+        const p = currentProject();
+        const { error } = await db()
+          .from("projects")
+          .update({ internal_linking: Boolean(enabled) })
+          .eq("id", p.id);
+        if (error) {
+          if (error.message.includes("internal_linking")) {
+            return fail(
+              "This database hasn't run migration 0045 yet, so internal linking can't be changed. Apply supabase/migrations/0045_project_internal_linking.sql first.",
+            );
+          }
+          return fail(error.message);
+        }
+        return ok({
+          project: p.slug,
+          internal_linking: Boolean(enabled),
+          note: enabled
+            ? "The guide builder may now edit up to 3 published posts per build to link back to the new guide. Those PRs always wait for a human review."
+            : "The guide builder will no longer touch already-published posts.",
+        });
+      },
+    );
+
+    server.registerTool(
       "get_cron_health",
       {
         title: "Get cron health",
@@ -2099,6 +2142,12 @@ const mcpHandler = createMcpHandler(
           // weekly target on these, not leave a pending backlog.
           auto_approve: effectiveAutomations(p).auto_approve,
           auto_approve_tools: effectiveAutomations(p).auto_approve_tools,
+          // May the guide builder EDIT already-published posts so they link
+          // back to a new guide (build-guide step 10)? Not an automation flag
+          // and never implied by auto mode - false unless the owner said yes.
+          // Read this exact field; never infer the permission from anything
+          // else in this payload.
+          internal_linking: internalLinkingEnabled(p),
           keyword_source: p.keyword_source,
           serp_provider_connected: (await serpProviderForProject(p)) != null,
           dataforseo_connected: dfsCreds != null,

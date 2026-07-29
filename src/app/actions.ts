@@ -1399,6 +1399,36 @@ export async function setAutomationToggle(
   revalidatePath("/", "layout");
 }
 
+// Internal back-linking: may the guide builder EDIT already-published posts so
+// they link to a new guide? Deliberately its own action rather than another
+// entry in setAutomationToggle - the automation flags answer "how much do I
+// automate", and switching a project to Auto must never silently grant
+// permission to rewrite pages the owner already shipped. Same reason it lives
+// outside AutomationFlags in projects.ts. Backed by the set_internal_linking
+// MCP tool so the agent has parity.
+export async function setInternalLinking(enabled: boolean, slug: string) {
+  await assertAuthed();
+  const project = await getProjectBySlug(slug);
+  if (!project) throw new Error("Unknown project.");
+  if (isCloudMode()) await assertProjectOwned(project.id);
+  const { error } = await db()
+    .from("projects")
+    .update({ internal_linking: Boolean(enabled) })
+    .eq("id", project.id);
+  // A DB that hasn't run 0045 yet: report it instead of pretending the toggle
+  // saved. The read path already resolves the missing column to OFF, so the
+  // honest message is "run the migration", not a silent no-op.
+  if (error) {
+    if (error.message.includes("internal_linking")) {
+      throw new Error(
+        "This database hasn't run migration 0045 yet, so internal linking can't be enabled. Apply supabase/migrations/0045_project_internal_linking.sql and try again.",
+      );
+    }
+    throw new Error(error.message);
+  }
+  revalidatePath("/", "layout");
+}
+
 // The Instructions page's template controls (block toggles, shape rotation,
 // house rules). saveContentPrefs normalizes and validates; the same lib call
 // backs the set_content_prefs MCP tool.

@@ -97,6 +97,16 @@ export type Project = {
   // projectAgent() in @/lib/agents, which resolves absence to Claude - true by
   // construction, since the column only exists because a second agent does.
   agent: string | null;
+  // Opt-in: may the guide builder EDIT already-published posts to add internal
+  // links back to a new guide (migration 0045)? Every other builder behaviour
+  // is additive, so this is the one flag that governs touching content the
+  // owner already shipped - it defaults false and is deliberately NOT part of
+  // the semi/auto/custom presets, because "how much do I automate" and "may
+  // you rewrite my published pages" are different questions.
+  // NULLABLE for the same reason as `agent`: absent both on a DB that hasn't
+  // run 0045 and on the COLS_PRE_0045 fallback tier. Read it through
+  // internalLinkingEnabled() below, which resolves absence to OFF.
+  internal_linking: boolean | null;
   created_at: string;
 };
 
@@ -143,6 +153,17 @@ export function effectiveAutomations(p: Project): AutomationFlags {
   };
 }
 
+// May the guide builder edit already-published posts to link back to a new
+// guide? Deliberately NOT part of effectiveAutomations: the semi/auto/custom
+// presets answer "how much do I automate", and flipping a project to Auto must
+// never silently grant permission to rewrite pages the owner already shipped.
+// Absence (a DB pre-0045, or the COLS_PRE_0045 fallback tier) resolves to OFF -
+// the conservative direction, and the only safe one for a capability whose
+// blast radius is live content.
+export function internalLinkingEnabled(p: Project): boolean {
+  return p.internal_linking === true;
+}
+
 // A flag set that exactly matches a preset IS that preset - "custom" is only
 // the leftover state, never something the user picks directly.
 export function modeForFlags(flags: AutomationFlags): "semi" | "auto" | "custom" {
@@ -164,6 +185,13 @@ export const DEFAULT_PROJECT_ID = "00000000-0000-4000-8000-000000000001";
 
 // mcp_token deliberately excluded - only fetchProjectToken exposes it.
 const COLS =
+  "id, slug, name, domain, gsc_site_url, github_repo, content_mode, content_path_hint, dataforseo_login, dataforseo_password, keyword_source, serpapi_key, powerups_skipped, location_code, language_code, mode, auto_approve, auto_approve_tools, auto_build_guides, auto_build_tools, auto_merge, last_trend_scan_at, site_launched_at, pipeline_installed_at, pipeline_verified, content_prefs, gsc_oauth_refresh_token, github_installation_id, github_app_installed_at, install_progress, onboarding_screen, owner_user_id, agent, internal_linking, created_at";
+
+// COLS minus 0045's internal_linking, for a DB that hasn't run that migration
+// yet. Newest column, so it is the FIRST thing dropped - a DB lagging only
+// 0045 keeps everything else and simply reads as "back-linking off", which is
+// the safe default anyway.
+const COLS_PRE_0045 =
   "id, slug, name, domain, gsc_site_url, github_repo, content_mode, content_path_hint, dataforseo_login, dataforseo_password, keyword_source, serpapi_key, powerups_skipped, location_code, language_code, mode, auto_approve, auto_approve_tools, auto_build_guides, auto_build_tools, auto_merge, last_trend_scan_at, site_launched_at, pipeline_installed_at, pipeline_verified, content_prefs, gsc_oauth_refresh_token, github_installation_id, github_app_installed_at, install_progress, onboarding_screen, owner_user_id, agent, created_at";
 
 // COLS minus 0044's agent, for a DB that hasn't run that migration yet.
@@ -206,8 +234,12 @@ async function selectProjects<T>(
     Boolean(e && e.message.includes("does not exist"));
   const first = await run(COLS);
   if (!missingCol(first.error)) return first;
-  // Drop only the newest column (0044's agent) first, so a DB that lags 0044
-  // alone keeps everything else and simply reads as all-Claude.
+  // Drop only the newest column (0045's internal_linking) first, so a DB that
+  // lags 0045 alone keeps everything else and simply reads as back-linking-off.
+  const linkless = await run(COLS_PRE_0045);
+  if (!missingCol(linkless.error)) return linkless;
+  // Then 0044's agent, so a DB that lags 0044 too keeps everything else and
+  // simply reads as all-Claude.
   const agentless = await run(COLS_PRE_0044);
   if (!missingCol(agentless.error)) return agentless;
   // Then 0040, same reasoning one tier down; fall back further only if that
@@ -269,6 +301,10 @@ function envFallbackProject(): Project {
     // projectAgent() already resolves null to Claude. Asserting a choice here
     // would claim the owner made one.
     agent: null,
+    // Null, resolving to OFF. This synthetic row appears during a DB error, and
+    // "we couldn't read your settings" must never be the reason an agent starts
+    // editing already-published pages.
+    internal_linking: null,
     created_at: new Date(0).toISOString(),
   };
 }
