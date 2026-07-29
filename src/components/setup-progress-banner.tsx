@@ -52,15 +52,26 @@ export function SetupProgressBanner({
           rank_checks?: number;
         };
         setResearchDone((s.ideas_queued ?? 0) > 0);
-        if (!s.pipeline_installed) {
-          setPhase("setup");
-        } else if ((s.rank_checks ?? 0) > 0) {
-          // First ranking check landed - the dashboard has real data now.
+        // Evidence outranks stamps. A rank check EXISTS only if the pipeline
+        // has really run, so it settles the question on its own - checked
+        // first, before pipeline_installed, because that stamp can be null on
+        // a site that has been publishing for months: projects installed
+        // before mark_pipeline_installed existed never got one, and nothing
+        // backfills it. The layout's 24h fallback clock was supposed to cover
+        // them, but it keys off github_app_installed_at, which any App
+        // reconnect resets - so every reconnect re-armed "Setting up your site
+        // in the background" on a live site (2026-07-29, clockedcode: 17
+        // published guides, null stamp, banner back for 24h). Ordering this
+        // branch first means a site with real data can never be described as
+        // still setting up, whatever the timestamps say.
+        if ((s.rank_checks ?? 0) > 0) {
           setPhase("done");
           if (!refreshed.current) {
             refreshed.current = true;
             setTimeout(() => router.refresh(), 1600);
           }
+        } else if (!s.pipeline_installed) {
+          setPhase("setup");
         } else {
           setPhase("firstRun");
         }
