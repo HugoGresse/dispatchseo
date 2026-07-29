@@ -125,8 +125,14 @@ const mcpHandler = createMcpHandler(
         inputSchema: {
           status: z
             .enum(["pending", "approved", "rejected", "in_progress", "done"])
-            .optional(),
-          type: z.enum(["guide", "tool", "backlink", "update"]).optional(),
+            .optional()
+            .describe(
+              "Which queue to list. Defaults to 'approved' - what the owner has greenlit and what builders take from.",
+            ),
+          type: z
+            .enum(["guide", "tool", "backlink", "update"])
+            .optional()
+            .describe("Restrict to one item type. Omit to get every type."),
         },
       },
       async ({ status, type }) => {
@@ -173,18 +179,70 @@ const mcpHandler = createMcpHandler(
           "morning, so front means tomorrow), and for tools build 'now' to fire the tool " +
           "builder immediately instead of queueing.",
         inputSchema: {
-          type: z.enum(["guide", "tool", "backlink", "update"]),
-          title: z.string(),
-          primary_keyword: z.string().optional(),
-          volume: z.number().int().optional(),
-          kd: z.number().optional(),
-          rationale: z.string().optional(),
-          spec: z.record(z.string(), z.any()).optional(),
-          source: z.enum(["research", "trend-scan", "manual"]).optional(),
-          trend_topic_id: z.string().uuid().optional(),
-          approved: z.boolean().optional(),
-          position: z.enum(["front", "back"]).optional(),
-          build: z.enum(["now", "queue"]).optional(),
+          type: z
+            .enum(["guide", "tool", "backlink", "update"])
+            .describe(
+              "guide = an article; tool = a free interactive widget; backlink = an outreach target; update = a change to an existing page.",
+            ),
+          title: z.string().describe("The proposed page or tool title, as it would read on the site."),
+          primary_keyword: z
+            .string()
+            .optional()
+            .describe("The single keyword this item targets."),
+          volume: z
+            .number()
+            .int()
+            .optional()
+            .describe(
+              "Monthly search volume for primary_keyword, from the research source. Omit when the project has no volume data.",
+            ),
+          kd: z
+            .number()
+            .optional()
+            .describe("Keyword difficulty (0-100) for primary_keyword, from the research source."),
+          rationale: z
+            .string()
+            .optional()
+            .describe(
+              "Why this is worth doing: volume, KD, intent, SERP weakness - and who types the query and why that person overlaps the site's buyer.",
+            ),
+          spec: z
+            .record(z.string(), z.any())
+            .optional()
+            .describe(
+              "Free-form brief. Guides: outline, angle, serp_notes. Tools: the intended functionality. Backlinks: the target url. A take grown from one viral post also carries seed_url (+ seed_stats).",
+            ),
+          source: z
+            .enum(["research", "trend-scan", "manual"])
+            .optional()
+            .describe(
+              "Who queued it. Trend workflows MUST pass 'trend-scan'. 'manual' is ONLY for ideas the owner dictated in the current conversation - never from an autonomous run.",
+            ),
+          trend_topic_id: z
+            .string()
+            .uuid()
+            .optional()
+            .describe(
+              "The trend topic this take belongs to - passed by trend-expand so each take groups under its subject on the radar.",
+            ),
+          approved: z
+            .boolean()
+            .optional()
+            .describe(
+              "Manual ideas only: skip the pending gate and land straight in the build queue.",
+            ),
+          position: z
+            .enum(["front", "back"])
+            .optional()
+            .describe(
+              "'front' means do this one next - guides ship one per morning, so front means tomorrow. Defaults to back.",
+            ),
+          build: z
+            .enum(["now", "queue"])
+            .optional()
+            .describe(
+              "Tools only: 'now' fires the tool builder immediately instead of waiting for the weekly build. Never pass 'now' from an autonomous run.",
+            ),
         },
       },
       async ({ type, title, primary_keyword, volume, kd, rationale, spec, source, trend_topic_id, approved, position, build }) => {
@@ -283,12 +341,23 @@ const mcpHandler = createMcpHandler(
           "conversation ('approve that one', 'reject it', 'restore the X idea') - never " +
           "from autonomous workflow runs.",
         inputSchema: {
-          id: z.string().uuid(),
+          id: z.string().uuid().describe("The suggestion's id, as returned by get_suggestions."),
           status: z
             .enum(["pending", "approved", "rejected", "in_progress", "done"])
-            .optional(),
-          result_pr_url: z.string().optional(),
-          decided_by: z.enum(["owner", "agent"]).optional(),
+            .optional()
+            .describe(
+              "The new status. Builders set 'in_progress' when they start and 'done' when the PR is open.",
+            ),
+          result_pr_url: z
+            .string()
+            .optional()
+            .describe("The pull request this item produced. Pass it alongside status 'done'."),
+          decided_by: z
+            .enum(["owner", "agent"])
+            .optional()
+            .describe(
+              "Pass 'owner' ONLY when the site owner made the call in the current conversation ('approve that one'). Never from an autonomous workflow run.",
+            ),
         },
       },
       async ({ id, status, result_pr_url, decided_by }) => {
@@ -427,8 +496,11 @@ const mcpHandler = createMcpHandler(
           "place after the ordered set. Only use when the site owner asked to " +
           "re-prioritize in the current conversation - never from autonomous runs.",
         inputSchema: {
-          group: z.enum(["guide", "tool"]),
-          ordered_ids: z.array(z.string().uuid()).min(1),
+          group: z.enum(["guide", "tool"]).describe("Which queue to reorder - guides and tools are ordered independently."),
+          ordered_ids: z
+            .array(z.string().uuid())
+            .min(1)
+            .describe("Every suggestion id in this group, in the new build order, first to last."),
         },
       },
       async ({ group, ordered_ids }) => {
@@ -453,7 +525,7 @@ const mcpHandler = createMcpHandler(
           "current conversation - never from autonomous workflow runs; those " +
           "queue via propose_suggestion and wait.",
         inputSchema: {
-          id: z.string().uuid(),
+          id: z.string().uuid().describe("The suggestion to build immediately, as returned by get_suggestions."),
         },
       },
       async ({ id }) => {
@@ -518,8 +590,11 @@ const mcpHandler = createMcpHandler(
           "OPEN (pass with a note) if the corpus cannot be read, so a network or DB " +
           "hiccup can never block a build.",
         inputSchema: {
-          markdown: z.string(),
-          primary_keyword: z.string().optional(),
+          markdown: z.string().describe("The full draft to check, as markdown."),
+          primary_keyword: z
+            .string()
+            .optional()
+            .describe("The keyword this draft targets, so the check can weigh it against pages already covering it."),
         },
       },
       async ({ markdown, primary_keyword }) => {
@@ -590,14 +665,22 @@ const mcpHandler = createMcpHandler(
           keywords: z
             .array(
               z.object({
-                keyword: z.string(),
-                volume: z.number().int().optional(),
-                kd: z.number().optional(),
-                cpc: z.number().optional(),
-                intent: z.string().optional(),
+                keyword: z.string().describe("The search term to track, exactly as a user would type it."),
+                volume: z
+                  .number()
+                  .int()
+                  .optional()
+                  .describe("Monthly search volume from the research source. Never estimate it."),
+                kd: z.number().optional().describe("Keyword difficulty, 0-100, from the research source."),
+                cpc: z.number().optional().describe("Cost per click in USD, from the research source."),
+                intent: z
+                  .string()
+                  .optional()
+                  .describe("Search intent for this term, e.g. informational, commercial, transactional."),
               }),
             )
-            .min(1),
+            .min(1)
+            .describe("One entry per keyword to start tracking. Send the whole batch in a single call."),
         },
       },
       async ({ keywords }) => {
@@ -655,8 +738,13 @@ const mcpHandler = createMcpHandler(
           "position first; keywords outside the top 100 come last, ordered by search volume " +
           "(so the tail reads as an opportunity list).",
         inputSchema: {
-          keyword: z.string().optional(),
-          days: z.number().int().positive().optional(),
+          keyword: z.string().optional().describe("Restrict to one tracked keyword. Omit for every tracked keyword."),
+          days: z
+            .number()
+            .int()
+            .positive()
+            .optional()
+            .describe("How far back to read rank history, in days."),
         },
       },
       async ({ keyword, days }) => {
@@ -728,12 +816,23 @@ const mcpHandler = createMcpHandler(
           "daily publishing pace reads this field, so a backfill stamped 'now' wrongly uses " +
           "today's build slot.",
         inputSchema: {
-          url: z.string(),
-          title: z.string().optional(),
-          type: z.enum(["guide", "tool", "landing"]).optional(),
-          primary_keyword: z.string().optional(),
-          pr_url: z.string().optional(),
-          published_at: z.string().optional(),
+          url: z.string().describe("The page's full public URL on the site."),
+          title: z.string().optional().describe("The page title as published."),
+          type: z
+            .enum(["guide", "tool", "landing"])
+            .optional()
+            .describe("What kind of page this is."),
+          primary_keyword: z
+            .string()
+            .optional()
+            .describe("The keyword this page targets - the same one its suggestion carried."),
+          pr_url: z.string().optional().describe("The pull request that shipped this page."),
+          published_at: z
+            .string()
+            .optional()
+            .describe(
+              "Publication date as YYYY-MM-DD. Take it from running `date -u +%F` in the shell, never from memory.",
+            ),
         },
       },
       async ({ url, title, type, primary_keyword, pr_url, published_at }) => {
@@ -812,8 +911,14 @@ const mcpHandler = createMcpHandler(
           "pages (get_pages). Pages left over (daily quota hit, login wall) stay on the " +
           "card - just omit them.",
         inputSchema: {
-          requested_urls: z.array(z.string()).optional(),
-          already_indexed_urls: z.array(z.string()).optional(),
+          requested_urls: z
+            .array(z.string())
+            .optional()
+            .describe("URLs indexing was just requested for, so they aren't re-submitted on the next run."),
+          already_indexed_urls: z
+            .array(z.string())
+            .optional()
+            .describe("URLs found to be indexed already, so they drop out of the queue without a request being spent."),
         },
       },
       async ({ requested_urls, already_indexed_urls }) => {
@@ -872,7 +977,7 @@ const mcpHandler = createMcpHandler(
           "plus a trend summary (totals and first-half vs second-half deltas for clicks and " +
           "impressions). Each snapshot includes top queries and top pages.",
         inputSchema: {
-          days: z.number().int().positive().optional(),
+          days: z.number().int().positive().optional().describe("How many days of history to summarise."),
         },
       },
       async ({ days }) => {
@@ -952,10 +1057,19 @@ const mcpHandler = createMcpHandler(
           "Add a backlink prospect (a domain worth pursuing a link from), status 'new'. " +
           "reason should say why it's relevant or where it was found.",
         inputSchema: {
-          domain: z.string(),
-          url: z.string().optional(),
-          reason: z.string().optional(),
-          domain_rating: z.number().optional(),
+          domain: z.string().describe("The prospect site's domain, without protocol or www."),
+          url: z
+            .string()
+            .optional()
+            .describe("The specific page to pitch - a submission form, a resource list, a relevant article."),
+          reason: z
+            .string()
+            .optional()
+            .describe("Why this site would plausibly link here: what it already covers, and the angle to pitch."),
+          domain_rating: z
+            .number()
+            .optional()
+            .describe("The prospect's domain rating (0-100) from the research source. Never estimate it."),
         },
       },
       async ({ domain, url, reason, domain_rating }) => {
@@ -995,7 +1109,10 @@ const mcpHandler = createMcpHandler(
         description:
           "List backlink prospects, optionally filtered by status (new|contacted|acquired|rejected).",
         inputSchema: {
-          status: z.enum(["new", "contacted", "acquired", "rejected"]).optional(),
+          status: z
+            .enum(["new", "contacted", "acquired", "rejected"])
+            .optional()
+            .describe("Filter to one stage. Omit to get every prospect."),
         },
       },
       async ({ status }) => {
@@ -1021,8 +1138,10 @@ const mcpHandler = createMcpHandler(
           "acquired (or rejected). Same transition the dashboard's Backlinks " +
           "screen does - use it after outreach happened or a link went live.",
         inputSchema: {
-          id: z.string().uuid(),
-          status: z.enum(["new", "contacted", "acquired", "rejected"]),
+          id: z.string().uuid().describe("The prospect's id, as returned by get_backlink_prospects."),
+          status: z
+            .enum(["new", "contacted", "acquired", "rejected"])
+            .describe("Where this prospect now stands: contacted after outreach, acquired once the link is live."),
         },
       },
       async ({ id, status }) => {
@@ -1067,8 +1186,14 @@ const mcpHandler = createMcpHandler(
           "Unavailable in GSC-only mode. SerpApi's free tier is 250 searches/month - " +
           "spend them on shortlisted keywords, not broad sweeps.",
         inputSchema: {
-          keyword: z.string().min(1),
-          top: z.number().int().positive().max(100).optional(),
+          keyword: z.string().min(1).describe("The search term to fetch a live SERP for, exactly as a user would type it."),
+          top: z
+            .number()
+            .int()
+            .positive()
+            .max(100)
+            .optional()
+            .describe("How many results to return, up to 100. Defaults to a shallow page-one read."),
         },
       },
       async ({ keyword, top }) => {
@@ -1221,26 +1346,42 @@ const mcpHandler = createMcpHandler(
           results: z
             .array(
               z.object({
-                engine: z.enum(AGENT_ENGINES),
-                query: z.string().min(1).max(300),
-                has_ai_answer: z.boolean(),
-                cited: z.boolean(),
-                cited_url: z.string().max(600).optional(),
-                answer_excerpt: z.string().max(1500).optional(),
+                engine: z.enum(AGENT_ENGINES).describe("Which AI engine produced this answer."),
+                query: z
+                  .string()
+                  .min(1)
+                  .max(300)
+                  .describe("The customer question exactly as it was asked."),
+                has_ai_answer: z
+                  .boolean()
+                  .describe("Whether the engine produced an AI answer at all, as opposed to plain links or nothing."),
+                cited: z.boolean().describe("Whether this site was among the answer's cited sources."),
+                cited_url: z
+                  .string()
+                  .max(600)
+                  .optional()
+                  .describe("Which URL of this site was cited. Pass it whenever cited is true."),
+                answer_excerpt: z
+                  .string()
+                  .max(1500)
+                  .optional()
+                  .describe("A verbatim excerpt of the answer. Copy it exactly - never paraphrase or summarise."),
                 citations: z
                   .array(
                     z.object({
-                      domain: z.string().min(1).max(253),
-                      url: z.string().max(600).optional(),
-                      title: z.string().max(300).optional(),
+                      domain: z.string().min(1).max(253).describe("The cited source's domain."),
+                      url: z.string().max(600).optional().describe("The cited source's full URL."),
+                      title: z.string().max(300).optional().describe("The cited source's title as the engine showed it."),
                     }),
                   )
                   .max(30)
-                  .optional(),
+                  .optional()
+                  .describe("Every source the answer cited, in the order shown - including competitors, which is how gap domains are found."),
               }),
             )
             .min(1)
-            .max(100),
+            .max(100)
+            .describe("One entry per question asked. Send the whole scan in a single call, not one call per question."),
         },
       },
       async ({ results }) => {
@@ -1261,8 +1402,12 @@ const mcpHandler = createMcpHandler(
           "(no volume numbers). Combine with get_site_stats top queries for seeds, then " +
           "check_serp on the shortlist to judge winnability.",
         inputSchema: {
-          seed: z.string().min(1),
-          modifiers: z.array(z.string()).max(8).optional(),
+          seed: z.string().min(1).describe("The base term to build variations from."),
+          modifiers: z
+            .array(z.string())
+            .max(8)
+            .optional()
+            .describe("Words to combine with the seed, e.g. 'free', 'vs', 'for teams', 'alternative'."),
         },
       },
       async ({ seed, modifiers }) => {
@@ -1293,8 +1438,18 @@ const mcpHandler = createMcpHandler(
           "list WITH a note (never an error) when the project has no DataForSEO access or the " +
           "monthly budget is spent - fall back to check_serp + product judgment then.",
         inputSchema: {
-          seeds: z.array(z.string().min(1)).min(1).max(20),
-          limit: z.number().int().min(1).max(200).optional(),
+          seeds: z
+            .array(z.string().min(1))
+            .min(1)
+            .max(20)
+            .describe("Up to 20 seed keywords to expand from. Send them in one call rather than one call per seed."),
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(200)
+            .optional()
+            .describe("Maximum ideas to return, up to 200."),
         },
       },
       async ({ seeds, limit }) => {
@@ -1363,13 +1518,33 @@ const mcpHandler = createMcpHandler(
           "short_description <= 160 chars, long_description 300-600 chars - " +
           "directories enforce these limits, so keep to them.",
         inputSchema: {
-          name: z.string().min(1),
-          url: z.string().url(),
-          tagline: z.string().min(1).max(60),
-          short_description: z.string().min(1).max(160),
-          long_description: z.string().min(100).max(700),
-          categories: z.array(z.string()).min(1).max(5),
-          tags: z.array(z.string()).min(1).max(10),
+          name: z.string().min(1).describe("The site or product name as it should appear in a directory listing."),
+          url: z.string().url().describe("The site's canonical homepage URL."),
+          tagline: z
+            .string()
+            .min(1)
+            .max(60)
+            .describe("One short line summarising the product, 60 characters or fewer."),
+          short_description: z
+            .string()
+            .min(1)
+            .max(160)
+            .describe("One or two sentences, 160 characters or fewer - the blurb most directories ask for."),
+          long_description: z
+            .string()
+            .min(100)
+            .max(700)
+            .describe("A fuller description between 100 and 700 characters, for directories with a longer field."),
+          categories: z
+            .array(z.string())
+            .min(1)
+            .max(5)
+            .describe("One to five categories the product belongs to."),
+          tags: z
+            .array(z.string())
+            .min(1)
+            .max(10)
+            .describe("One to ten keywords describing the product."),
         },
       },
       async (profile) => {
@@ -1398,7 +1573,12 @@ const mcpHandler = createMcpHandler(
           "and access checks keep failing, the guess is likely wrong. Pass the " +
           "property exactly as Search Console names it. Same write as the " +
           "dashboard's 'use this property' button on /google.",
-        inputSchema: { site_url: z.string().min(1) },
+        inputSchema: {
+          site_url: z
+            .string()
+            .min(1)
+            .describe("The Search Console property to track, exactly as Search Console lists it (e.g. 'sc-domain:example.com' or 'https://example.com/')."),
+        },
       },
       async ({ site_url }) => {
         const p = currentProject();
@@ -1418,7 +1598,12 @@ const mcpHandler = createMcpHandler(
           "installation's live repo list - a repo outside the installation is " +
           "refused. Same write as the onboarding wizard's repo picker. " +
           "Self-host connects the repo during project creation instead.",
-        inputSchema: { repo: z.string().min(3) },
+        inputSchema: {
+          repo: z
+            .string()
+            .min(3)
+            .describe("The repository as owner/name. Must be one the project's GitHub App installation can reach."),
+        },
       },
       async ({ repo }) => {
         if (!isCloudMode()) return fail("Self-host connects the repo during project creation.");
@@ -1649,7 +1834,9 @@ const mcpHandler = createMcpHandler(
           "missed window re-raises the alert. Use the exact job name from " +
           "get_cron_health, including any --<project> suffix; fails if that " +
           "job has no active alert.",
-        inputSchema: { job: z.string().min(1) },
+        inputSchema: {
+          job: z.string().min(1).describe("The cron job key to clear, as reported by get_cron_health."),
+        },
       },
       async ({ job }) => {
         // Scoped through getCronHealth(slug) inside markCronFixed: a project
@@ -1734,7 +1921,7 @@ const mcpHandler = createMcpHandler(
           "server's GH_MERGE_TOKEN; without it this fails and the PR page link " +
           "is the fallback.",
         inputSchema: {
-          number: z.number().int().positive(),
+          number: z.number().int().positive().describe("The pull request number to merge."),
         },
       },
       async ({ number }) => {
@@ -1759,7 +1946,7 @@ const mcpHandler = createMcpHandler(
           "this project's site: for the site's own activity use get_activity. " +
           "Pass limit to trim the list.",
         inputSchema: {
-          limit: z.number().int().min(1).max(50).optional(),
+          limit: z.number().int().min(1).max(50).optional().describe("How many of the most recent releases to return, up to 50."),
         },
       },
       async ({ limit }) => {
@@ -1786,7 +1973,7 @@ const mcpHandler = createMcpHandler(
           "from the site profile, plain-English steps, gotchas, and a paste-ready " +
           "@browser command. Mark progress with set_playbook_status.",
         inputSchema: {
-          slug: z.string().optional(),
+          slug: z.string().optional().describe("Fetch one playbook step by slug. Omit for the whole playbook."),
         },
       },
       async ({ slug }) => {
@@ -1856,8 +2043,10 @@ const mcpHandler = createMcpHandler(
           "the dashboard's Backlinks screen. Call it after a submission actually " +
           "went through (e.g. the @browser session finished), not before.",
         inputSchema: {
-          slug: z.string().min(1),
-          status: z.enum(["todo", "done", "skipped"]),
+          slug: z.string().min(1).describe("The playbook step's slug, as returned by get_playbook."),
+          status: z
+            .enum(["todo", "done", "skipped"])
+            .describe("Where this step stands: 'skipped' means deliberately not doing it, not failed."),
         },
       },
       async ({ slug, status }) => {
@@ -1988,12 +2177,30 @@ const mcpHandler = createMcpHandler(
           "the radar (any status) the existing row is returned with a note - " +
           "move on, don't retry.",
         inputSchema: {
-          title: z.string().min(1),
-          why_now: z.string().min(1),
-          signals: z.array(z.string()).max(8).optional(),
-          sources: z.array(z.string()).max(8).optional(),
-          seed_url: z.string().url().optional(),
-          seed_stats: z.string().optional(),
+          title: z.string().min(1).describe("The subject in a few words, as it should read on the dashboard's Trend radar."),
+          why_now: z
+            .string()
+            .min(1)
+            .describe("Why this is worth writing about THIS week - the timeliness argument, not a general description."),
+          signals: z
+            .array(z.string())
+            .max(8)
+            .optional()
+            .describe("What proves the topic is moving right now: engagement numbers, velocity, repeated discussion."),
+          sources: z
+            .array(z.string())
+            .max(8)
+            .optional()
+            .describe("URLs the signals came from, so the owner can judge the evidence."),
+          seed_url: z
+            .string()
+            .url()
+            .optional()
+            .describe("The one specific post or video this topic grew from. Takes built on it credit and quote it directly."),
+          seed_stats: z
+            .string()
+            .optional()
+            .describe("The seed's traction at scan time, e.g. '4.2k upvotes, 380 comments in 2 days'."),
         },
       },
       async ({ title, why_now, signals, sources, seed_url, seed_stats }) => {
@@ -2044,7 +2251,10 @@ const mcpHandler = createMcpHandler(
           "reads ALL statuses before proposing (never re-propose a known subject); " +
           "the trend-expand workflow reads its dispatched topic's evidence here.",
         inputSchema: {
-          status: z.enum(["new", "expanding", "expanded", "dismissed"]).optional(),
+          status: z
+            .enum(["new", "expanding", "expanded", "dismissed"])
+            .optional()
+            .describe("Filter the radar to one stage. Omit for every topic."),
         },
       },
       async ({ status }) => {
@@ -2074,8 +2284,10 @@ const mcpHandler = createMcpHandler(
           "settable here - when the owner asks for takes on a subject, use " +
           "expand_trend_topic instead.",
         inputSchema: {
-          id: z.string().uuid(),
-          status: z.enum(["expanded", "dismissed"]),
+          id: z.string().uuid().describe("The trend topic's id, as returned by get_trend_topics."),
+          status: z
+            .enum(["expanded", "dismissed"])
+            .describe("'expanded' once takes have been queued from it; 'dismissed' to drop it off the radar."),
         },
       },
       async ({ id, status }) => {
@@ -2132,7 +2344,7 @@ const mcpHandler = createMcpHandler(
           "site owner picked the subject in the current conversation - never from " +
           "autonomous workflow runs.",
         inputSchema: {
-          id: z.string().uuid(),
+          id: z.string().uuid().describe("The trend topic to expand into takes, as returned by get_trend_topics."),
         },
       },
       async ({ id }) => {
@@ -2167,7 +2379,7 @@ const mcpHandler = createMcpHandler(
           "set that produced them. Site-specific facts live in the repo's " +
           ".dispatchseo/conventions.md, which the 'setup' workflow writes.",
         inputSchema: {
-          workflow: z.enum(WORKFLOWS),
+          workflow: z.enum(WORKFLOWS).describe("Which playbook to fetch. Call this FIRST in every run - it overrides any cached knowledge of the pipeline."),
         },
       },
       async ({ workflow }) => {
@@ -2201,7 +2413,7 @@ const mcpHandler = createMcpHandler(
           "adapts the stack-specific spots to the target repo and commits a PR " +
           "- the files are a reference-stack template, never commit blindly.",
         inputSchema: {
-          path: z.string().optional(),
+          path: z.string().optional().describe("Return a single file from the pipeline pack by its repo-relative path. Omit for every file."),
         },
       },
       async ({ path }) => {
@@ -2245,14 +2457,16 @@ const mcpHandler = createMcpHandler(
           "(mark_pipeline_installed does that) and a failure here must " +
           "never stop the install.",
         inputSchema: {
-          step: z.enum([
-            "workflows",
-            "adaptation",
-            "repo_settings",
-            "content_home",
-            "site_facts",
-            "research",
-          ]),
+          step: z
+            .enum([
+              "workflows",
+              "adaptation",
+              "repo_settings",
+              "content_home",
+              "site_facts",
+              "research",
+            ])
+            .describe("Which install step just completed. Stamps it on the dashboard's live setup checklist."),
         },
       },
       async ({ step }) => {
@@ -2366,8 +2580,8 @@ const mcpHandler = createMcpHandler(
 
     // ---- conventions (the dashboard's mirror of the repo's site facts) -----
     const themeTokenSchema = z.object({
-      name: z.string().min(1),
-      value: z.string().optional(),
+      name: z.string().min(1).describe("The token's name as used in the codebase, e.g. 'brand-500' or '--surface'."),
+      value: z.string().optional().describe("The token's literal value, e.g. '#7c3aed' or '1.25rem'."),
     });
     server.registerTool(
       "set_conventions",
@@ -2381,20 +2595,62 @@ const mcpHandler = createMcpHandler(
           "theme_tokens should include resolved color values (hex/oklch) where the " +
           "token is a color, so the dashboard can render real swatches.",
         inputSchema: {
-          product_summary: z.string().optional(),
-          stack: z.string().optional(),
-          package_manager: z.string().optional(),
-          build_command: z.string().optional(),
-          guides_dir: z.string().optional(),
-          tools_wiring: z.string().optional(),
-          theme_tokens: z.array(themeTokenSchema).optional(),
-          fonts: z.array(z.string()).optional(),
-          voice_rules: z.array(z.string()).optional(),
-          exemplar_guides: z.array(z.string()).optional(),
-          exemplar_visuals: z.array(z.string()).optional(),
-          tool_reference: z.string().optional(),
-          analytics: z.string().optional(),
-          notes: z.string().optional(),
+          product_summary: z
+            .string()
+            .optional()
+            .describe("What the product does, in a few sentences - the grounding every research and build run reads first."),
+          stack: z
+            .string()
+            .optional()
+            .describe("Framework, language and notable libraries, e.g. 'Next.js 16 App Router, React 19, Tailwind v4'."),
+          package_manager: z
+            .string()
+            .optional()
+            .describe("The package manager this repo uses: npm, pnpm, yarn or bun."),
+          build_command: z
+            .string()
+            .optional()
+            .describe("The command that verifies a build, e.g. 'pnpm build'. Builders run it before opening a PR."),
+          guides_dir: z
+            .string()
+            .optional()
+            .describe("Repo path where guide content files live, e.g. 'src/content/blog'."),
+          tools_wiring: z
+            .string()
+            .optional()
+            .describe("How a new interactive tool gets registered and routed in this repo: registry file, index page, route convention."),
+          theme_tokens: z
+            .array(themeTokenSchema)
+            .optional()
+            .describe("The site's design tokens, so generated UI matches the site instead of improvising colours and spacing."),
+          fonts: z
+            .array(z.string())
+            .optional()
+            .describe("Font families the site uses, so generated pages match."),
+          voice_rules: z
+            .array(z.string())
+            .optional()
+            .describe("Writing rules to follow exactly: punctuation bans, tone, author attribution."),
+          exemplar_guides: z
+            .array(z.string())
+            .optional()
+            .describe("Paths to existing guides that represent the quality bar - builders read these before writing."),
+          exemplar_visuals: z
+            .array(z.string())
+            .optional()
+            .describe("Paths to existing visual or diagram components worth imitating."),
+          tool_reference: z
+            .string()
+            .optional()
+            .describe("Path to the best existing interactive tool - the reference implementation a new tool is modelled on."),
+          analytics: z
+            .string()
+            .optional()
+            .describe("How analytics is wired, when new pages have to hook into it."),
+          notes: z
+            .string()
+            .optional()
+            .describe("Anything else a builder must know about this repo that the other fields don't cover."),
         },
       },
       async (data) => {
@@ -2456,9 +2712,19 @@ const mcpHandler = createMcpHandler(
           "wholesale (omitted fields keep theirs). At least 2 archetypes must " +
           "stay in rotation.",
         inputSchema: {
-          house_rules: z.string().max(HOUSE_RULES_MAX).optional(),
-          disabled_archetypes: z.array(z.enum(GUIDE_ARCHETYPES)).optional(),
-          disabled_blocks: z.array(z.enum(GUIDE_BLOCKS)).optional(),
+          house_rules: z
+            .string()
+            .max(HOUSE_RULES_MAX)
+            .optional()
+            .describe("Free-text standing instructions injected into every build. Replaces the current value wholesale."),
+          disabled_archetypes: z
+            .array(z.enum(GUIDE_ARCHETYPES))
+            .optional()
+            .describe("Guide shapes to remove from rotation. At least 2 archetypes must stay in rotation."),
+          disabled_blocks: z
+            .array(z.enum(GUIDE_BLOCKS))
+            .optional()
+            .describe("Guide skeleton parts to drop from every build: tldr, comparison_table, visuals, faq."),
         },
       },
       async (patch) => {
