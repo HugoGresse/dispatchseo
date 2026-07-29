@@ -114,7 +114,10 @@ invented volumes, difficulties, positions, or stats, ever.
   tool build (never pass \`build:"now"\` from an autonomous run). Projects
   with it OFF record the approval as pending for the owner to greenlight on
   the dashboard; the tool response says so and that counts as success - do
-  not retry.
+  not retry. A site with no public tools page yet is NOT an exception:
+  the ideas still get queued, and the first tool build scaffolds the tools
+  home in its own PR (build-tool step 3). Nothing in a conventions file
+  cancels this.
 - Builders take the FIRST approved item \`get_suggestions\` returns for their
   type - that is the owner's queue in build order, never to be re-ranked. An
   empty queue is a clean exit, never an invented task - with ONE exception:

@@ -53,10 +53,22 @@ Product-surface files to read fresh each research run:
 
 ## Tools
 
-**Not wired yet - do not approve or build tool suggestions.** `/tools` is a
-password-gated dashboard screen, not a public tool surface. Shipping public
-SEO tools needs a registry + public route + template first (future work;
-when built, update this file and the tool-validate workflow's assumptions).
+- Public base path: **`/free-tools/<slug>`**. `/tools` is taken - it is the
+  password-gated dashboard screen in the `(dashboard)` route group, NOT a
+  public surface, and it must not be moved or reused.
+- **No tools home exists yet.** The first tool build scaffolds it in its own
+  PR (build-tool step 3): a registry module, `/free-tools` index page,
+  `/free-tools/[slug]` detail template rendering the locked funnel (large
+  centered title -> value line -> widget -> CTA -> description -> FAQ),
+  sitemap coverage in `src/app/sitemap.ts`, and the widget components under
+  `src/components/free-tools/`. Nothing here is auth-gated - the site has no
+  middleware; dashboard pages guard themselves individually, so a new public
+  route is public by default. Verify anyway with a cookie-less request.
+- Reference implementation: none yet - the first merged tool becomes it.
+  Update this section (base path, registry path, wiring steps, reference)
+  in that same PR.
+- Tool ideas ARE queued every week regardless of the above; see the research
+  workflow's tool slot.
 
 ## Design system
 

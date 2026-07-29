@@ -11,6 +11,7 @@ export const RESEARCH_STEPS = [
   { title: "Validate", plain: "Checks real search volume and difficulty - keywords outside your site's league get dropped." },
   { title: "Inspect", plain: "Eyeballs page 1 for each survivor: is it actually winnable?" },
   { title: "Queue", plain: "Fills the week's tank to your site's own pace - and guarantees it: if easy keywords run out, it promotes its own harder-but-vetted finds and widens the hunt before ever coming back short. Never filler to hit the number." },
+  { title: "Tools", plain: "Every run also leaves a tool idea or two in the tool queue - the weekly tool builder has nothing to ship otherwise. A site that has no public tools page yet still gets ideas queued; the first tool build creates the page." },
 ];
 
 export const RESEARCH = `## Workflow: research <topic?>
@@ -56,6 +57,15 @@ product:
    Tag each candidate with its intent class (commercial | comparison |
    informational | transactional) - the tag rides into the rationale at
    step 5 and into the run report, so the real mix is always visible.
+   **Sweep for tool-shaped queries as its own pass, every run.** Guide
+   candidates crowd out tool candidates when both come from one list, and the
+   tool queue then sits empty for months. So run a separate, explicit sweep
+   for queries that imply DOING something -
+   generate / build / create / check / test / validate / calculate /
+   estimate / convert / compare / pick - plus the jobs the product's own
+   users do by hand today (config files, boilerplate, sizing decisions,
+   audits). Aim for 5-10 tool candidates in every run; they carry into the
+   same validation and SERP steps as guides.
 3. **Validate with the research source** (see the data-tools section):
    volume + KD for the candidates where available (batch where possible).
    Apply the quality bar.
@@ -75,6 +85,13 @@ product:
    (wizard | calculator | analyzer | library - see the build-tool workflow's
    archetype table) so the builder knows the intended interaction pattern up
    front.
+   **A site with no public tools page yet is NOT a reason to skip tool
+   ideas.** Some conventions files say tools are "not wired yet" or name no
+   tool surface at all - that describes the repo on the day setup ran, not a
+   policy. The build-tool workflow scaffolds the tools home (registry, index,
+   page template) inside its first PR, so the missing surface is the FIRST
+   tool build's job, not a reason for an empty queue. Queue the ideas; note
+   in the run report that the first build will create the tools section.
 
 ### Weekly quota - the queue guarantee
 
@@ -90,6 +107,24 @@ which counts (see the queue policies). Count what is already queued first
 (\`get_suggestions\` for approved and pending) and top up the DIFFERENCE -
 never overfill past ~9 approved guides or ~2 queued tools.
 
+**The tool slot is not optional - it is half the promise.** The dashboard
+tells the owner in writing that this run fills the tool queue, and the tool
+builder ships at most one tool a week from whatever it finds there. So every
+run ends with **1-2 tool ideas queued** (top up to 2; skip only when 2 are
+already waiting). A run that queues zero tools while the tool queue is empty
+is a FAILED run, however good its guides were. Exactly two excuses are
+banned outright:
+- "The repo has no tools surface / conventions says tools are not wired" -
+  the first tool build creates it (see step 5). Queue anyway.
+- "No perfect tool keyword turned up" - that is rung 1, not a verdict:
+  re-run the tool-shaped sweep wider before concluding it. A product whose
+  users configure, calculate, or check ANYTHING by hand has a tool in it.
+The quality bar still decides WHICH tool ideas pass - a fake widget queued
+to hit the number is worse than an honest miss. If after a genuine wider
+sweep nothing clears the bar, say so explicitly in the run report ("0 tools
+queued - N tool candidates validated, none cleared the bar because X"), so
+the miss is visible instead of silent.
+
 **Auto mode fills the tank; semi mode fills the backlog.** Read
 \`get_project\`'s \`auto_approve\`. When it is TRUE (the owner chose Auto -
 hands-off publishing), reaching the weekly target is MANDATORY: after the KD
@@ -104,6 +139,11 @@ or owner-rejected ideas - those still wait, both modes.) When \`auto_approve\`
 is FALSE (Semi), the opposite: approve only the confident auto-approve-zone
 winners and leave the rest pending for the owner - the backend coerces your
 extra approvals to pending anyway, so just list them in the run report.
+Tool ideas follow the same rule through their own flag,
+\`auto_approve_tools\`: approve every tool idea you queue either way - on an
+Auto-tools project that lands approved and books the week's build slot, on a
+gated one the backend records it as pending for the owner. Both are success;
+never leave a tool idea unapproved just because the gate might catch it.
 
 Short of quota? Work down this ladder IN ORDER - each rung costs more than
 the one above it, so exhaust a rung before descending:
@@ -153,8 +193,10 @@ unpromoted is a research failure, not honesty.
 
 Two markdown tables: (a) keyword opportunities - keyword, volume, KD, intent,
 type, angle; (b) recommended tools/interactive pages - idea, target keyword,
-why it converts, status. Then a one-line summary of what was queued, the
-quota status, and the HONEST intent mix - never a forced one - e.g. "queue
-now holds 7 approved guides, 1 queued tool; 3 of 7 commercial, the rest were
-the only keywords under the KD ceiling this week".
+why it converts, status. Table (b) is never empty-by-omission: list the tool
+candidates you swept even when none was queued, with the reason each was
+dropped. Then a one-line summary of what was queued, the quota status
+for BOTH queues, and the HONEST intent mix - never a forced one - e.g.
+"queue now holds 7 approved guides and 2 tool ideas; 3 of 7 commercial, the
+rest were the only keywords under the KD ceiling this week".
 `;

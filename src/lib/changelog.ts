@@ -30,6 +30,44 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-29",
+    date: "2026-07-29",
+    title: "The tool queue fills itself",
+    summary:
+      "Every weekly research run now queues tool ideas, not just guides - and if your site has no public tools section yet, the first tool build creates one.",
+    changes: [
+      {
+        kind: "fixed",
+        text:
+          "Sites that finished setup without a public tools section got tool ideas skipped " +
+          "week after week, so the tool queue stayed empty and the weekly tool builder had " +
+          "nothing to ship - quietly, with no warning anywhere. The research run now queues " +
+          "1-2 tool ideas every week regardless, and reports it when none clears the bar.",
+      },
+      {
+        kind: "new",
+        text:
+          "The tool builder creates your tools section itself the first time it runs - " +
+          "registry, tools index, and the page template - in the same PR as the first tool. " +
+          "If /tools is already your app's own screen, it publishes at /free-tools instead " +
+          "and leaves your routes alone.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Setup now looks for (or scaffolds) a tools home the same way it does your blog, " +
+          "so new projects start able to publish tools on day one.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Tool validation used to assume every tool lives at /tools/<slug>; it now reads " +
+          "the real path from the PR, so tools published anywhere else get tested instead " +
+          "of failing on a 404.",
+      },
+    ],
+  },
+  {
     version: "2026-07-28.2",
     date: "2026-07-28",
     title: "The launch-day audit sweep",

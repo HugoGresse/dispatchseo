@@ -7,7 +7,7 @@
 // together with the markdown below - they describe the same pipeline.
 export const BUILD_TOOL_STEPS = [
   { title: "Pick", plain: "Only builds tool ideas you already greenlit on the dashboard." },
-  { title: "Study", plain: "Reads your best existing tool end to end as the quality reference." },
+  { title: "Study", plain: "Reads your best existing tool end to end as the quality reference - and if your site has no public tools section yet, the first build creates one (registry, index, page template) in the same PR." },
   { title: "Gate", plain: "Checks page 1 for competing tools. If ours can't clearly win, it doesn't build." },
   { title: "Theme", plain: "Reads your site's actual design system fresh - your colors, fonts, and spacing only." },
   { title: "Plan", plain: "Designs the tool on paper first: who searches this, what they walk away with, the real logic inside." },
@@ -39,14 +39,45 @@ swapping words and buttons is a build failure, not a shortcut.
    may be just a title - derive the search intent and functionality from the
    keyword and the PLAN step as usual; a thin brief is not a reason to skip.
 2. \`update_suggestion(id, status="in_progress")\`.
-3. **TEMPLATE.** The living template is the reference tool named in the
+3. **SURFACE CHECK (build the tools home if the site has none).** Read the
+   conventions file's Tools section first. If it names no public tool
+   surface, points at a route that turns out to be behind the product's
+   login, or says tools are "not wired yet" / "do not build tool
+   suggestions": that is a repo that finished setup before it had a tools
+   section, NOT a stop order. Do not exit and do not park the suggestion -
+   scaffold the surface as the first commits of THIS PR, then build the tool
+   into it:
+   - a **registry** module (one entry per tool: slug, title, h1, value line,
+     meta description, description copy, FAQ items, widget reference), an
+     **index page** listing entries as cards, and a **detail template**
+     rendering the locked funnel below - all in the site's own stack and
+     design tokens, discovered per the THEME step;
+   - served from a PUBLIC path with sitemap coverage and excluded from any
+     auth gate. If the obvious name is taken by the product's own app (a
+     \`/tools\` dashboard screen is the classic case), publish at a sibling
+     public path - \`/free-tools/<slug>\` is the safe default - and never
+     move or rename the owner's app routes;
+   - verify like a logged-out stranger: build, serve, request the new tool
+     page with no cookies, expect 200 with the widget rendered;
+   - update \`.dispatchseo/conventions.md\`'s Tools section in the same PR
+     with the real base path, registry path, wiring steps, and this tool as
+     the reference implementation, then mirror it with \`set_conventions\`.
+     Leaving the stale "not wired" text behind means the next build
+     scaffolds a second tools system.
+   Say plainly in the run report and PR body that this PR also created the
+   site's tools section. Every later build skips this step - the surface is
+   there and the conventions file now says so.
+4. **TEMPLATE.** The living template is the reference tool named in the
    conventions file. Before writing anything, read COMPLETELY: its registry
    entry (field by field), its widget component, and the page template that
    renders the shell. The funnel is LOCKED: hero (tool name as a LARGE
    CENTERED title + one value line stating what the user walks away with) ->
    the widget itself (the product, immediately usable, no scroll hunting) ->
    CTA to the paid product -> description copy -> FAQ. The build's job is a
-   registry entry and a widget that match the reference's quality bar.
+   registry entry and a widget that match the reference's quality bar. On a
+   site whose tools home was just scaffolded in step 3 there is no reference
+   tool to read - the locked funnel here IS the spec, and this build becomes
+   the reference every later one studies, so hold it to that bar.
    **The widget's interaction pattern is chosen BY ARCHETYPE - classify
    first, then apply that archetype's locked pattern.** Classify from the
    suggestion's spec (the researcher stamps an \`archetype\` - confirm it, do
@@ -73,7 +104,7 @@ swapping words and buttons is a build failure, not a shortcut.
    the living reference to read. If a tool genuinely fits no archetype, pick
    the nearest pattern and STATE THE DEVIATION and why in the PR body - a
    mismatch must be visible, never silent.
-4. **THIN-CONTENT GATE.** Re-pull the live SERP top 5 for the primary
+5. **THIN-CONTENT GATE.** Re-pull the live SERP top 5 for the primary
    keyword. The planned tool must be the definitive INTERACTIVE answer on
    page 1 - if a competitor tool exists, list concretely what ours does
    better (polish, completeness, presets, zero-login). If it cannot clearly
@@ -83,7 +114,7 @@ swapping words and buttons is a build failure, not a shortcut.
    winnability from the tool idea itself and product knowledge, and write
    "SERP gate: skipped (free mode - no SERP source)" in the run report AND
    the PR body. Never fabricate SERP claims you did not fetch.**
-5. **THEME (know the host site before styling anything).** The tool must
+6. **THEME (know the host site before styling anything).** The tool must
    look native to the site it ships on, and the site's design system is read
    fresh each build - never assumed from memory or carried over from another
    site:
@@ -99,7 +130,7 @@ swapping words and buttons is a build failure, not a shortcut.
    idiom, label style, anything unusual) and keep every visual decision in
    the widget traceable to it. Nothing from another site's palette or idiom
    ever leaks across sites.
-6. **EXECUTION PLAN (mandatory - design the tool, never re-skin the
+7. **EXECUTION PLAN (mandatory - design the tool, never re-skin the
    template).** The template gives every tool the same shell; this step is
    where the actual tool gets designed, in writing, BEFORE any code:
    - **Search intent.** Who types this keyword, what job they are trying to
@@ -136,7 +167,7 @@ swapping words and buttons is a build failure, not a shortcut.
    relabeled steps and buttons; a wizard whose every path ends in
    near-identical canned output; a "checker" that trivially pattern-matches
    and calls it analysis; static content wearing an input box as decoration.
-7. **BUILD.** Implement the plan per the site's tool-shipping steps in the
+8. **BUILD.** Implement the plan per the site's tool-shipping steps in the
    conventions file (registry entry, widget component, wiring). The widget
    must be purely client-side (no backend calls), resilient (no interaction
    may throw), and its primary action obvious. Universal microcopy rule:
@@ -146,7 +177,7 @@ swapping words and buttons is a build failure, not a shortcut.
    AND a power user still sees exactly what gets written. Analytics only for
    real interactive milestones, following the conventions file's
    event-naming rule.
-8. **HUMANIZER (mandatory).** Apply the humanizer pass to ALL registry copy:
+9. **HUMANIZER (mandatory).** Apply the humanizer pass to ALL registry copy:
    title, h1, meta description, summary, every description paragraph, every
    FAQ answer. The copy is the ranking surface - it must read like the owner
    wrote it. **Information gain:** the description and FAQ must carry at least
@@ -158,12 +189,12 @@ swapping words and buttons is a build failure, not a shortcut.
    links (at least one sibling tool, one related guide) with natural
    keyword-bearing anchors, root-relative only - and never inside FAQ
    answers if those mirror into structured data as plain text.
-9. **VERIFY.** The site's build command must pass. Trace every widget
+10. **VERIFY.** The site's build command must pass. Trace every widget
    interaction path in the code once more - a broken interaction blocks the
    merge. Then check the composed page against the locked funnel: large
    centered title, value line, widget, CTA, description, FAQ, all present in
    that order, and no class or color in the widget outside the THEME brief.
-10. **PR - never main.** Branch \`seo/<slug>\`, commit, push, then
+11. **PR - never main.** Branch \`seo/<slug>\`, commit, push, then
     \`gh pr create --label seo --label seo-tool --title "..." --body "..."\`
     (create missing labels). Body includes: target keyword, volume/KD, the
     conversion rationale, gate verdict, the execution plan (search intent,
@@ -177,8 +208,8 @@ swapping words and buttons is a build failure, not a shortcut.
     report, and exit non-zero so the workflow goes red and the owner gets
     GitHub's failure email. A pushed branch with no PR and a green run is
     the worst outcome - it strands silently.
-11. \`update_suggestion(id, status="done", result_pr_url=<pr url>)\` and
+12. \`update_suggestion(id, status="done", result_pr_url=<pr url>)\` and
     \`log_page(url="https://{{DOMAIN}}/<path>", ...)\`.
-12. Report: what was built, the PR link, the gate verdict, the one-line core
+13. Report: what was built, the PR link, the gate verdict, the one-line core
     transformation, and what to check on the preview.
 `;

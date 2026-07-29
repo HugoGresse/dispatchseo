@@ -8,6 +8,7 @@
 export const SETUP_STEPS = [
   { title: "Inspect", plain: "Your Claude Code reads your repo: stack, build command, design tokens, existing content." },
   { title: "Content home", plain: "Finds where published content should live - or scaffolds a minimal blog as its own PR if the site has none. Never duplicates an existing one, and always public - never behind your login." },
+  { title: "Tool home", plain: "Does the same for free interactive tools: finds your public tools section, or scaffolds an empty one so the first tool the builder makes has somewhere to land. A /tools route that is part of your logged-in app doesn't count - it publishes next to it instead." },
   { title: "Record", plain: "Writes the site-facts file every other workflow adapts from - discovered, never assumed." },
   { title: "Mirror", plain: "Sends the same facts here, so this dashboard can show you what it found." },
   { title: "Profile", plain: "Describes your product in directory-ready copy and saves it for the backlink playbook." },
@@ -15,7 +16,7 @@ export const SETUP_STEPS = [
 
 export const SETUP = `## Workflow: setup (one-time - find the content home, write the site facts, personalize the playbook)
 
-Three jobs, in order. Do all three.
+Four jobs, in order. Do all four.
 
 ### Part 1 - find or create the content home
 
@@ -87,7 +88,45 @@ Treat that answer as a hint, not truth - owners misremember their own repos.
    missing tool or an error never stops setup; it only feeds the owner's
    progress checklist).
 
-### Part 2 - write \`.dispatchseo/conventions.md\`
+### Part 2 - find or create the tools home
+
+Free interactive tools are the other half of what this pipeline publishes,
+and they convert better than guides. The weekly research run queues tool
+ideas for EVERY project, so every project needs somewhere for them to land.
+
+1. **Detect a PUBLIC tool surface**, whatever it is called: routes like
+   /tools, /free-tools, /calculators, /generators, /utilities, a tools
+   registry or config, existing widget/calculator pages.
+2. **The login trap - check who the surface serves.** A \`/tools\` route
+   that belongs to the product's own logged-in app or dashboard is NOT a
+   tools home: it is a product screen behind auth, and treating it as one
+   silently blocks tool publishing forever. Same test as the content home -
+   would a logged-out stranger get the page? If the obvious name is taken by
+   an app route, publish under a sibling public path (\`/free-tools\` is the
+   safe default) and say so; never rename or move the owner's app routes.
+3. **Scaffold when none exists**, in the site's OWN stack and tokens, as its
+   own PR (or folded into the content-home PR - state which):
+   - a **registry** module - one entry per tool carrying at minimum slug,
+     title, h1, one-line value statement, meta description, description
+     copy, FAQ items, and a reference to its widget component. It ships
+     EMPTY (no placeholder or demo tool - a fake tool is worse than none);
+   - an **index page** listing the registry's tools as cards (name, one
+     line, link), presentable with zero entries ("first tools coming");
+   - a **detail template** rendering the locked funnel the tool builder
+     writes against, in this order: large centered title -> one value line
+     -> the widget itself -> CTA to the product -> description copy -> FAQ;
+   - **sitemap coverage** for the index and every registry entry, and the
+     same public-route rule as Part 1 (excluded from any auth gate, verified
+     logged-out with no cookies: 200 with the page, not a redirect).
+   Keep it minimal: a registry, a list, a template. Not a themed showcase.
+4. **Never create a second tools system.** If any public tool surface
+   exists, extend it and record its wiring instead.
+5. Record the result for Part 3: the public base path (e.g.
+   \`/free-tools/<slug>\`), the registry path, the widget directory, and the
+   exact steps to ship one tool. If you scaffolded, tell the owner that PR
+   is what makes tools publishable.
+
+### Part 3 - write \`.dispatchseo/conventions.md\`
 
 Inspect THIS repo and write the site facts file every other workflow depends
 on. Discover, never assume: read the actual files, run the actual build
@@ -105,9 +144,21 @@ command once to confirm it. The file must contain these sections:
    JSON-LD), which structured data the stack emits (e.g. FAQPage from
    frontmatter), internal-link style, and 2-3 exemplar posts to read before
    drafting.
-4. **Tools** - where interactive tool pages live, the registry/wiring steps
-   to ship one, the reference implementation to read completely, and what the
-   page template renders automatically.
+4. **Tools** - the public base path tool pages are served at (e.g.
+   \`/free-tools/<slug>\`), where the registry and widget components live,
+   the registry/wiring steps to ship one, the reference implementation to
+   read completely (write "none yet - first build sets the reference" when
+   the registry is empty), and what the page template renders automatically.
+   **HARD RULE - this section may never tell downstream workflows to stand
+   down.** Never write "tools are not wired", "do not queue tool ideas", or
+   "do not approve or build tool suggestions". The research run queues tool
+   ideas every week for every project and the tool builder scaffolds
+   whatever is still missing on its first PR, so a stand-down line here does
+   not pause tools - it silently kills them, and the owner just sees an
+   empty tool queue for months. If Part 2 could not finish (an unfamiliar
+   stack, an ambiguous repo), write what IS true - the intended base path
+   and the concrete wiring steps the first tool build must perform - and
+   name the open question.
 5. **Design system** - where the theme tokens live (e.g. the globals.css
    @theme block), the token names, card/button/label idioms, the icon
    language, where brand logomarks live, and 2-3 exemplar visual components.
@@ -132,12 +183,12 @@ each time. Re-run this mirror whenever the conventions file changes.
 Then call \`mark_install_step\` with step=\`site_facts\` (best-effort, same
 rule as the content_home stamp).
 
-### Part 3 - personalize the site profile
+### Part 4 - personalize the site profile
 
 Fills the profile the dashboard's Playbook tab personalizes from - every
 directory submission's prefilled copy and every browser command uses it.
 
-1. Read the product surface fresh (the files you just listed in Part 1).
+1. Read the product surface fresh (the files you just listed in Part 3).
    Enough to describe the product accurately - do not draft from memory.
 2. Write the profile, respecting the length contracts (directories enforce
    them): \`name\`; \`url\`; \`tagline\` <= 60 chars; \`short_description\`
@@ -146,7 +197,7 @@ directory submission's prefilled copy and every browser command uses it.
    \`tags\` (1-10, lowercase-kebab).
 3. Copy quality bar: plain English, first-person-free, concrete (what the
    buyer gets), zero hype words ("revolutionary", "game-changing" get
-   listings rejected). Follow the writing rules from Part 1.
+   listings rejected). Follow the writing rules from Part 3.
 4. Call \`set_site_profile\` with the values. Show the saved profile back as
    a table.
 5. Tell the user: the Playbook tab is now personalized; open it and work top
