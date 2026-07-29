@@ -47,9 +47,9 @@
 <p align="center">
   <a href="https://dispatchseo.com">Website</a>
   &nbsp;&middot;&nbsp;
-  <a href="https://dispatchseo.com/docs/docker-compose">Self-hosting guide</a>
+  <a href="https://dispatchseo.com/docs/docker-compose">Self-host on your computer</a>
   &nbsp;&middot;&nbsp;
-  <a href="https://dispatchseo.com/docs/vps">VPS guide</a>
+  <a href="https://dispatchseo.com/docs/vps">Self-host on a VPS</a>
   &nbsp;&middot;&nbsp;
   <a href="https://github.com/NeoZi12/dispatchseo/discussions">Discussions</a>
   &nbsp;&middot;&nbsp;
