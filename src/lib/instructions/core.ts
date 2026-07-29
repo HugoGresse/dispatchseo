@@ -55,8 +55,26 @@ invented volumes, difficulties, positions, or stats, ever.
 
 ## Quality bar (locked)
 
-- Volume floor: **> 500** (soft: > 300 only when intent fits the product
-  perfectly). Applies only when volume data exists (DataForSEO projects).
+- Volume BAND is **DYNAMIC - it scales with the site's authority**, same as
+  the KD ceiling below and read off the same \`get_domain_rank\` call. Applies
+  only when volume data exists (DataForSEO projects).
+
+  | DR-equivalent | Target band | Soft edge (dead-on ICP only) |
+  |---|---|---|
+  | < 10 (incl. unindexed) | 100 - 800 | up to 1500 |
+  | 10-19 | 200 - 1500 | up to 3000 |
+  | 20-34 | 300 - 3000 | up to 6000 |
+  | 35+ | > 500 | no ceiling |
+
+  **The upper bound is the point, and it is NOT a formality.** A DR-0 site
+  ranking for an 8000-volume head term does not happen, and queueing one
+  spends a build slot to land on page 8. Long-tail is not a consolation prize
+  for a young site - it is the ONLY thing that ranks, and a 200-volume query
+  won at position 6 beats a 5000-volume query lost at position 80 every time.
+  So on a low-DR site, a candidate is dropped for being too BIG at least as
+  often as for being too small. If a run's candidates are clustering above the
+  band, that is the signal to hunt narrower (add a qualifier, an audience, a
+  version, an error string), not to invoke the soft edge.
 - KD ceiling is **DYNAMIC - it scales with the site's authority**. At the
   START of every research run, call the seo-manager MCP's \`get_domain_rank\`
   tool for the site's cached DR-equivalent (0-100, refreshed weekly by the
@@ -72,9 +90,30 @@ invented volumes, difficulties, positions, or stats, ever.
   | 20-34 | KD < 25 | KD 25-35 with strong SERP weakness |
   | 35+ | KD < 35 | KD 35-45 with strong SERP weakness |
 
+  - **KD is an input, never the verdict. The SERP overrules it.** Reported KD
+    is derived from the BACKLINK profiles of page 1, so it reads far too low
+    on commercial SERPs where the incumbents rank on brand and topical
+    authority rather than links - "<competitor> alternative", "best X",
+    "X pricing", "free X" queries routinely report KD 1-15 while page 1 is
+    five established brands. Those are the exact queries a young site loses.
+    A KD number that disagrees with what you SEE on page 1 is wrong, and what
+    you see wins.
+  - **Authority gate (a hard disqualifier - run it FIRST).** Count page-1
+    results that are established authority for the query: recognized brands
+    in the niche, the vendor's own domain, official docs, and publishers that
+    clearly out-rank this site on every axis. **4 or more -> DROP the
+    candidate.** No KD number, no weakness signal, and no differentiated angle
+    rescues it. Note the count in serp_notes every time, e.g. "authority
+    count 5/10 - dropped". This gate runs BEFORE the weakness test and cannot
+    be overridden by it.
   - "Strong SERP weakness" = page 1 shows at least 2 of: forum/Reddit threads,
     raw gists/repos, thin or outdated listicles, docs-only results with no
     guide-shaped competitor. Say WHICH signals you saw in serp_notes.
+    **Weakness only PROMOTES a candidate that already cleared the authority
+    gate - it never rescues one that failed it.** And weigh the signals
+    honestly: a single Reddit thread is background noise on almost every SERP
+    today, not evidence of a soft field. Two weak results sitting under five
+    strong ones is a strong SERP.
   - Auto-approve zone -> guides get approved per the build-first policy.
   - Pending zone -> propose but leave \`pending\` with "FLAGGED FOR YOUR CALL"
     in the rationale. Never auto-approve above the zone ceiling.
