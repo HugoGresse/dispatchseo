@@ -149,16 +149,46 @@ invented volumes, difficulties, positions, or stats, ever.
 - Every page must genuinely be the best answer on page 1 for its query. No
   thin content, no padding. If the best you can produce is a me-too page, do
   not propose it.
-- **Audience fit (the ICP test).** A winnable SERP is not enough - every
-  proposal's rationale must name WHO types the query and why that person
-  overlaps {{SITE_NAME}}'s buyer or user. Reader is not buyer: a tutorial
-  keyword can clear volume and KD while attracting an audience that will
-  never need the product (the classic trap: writing about the product's own
-  tech stack pulls in people building similar tech, not people shopping for
-  what it does). At most ONE tangential-audience pick per research run, and
-  only when the rationale says what it does for the site - feeding a
-  commercial cluster through internal links, or claiming a term in AI
-  answers.
+- **Topic remit (the product-is-the-answer test) - a hard disqualifier, and
+  the cheapest one you own: run it FIRST, before spending a volume lookup or
+  a SERP check on anything.** Ask of each candidate: written well, would this
+  page's natural conclusion be "...and that is what {{SITE_NAME}} does"? Can
+  the product stand as the ANSWER - the thing the reader goes and uses when
+  they finish reading - rather than as a footnote, an aside, or a "here is
+  how we built ours" case study? If only the footnote version is honest, the
+  keyword is OFF-REMIT and dropped, however good its volume, KD, SERP
+  weakness or audience overlap.
+
+  **Audience overlap is NOT remit, and confusing the two is the most
+  expensive mistake available to this workflow.** Your buyer searches a
+  hundred things a week; you are the answer to a handful of them. The
+  reliable trap is the queries your audience types about their OTHER tools -
+  the language, framework, editor, agent, cloud or CI they run alongside you -
+  because every proposal for those looks defensible: real ICP, real
+  first-hand knowledge, and an honest offer to write the piece from the
+  product's own codebase. **That last part is the tell. If the strongest
+  angle you can name is "we can write this from our own architecture", you
+  are describing your stack, not your subject.** A site that publishes its
+  engineering notes ranks for engineering questions and sells nothing.
+
+  So derive the remit from what the product SELLS THE FIX TO - the problem in
+  the owner's positioning - never from the toolchain it is built on or the
+  one its users happen to hold. Borderline candidates pass: if the product is
+  one plausible answer among several, that is inside the remit. The test only
+  kills the ones where the product cannot honestly be an answer at all. State
+  the verdict in the rationale in one clause ("remit: we are the answer - the
+  reader is choosing how to track ranks").
+- **Audience fit (the ICP test) - run it AFTER the remit test, never instead
+  of it.** Every rationale must name the PROBLEM the searcher has at the
+  moment they type the query, and why {{SITE_NAME}} is what fixes that
+  problem. Name the problem, not the person: "developers who use X" is an
+  audience claim, it passes trivially for anything the audience touches, and
+  that is exactly why it stopped catching anything. At most ONE tangential
+  pick per research run, and only when the rationale says what it does for
+  the site - feeding a commercial cluster through internal links, or claiming
+  a term in AI answers. **An off-remit candidate can never take that slot**:
+  the tangential allowance covers a subject the product IS an answer to with
+  a softer buyer, never an off-subject page with a perfect audience.
 - Two content types: **guides** (articles in the site's content system) and
   **free interactive tools** (client-side widgets). Tools convert better than
   guides - prefer a tool when the keyword implies doing something

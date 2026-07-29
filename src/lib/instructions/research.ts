@@ -9,6 +9,7 @@ export const RESEARCH_STEPS = [
   { title: "Review", plain: "Looks at how the pages it already published are actually doing in Google - what ranked, what stalled - and lets that steer this week's picks. It waits until at least 10 pages have had three weeks to settle before drawing any conclusion, so it can't invent a pattern from two lucky posts." },
   { title: "Learn", plain: "Re-reads what your product actually is, from your repo, every single run." },
   { title: "Derive", plain: "Asks: what would someone google right before your product is the answer? 40-60 candidates, hunting buying-intent first (comparisons, 'best X', alternatives) rather than 'what is X' traffic that never converts - but the quality bar still decides what makes it in." },
+  { title: "Scope", plain: "Throws out the keywords your product isn't actually an answer to, before spending a penny checking them. The trap it exists to stop: your buyers search about every other tool they use too, and writing about those brings in readers who never needed you - so a keyword only survives if a good post about it would end with 'and that's what this product does'." },
   { title: "Validate", plain: "Checks real search volume and difficulty - keywords outside your site's league get dropped, including the ones that are too BIG. Until your site has some authority, a smaller query you can win beats a huge one you can't." },
   { title: "Inspect", plain: "Eyeballs page 1 for each survivor and counts who's already there. Four or more established players and it's dropped, however easy the difficulty score claimed it was - that score is often wrong, and the actual page 1 isn't. Capped at 25 of these checks a run, spent on the best candidates first, so a hard week can't run up your bill." },
   { title: "Queue", plain: "Fills the week's tank so the builder ships one guide a day, and gets there by hunting wider - your existing Search Console queries, error messages, new releases, trend topics - instead of by lowering the bar. Never filler to hit the number." },
@@ -66,10 +67,20 @@ product:
    files listed in the conventions file, plus the existing content
    inventory - published slugs in the guides directory and the tools
    registry, cross-checked against \`get_pages\` (never propose duplicates).
-2. **Derive candidate queries** from that knowledge: what would someone
-   google right before {{SITE_NAME}} is the answer? Setup pains,
-   feature-by-feature questions, comparisons, error messages, "best X for Y",
-   generator/checker intents. Aim for 40-60 candidates across both content
+2. **Derive candidate queries** from that knowledge, and read the question
+   strictly: what would someone google right before {{SITE_NAME}} is the
+   ANSWER - not what your audience googles in general. Start from the problem
+   the product sells the fix to, as the positioning surface states it, and
+   work outward: setup pains, feature-by-feature questions, comparisons,
+   error messages, "best X for Y", generator/checker intents. The subject is
+   the job the product does; the stack it happens to be built on, and the
+   other tools its users happen to run, are NOT the subject.
+   **Then strike the off-remit candidates before validating any of them.**
+   Run the quality bar's product-is-the-answer test over the whole list -
+   it costs nothing, needs no API call, and every off-remit keyword you carry
+   into step 3 spends volume, KD and SERP budget on a page you could not
+   honestly write. Report the count struck.
+   Aim for 40-60 candidates across both content
    types - the quota ladder's rung 1 requires 40 to carry real volume/KD
    numbers before a run may come back short, so deriving fewer guarantees a
    miss. If a topic argument was given, scope this step to that topic;
@@ -116,8 +127,10 @@ product:
 5. **Persist**: \`track_keywords\` the winners, then \`propose_suggestion\`
    for the best ones with a real rationale and a spec brief, following the
    queue policies (guides build-first, tools approve-first behind the
-   project's tool-approval gate). Every
-   rationale NAMES the query's intent class, and an informational idea says
+   project's tool-approval gate). Every rationale opens with its **remit
+   verdict** in one clause (how the product is the answer to this query, not
+   who the searcher is) and NAMES the query's intent class, and an
+   informational idea says
    in one clause what it is doing for the site - feeding a commercial cluster
    through internal links, or claiming a term in AI answers. (Both are real
    jobs. This is labelling, not a tribunal: a strong informational keyword
@@ -301,7 +314,10 @@ and rung 1 makes up the difference.
 Open with the **outcome steer from step 0** in one or two lines - what the
 already-published pages show about which targeting is working on this
 domain, and how it shaped this run's picks (or "no outcome data yet - first
-runs"). Then two markdown tables: (a) keyword opportunities - keyword,
+runs"). State how many candidates the **remit test** struck before validation and
+name the pattern they shared (e.g. "struck 14 off-remit - all of them
+questions about tools our readers use alongside us, not about the job we
+do"). Then two markdown tables: (a) keyword opportunities - keyword,
 volume, KD, **authority count**, intent, type, angle; (b) recommended
 tools/interactive pages - idea, target keyword, why it converts, status. Table (b) is never empty-by-omission: list the tool
 candidates you swept even when none was queued, with the reason each was

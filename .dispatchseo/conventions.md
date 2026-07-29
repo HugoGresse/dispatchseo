@@ -14,10 +14,28 @@ serves a password-gated dashboard for approvals. One deployment manages many
 sites (multi-tenant by MCP bearer token). A paid cloud version is planned;
 the launch plan lives in the maintainer's untracked `docs-private/`.
 
-Product-surface files to read fresh each research run:
+**The problem it sells the fix to:** a founder or small team knows SEO
+compounds and never gets to it - keyword research, a post a week, watching
+ranks and Search Console. DispatchSEO is the answer to "who does my SEO",
+not to "how do I build an agent pipeline". The subject of this site's
+content is SEO work: keyword research, content operations, rank tracking,
+Search Console, technical and programmatic SEO, and automating any of it.
+Claude Code, MCP, Vercel and the rest are how the product is BUILT and what
+its readers happen to run - they are not the subject. (See the quality
+bar's product-is-the-answer test; this paragraph is what it reads.)
+
+Product-surface files to read fresh each research run.
+
+Positioning - what the site is ABOUT; the topic remit comes from here:
+- `src/app/page.tsx` (+ `feature-showcase.tsx`, `landing-nav.tsx`) - the
+  landing page: the promise, the objections, the buyer
+- `README.md` - the repo's landing page, same positioning in long form
+- `src/app/docs/**` - the public docs site, product-wide
+- `docs/SPEC.md` - the original spec (launch plan: `docs-private/LAUNCH_PLAN.md`,
+  maintainer machine only)
+
+Capability - what it does, feature by feature:
 - `CLAUDE.md` - architecture + product ethos (repo root)
-- `docs/SPEC.md` - the original spec (launch plan + positioning:
-  `docs-private/LAUNCH_PLAN.md`, maintainer machine only)
 - `src/lib/instructions/*.ts` - the agent playbooks (what the product actually does)
 - `src/app/(dashboard)/page.tsx` and siblings - the dashboard surface
 

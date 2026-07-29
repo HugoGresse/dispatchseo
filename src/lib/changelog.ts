@@ -30,6 +30,41 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-29.5",
+    date: "2026-07-29",
+    title: "Your posts stay about what you sell",
+    summary:
+      "Research now throws out keywords your product isn't actually an answer to - the ones your buyers search about the other tools they use, which read as a perfect fit and bring in people who never needed you.",
+    changes: [
+      {
+        kind: "improved",
+        text:
+          "A keyword now has to pass one question before anything else: written well, would this " +
+          "post end with \"and that's what your product does\"? If the product can only show up as " +
+          "a footnote or a \"here's how we built ours\" aside, the keyword is dropped - no matter " +
+          "how good the search volume, the difficulty score, or the fit with your audience.",
+      },
+      {
+        kind: "improved",
+        text:
+          "The rule this replaces asked whether your audience would search the keyword, and your " +
+          "audience searches a hundred things a week you're not the answer to - their editor, " +
+          "their cloud, their framework, the agent they run you with. Those all passed, and each " +
+          "one is a post that ranks for someone else's question. Every idea now has to name the " +
+          "problem the searcher has, not who the searcher is.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Setup now writes down your marketing surface - your landing page, your README - " +
+          "alongside your code, because that's where the research reads what your site is " +
+          "actually about. If your site facts file was written before today it probably lists " +
+          "code only, which is exactly how a run drifts into writing about your plumbing. " +
+          "Re-run setup from the dashboard to refresh it.",
+      },
+    ],
+  },
+  {
     version: "2026-07-29.4",
     date: "2026-07-29",
     title: "Your posts can start linking to each other",

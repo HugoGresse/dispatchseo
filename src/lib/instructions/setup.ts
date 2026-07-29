@@ -132,9 +132,23 @@ Inspect THIS repo and write the site facts file every other workflow depends
 on. Discover, never assume: read the actual files, run the actual build
 command once to confirm it. The file must contain these sections:
 
-1. **Product** - what {{SITE_NAME}} is, who it serves, and the product-surface
-   files a researcher should read fresh each run (the docs/config/content
-   files that describe what the product does). List concrete paths.
+1. **Product** - what {{SITE_NAME}} is, who it serves, and above all the
+   PROBLEM it sells the fix to, in the owner's own words. Then the
+   product-surface files a researcher should read fresh each run, split into
+   two groups and BOTH required:
+   - **Positioning** - the marketing surface: landing/home page copy,
+     README, pricing page, docs introduction. This is what the site is
+     ABOUT, and the research run derives its topic remit from it.
+   - **Capability** - the docs/config/content files describing what the
+     product does, feature by feature.
+
+   List concrete paths under each. **A product-surface list containing only
+   architecture and source files is a FAILED Part 3** - research that reads
+   only those derives keywords about how the product is BUILT instead of
+   what it is FOR, and those pages rank for engineering questions and sell
+   nothing. If the repo genuinely has no marketing surface, say so and point
+   at the closest thing (README intro, docs landing) rather than omitting
+   the group.
 2. **Stack & build** - framework and content system (e.g. Next.js + MDX,
    Astro, Hugo), package manager, the exact build/verify command, and any
    CI validators that gate merges.
