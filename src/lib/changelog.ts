@@ -30,6 +30,40 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-29.3",
+    date: "2026-07-29",
+    title: "Drive DispatchSEO from any coding agent",
+    summary:
+      "A new command-line tool lets any coding agent run your SEO - not just Claude Code - and a live site no longer claims it's still setting up.",
+    changes: [
+      {
+        kind: "new",
+        text:
+          "There's now a `dispatchseo` command you can install with `npm install -g dispatchseo`. " +
+          "Point it at your project with your project key and any coding agent that can run a " +
+          "terminal command can research keywords, queue ideas, and read your rankings - Codex, " +
+          "Cursor, Gemini CLI, whatever you use. Claude Code keeps working exactly as it does " +
+          "today; this is an extra door to the same data, not a replacement.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "The \"Setting up your site in the background\" banner no longer appears on a site " +
+          "that's clearly already running. It was keyed on a marker that older projects never " +
+          "got, and reconnecting your GitHub App reset the timer that was supposed to hide it - " +
+          "so a site publishing guides every day could be told it was still being set up. It now " +
+          "goes by whether your site has real data, which settles it regardless of any marker.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Every setting your agent can pass now explains what it's for. Previously the agent had " +
+          "to infer what belonged in each field from the surrounding description, which Claude " +
+          "handles well and other agents handle less well. All 111 of them are now spelled out.",
+      },
+    ],
+  },
+  {
     version: "2026-07-29.2",
     date: "2026-07-29",
     title: "No more duplicate ideas, and reconnecting GitHub actually sticks",

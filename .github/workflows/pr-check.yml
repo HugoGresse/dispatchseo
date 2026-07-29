@@ -54,6 +54,37 @@ jobs:
             exit 1
           }
 
+      # The Claude regression guard. Routing hardcoded Claude strings through
+      # the agent registry must not change a single byte an owner pastes into a
+      # terminal - these commands carry detail that took real installs to find
+      # (--scope local, argument order, the Windows ?key= form). Credential-free
+      # and network-free on purpose, so it runs on fork PRs like the build does.
+      - name: Agent commands match the golden snapshot
+        run: |
+          node --experimental-strip-types --no-warnings scripts/agent-golden.mjs --check || {
+            echo "::error::Agent command output changed. If intended, run 'node --experimental-strip-types scripts/agent-golden.mjs' and commit the snapshot in the same commit."
+            exit 1
+          }
+
+      # The CLI is the agent-portable door - the one surface that works in any
+      # agent that can run a shell. It has no dependencies and no build step, so
+      # the only way it breaks is a syntax error or a bad bin path, and both show
+      # up here. Credential-free: --help never touches the network.
+      - name: CLI loads and self-documents
+        run: |
+          node cli/dispatchseo.mjs --help > /dev/null || {
+            echo "::error::cli/dispatchseo.mjs failed to run - check it for syntax errors"
+            exit 1
+          }
+          node -e "
+            const p = require('./cli/package.json');
+            const fs = require('fs');
+            if (!fs.existsSync(p.bin.dispatchseo.replace('./', './cli/'))) {
+              console.error('::error::cli/package.json bin path does not resolve');
+              process.exit(1);
+            }
+          "
+
       - name: Build (typecheck)
         run: pnpm build
         env:
@@ -61,3 +92,43 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: "https://placeholder.supabase.co"
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder-anon-key"
           NEXT_PUBLIC_SITE_URL: "https://dispatchseo.com"
+
+  # Agent-portability gate for the MCP tool surface. Claude Code is forgiving
+  # about tool schemas; OpenAI's function-calling validator (which Codex feeds
+  # every MCP tool through) is not, and one rejected schema can drop the WHOLE
+  # server - which reads downstream as "the agent saw no tools and exited
+  # cleanly", a green run that built nothing.
+  #
+  # push-only on purpose. This talks to the deployed MCP with a real key, and
+  # pull_request builds from forks cannot read secrets - keeping it out of the
+  # PR path preserves the property the build job above documents, that every
+  # required check runs credential-free for outside contributors. Main is
+  # where a merged schema regression would actually matter anyway.
+  mcp-schema:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: MCP tool schemas are agent-portable
+        env:
+          # The script reads MCP_API_KEY (matching .env.local for local runs);
+          # this repo's secret carries the pipeline's name, so map it here
+          # rather than storing the same key twice under two names.
+          MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
+        run: |
+          if [ -z "$MCP_API_KEY" ]; then
+            echo "::warning::SEO_MCP_API_KEY is not set on this repo - skipping the schema conformance gate."
+            exit 0
+          fi
+          node scripts/mcp-schema-check.mjs https://dispatchseo.com
