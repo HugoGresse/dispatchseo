@@ -325,17 +325,36 @@ the build-tool workflow and must never be picked up here.
      reader of that post should plausibly want this one next. If only one page
      is genuinely close, edit one. If none is, edit NONE and say so - a forced
      link between unrelated posts is worse than no link.
-   - **Edit an existing sentence; never append a block.** Find a sentence in
-     the old post that already discusses the thing, and turn the natural
-     phrase into a root-relative link. If a light rewrite of that sentence
-     makes it read better, do that. NEVER add a "Related posts" list, a
-     "See also" footer, or a new paragraph whose only job is to hold a link -
-     those are ignorable boilerplate and they make the page worse.
+   - **Wrap words that are already there. Never rewrite, never add prose.**
+     Find a sentence in the old post that already discusses the thing, and
+     turn the phrase that is ALREADY IN IT into a root-relative link. You may
+     not reword the sentence, fix its grammar, extend it, or write a new one.
+     The published text must read identically with the link markup stripped
+     out - if it would not, you have changed the owner's writing, which is
+     never yours to do. This constraint is what makes the edit safe enough to
+     ship unattended: an added link cannot mangle a sentence, a rewrite can.
+     If no existing sentence carries a phrase that genuinely fits, that post
+     is not a candidate - move to the next one rather than authoring a home
+     for the link. And NEVER add a "Related posts" list, a "See also" footer,
+     or a new paragraph whose only job is to hold a link - those are
+     ignorable boilerplate and they make the page worse.
    - **Vary the anchor text.** Every anchor pointing at this guide across the
      corpus must read differently, and none may be the bare primary keyword
      repeated. Repetition of one exact-match anchor across many pages is a
      recognised spam signal, and it is the single most likely way this step
      does harm.
+   - **Saturation cap - skip any post already carrying 5 links to sibling
+     guides.** This is the rule that stops the whole scheme rotting over
+     time. A genuinely hub-ish post is topically close to everything, so
+     without a ceiling it gets picked build after build and slowly fills with
+     internal links until it reads like a link farm - the exact
+     over-optimisation that makes automated interlinking backfire. Count the
+     existing root-relative links to other guides in each candidate file
+     BEFORE choosing it; at 5 or more the post is full, and full is a
+     permanent state, not a queue. Move to the next-closest post, and if
+     every close post is full, edit fewer than 3 or none at all and say so.
+     Fewer links into a corpus that reads naturally beats more links into one
+     that does not.
    - **Never double-link.** Skip any post that already links to this guide.
      One link per post per target, ever.
    - **Hard cap: 3 files, one link each.** Not "at least" - at most. A run
@@ -358,14 +377,13 @@ the build-tool workflow and must never be picked up here.
    \`seo\` label if missing). Body includes: target keyword, volume/KD, the
    suggestion rationale, gate verdict (what page 1 lacks that this draft
    has), and a note that the deploy preview link is the review surface.
-   **If step 10 edited any already-published post, the body MUST carry the
-   exact line \`Edits published posts: yes\` followed by a bullet per edited
-   file - path, the anchor text used, and the sentence it now sits in.** That
-   line is not decoration: the auto-merge workflow greps for it and refuses to
-   auto-merge the PR, so a human always sees a diff that touches live content.
-   Omitting it on a PR that edits published posts is the single worst thing
-   this workflow can do - it merges an edit to the owner's content that nobody
-   read. When step 10 edited nothing, write \`Edits published posts: no\`.
+   **If step 10 edited any already-published post, the body lists them** -
+   one bullet per edited file with the path, the anchor text used, and the
+   sentence it now sits in. This is disclosure, not a gate: back-link edits
+   ride in THIS PR and merge with it under the project's normal merge rules,
+   exactly like the new guide does. The owner should be able to see what was
+   touched by scrolling the PR body, without ever having to go looking - but
+   nothing about back-linking changes whether or when the PR merges.
    **If \`gh pr create\` fails, that is a FAILED run - never exit green.**
    The usual cause is the repo setting "Allow GitHub Actions to create and
    approve pull requests" being off (the default on new repos). Revert the

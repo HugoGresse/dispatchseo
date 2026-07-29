@@ -77,17 +77,25 @@ export const CHANGELOG: ChangelogEntry[] = [
           "New guides have always linked out to your older ones, but nothing ever linked back - " +
           "so your oldest posts, usually your best, collected no internal links at all. There's " +
           "now a switch on the Automations page: when it's on, the same pull request that adds a " +
-          "guide also edits 2-3 of your closest existing posts so they link to it. One sentence " +
-          "changed in each, nothing else touched.",
+          "guide also edits 2-3 of your closest existing posts so they link to it. It only ever " +
+          "wraps words that are already in a sentence you wrote - strip the link out and the text " +
+          "reads exactly as before - so your writing is never reworded, extended, or tidied.",
       },
       {
         kind: "new",
         text:
           "It's off until you turn it on, and it stays that way if you never do. This is the only " +
           "thing DispatchSEO does that changes pages you already published, so it doesn't ride " +
-          "along with Semi or Auto - it's a separate yes. A pull request that edits published " +
-          "posts also never merges on its own, even with auto-merge on, so you always see that " +
-          "diff before it goes live.",
+          "along with Semi or Auto - it's a separate yes. Once it's on it stays out of your way: " +
+          "the links ride in the same pull request as the new guide, which merges under whatever " +
+          "rules you already had. No extra pull requests, nothing new to approve.",
+      },
+      {
+        kind: "new",
+        text:
+          "A post that's already carrying 5 links to other guides gets left alone from then on. " +
+          "Without that, your most on-topic post would get picked build after build and slowly " +
+          "fill with links - which is the thing that makes automatic linking backfire.",
       },
     ],
   },
