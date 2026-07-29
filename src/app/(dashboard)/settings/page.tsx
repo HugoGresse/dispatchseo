@@ -34,6 +34,35 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+// The way out when the dashboard itself can't help. Sits immediately above the
+// danger zone on both render paths: someone scrolled this far because something
+// isn't working, and the next thing under this line is the delete buttons -
+// better they find people first.
+//
+// /discord is our own redirect (next.config.ts), so the invite code is never
+// duplicated here and a self-hosted install resolves it against its own origin.
+// Account-level like AccountSection, so it also renders for someone who owns no
+// site yet - being stuck at zero sites is exactly when you want to ask someone.
+function HelpSection() {
+  return (
+    <section className="space-y-3">
+      <SectionTitle sub="real people, not a ticket form">Help</SectionTitle>
+      <div className="rounded-xl bg-neutral-900 px-4 py-4 text-sm leading-relaxed text-neutral-400 sm:px-5">
+        Need help, or want to see what other people are doing with this?{" "}
+        <a
+          href="/discord"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-violet-400 underline underline-offset-2 hover:text-violet-300"
+        >
+          Join the Discord
+        </a>
+        .
+      </div>
+    </section>
+  );
+}
+
 // Which account this browser is signed in to. Account-level, not project-level,
 // so it renders even when there is no site - and it is the answer to "am I in
 // the right account", which nothing in the dashboard used to state anywhere.
@@ -100,6 +129,7 @@ export default async function SettingsPage() {
             .
           </div>
         </section>
+        <HelpSection />
         {account ? (
           <section className="space-y-3">
             <SectionTitle sub="irreversible - read before you click">Danger zone</SectionTitle>
@@ -245,6 +275,8 @@ export default async function SettingsPage() {
           <CopyBlock text={cronSecret} />
         </section>
       ) : null}
+
+      <HelpSection />
 
       <section className="space-y-3">
         <SectionTitle sub="irreversible - read before you click">Danger zone</SectionTitle>
