@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="161" height="46" viewBox="0 0 161 46" role="img" aria-label="Read the docs">
+  <rect x="0.5" y="0.5" width="160" height="45" rx="11" fill="#161B22" stroke="#3D444D"/>
+  <g stroke="#C9D1D9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M18 16.5 L25 18.5 L25 30.5 L18 28.5 Z"/>
+    <path d="M32 16.5 L25 18.5 L25 30.5 L32 28.5 Z"/>
+  </g>
+  <text x="44" y="28.6" textLength="97" lengthAdjust="spacingAndGlyphs" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#E6EDF3">Read the docs</text>
+</svg>

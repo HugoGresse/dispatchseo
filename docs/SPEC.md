@@ -1,5 +1,11 @@
 # SEO Manager MVP — Claude Code Handoff Spec
 
+> **Historical document.** This is the original single-user MVP spec from before
+> DispatchSEO was multi-tenant, open-source, or self-hostable. It's kept for phase
+> history and no longer describes how the product works. For the current
+> architecture read [CLAUDE.md](../CLAUDE.md); to install it, read the
+> [README](../README.md).
+
 ## What we're building
 
 A personal "SEO Manager" system for clockedcode.com. My own Claude Code becomes my SEO manager: it researches keywords, proposes guides/free tools/backlink targets, generates content as PRs on a schedule, and a backend tracks rankings + stats over time. Single user (me). No auth, no billing, no polish. Working > pretty.

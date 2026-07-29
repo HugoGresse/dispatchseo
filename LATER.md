@@ -55,9 +55,16 @@ Things that were tempting but deliberately not built. Add here instead of buildi
   this is now gap A1 in SPEC.md Phase 6 and the top-priority automation - the queue stays a
   notepad until one scheduled builder drains it.)
 
-## Explicitly out of scope (do NOT build - from the spec)
-Auth/multi-user, billing, onboarding, DataForSEO proxying/metering, email notifications,
-chatbot in dashboard, charts libraries, dark mode, settings pages, mobile app.
+## Explicitly out of scope (do NOT build)
+
+Chatbot in the dashboard, charting libraries, a light theme, a mobile app.
+
+*(This list used to also name auth, billing, onboarding, DataForSEO metering, and
+email notifications - all "never" items in the original single-user MVP spec. The
+hosted cloud shipped every one of them, so they came off the list. Self-host keeps
+running without any of them.)*
+
+## Deferred - may build later
 
 - **Per-project toggle for the AI-visibility Google check.** The nightly AI Overview
   check costs ~$0.002/keyword/day on the project's own DataForSEO account (disclosed on

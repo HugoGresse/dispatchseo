@@ -60,3 +60,8 @@ walks through it). To just *run* DispatchSEO instead, the Docker path in
 ## Security issues
 
 Not here - see [SECURITY.md](SECURITY.md) for private reporting.
+
+## Code of conduct
+
+Be decent to each other. The full text is in
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
