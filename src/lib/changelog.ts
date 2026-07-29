@@ -30,6 +30,79 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-29.2",
+    date: "2026-07-29",
+    title: "No more duplicate ideas, and reconnecting GitHub actually sticks",
+    summary:
+      "The same keyword can't get queued twice any more, and the \"Reconnect the GitHub App\" card now clears when you reconnect.",
+    changes: [
+      {
+        kind: "fixed",
+        text:
+          "A keyword that's already in your queue can't be added again - not by a research " +
+          "run, not by the Add idea form. Before this, a run that re-proposed a keyword you " +
+          "had already approved put the same guide in the queue twice, and two builders would " +
+          "write two competing pages for one search. You now get a plain \"already in the " +
+          "queue\" answer instead, naming the idea that's already there.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Reconnecting the GitHub App from the Home card now saves. If the app was already " +
+          "installed on your GitHub account, GitHub sent you back through a path that bounced " +
+          "you to the dashboard without recording anything - so the card kept nagging no " +
+          "matter how many times you reconnected. Connecting a second site on the same GitHub " +
+          "account works now too.",
+      },
+    ],
+  },
+  {
+    version: "2026-07-29.1",
+    date: "2026-07-29",
+    title: "Keyword picking now learns from your own results",
+    summary:
+      "Research reads how your published pages are actually doing in Google and lets that steer the next round - and it stopped queueing keywords a young site can't win.",
+    changes: [
+      {
+        kind: "new",
+        text:
+          "Every research run now starts by looking at the pages it already published - " +
+          "what ranked, what stalled past position 50, what got impressions but no clicks - " +
+          "and carries that into which keywords it picks next. It writes the conclusion into " +
+          "the run report, so you can see what it learned. Previously each run started from " +
+          "scratch and had no idea whether its last twenty picks worked.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Difficulty scores read far too low on commercial searches like " +
+          "\"<competitor> alternative\" or \"best X\", where page 1 is five established brands " +
+          "winning on reputation rather than links - so those keywords looked easy, got " +
+          "queued, and the pages landed on page 8. Research now counts the established " +
+          "players on page 1 and drops the keyword at four or more, whatever the difficulty " +
+          "score claimed.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Hitting the weekly target of 7 guides was allowed to push borderline keywords " +
+          "through on a site with no authority yet. You still get one guide a day - that " +
+          "hasn't changed - but research now gets there by hunting wider instead of settling: " +
+          "it mines the queries you already show up for in Search Console, error messages, " +
+          "new releases in your space, and your trend radar, and screens twice as many " +
+          "candidates before it will call a week short.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Search volume now has an upper limit that grows with your site, not just a floor. " +
+          "A brand-new site gets pointed at 100-800 volume long-tails it can actually win " +
+          "instead of head terms it can't, and the ceiling lifts on its own as your domain " +
+          "gains authority.",
+      },
+    ],
+  },
+  {
     version: "2026-07-29",
     date: "2026-07-29",
     title: "The tool queue fills itself",

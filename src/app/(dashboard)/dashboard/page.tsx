@@ -782,7 +782,7 @@ export default async function Home() {
           {needsAppReconnect ? (
             <SetupStep
               title="Reconnect the GitHub App"
-              why={`The DispatchSEO GitHub App no longer has access to ${project.github_repo} - it was uninstalled, or the repo was removed from the installation. Your repo's scheduled workflows keep running, but approving tools, one-tap merge, and every run triggered from this dashboard are paused until it's back.`}
+              why={`The DispatchSEO GitHub App has no access to ${project.github_repo} on record - it was never finished for this site, or it was uninstalled/the repo left the installation. Your repo's scheduled workflows keep running, but approving tools, one-tap merge, and every run triggered from this dashboard are paused until it's connected.`}
               steps={[
                 <>
                   <a

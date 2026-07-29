@@ -43,7 +43,22 @@ export async function assertRowOwned(
 // be bound to an owner this way - GitHub's setup redirect is unsigned and
 // we hold no GitHub user identity - but the victim's own callback then
 // fails loudly on this same check instead of silently sharing the repo.)
-export async function assertInstallationClaimable(installationId: number): Promise<void> {
+// A GitHub App installation is per ACCOUNT, but we store its id per PROJECT,
+// so a strict "already bound anywhere = refuse" reading locks an owner out of
+// connecting their SECOND site on the same GitHub account - and leaves the
+// reconnect card unclearable, because every retry hits this throw
+// (2026-07-29). Two escapes, both narrower than the risk this guards:
+//   provenCaller - the OAuth code exchange confirmed this human administers
+//                  the installation, which is strictly stronger evidence than
+//                  "nobody else claimed it first";
+//   already mine - a project the caller owns is bound to the same
+//                  installation, so the binding was already established
+//                  through this same check. Sharing it with another of their
+//                  own projects escalates nothing.
+export async function assertInstallationClaimable(
+  installationId: number,
+  opts?: { provenCaller?: boolean },
+): Promise<void> {
   const owned = await ownedProjectIds();
   if (!owned) return;
   const { data, error } = await db()
@@ -51,9 +66,11 @@ export async function assertInstallationClaimable(installationId: number): Promi
     .select("id")
     .eq("github_installation_id", installationId);
   if (error) throw new Error("Not found");
-  for (const row of (data ?? []) as Array<{ id: string }>) {
-    if (!owned.has(row.id)) throw new Error("Not found");
-  }
+  const rows = (data ?? []) as Array<{ id: string }>;
+  if (!rows.some((row) => !owned.has(row.id))) return; // unbound, or only mine
+  if (opts?.provenCaller) return;
+  if (rows.some((row) => owned.has(row.id))) return;
+  throw new Error("Not found");
 }
 
 // Bulk variant: every id must resolve AND be owned - a partially-foreign

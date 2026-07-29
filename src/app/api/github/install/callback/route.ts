@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requireDashboard } from "@/lib/auth-gate";
 import { verifyState } from "@/lib/gsc-oauth";
 import { getProjectBySlug } from "@/lib/projects";
-import { assertInstallationClaimable, assertProjectOwned } from "@/lib/tenant-guard";
+import { assertInstallationClaimable, assertProjectOwned, ownedProjectIds } from "@/lib/tenant-guard";
 import {
   callerControlsInstallation,
   getInstallation,
@@ -68,6 +68,18 @@ export async function GET(req: Request): Promise<Response> {
       redirect("/onboarding?gh=error&msg=bad-installation-id");
     }
 
+    // Resolved once, up front: which project started this flow (if any), and
+    // whether the OAuth code proves this human administers the installation.
+    // The proof is a ONE-TIME code, so it is exchanged lazily and memoized -
+    // both the claim path and the freshness gate below read the same answer.
+    const slug = state ? await verifyState(state) : null;
+    const proofCode = url.searchParams.get("code") ?? "";
+    let provenPromise: Promise<boolean> | null = null;
+    const provenCaller = () =>
+      (provenPromise ??= proofCode
+        ? callerControlsInstallation(proofCode, installationId)
+        : Promise.resolve(false));
+
     // UPDATE redirects are handled before either branch below, because they
     // satisfy neither one's assumptions. When someone adds or removes a repo
     // from an existing installation via GitHub's own settings UI, "Redirect on
@@ -78,23 +90,39 @@ export async function GET(req: Request): Promise<Response> {
     // would demand the proof code and answer "install-not-yours" for what is a
     // completely routine permission change (2026-07-27).
     //
-    // Nothing needs writing on this path either: the installation is already
+    // Usually nothing needs writing on this path: the installation is already
     // bound to whichever project claimed it, and repo membership is read live
-    // from GitHub every time we use it. So resolve it to a plain redirect.
+    // from GitHub every time we use it. So it resolves to a plain redirect -
+    // but ONLY when the caller genuinely has nothing left to bind.
+    //
+    // The original version redirected whenever ANY project held the id, which
+    // is how the reconnect card became unclearable (2026-07-29): clicking
+    // "Reinstall" on a project whose pointer was null sent the owner to
+    // GitHub, GitHub answered setup_action=update because the App was already
+    // installed on that account, and this branch bounced them to /dashboard
+    // without ever reading the signed state that named the project asking to
+    // be connected. It looked like success and wrote nothing.
+    //
+    // So: a signed state means a specific project asked to be connected - let
+    // the claim path below decide for THAT project. Without state, only skip
+    // out when a project the CALLER owns already holds this installation;
+    // otherwise fall through and let them claim it.
     //
     // Safe against a forged setup_action=update carrying a victim's id: the
-    // only outcome is a redirect to a page the caller can already reach. No
-    // row is written, no binding is created, and the response is identical
-    // whether or not the id is known to us.
-    if (setupAction === "update") {
+    // fall-through lands on the same proof + claimable + freshness gates as
+    // any other install, so no binding is created that those would refuse.
+    if (setupAction === "update" && !slug) {
       const { data: bound } = await db()
         .from("projects")
         .select("id")
-        .eq("github_installation_id", installationId)
-        .limit(1);
-      if ((bound ?? []).length > 0) redirect("/dashboard");
-      // Not bound to anything we know about - fall through and let the normal
-      // claim path decide, proof code and all.
+        .eq("github_installation_id", installationId);
+      const owned = await ownedProjectIds();
+      const rows = (bound ?? []) as Array<{ id: string }>;
+      if (rows.length > 0 && (owned === null || rows.some((r) => owned.has(r.id)))) {
+        redirect("/dashboard");
+      }
+      // Nothing of the caller's is bound to it - fall through and let the
+      // normal claim path decide, proof code and all.
     }
 
     // An org member requesting an install they cannot approve themselves gets
@@ -105,18 +133,10 @@ export async function GET(req: Request): Promise<Response> {
       redirect(`/onboarding?gh=error&msg=${encodeURIComponent("Your organization still has to approve the DispatchSEO app. Once an owner approves it, come back and click Install again.")}`);
     }
 
-    const slug = state ? await verifyState(state) : null;
-
     if (slug) {
       const project = await getProjectBySlug(slug);
       if (!project) redirect("/onboarding?gh=error&msg=unknown-project");
       await assertProjectOwned(project.id);
-      // installation_id is an enumerable integer from the query string; state
-      // proves the caller owns the PROJECT, not the installation. Refuse one
-      // already bound to another tenant, or a signed-in attacker could wire a
-      // victim's installation into their own project and write to the
-      // victim's repo through our App.
-      await assertInstallationClaimable(installationId);
 
       // Proof that the human who just clicked Install controls THIS installation.
       // GitHub's setup redirect is unsigned, so without this the only checks were
@@ -134,7 +154,6 @@ export async function GET(req: Request): Promise<Response> {
       // protection that shipped before the OAuth proof existed and still closes
       // every orphan-installation class. A code that IS present and does not
       // verify is real evidence, and still fails closed.
-      const proofCode = url.searchParams.get("code") ?? "";
       if (!proofCode && userAuthConfigured()) {
         console.error(
           `[github-install] no ?code on the callback for installation ${installationId} ` +
@@ -144,16 +163,33 @@ export async function GET(req: Request): Promise<Response> {
             `${requireInstallProof() ? "REFUSING (GITHUB_APP_REQUIRE_INSTALL_PROOF=1)." : "Falling back to the freshness gate."}`,
         );
       }
-      if (!proofCode ? requireInstallProof() : !(await callerControlsInstallation(proofCode, installationId))) {
+      const proven = await provenCaller();
+      if (!proofCode ? requireInstallProof() : !proven) {
         redirect(`/onboarding?gh=error&msg=${encodeURIComponent("We could not confirm that this GitHub installation belongs to you. Install the app from this page's button so we can verify it, rather than from github.com directly.")}`);
       }
+      // installation_id is an enumerable integer from the query string; state
+      // proves the caller owns the PROJECT, not the installation. Refuse one
+      // already bound to another tenant, or a signed-in attacker could wire a
+      // victim's installation into their own project and write to the
+      // victim's repo through our App. A verified proof code answers that
+      // question directly, so it lifts the exclusivity rule.
+      await assertInstallationClaimable(installationId, { provenCaller: proven });
 
       const installation = await getInstallation(installationId);
       // One generic message for BOTH "not our App's installation" and "not
       // claimable right now". Distinct replies made this endpoint an oracle:
       // probe an id, read which error came back, learn whether it belongs to
       // DispatchSEO - free reconnaissance for picking a hijack target.
-      if (!installation || !installationClaimable(installation)) {
+      //
+      // Freshness is a proxy for "the caller just did this install"; a
+      // verified proof code establishes the same thing directly and outranks
+      // it, so a proven caller reconnecting an installation GitHub last
+      // touched days ago is not turned away. Suspension still blocks either
+      // way - a suspended installation cannot act on the repo at all.
+      if (!installation || installation.suspended) {
+        redirect("/onboarding?gh=error&msg=install-not-found");
+      }
+      if (!proven && !installationClaimable(installation)) {
         redirect("/onboarding?gh=error&msg=install-not-found");
       }
 
@@ -195,7 +231,6 @@ export async function GET(req: Request): Promise<Response> {
     // the weaker path.
     // Same reasoning as the state path above: a missing code is our
     // configuration, a failing code is the caller's problem.
-    const proofCode = url.searchParams.get("code") ?? "";
     if (!proofCode && userAuthConfigured()) {
       console.error(
         `[github-install] no ?code on the stateless callback for installation ${installationId} ` +
@@ -203,7 +238,11 @@ export async function GET(req: Request): Promise<Response> {
           `${requireInstallProof() ? "REFUSING (GITHUB_APP_REQUIRE_INSTALL_PROOF=1)." : "Falling back to the freshness gate."}`,
       );
     }
-    if (!proofCode ? requireInstallProof() : !(await callerControlsInstallation(proofCode, installationId))) {
+    // Freshness is NOT relaxed for a proven caller here, unlike the state path
+    // above: this branch only hands off to the pick-a-project screen, and
+    // attachGithubInstallation re-applies the same gate when it finally
+    // writes. Relaxing one side would just move the refusal one screen later.
+    if (!proofCode ? requireInstallProof() : !(await provenCaller())) {
       redirect(`/onboarding?gh=error&msg=${encodeURIComponent("We could not confirm that this GitHub installation belongs to you. Install the app from this page's button so we can verify it, rather than from github.com directly.")}`);
     }
 
