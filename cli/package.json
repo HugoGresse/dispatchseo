@@ -1,0 +1,33 @@
+{
+  "name": "dispatchseo",
+  "version": "0.1.0",
+  "description": "Drive a DispatchSEO project from any coding agent - keyword research, content queue, rank tracking, and backlink prospects over one CLI",
+  "keywords": [
+    "seo",
+    "ai-agent",
+    "claude-code",
+    "codex",
+    "mcp",
+    "content-pipeline",
+    "rank-tracking"
+  ],
+  "homepage": "https://dispatchseo.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NeoZi12/dispatchseo.git",
+    "directory": "cli"
+  },
+  "license": "AGPL-3.0",
+  "author": "NeoZi12",
+  "type": "module",
+  "bin": {
+    "dispatchseo": "./dispatchseo.mjs"
+  },
+  "files": [
+    "dispatchseo.mjs",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}
