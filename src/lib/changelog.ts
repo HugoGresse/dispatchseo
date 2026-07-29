@@ -30,6 +30,24 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-29.6",
+    date: "2026-07-29",
+    title: "The queue tells you why an idea is waiting",
+    summary:
+      "An idea research didn't approve now says \"pending\" and shows the number behind it, instead of \"optional\" - because on a young site nothing else will ever pick it up.",
+    changes: [
+      {
+        kind: "improved",
+        text:
+          "On Auto, an idea research proposed but didn't approve used to read \"optional\", with an " +
+          "\"Add\" button - as if it were a bonus you could ignore. It isn't: research now refuses " +
+          "to promote borderline keywords just to hit the weekly count on a site with no backlinks " +
+          "yet, so approving is the only thing that ever builds them. The row says \"pending\" and " +
+          "names the reason - \"KD 17, over your ceiling of 10\" - and the button says Approve.",
+      },
+    ],
+  },
+  {
     version: "2026-07-29.5",
     date: "2026-07-29",
     title: "Your posts stay about what you sell",

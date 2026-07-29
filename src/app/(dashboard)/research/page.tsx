@@ -4,6 +4,8 @@ import { requireOnboarded } from "@/lib/onboarding-gate";
 import { getActiveProject } from "@/lib/active-project";
 import { isCloudMode } from "@/lib/cloud";
 import { sortQueue, type Suggestion } from "@/lib/metrics";
+import { getDomainRating } from "@/lib/domain-rating";
+import { kdZones } from "@/lib/kd-zones";
 import { AddIdeaCard, RestoreButton } from "@/components/client";
 import { DraggableQueue, type QueueRow } from "@/components/queue-table";
 import {
@@ -101,6 +103,14 @@ export default async function ResearchPage() {
   const nextGuide = opportunities.find((s) => s.status === "approved") ?? null;
   const shippedCount = history.filter((s) => s.status === "done").length;
 
+  // The auto-approve KD line this project's research decided by, so a pending
+  // row can say why it is pending. Creds are deliberately null: this is a
+  // read of the cached weekly snapshot only - rendering a queue must never
+  // trigger a paid DataForSEO call. No snapshot yet -> null ceiling, and the
+  // label omits the number instead of asserting one.
+  const dr = await getDomainRating(project.id, project.domain, null);
+  const kdCeiling = dr ? kdZones(dr.dr).autoApprove : null;
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -158,7 +168,12 @@ export default async function ResearchPage() {
               )}
             </EmptyState>
           ) : (
-            <DraggableQueue kind="guide" rows={opportunities.map(toQueueRow)} autoApproved={project.auto_approve} />
+            <DraggableQueue
+              kind="guide"
+              rows={opportunities.map(toQueueRow)}
+              autoApproved={project.auto_approve}
+              kdCeiling={kdCeiling}
+            />
           )}
         </section>
 
@@ -169,7 +184,12 @@ export default async function ResearchPage() {
           {tools.length === 0 ? (
             <EmptyState>Queue is empty - the weekly research run adds tool ideas here.</EmptyState>
           ) : (
-            <DraggableQueue kind="tool" rows={tools.map(toQueueRow)} autoApproved={project.auto_approve_tools} />
+            <DraggableQueue
+              kind="tool"
+              rows={tools.map(toQueueRow)}
+              autoApproved={project.auto_approve_tools}
+              kdCeiling={kdCeiling}
+            />
           )}
         </section>
       </div>

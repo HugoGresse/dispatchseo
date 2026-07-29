@@ -28,17 +28,45 @@ export type QueueRow = {
 
 // Approved needs no label (the row being here says it all); the two states
 // that DO carry information get one. Mirrors QueueStatus from the old table.
-function StatusLabel({ status, autoApproved }: { status: string; autoApproved?: boolean }) {
+//
+// A pending row used to read "optional" on Auto, on the theory that the agent
+// had already queued the winners so anything left over was a bonus. That
+// stopped being true when the research ladder's promote-to-hit-quota rung
+// closed for sites under DR 20: nothing promotes these on its own any more, so
+// a pending row IS waiting on the owner - on Auto just as much as on Semi. It
+// says "pending" in both modes now, muted on Auto (nothing is owed today; the
+// approved queue still ships without you) and amber on Semi (the queue does
+// not move until you decide). Either way the row carries the NUMBER behind the
+// decision, because "why isn't this approved?" is the only real question here.
+function StatusLabel({
+  status,
+  autoApproved,
+  kd,
+  kdCeiling,
+}: {
+  status: string;
+  autoApproved?: boolean;
+  kd?: number | null;
+  // The project's current auto-approve KD line (kd-zones.ts). Null when no
+  // domain-rating snapshot exists yet - then we show no ceiling rather than
+  // assert one we cannot back.
+  kdCeiling?: number | null;
+}) {
   if (status === "in_progress") return <span className="text-neutral-300">building now</span>;
-  if (status === "pending")
-    // Auto mode: the agent already approved and queued the winners, so a
-    // pending row is an EXTRA the owner MAY add but never has to. Show a muted
-    // "optional", not the amber "your call" that reads as a decision they owe.
-    return autoApproved ? (
-      <span className="text-neutral-500">optional</span>
-    ) : (
-      <span className="text-amber-300">your call</span>
+  if (status === "pending") {
+    const reason =
+      kd == null
+        ? "no difficulty score"
+        : kdCeiling != null && kd >= kdCeiling
+          ? `KD ${kd}, over your ceiling of ${kdCeiling}`
+          : null;
+    return (
+      <span className="flex flex-col gap-0.5">
+        <span className={autoApproved ? "text-neutral-400" : "text-amber-300"}>pending</span>
+        {reason ? <span className="text-xs text-neutral-500">{reason}</span> : null}
+      </span>
     );
+  }
   return <span className="text-neutral-400">queued</span>;
 }
 
@@ -95,12 +123,17 @@ export function DraggableQueue({
   kind,
   rows,
   autoApproved = false,
+  kdCeiling = null,
 }: {
   kind: "guide" | "tool";
   rows: QueueRow[];
-  // Auto-approval on for this queue's type -> pending rows are optional extras,
-  // not decisions the owner owes (the agent already queued the winners).
+  // Auto-approval on for this queue's type -> a pending row is muted rather
+  // than amber: the approved queue still ships without the owner, so nothing
+  // is owed TODAY. It still needs them eventually (see StatusLabel).
   autoApproved?: boolean;
+  // The project's auto-approve KD line, so a pending row can say why it is
+  // pending. Null = no domain-rating snapshot yet; the label just omits it.
+  kdCeiling?: number | null;
 }) {
   const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
 
@@ -257,7 +290,14 @@ export function DraggableQueue({
               key={r.id}
               title={kind === "guide" ? (r.primary_keyword ?? r.title) : r.title}
               meta={kind === "guide" ? `#${index + 1} in the build queue` : r.primary_keyword}
-              right={<StatusLabel status={r.status} autoApproved={autoApproved} />}
+              right={
+                <StatusLabel
+                  status={r.status}
+                  autoApproved={autoApproved}
+                  kd={r.keyword_difficulty}
+                  kdCeiling={kdCeiling}
+                />
+              }
               stats={
                 kind === "guide"
                   ? [
@@ -401,7 +441,12 @@ export function DraggableQueue({
                 )}
 
                 <div className={cell}>
-                  <StatusLabel status={r.status} autoApproved={autoApproved} />
+                  <StatusLabel
+                    status={r.status}
+                    autoApproved={autoApproved}
+                    kd={r.keyword_difficulty}
+                    kdCeiling={kdCeiling}
+                  />
                 </div>
 
                 {/* A build already running can't be unpicked or moved. */}
