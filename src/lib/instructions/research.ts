@@ -6,11 +6,12 @@
 // Plain-English step summary for the dashboard's Instructions page. Edit it
 // together with the markdown below - they describe the same pipeline.
 export const RESEARCH_STEPS = [
+  { title: "Review", plain: "Looks at how the pages it already published are actually doing in Google - what ranked, what stalled - and lets that steer this week's picks. It waits until at least 10 pages have had three weeks to settle before drawing any conclusion, so it can't invent a pattern from two lucky posts." },
   { title: "Learn", plain: "Re-reads what your product actually is, from your repo, every single run." },
-  { title: "Derive", plain: "Asks: what would someone google right before your product is the answer? 20-40 candidates, hunting buying-intent first (comparisons, 'best X', alternatives) rather than 'what is X' traffic that never converts - but the quality bar still decides what makes it in." },
-  { title: "Validate", plain: "Checks real search volume and difficulty - keywords outside your site's league get dropped." },
-  { title: "Inspect", plain: "Eyeballs page 1 for each survivor: is it actually winnable?" },
-  { title: "Queue", plain: "Fills the week's tank to your site's own pace - and guarantees it: if easy keywords run out, it promotes its own harder-but-vetted finds and widens the hunt before ever coming back short. Never filler to hit the number." },
+  { title: "Derive", plain: "Asks: what would someone google right before your product is the answer? 40-60 candidates, hunting buying-intent first (comparisons, 'best X', alternatives) rather than 'what is X' traffic that never converts - but the quality bar still decides what makes it in." },
+  { title: "Validate", plain: "Checks real search volume and difficulty - keywords outside your site's league get dropped, including the ones that are too BIG. Until your site has some authority, a smaller query you can win beats a huge one you can't." },
+  { title: "Inspect", plain: "Eyeballs page 1 for each survivor and counts who's already there. Four or more established players and it's dropped, however easy the difficulty score claimed it was - that score is often wrong, and the actual page 1 isn't. Capped at 25 of these checks a run, spent on the best candidates first, so a hard week can't run up your bill." },
+  { title: "Queue", plain: "Fills the week's tank so the builder ships one guide a day, and gets there by hunting wider - your existing Search Console queries, error messages, new releases, trend topics - instead of by lowering the bar. Never filler to hit the number." },
   { title: "Tools", plain: "Every run also leaves a tool idea or two in the tool queue - the weekly tool builder has nothing to ship otherwise. A site that has no public tools page yet still gets ideas queued; the first tool build creates the page." },
 ];
 
@@ -22,6 +23,45 @@ Never start from a generic seed list. Start from what {{SITE_NAME}} IS, read
 fresh from the repo at research time, so the research evolves with the
 product:
 
+0. **Read what already happened (the learning step - never skip it).** Call
+   \`get_overview\` and look at the \`guides\` and \`tools\` arrays: every page
+   this pipeline already shipped, with its real clicks, impressions and
+   average position. Pages published in the last ~3 weeks are still settling -
+   weigh them lightly - but anything older is a graded answer to "did our
+   targeting work?", and it is the only honest evidence this run has.
+
+   Bucket the pages that have had time to settle by the traits recorded on
+   their suggestion (\`get_suggestions\` with status "done" carries
+   \`keyword_volume\`, \`keyword_difficulty\`, the intent class in the
+   rationale, and \`serp_notes\`), and answer three questions in writing:
+   - Which traits produced pages now sitting in the top 20?
+   - Which produced pages stuck past position 50, or with impressions but no
+     clicks? Those are the patterns to STOP repeating.
+   - Where the two disagree with the reported KD, trust the observed
+     positions. Real outcomes on this domain beat any vendor's difficulty
+     score.
+
+   Carry the answer into step 2 as a concrete steer ("comparison long-tails
+   under 800 volume are landing top-20; the commercial 'alternative' terms
+   are stuck past 80 - hunt the former, drop the latter this run"). State the
+   steer in the run report so the owner can see the loop is closing.
+
+   **Minimum sample - do not pattern-match on noise.** A "settled" page is one
+   published **21+ days** ago. Count them:
+   - **Fewer than 10 settled pages: REPORT ONLY.** Write down what you see
+     ("3 of 6 settled pages are past position 50") but derive NO targeting
+     rule from it and pass NO steer to step 2. Two pages sharing a trait is a
+     coincidence, and a confident rule invented from n=3 is worse than no
+     rule at all - it will bias every run that follows while looking like
+     evidence. Say "outcome data too thin to steer (N settled pages, need
+     10)" and move on.
+   - **10 or more: steer normally**, as above.
+   - A trait needs at least **3 settled pages** behind it before it can
+     support a conclusion, however clean the pattern looks.
+
+   On a site with no settled pages at all, say "no outcome data yet - first
+   runs" and move on. This step gets sharper every week; once past the
+   threshold it should be the single biggest influence on what gets queued.
 1. **Read the product surface** (skim, do not deep-read): the product-surface
    files listed in the conventions file, plus the existing content
    inventory - published slugs in the guides directory and the tools
@@ -29,8 +69,10 @@ product:
 2. **Derive candidate queries** from that knowledge: what would someone
    google right before {{SITE_NAME}} is the answer? Setup pains,
    feature-by-feature questions, comparisons, error messages, "best X for Y",
-   generator/checker intents. Aim for 20-40 candidates across both content
-   types. If a topic argument was given, scope this step to that topic;
+   generator/checker intents. Aim for 40-60 candidates across both content
+   types - the quota ladder's rung 1 requires 40 to carry real volume/KD
+   numbers before a run may come back short, so deriving fewer guarantees a
+   miss. If a topic argument was given, scope this step to that topic;
    otherwise cover the whole product.
    **Intent - hunt buying-adjacent FIRST.** Traffic that never converts is
    the #1 way an SEO program wastes a month: easy informational queries
@@ -127,14 +169,19 @@ the miss is visible instead of silent.
 
 **Auto mode fills the tank; semi mode fills the backlog.** Read
 \`get_project\`'s \`auto_approve\`. When it is TRUE (the owner chose Auto -
-hands-off publishing), reaching the weekly target is MANDATORY: after the KD
-ceiling auto-approves what it can, DESCEND THE LADDER BELOW - especially rung 2
-(promote pending-zone survivors) - until **7 guides are actually approved**.
-Do NOT stop at the two or three that cleared the auto-approve zone and leave
-the rest sitting as pending "optional" ideas - on an Auto-mode site that is a
-BUG the owner sees as "why do I still have to add these myself?". The pending
-zone is a holding area for the owner's judgment on SEMI projects only; on Auto
-projects it must be drained toward the target. (Never promote source "manual"
+hands-off publishing), reaching the weekly target is MANDATORY: **7 approved
+guides, every week, so the builder ships one a day.** Do NOT stop at the two
+or three that cleared the auto-approve zone and leave the rest sitting as
+pending "optional" ideas - on an Auto-mode site that is a BUG the owner sees
+as "why do I still have to add these myself?". The pending zone is a holding
+area for the owner's judgment on SEMI projects only.
+
+**The daily cadence and the quality bar are both non-negotiable, and rung 1
+is how you satisfy both.** They only appear to conflict when the hunt is too
+narrow - and closing rung 2 (below) removes the shortcut that used to paper
+over a lazy hunt. The answer to a short queue is ALWAYS more candidates, never
+a lower bar. A niche that looks exhausted at 20 candidates is almost never
+exhausted; it has been searched from one angle. (Never promote source "manual"
 or owner-rejected ideas - those still wait, both modes.) When \`auto_approve\`
 is FALSE (Semi), the opposite: approve only the confident auto-approve-zone
 winners and leave the rest pending for the owner - the backend coerces your
@@ -148,52 +195,115 @@ never leave a tool idea unapproved just because the gate might catch it.
 Short of quota? Work down this ladder IN ORDER - each rung costs more than
 the one above it, so exhaust a rung before descending:
 
-1. **Hunt wider (the candidate floor is a rule, not advice).** Mine more
-   angles - autocomplete/question phrasings, "X vs Y" comparisons, error
-   messages, long-tails of pages already ranking, feature-by-feature setup
-   queries, product surface shipped since last week - and validate the new
-   candidates (batch the volume/KD lookups; validation is the cheap part).
-   You may NOT conclude the niche is exhausted before at least **20
-   candidates** carry real volume/KD numbers in this run.
-2. **Promote pending-zone survivors (costs nothing).** Ideas in the pending
-   zone from source "research" - this run's or ones still sitting from
-   earlier runs - passed the FULL quality bar; only the auto-approve KD
-   line kept them out of the tank. \`update_suggestion(id,
-   status="approved")\` the best of them - audience fit first, then lowest
-   KD - until the target is met, prefixing the rationale with
-   "AUTO-PROMOTED to keep the daily cadence". Never promote source
-   "manual" ideas (the owner's own drafts await THEIR decision) or
-   anything the owner rejected. On semi-automatic projects the backend
-   records these approvals as pending - correct behavior; instead list in
-   the run report exactly which ideas the owner should approve, in order.
-3. **Soften the volume floor for dead-on ICP keywords only.** Candidates
-   with volume 200-500 qualify WHEN the searcher is unmistakably the
-   product's buyer (the audience-fit test leaves no doubt). KD zones never
-   move. Low-volume + perfect fit beats high-volume + tangential - never
-   the reverse.
+1. **Hunt wider - this rung does the work, and it almost never runs dry.**
+   The candidate floor is a rule, not advice: you may NOT conclude the niche
+   is exhausted before at least **40 candidates** carry real volume/KD
+   numbers in this run (batch the lookups - validation is the cheap part).
+   If 7 guides are not yet queued at 40, keep going; the floor is a minimum,
+   not a stopping point.
+
+   A young site's winnable keywords are almost never the ones a head-term
+   sweep surfaces. Work these seams in order - each one reliably yields
+   queries that clear the authority gate because nobody has bothered to
+   target them:
+   - **Queries you already appear for.** \`get_site_stats\` carries real GSC
+     queries where this domain already earns impressions at position 20-80.
+     Proven relevant, already half-ranked, and free - mine this FIRST every
+     run.
+   - **Error strings and failure modes.** Verbatim messages, "X not
+     working", "why does X", "X keeps <failing>". Almost always thin SERPs
+     dominated by forum threads, and dead-on intent.
+   - **Version and release deltas.** Anything the product's ecosystem
+     shipped recently: new features, renamed flags, changed defaults,
+     deprecations. Fast-moving spaces mint winnable queries every week and
+     the incumbents are slow to update.
+   - **Integration pairs.** "X with Y", "X + Y", "using X in Y" across every
+     tool the product's audience already runs alongside it.
+   - **Qualified long-tails of head terms you CANNOT win.** A head term that
+     failed the authority gate is still a seed: add a use case, an audience,
+     a constraint, a version, a platform ("X for solo devs", "X without Y",
+     "X on Windows"). The qualified variant routinely clears the gate the
+     bare term failed.
+   - **Trend radar.** \`get_trend_topics\` - fresh topics have the thinnest
+     SERPs on the internet, and the product scans for them precisely so this
+     rung has fuel.
+
+   Coming back short while any of these seams is unworked is a FAILED run,
+   not an honest one. Name in the run report which seams you mined.
+2. **Promote pending-zone survivors - CLOSED while DR < 20.** On a site
+   with DR-equivalent under 20, this rung does not exist: do NOT promote
+   pending-zone ideas to hit the quota, ever. A young site has no authority
+   to spend on a keyword that already needed an exception, and every such
+   page lands past position 50, burns a build slot, and adds a page the
+   owner has to look at. Skip straight to rung 3. (The evidence this rule
+   exists for: promoted-to-hit-cadence pages are reliably the worst
+   performers in step 0's outcome data.)
+
+   At DR 20+, the rung opens: ideas in the pending zone from source
+   "research" - this run's or ones still sitting from earlier runs - passed
+   the FULL quality bar; only the auto-approve KD line kept them out of the
+   tank. \`update_suggestion(id, status="approved")\` the best of them -
+   audience fit first, then lowest KD - until the target is met, prefixing
+   the rationale with "AUTO-PROMOTED to keep the daily cadence". Never
+   promote source "manual" ideas (the owner's own drafts await THEIR
+   decision) or anything the owner rejected. On semi-automatic projects the
+   backend records these approvals as pending - correct behavior; instead
+   list in the run report exactly which ideas the owner should approve, in
+   order.
+3. **Reach into the volume band's soft edge - for dead-on ICP keywords
+   only.** Candidates just OUTSIDE the band qualify WHEN the searcher is
+   unmistakably the product's buyer (the audience-fit test leaves no
+   doubt). Reach DOWNWARD first and by default: below the band's floor is
+   where a young site's winnable queries live, and a 120-volume query owned
+   at position 3 compounds. Reaching UPWARD is governed by the authority
+   gate, not by this rung - see the volume band in the quality bar: a clean
+   page 1 (authority 0-2) waives the ceiling outright, authority 3 allows it
+   for dead-on ICP only, and 4+ is already dropped. KD zones and the
+   authority gate never move. Low-volume + perfect fit beats high-volume +
+   tangential - never the reverse.
 4. **Mine the radar.** Trend topics already on the project's radar
    (\`get_trend_topics\`) are candidate sources too - derive guide angles
    from them and validate normally.
-5. **Only now report a miss.** Queue what passed and state it plainly:
-   "quota missed - N of 7 guides queued; ladder
-   exhausted at rung X". With four rungs above, a miss should be RARE -
-   and a miss reported with fewer than 20 validated candidates is a failed
-   run, not an honest one.
+5. **Only now report a miss - and it should be genuinely rare.** Queue what
+   passed and state it plainly: "quota missed - N of 7 guides queued; ladder
+   exhausted at rung X", naming every seam mined at rung 1 and every one
+   that came up empty. A miss reported with fewer than 40 validated
+   candidates, or with any rung-1 seam unworked, is a failed run rather than
+   an honest one - rung 1 is where misses are supposed to die.
+
+   **The one exception is the SERP-check budget.** Spending all 25 checks
+   without filling the queue is a legitimate stop, not a failed run - the
+   budget exists precisely so a hard week costs a bounded amount. Report it
+   as "SERP budget spent (25 checks) - N of 7 queued", list the candidates
+   that passed the cheap filters but never got checked so the next run can
+   start there, and do not descend further rungs to compensate.
+
+   A repeated miss is a signal to escalate to the owner, not a new normal:
+   if two consecutive runs come up short with the full ladder worked, say so
+   in the report and name what would unblock it (a wider topic remit, more
+   product surface to write about, backlinks lifting the DR ceiling).
 
 The quality bar itself NEVER bends - not for the quota, not for the intent
-mix, not for a keyword you like (KD zones and the best-page-1-answer test
-hold at every rung; rung 3's volume softening is the bar's own written
-exception, not a bend). One precedence, no exceptions: **the bar decides
-what may be queued; the quota decides how many; intent decides which ones
-you chase and which of two passers wins.** The daily builder idling beats
-filler shipping - but a builder idling while vetted pending-zone ideas sit
-unpromoted is a research failure, not honesty.
+mix, not for a keyword you like (KD zones, the authority gate, and the
+best-page-1-answer test hold at every rung; rung 3's soft edge is the bar's
+own written exception, not a bend). One precedence, no exceptions: **the bar
+decides what may be queued; the quota decides how many; intent decides which
+ones you chase and which of two passers wins.** The daily builder idling beats
+filler shipping - but on a well-worked run it should never come to that:
+rung 1 exists so the cadence is met with genuinely winnable keywords, and a
+short queue nearly always means the hunt stopped early, not that the niche
+ran out. On a DR 20+ site, a builder idling while vetted pending-zone ideas
+sit unpromoted is a research failure; on a younger one those ideas stay put
+and rung 1 makes up the difference.
 
 ### Output
 
-Two markdown tables: (a) keyword opportunities - keyword, volume, KD, intent,
-type, angle; (b) recommended tools/interactive pages - idea, target keyword,
-why it converts, status. Table (b) is never empty-by-omission: list the tool
+Open with the **outcome steer from step 0** in one or two lines - what the
+already-published pages show about which targeting is working on this
+domain, and how it shaped this run's picks (or "no outcome data yet - first
+runs"). Then two markdown tables: (a) keyword opportunities - keyword,
+volume, KD, **authority count**, intent, type, angle; (b) recommended
+tools/interactive pages - idea, target keyword, why it converts, status. Table (b) is never empty-by-omission: list the tool
 candidates you swept even when none was queued, with the reason each was
 dropped. Then a one-line summary of what was queued, the quota status
 for BOTH queues, and the HONEST intent mix - never a forced one - e.g.

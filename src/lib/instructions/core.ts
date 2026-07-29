@@ -66,15 +66,31 @@ invented volumes, difficulties, positions, or stats, ever.
   | 20-34 | 300 - 3000 | up to 6000 |
   | 35+ | > 500 | no ceiling |
 
-  **The upper bound is the point, and it is NOT a formality.** A DR-0 site
-  ranking for an 8000-volume head term does not happen, and queueing one
-  spends a build slot to land on page 8. Long-tail is not a consolation prize
-  for a young site - it is the ONLY thing that ranks, and a 200-volume query
-  won at position 6 beats a 5000-volume query lost at position 80 every time.
-  So on a low-DR site, a candidate is dropped for being too BIG at least as
-  often as for being too small. If a run's candidates are clustering above the
-  band, that is the signal to hunt narrower (add a qualifier, an audience, a
-  version, an error string), not to invoke the soft edge.
+  **The upper bound is a PROXY for competition, and the authority gate
+  measures competition directly - so the gate overrules it.** High volume
+  usually means a crowded SERP a young site cannot enter, which is why the
+  ceiling exists. But in a new or fast-moving topic space the two come apart:
+  a query can carry thousands of searches while page 1 is still YouTube,
+  Reddit and scattered blog posts, because nobody has published the real
+  answer yet. Those are the best opportunities a young site will ever get,
+  and a volume ceiling applied blindly bans exactly them.
+
+  So: **a candidate over the band's ceiling is NOT dropped on volume alone.**
+  Run the authority gate on it first.
+  - **Authority count 0-2 -> volume ceiling does not apply.** Queue it on the
+    gate's verdict like any other candidate, and say so in the rationale
+    ("volume 8100 is above the band but authority count is 2/10 - new topic,
+    thin page 1").
+  - **Authority count 3 -> treat as the soft edge**: dead-on ICP only.
+  - **Authority count 4+ -> dropped by the gate anyway**, as any candidate
+    would be.
+
+  The FLOOR keeps its full force: below the band, a query is too thin to be
+  worth a build slot unless the ICP fit is perfect (rung 3). And the instinct
+  behind the ceiling still holds whenever the gate is not clean - if
+  candidates are clustering high AND their SERPs are crowded, hunt narrower
+  (add a qualifier, an audience, a version, an error string) rather than
+  reaching upward.
 - KD ceiling is **DYNAMIC - it scales with the site's authority**. At the
   START of every research run, call the seo-manager MCP's \`get_domain_rank\`
   tool for the site's cached DR-equivalent (0-100, refreshed weekly by the
@@ -106,6 +122,17 @@ invented volumes, difficulties, positions, or stats, ever.
     rescues it. Note the count in serp_notes every time, e.g. "authority
     count 5/10 - dropped". This gate runs BEFORE the weakness test and cannot
     be overridden by it.
+  - **SERP-check budget: 25 per run, and spend it in the right order.** Live
+    SERP checks are the most expensive call in a research run and are capped
+    per project per day, so the gate must not be run blindly on every idea.
+    Filter FIRST on the free and cheap signals - volume band, KD, duplicate
+    check, audience fit - and only then spend a check on the survivors, best
+    candidate first. Stop at 25 checks: if 7 guides are queued before that,
+    stop earlier. If you hit 25 without filling the queue, do NOT keep
+    checking - report "SERP budget spent (25 checks)" with what you queued,
+    and let the next run pick up from there. An unchecked candidate is never
+    queued on assumption: no check means no authority count, and no authority
+    count means it does not pass.
   - "Strong SERP weakness" = page 1 shows at least 2 of: forum/Reddit threads,
     raw gists/repos, thin or outdated listicles, docs-only results with no
     guide-shaped competitor. Say WHICH signals you saw in serp_notes.

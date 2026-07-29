@@ -95,10 +95,25 @@ export const CHANGELOG: ChangelogEntry[] = [
       {
         kind: "improved",
         text:
-          "Search volume now has an upper limit that grows with your site, not just a floor. " +
-          "A brand-new site gets pointed at 100-800 volume long-tails it can actually win " +
-          "instead of head terms it can't, and the ceiling lifts on its own as your domain " +
-          "gains authority.",
+          "Search volume now has an upper limit that grows with your site, not just a floor - " +
+          "but a big keyword whose page 1 is still thin no longer gets thrown out for being " +
+          "big. In a fast-moving topic, a query can have thousands of searches while nobody " +
+          "has published the real answer yet; those are the best openings a new site gets, " +
+          "so what's already on page 1 decides, not the volume number.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Research won't invent a pattern from two lucky posts. It now waits until at least " +
+          "10 of your pages have had three weeks to settle before drawing any conclusion from " +
+          "how they're doing, and says \"not enough data yet\" until then.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Page-1 checks are capped at 25 per research run, spent on the strongest candidates " +
+          "first. They're the priciest thing a run does, so a hard week now costs a known " +
+          "amount instead of running up your bill.",
       },
     ],
   },
