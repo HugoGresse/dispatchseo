@@ -33,7 +33,11 @@ const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm" });
 
 const GITHUB_URL = "https://github.com/NeoZi12/dispatchseo";
 const DOCS_URL = "/docs";
-const DISCORD_URL = "https://discord.gg/jqbtN98EHA";
+// Our own path, not the discord.gg invite: the code lives once, in
+// next.config.ts, so a regenerated invite never means editing this file. Kept
+// relative so preview deploys and localhost redirect through themselves rather
+// than bouncing a tester to production.
+const DISCORD_URL = "/discord";
 
 export const metadata: Metadata = {
   title: "DispatchSEO - Automate your SEO with Claude Code",

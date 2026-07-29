@@ -16,6 +16,28 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [{ source: "/docs/:slug([a-z0-9-]+).md", destination: "/api/docs-md/:slug" }];
   },
+  // /discord is the one place the Discord invite code lives. Every surface that
+  // points at the community - the landing hero, the footer, the README badge
+  // and its three prose links - points HERE, so regenerating the invite is a
+  // one-line edit in this file instead of a hunt through five hardcoded copies
+  // and a redeploy of the README. Same pattern Postiz (discord.postiz.com) and
+  // Immich (discord.immich.app) use, on a path rather than a subdomain because
+  // we already own the app and a path costs no DNS.
+  //
+  // permanent: false is load-bearing. A 308 is cached by the browser forever,
+  // so the day the invite code changes, everyone who ever clicked the old one
+  // keeps being sent to a dead invite - which is exactly the failure this
+  // indirection exists to prevent. 307 keeps the redirect ours to change.
+  // (Postiz ships a 301 here; Immich ships a 307. Immich is right.)
+  //
+  // It also has to be a config-level redirect rather than a route: unknown
+  // paths hit the dashboard auth gate and bounce to /login, and next.config
+  // redirects resolve ahead of that.
+  async redirects() {
+    return [
+      { source: "/discord", destination: "https://discord.gg/D7Eq3hKtKs", permanent: false },
+    ];
+  },
   async headers() {
     return [
       {
