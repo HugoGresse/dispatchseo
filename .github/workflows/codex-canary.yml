@@ -1,0 +1,112 @@
+name: Codex canary
+
+# Proves the Codex half of the pipeline end to end, in the only place that
+# matters: a real GitHub Actions runner.
+#
+# Everything about Codex that can be checked locally has been (see
+# docs-private/CODEX_FACTS.md) - all 52 tools arrive, the connect syntax is
+# settled, auth needs an explicit login. What CANNOT be checked locally is how
+# openai/codex-action wires the MCP config, whether the runner's environment
+# reaches the MCP client, and what a failure actually prints. This answers those.
+#
+# manual-only on purpose. It spends real OpenAI credit, and it exists to answer
+# questions, not to guard anything - once the Codex builder templates are real,
+# they carry their own reporting and this can go.
+#
+# Sandbox note: `danger-full-access` is required for MCP tool calls (verified
+# 2026-07-29: workspace-write fails with "user cancelled MCP tool call" even
+# with network_access enabled). That matches how Claude already runs here -
+# every seo-* template passes --permission-mode bypassPermissions, and the
+# docker builder does too. `safety-strategy: drop-sudo` keeps the run
+# non-root regardless, which the Claude action has no equivalent for.
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Model to run (gpt-5-codex 404s on a pay-as-you-go project key - see CODEX_FACTS)"
+        default: "gpt-5-mini"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # The MCP server, in Codex's own config format. CODEX_HOME redirects the
+      # whole config directory, which is the only scoping Codex offers - there
+      # is no --scope local equivalent.
+      - name: Write the Codex MCP config
+        run: |
+          mkdir -p "$RUNNER_TEMP/codex-home"
+          cat > "$RUNNER_TEMP/codex-home/config.toml" <<'TOML'
+          [mcp_servers.dispatchseo]
+          url = "https://dispatchseo.com/api/mcp"
+          bearer_token_env_var = "SEO_MCP_API_KEY"
+          TOML
+          echo "CODEX_HOME=$RUNNER_TEMP/codex-home" >> "$GITHUB_ENV"
+          echo "--- config written ---"
+          cat "$RUNNER_TEMP/codex-home/config.toml"
+
+      # Fail in plain language before spending anything, rather than letting the
+      # action die on an empty secret several minutes in.
+      - name: Preflight - secrets present
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
+        run: |
+          [ -n "$OPENAI_API_KEY" ] || { echo "::error::OPENAI_API_KEY secret is missing or empty."; exit 1; }
+          [ -n "$SEO_MCP_API_KEY" ] || { echo "::error::SEO_MCP_API_KEY secret is missing or empty."; exit 1; }
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 -X POST https://dispatchseo.com/api/mcp \
+            -H "Authorization: Bearer $SEO_MCP_API_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json, text/event-stream" \
+            -d '{"jsonrpc":"2.0","id":0,"method":"tools/list"}')
+          [ "$code" = "200" ] || { echo "::error::MCP returned HTTP $code before Codex even started."; exit 1; }
+          echo "MCP reachable, both secrets present."
+
+      - name: Run Codex against the MCP server
+        id: codex
+        continue-on-error: true
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: ${{ inputs.model }}
+          sandbox: danger-full-access
+          safety-strategy: drop-sudo
+          output-file: ${{ runner.temp }}/codex-out.txt
+          prompt: |
+            Call the dispatchseo MCP tool get_project.
+            Then reply with EXACTLY three lines and nothing else:
+            DOMAIN=<the domain field it returned>
+            TOOLS=<the total number of tools the dispatchseo MCP server exposes to you>
+            OK=yes
+        env:
+          SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
+
+      # Read the result rather than trusting the step's exit code: the whole
+      # point is to learn what Codex actually prints, including on failure.
+      - name: Report what happened
+        if: always()
+        env:
+          OUTCOME: ${{ steps.codex.outcome }}
+          FINAL: ${{ steps.codex.outputs.final-message }}
+        run: |
+          echo "=== step outcome: $OUTCOME"
+          echo "=== final-message output ==="
+          printf '%s\n' "$FINAL"
+          echo "=== output-file ==="
+          cat "$RUNNER_TEMP/codex-out.txt" 2>/dev/null || echo "(no output file written)"
+          echo "=== verdict ==="
+          if printf '%s' "$FINAL" | grep -q "OK=yes"; then
+            printf '%s' "$FINAL" | grep -E '^(DOMAIN|TOOLS)='
+            echo "CANARY PASSED - Codex reached the MCP server and called a tool."
+          else
+            echo "::error::CANARY FAILED - see the output above for what Codex actually reported."
+            exit 1
+          fi
