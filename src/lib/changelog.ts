@@ -30,6 +30,33 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-29.4",
+    date: "2026-07-29",
+    title: "Your posts can start linking to each other",
+    summary:
+      "Turn it on and every new guide also adds a link from 2-3 of your closest older posts, so the whole set pulls together instead of each post standing alone.",
+    changes: [
+      {
+        kind: "new",
+        text:
+          "New guides have always linked out to your older ones, but nothing ever linked back - " +
+          "so your oldest posts, usually your best, collected no internal links at all. There's " +
+          "now a switch on the Automations page: when it's on, the same pull request that adds a " +
+          "guide also edits 2-3 of your closest existing posts so they link to it. One sentence " +
+          "changed in each, nothing else touched.",
+      },
+      {
+        kind: "new",
+        text:
+          "It's off until you turn it on, and it stays that way if you never do. This is the only " +
+          "thing DispatchSEO does that changes pages you already published, so it doesn't ride " +
+          "along with Semi or Auto - it's a separate yes. A pull request that edits published " +
+          "posts also never merges on its own, even with auto-merge on, so you always see that " +
+          "diff before it goes live.",
+      },
+    ],
+  },
+  {
     version: "2026-07-29.3",
     date: "2026-07-29",
     title: "Drive DispatchSEO from any coding agent",

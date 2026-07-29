@@ -83,6 +83,12 @@ const PROBES: Probe[] = [
   // projects.agent is the one artifact of 0044 PostgREST can actually see, and
   // it is the one every read path depends on.
   { migration: "0044_project_agent", table: "projects", column: "agent" },
+  // 0045 adds exactly one column and nothing else, so it probes cleanly.
+  {
+    migration: "0045_project_internal_linking",
+    table: "projects",
+    column: "internal_linking",
+  },
 ];
 
 // Migrations that genuinely CANNOT be probed through this mechanism, with the

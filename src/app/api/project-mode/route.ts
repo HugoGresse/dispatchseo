@@ -1,4 +1,4 @@
-import { effectiveAutomations, getProjectByToken } from "@/lib/projects";
+import { effectiveAutomations, getProjectByToken, internalLinkingEnabled } from "@/lib/projects";
 import { db } from "@/lib/db";
 import pack from "@/lib/pipeline-pack.json";
 
@@ -81,6 +81,12 @@ export async function GET(req: Request) {
     slug: project.slug,
     mode: project.mode,
     automations: effectiveAutomations(project),
+    // Deliberately OUTSIDE `automations`: this is not an automation level, it
+    // is permission to edit already-published pages, and the auto-merge
+    // workflow reads it to decide whether a PR that MODIFIES existing content
+    // may merge unattended. Kept separate so flipping a project to Auto can
+    // never imply it. Absent column / older DB resolves to false.
+    internal_linking: internalLinkingEnabled(project),
     // Current pipeline-pack version (content hash). Connected repos compare
     // it against their installed .dispatchseo/pipeline-version stamp in the
     // daily seo-token-check workflow and report when an update is available.

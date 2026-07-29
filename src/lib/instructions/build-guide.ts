@@ -307,11 +307,65 @@ the build-tool workflow and must never be picked up here.
    The owner can retarget or drop the idea. Never loop past three - burning
    the run's turns to force a duplicate through helps nobody.
    If it passes open with a note (corpus unreadable), say so in the report.
-10. **PR - never main.** Branch \`seo/<slug>\` -> commit -> push ->
+10. **BACK-LINKS (only when the project opted in).** Read
+   \`get_project\`'s \`internal_linking\`. When it is not exactly \`true\`,
+   SKIP this step entirely and say nothing about it - that is the default and
+   it is not a failure. Never infer permission from Auto mode, from
+   \`auto_merge\`, or from the owner having been happy with previous PRs: this
+   is the only step that edits pages the owner ALREADY PUBLISHED, and it needs
+   its own yes.
+
+   When it IS true: the new guide already links OUT to siblings (step 6). Now
+   make the link flow both ways, so the corpus compounds instead of every post
+   standing alone. In THIS SAME PR, edit **2-3 already-published posts** so
+   they link TO the new guide.
+
+   - **Pick by topical closeness, not recency.** From \`get_pages\`, choose the
+     posts whose primary keyword and title sit nearest this guide's topic. A
+     reader of that post should plausibly want this one next. If only one page
+     is genuinely close, edit one. If none is, edit NONE and say so - a forced
+     link between unrelated posts is worse than no link.
+   - **Edit an existing sentence; never append a block.** Find a sentence in
+     the old post that already discusses the thing, and turn the natural
+     phrase into a root-relative link. If a light rewrite of that sentence
+     makes it read better, do that. NEVER add a "Related posts" list, a
+     "See also" footer, or a new paragraph whose only job is to hold a link -
+     those are ignorable boilerplate and they make the page worse.
+   - **Vary the anchor text.** Every anchor pointing at this guide across the
+     corpus must read differently, and none may be the bare primary keyword
+     repeated. Repetition of one exact-match anchor across many pages is a
+     recognised spam signal, and it is the single most likely way this step
+     does harm.
+   - **Never double-link.** Skip any post that already links to this guide.
+     One link per post per target, ever.
+   - **Hard cap: 3 files, one link each.** Not "at least" - at most. A run
+     that wants to edit a fourth is wrong about relevance.
+   - **Touch nothing else in those files.** No typo fixes, no reformatting,
+     no frontmatter edits, no reordering. The diff for each edited post must
+     be one line changed. Anything else makes the PR unreviewable and puts
+     content the owner wrote at risk.
+   - **Concurrency: rebase before you edit.** Another guide build may have a
+     PR open against the same posts. Before editing, \`git fetch origin\` and
+     rebase onto the latest default branch, then re-read each file you are
+     about to touch from that state. If a file you want is already modified
+     on an open \`seo/\` PR, skip it and pick the next-closest post - a merge
+     conflict in someone's published content is a far worse outcome than one
+     fewer back-link.
+   - **Verify again after editing.** Re-run the site's build/verify command:
+     the edited posts must still build and every link must resolve.
+11. **PR - never main.** Branch \`seo/<slug>\` -> commit -> push ->
    \`gh pr create --label seo --title "..." --body "..."\` (create the
    \`seo\` label if missing). Body includes: target keyword, volume/KD, the
    suggestion rationale, gate verdict (what page 1 lacks that this draft
    has), and a note that the deploy preview link is the review surface.
+   **If step 10 edited any already-published post, the body MUST carry the
+   exact line \`Edits published posts: yes\` followed by a bullet per edited
+   file - path, the anchor text used, and the sentence it now sits in.** That
+   line is not decoration: the auto-merge workflow greps for it and refuses to
+   auto-merge the PR, so a human always sees a diff that touches live content.
+   Omitting it on a PR that edits published posts is the single worst thing
+   this workflow can do - it merges an edit to the owner's content that nobody
+   read. When step 10 edited nothing, write \`Edits published posts: no\`.
    **If \`gh pr create\` fails, that is a FAILED run - never exit green.**
    The usual cause is the repo setting "Allow GitHub Actions to create and
    approve pull requests" being off (the default on new repos). Revert the
@@ -320,8 +374,9 @@ the build-tool workflow and must never be picked up here.
    report, and exit non-zero (e.g. \`exit 1\` from bash) so the workflow
    goes red and the owner gets GitHub's failure email. A pushed branch
    with no PR and a green run is the worst outcome - it strands silently.
-11. \`update_suggestion(id, status="done", result_pr_url=<pr url>)\` and
+12. \`update_suggestion(id, status="done", result_pr_url=<pr url>)\` and
     \`log_page(url="https://{{DOMAIN}}/<path>", ...)\`.
-12. Report: what was built, the PR link, the gate verdict, the archetype and
-    information-gain asset chosen, and what to check on the preview.
+13. Report: what was built, the PR link, the gate verdict, the archetype and
+    information-gain asset chosen, which published posts (if any) were edited
+    to link back, and what to check on the preview.
 `;

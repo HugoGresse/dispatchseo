@@ -3,8 +3,9 @@ import { db } from "@/lib/db";
 import { requireOnboarded } from "@/lib/onboarding-gate";
 import { getActiveProject } from "@/lib/active-project";
 import { AUTOMATIONS, gatherEvidence, type Automation } from "@/lib/automations";
-import { effectiveAutomations, type AutomationFlags } from "@/lib/projects";
+import { effectiveAutomations, internalLinkingEnabled, type AutomationFlags } from "@/lib/projects";
 import { AutomationToggle } from "@/components/automation-toggle";
+import { InternalLinkingToggle } from "@/components/internal-linking-toggle";
 import { PageHeader } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -170,6 +171,33 @@ export default async function AutomationsPage() {
               slug={project.slug}
             />
           ))}
+      </div>
+      {/* Deliberately its OWN block below the grid, not another automation
+          card: every automation above decides whether something publishes on
+          its own, and this decides whether the builder may edit pages you
+          already published. Different question, so it doesn't move with the
+          Semi/Auto presets and doesn't belong in the same list. */}
+      <div className="space-y-3 border-t border-neutral-800 pt-6">
+        <h2 className="text-sm font-medium text-neutral-300">Content the agent may touch</h2>
+        <div className="flex items-start justify-between gap-6 rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-neutral-100">
+              Let the builder add links from older posts
+            </p>
+            <p className="max-w-2xl text-sm text-neutral-400">
+              When a new guide ships, the same pull request edits 2-3 of your closest existing
+              posts so they link to it - one sentence each, nothing else touched. It&apos;s how a
+              pile of posts turns into a cluster that lifts itself. This is the only thing
+              DispatchSEO does that changes pages you already published, so it&apos;s off until you
+              say otherwise, and a pull request that edits published posts always waits for your
+              review even on Auto.
+            </p>
+          </div>
+          <InternalLinkingToggle
+            enabled={internalLinkingEnabled(project)}
+            slug={project.slug}
+          />
+        </div>
       </div>
     </div>
   );
