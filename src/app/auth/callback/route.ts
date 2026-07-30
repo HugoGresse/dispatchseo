@@ -55,7 +55,22 @@ export async function GET(req: NextRequest) {
     const { data, error } = tokenHash
       ? await supabase.auth.verifyOtp({
           token_hash: tokenHash,
-          type: (type ?? "email") as EmailOtpType,
+          // `signup` is normalized to `email` rather than passed through.
+          // Supabase deprecates `signup` and `magiclink` on the client, and in
+          // GoTrue `email` is a strict SUPERSET of both: verifyTokenHash's
+          // email case looks the hash up against confirmation_token AND
+          // recovery_token and rewrites the type itself, where the signup case
+          // only ever checks confirmation_token. So `email` is the more
+          // tolerant lookup and the shape every current official example uses.
+          //
+          // Normalizing here rather than only in the email template means a
+          // dashboard template still emitting `type=signup` (the shape pasted
+          // on 2026-07-30) keeps working without being re-pasted, and matters
+          // for the resend path: auth.resend() is known to write a confirmation
+          // token whose PKCE prefixing differs from the original signup's
+          // (supabase/auth#1872), and the superset lookup is the one more
+          // likely to survive that.
+          type: (type === "signup" ? "email" : (type ?? "email")) as EmailOtpType,
         })
       : await supabase.auth.exchangeCodeForSession(code as string);
     if (error) return fail();
