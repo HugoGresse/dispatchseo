@@ -490,6 +490,16 @@ export type KeywordIdea = {
   keyword_difficulty: number | null;
   cpc: number | null;
   competition: number | null;
+  // Added 2026-07-30 alongside keywordSuggestions/the related_keywords filter
+  // rework: language_code only selects which language segment of DataForSEO's
+  // keyword database is searched, NOT the language of what comes back (their
+  // docs say so explicitly, and the keyword_ideas MCP tool proved it live -
+  // English seeds returned French/Italian keywords unfiltered). detected_language
+  // is DataForSEO's own per-keyword guess (e.g. "en", "fr"); is_another_language
+  // is their derived "doesn't match the requested segment" flag. Both ride along
+  // on every idea so a caller can filter without a second round-trip.
+  detected_language: string | null;
+  is_another_language: boolean | null;
 };
 
 function mapLabsItems(items: unknown[]): KeywordIdea[] {
@@ -498,12 +508,24 @@ function mapLabsItems(items: unknown[]): KeywordIdea[] {
     keyword_data?: {
       keyword?: string;
       keyword_info?: { search_volume?: number; cpc?: number; competition?: number };
-      keyword_properties?: { keyword_difficulty?: number };
+      keyword_properties?: {
+        keyword_difficulty?: number;
+        detected_language?: string;
+        is_another_language?: boolean;
+      };
     };
     keyword_info?: { search_volume?: number; cpc?: number; competition?: number };
-    keyword_properties?: { keyword_difficulty?: number };
+    keyword_properties?: {
+      keyword_difficulty?: number;
+      detected_language?: string;
+      is_another_language?: boolean;
+    };
   }>).map((it) => {
-    // related_keywords nests under keyword_data; keyword_ideas is flat.
+    // related_keywords nests under keyword_data; keyword_ideas and
+    // keyword_suggestions are flat - verified against a live
+    // /dataforseo_labs/available_filters response 2026-07-30, which lists the
+    // former's fields as keyword_data.keyword_info.* / keyword_data.keyword_properties.*
+    // and the latter two as bare keyword_info.* / keyword_properties.*.
     const kd = it.keyword_data ?? it;
     const kw = it.keyword ?? it.keyword_data?.keyword ?? kd.keyword ?? "";
     const info = kd.keyword_info ?? it.keyword_info;
@@ -514,11 +536,20 @@ function mapLabsItems(items: unknown[]): KeywordIdea[] {
       keyword_difficulty: props?.keyword_difficulty ?? null,
       cpc: info?.cpc ?? null,
       competition: info?.competition ?? null,
+      detected_language: props?.detected_language ?? null,
+      is_another_language: props?.is_another_language ?? null,
     };
   });
 }
 
-// Labs keyword_ideas: keywords semantically related to the seeds.
+// Labs keyword_ideas: CATEGORY-neighbors of the seeds, not semantic matches -
+// DataForSEO's own docs say results are "not necessarily semantically
+// similar", and it showed live 2026-07-30: SEO seeds like "ai seo agent" came
+// back with "audemars piguet marketing" and "agent provocateur sale" (same
+// rough market segment, zero topical relation). The keyword_ideas MCP tool no
+// longer calls this - see keywordSuggestions + relatedKeywords below - but the
+// retired weekly-opportunities cron (src/app/api/cron/weekly-opportunities)
+// still does, so the function stays. Do not point new callers at it.
 export async function keywordIdeas(
   seeds: string[],
   creds: DataforseoCreds,
@@ -539,7 +570,50 @@ export async function keywordIdeas(
   return { ideas: mapLabsItems(items), cost: json.cost };
 }
 
-// Labs related_keywords: the "searches related to" graph around one seed.
+// Labs keyword_suggestions: full-text expansion of ONE seed - every result is
+// guaranteed to CONTAIN the seed phrase, unlike keyword_ideas' category
+// matching above. Takes one seed per call (no batching), so the caller
+// decides how many seeds are worth the metered spend. filters/order_by field
+// paths verified live against GET /dataforseo_labs/available_filters
+// 2026-07-30: keyword_suggestions.google lists keyword_info.search_volume and
+// keyword_properties.is_another_language as real (flat) filterable fields, so
+// the volume floor and language check happen server-side, before billing -
+// mapLabsItems still carries both fields too, for a client-side
+// belt-and-suspenders check (e.g. is_another_language can be false while
+// detected_language is still something odd DataForSEO didn't flag).
+export async function keywordSuggestions(
+  seed: string,
+  creds: DataforseoCreds,
+  limit = 100,
+): Promise<{ ideas: KeywordIdea[]; cost: number }> {
+  const json = await post<{
+    cost: number;
+    tasks: Array<{ result?: Array<{ items?: unknown[] }> }>;
+  }>("/dataforseo_labs/google/keyword_suggestions/live", [
+    {
+      keyword: seed,
+      location_code: LOCATION_CODE,
+      language_code: LANGUAGE_CODE,
+      limit,
+      filters: [
+        ["keyword_info.search_volume", ">", 0],
+        "and",
+        ["keyword_properties.is_another_language", "=", false],
+      ],
+      order_by: ["keyword_info.search_volume,desc"],
+    },
+  ], creds);
+  const items = json.tasks?.[0]?.result?.[0]?.items ?? [];
+  return { ideas: mapLabsItems(items), cost: json.cost };
+}
+
+// Labs related_keywords: Google's real "searches related to" graph around one
+// seed. Also one seed per call. filters/order_by added 2026-07-30 alongside
+// keywordSuggestions above - verified live against
+// GET /dataforseo_labs/available_filters that related_keywords.google nests
+// every field under keyword_data. (unlike keyword_suggestions' flat paths),
+// so the same volume-floor + not-another-language filter needs the
+// keyword_data. prefix here or it silently 400s / no-ops.
 export async function relatedKeywords(
   seed: string,
   creds: DataforseoCreds,
@@ -554,6 +628,12 @@ export async function relatedKeywords(
       location_code: LOCATION_CODE,
       language_code: LANGUAGE_CODE,
       limit,
+      filters: [
+        ["keyword_data.keyword_info.search_volume", ">", 0],
+        "and",
+        ["keyword_data.keyword_properties.is_another_language", "=", false],
+      ],
+      order_by: ["keyword_data.keyword_info.search_volume,desc"],
     },
   ], creds);
   const items = json.tasks?.[0]?.result?.[0]?.items ?? [];

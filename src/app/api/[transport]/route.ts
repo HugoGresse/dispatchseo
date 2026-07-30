@@ -11,7 +11,7 @@ import { getAnalyticsOverview } from "@/lib/analytics-data";
 import { getJourney } from "@/lib/journey";
 import { getWeeklyProgress } from "@/lib/progress";
 import { AUTOMATIONS, gatherEvidence } from "@/lib/automations";
-import { credsForProject, keywordIdeas } from "@/lib/dataforseo";
+import { credsForProject, keywordSuggestions, relatedKeywords, type KeywordIdea } from "@/lib/dataforseo";
 import { isCloudMode } from "@/lib/cloud";
 import { canMerge, dispatchToolBuild, mergePr, openSeoPrs, verifyPipelinePrereqs } from "@/lib/github";
 import {
@@ -107,6 +107,12 @@ function fail(message: string) {
     content: [{ type: "text" as const, text: JSON.stringify({ error: message }, null, 2) }],
   };
 }
+
+// keyword_ideas (2026-07-30 rewrite): each expanded seed now costs 2 metered
+// DataForSEO calls (keyword_suggestions + related_keywords) instead of the
+// old 1-call-for-all-seeds shape, so cap how many seeds a single tool call
+// actually expands rather than trusting every caller to self-limit.
+const KEYWORD_IDEAS_SEED_CAP = 5;
 
 const mcpHandler = createMcpHandler(
   (server) => {
@@ -1426,30 +1432,44 @@ const mcpHandler = createMcpHandler(
       {
         title: "Keyword ideas with volume & difficulty",
         description:
-          "Expand seed keywords into related searches WITH real monthly search volume and " +
-          "keyword difficulty (KD), via DataForSEO. Works whenever the project has DataForSEO - " +
-          "its OWN account or the platform's BUNDLED plan (cloud) - so it's how bundled-plan " +
-          "projects (no DataForSEO server in their repo) get the numbers the quality bar gates " +
-          "on. Returns { ideas: [{keyword, volume, kd, cpc}] } sorted by volume, highest first. " +
-          "Use it during research to discover and validate candidates in one call: the returned " +
-          "keywords already carry the volume floor / KD ceiling numbers. Batch multiple seeds per " +
-          "call - it costs one metered DataForSEO call each time, billed to the platform on the " +
-          "bundled plan (counts against the project's monthly budget). Returns an empty ideas " +
-          "list WITH a note (never an error) when the project has no DataForSEO access or the " +
-          "monthly budget is spent - fall back to check_serp + product judgment then.",
+          "Expand seed keywords into keywords that are actually RELATED to them WITH real " +
+          "monthly search volume and keyword difficulty (KD), via DataForSEO. Fixed 2026-07-30: " +
+          "this used to call Labs' keyword_ideas/live, which DataForSEO's own docs describe as " +
+          "CATEGORY-based, not semantic - live seeds like \"ai seo agent\" came back with " +
+          "\"audemars piguet marketing\" and \"agent provocateur sale\" (same rough market segment, " +
+          "zero topical relation), and language_code never filtered the output language either, " +
+          "so French/Italian keywords leaked into English-seed results unfiltered. This tool now " +
+          "calls keyword_suggestions (results GUARANTEED to contain the seed phrase) + " +
+          "related_keywords (Google's real \"searches related to\" graph) per seed, merges and " +
+          `dedupes both, and drops anything with no search volume or a non-English detected ` +
+          `language before it ever reaches you. Works whenever the project has DataForSEO - its ` +
+          "OWN account or the platform's BUNDLED plan (cloud). Returns " +
+          "{ ideas: [{keyword, volume, kd, cpc}], note } sorted by volume, highest first. COST: " +
+          `up to ${KEYWORD_IDEAS_SEED_CAP} seeds are actually expanded per call (send your ` +
+          "highest-signal seeds first - extras beyond the cap are silently skipped, but named in " +
+          "the note), and each expanded seed costs 2 metered DataForSEO calls (one " +
+          "keyword_suggestions + one related_keywords), billed to the platform on the bundled " +
+          "plan and counted against the project's monthly budget - so a full call can cost up to " +
+          `${KEYWORD_IDEAS_SEED_CAP * 2} calls, not 1. The note always states how many seeds were ` +
+          "expanded vs skipped so you are never silently handed partial data. Returns an empty " +
+          "ideas list WITH a note (never an error) when the project has no DataForSEO access or " +
+          "the monthly budget is spent - fall back to check_serp + product judgment then.",
         inputSchema: {
           seeds: z
             .array(z.string().min(1))
             .min(1)
             .max(20)
-            .describe("Up to 20 seed keywords to expand from. Send them in one call rather than one call per seed."),
+            .describe(
+              `Seed keywords to expand from, BEST FIRST - only the first ${KEYWORD_IDEAS_SEED_CAP} are ` +
+                "actually expanded (2 metered calls each), the rest are skipped and named in the response note.",
+            ),
           limit: z
             .number()
             .int()
             .min(1)
             .max(200)
             .optional()
-            .describe("Maximum ideas to return, up to 200."),
+            .describe("Maximum ideas to return, up to 200, after merging and deduping both endpoints across all expanded seeds."),
         },
       },
       async ({ seeds, limit }) => {
@@ -1466,21 +1486,81 @@ const mcpHandler = createMcpHandler(
             note: "No DataForSEO access for this project (free/GSC-only mode, or the monthly bundled budget is spent). Use check_serp + product judgment - do not invent numbers.",
           });
         }
-        try {
-          const { ideas } = await keywordIdeas(seeds, creds, limit ?? 100);
-          const sorted = ideas
-            .filter((i) => i.keyword)
-            .sort((a, b) => (b.search_volume ?? 0) - (a.search_volume ?? 0))
-            .map((i) => ({
-              keyword: i.keyword,
-              volume: i.search_volume,
-              kd: i.keyword_difficulty,
-              cpc: i.cpc,
-            }));
-          return ok({ seeds, ideas: sorted });
-        } catch (e) {
-          return fail(e instanceof Error ? e.message : String(e));
+
+        // Cost control (2026-07-30): the old call was 1 metered call for up
+        // to 20 seeds; two-endpoints-per-seed makes cost scale with seed
+        // count, so cap how many are actually expanded rather than trusting
+        // every caller to self-limit. Seeds arrive highest-signal-first (the
+        // tool description says so), so a plain slice keeps the best ones.
+        const expanded = seeds.slice(0, KEYWORD_IDEAS_SEED_CAP);
+        const skipped = seeds.slice(KEYWORD_IDEAS_SEED_CAP);
+
+        // Merge keyword_suggestions + related_keywords per seed, deduped by
+        // lowercased keyword (keep the higher-volume duplicate when both
+        // endpoints surface the same keyword). Never fabricate: a seed whose
+        // calls both fail contributes nothing, not a guess.
+        const merged = new Map<string, KeywordIdea>();
+        const callErrors: string[] = [];
+        for (const seed of expanded) {
+          const settled = await Promise.allSettled([
+            keywordSuggestions(seed, creds, limit ?? 100),
+            relatedKeywords(seed, creds, limit ?? 100),
+          ]);
+          for (const result of settled) {
+            if (result.status === "rejected") {
+              callErrors.push(
+                result.reason instanceof Error ? result.reason.message : String(result.reason),
+              );
+              continue;
+            }
+            for (const idea of result.value.ideas) {
+              if (!idea.keyword) continue;
+              if (!idea.search_volume) continue; // no/zero volume - never invent a number
+              // Server-side filters already drop is_another_language=true rows,
+              // but detected_language is the direct signal the incident above
+              // was actually about - check it too as a belt-and-suspenders pass.
+              if (idea.detected_language && idea.detected_language !== "en") continue;
+              const key = idea.keyword.toLowerCase();
+              const existing = merged.get(key);
+              if (!existing || (idea.search_volume ?? 0) > (existing.search_volume ?? 0)) {
+                merged.set(key, idea);
+              }
+            }
+          }
         }
+
+        // Every call for every expanded seed failing is a real vendor/creds
+        // problem, not "no related keywords" - report it as an error rather
+        // than a suspiciously empty success.
+        if (callErrors.length > 0 && merged.size === 0) {
+          return fail(`DataForSEO calls failed for every seed: ${callErrors[0]}`);
+        }
+
+        const sorted = Array.from(merged.values())
+          .sort((a, b) => (b.search_volume ?? 0) - (a.search_volume ?? 0))
+          .slice(0, limit ?? 100)
+          .map((i) => ({
+            keyword: i.keyword,
+            volume: i.search_volume,
+            kd: i.keyword_difficulty,
+            cpc: i.cpc,
+          }));
+
+        const noteParts = [
+          `Expanded ${expanded.length} of ${seeds.length} seed(s) via keyword_suggestions + ` +
+            `related_keywords (2 metered calls each, ${expanded.length * 2} total).`,
+        ];
+        if (skipped.length > 0) {
+          noteParts.push(
+            `Skipped ${skipped.length} seed(s) past the cap of ${KEYWORD_IDEAS_SEED_CAP}: ${skipped.join(", ")}.`,
+          );
+        }
+        if (callErrors.length > 0) {
+          noteParts.push(
+            `${callErrors.length} of ${expanded.length * 2} calls failed (results below are partial): ${callErrors[0]}`,
+          );
+        }
+        return ok({ seeds, ideas: sorted, note: noteParts.join(" ") });
       },
     );
 
@@ -1908,7 +1988,12 @@ const mcpHandler = createMcpHandler(
           "approved items waiting for their build, builds in progress, open SEO PRs " +
           "(merge with merge_pr once checks are green), and pages waiting for a " +
           "Search Console 'Request indexing' click (comes with a paste-ready " +
-          "@browser command; report the outcome via mark_indexing_requested).",
+          "@browser command; report the outcome via mark_indexing_requested). " +
+          "On a project with auto-approval ON for a type, pending items of that " +
+          "type are NOT owner decisions - they come back under `held` instead of " +
+          "`awaiting_approval`, because the owner delegated the call. Never ask " +
+          "the owner to approve a held item; the research run releases it when " +
+          "the site's authority grows into its difficulty zone.",
         inputSchema: {},
       },
       async () => {
@@ -1933,8 +2018,17 @@ const mcpHandler = createMcpHandler(
         if (sugRes.error) return fail(sugRes.error.message);
         const sugs = sugRes.data ?? [];
         const queue = indexingQueue((pagesRes.data ?? []) as IndexingPageRow[]);
+        // Auto-approval ON for a type means the owner delegated that decision,
+        // so a pending item of that type is HELD (the bar does not admit it
+        // yet), never a chore. Reporting it as awaiting_approval is what made
+        // hands-off projects ask for hands on the dashboard and over MCP alike.
+        const autoFlags = effectiveAutomations(p);
+        const isHeld = (s: { type: string; status: string }) =>
+          s.status === "pending" &&
+          (s.type === "tool" ? autoFlags.auto_approve_tools : autoFlags.auto_approve);
         return ok({
-          awaiting_approval: sugs.filter((s) => s.status === "pending"),
+          awaiting_approval: sugs.filter((s) => s.status === "pending" && !isHeld(s)),
+          held: sugs.filter(isHeld),
           approved_waiting_build: sugs.filter((s) => s.status === "approved"),
           building_now: sugs.filter((s) => s.status === "in_progress"),
           open_seo_prs: prs,

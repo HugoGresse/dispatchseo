@@ -7,7 +7,9 @@
 // together with the markdown below - they describe the same pipeline.
 export const RESEARCH_STEPS = [
   { title: "Review", plain: "Looks at how the pages it already published are actually doing in Google - what ranked, what stalled - and lets that steer this week's picks. It waits until at least 10 pages have had three weeks to settle before drawing any conclusion, so it can't invent a pattern from two lucky posts." },
+  { title: "Release", plain: "Frees any idea that was parked as too hard for your site, but isn't any more - your site gets stronger, the bar rises with it, and parked ideas come back on their own. On automatic mode this is the only way they ever get built, because automatic mode never asks you to approve anything." },
   { title: "Learn", plain: "Re-reads what your product actually is, from your repo, every single run." },
+  { title: "Aim", plain: "Your product can be described honestly in several ways, and they're not equally winnable - \"SEO software\" is a market Ahrefs has owned for 15 years, \"agents that do work for you\" is two years old. So it measures each description against your site's current strength, then spends the week on whichever one you can actually win, and shows you the numbers behind the choice. It sticks with that subject rather than hopping, because twenty posts spread across five subjects makes you an authority on none." },
   { title: "Derive", plain: "Asks: what would someone google right before your product is the answer? 40-60 candidates, hunting buying-intent first (comparisons, 'best X', alternatives) rather than 'what is X' traffic that never converts - but the quality bar still decides what makes it in." },
   { title: "Scope", plain: "Throws out the keywords your product isn't actually an answer to, before spending a penny checking them. The trap it exists to stop: your buyers search about every other tool they use too, and writing about those brings in readers who never needed you - so a keyword only survives if a good post about it would end with 'and that's what this product does'." },
   { title: "Validate", plain: "Checks real search volume and difficulty - keywords outside your site's league get dropped, including the ones that are too BIG. Until your site has some authority, a smaller query you can win beats a huge one you can't." },
@@ -63,10 +65,95 @@ product:
    On a site with no settled pages at all, say "no outcome data yet - first
    runs" and move on. This step gets sharper every week; once past the
    threshold it should be the single biggest influence on what gets queued.
+0.5 **Release the held ideas the bar now admits (Auto projects especially).**
+   Your site's authority rises over time, and the KD ceiling rises with it, so
+   ideas parked in the pending zone months ago may now sit INSIDE the
+   auto-approve zone. Read \`get_domain_rank\`, compute this run's ceiling from
+   the quality bar's table, list \`get_suggestions\` status "pending" source
+   "research", and \`update_suggestion(id, status="approved")\` every one whose
+   KD is now UNDER that ceiling - oldest first. Say in the report how many were
+   released and at what ceiling.
+
+   **This is NOT the quota ladder's rung 2, and the difference is the whole
+   point.** Rung 2 promotes ideas that are STILL above the bar, to hit a
+   number - it stays closed under DR 20. This step releases ideas the bar now
+   ADMITS on their own merits, which is not a favour to the cadence and needs
+   no exception. Nothing here bends the bar; the bar moved.
+
+   On an Auto project this step is also what makes "held" honest: the owner is
+   never asked to approve anything, so releasing held ideas as authority grows
+   is the ONLY path by which they ever get built. Skipping it strands them
+   permanently. Never release an idea the owner rejected, and never one with
+   source "manual" (those are the owner's own drafts, awaiting THEIR decision
+   in both modes).
 1. **Read the product surface** (skim, do not deep-read): the product-surface
    files listed in the conventions file, plus the existing content
    inventory - published slugs in the guides directory and the tools
    registry, cross-checked against \`get_pages\` (never propose duplicates).
+1.5 **Aim the run: measure the product's facets, then work ONE.**
+
+   A product is not about one subject. Every honest description of the job it
+   does is a different search market with its own competition, and they are
+   rarely equally winnable. DispatchSEO is the worked example: read as "SEO",
+   its market has had Ahrefs and Semrush publishing into it since 2011, so
+   everything simultaneously relevant and winnable for a young site is a
+   long-tail. Read as "agents that do work unattended", the same product sits
+   in a market two years old where nobody has published the real answers yet.
+   Same product, same quality bar, order-of-magnitude different opportunity.
+   A run that never checks is not choosing the crowded market - it is failing
+   to notice there was a choice.
+
+   The conventions file lists this site's facets (setup writes them, most
+   direct first). Measure them in ONE call, not one per facet:
+   - **Find the phrasing** with \`suggest_keywords\` if a facet's search
+     wording is unclear - free, no credentials, real autocomplete queries. Use
+     it to pick the phrase people actually type, not to price anything: it
+     returns no volume.
+   - **Price all the facets in a single \`keyword_ideas\` call**, passing ONE
+     seed phrase per facet (the tool expands up to 5 seeds per call, which is
+     the facet count by design). It returns English, volume-backed candidates
+     carrying KD, so expansion and pricing are the same call - there is no
+     separate bulk-metrics lookup, do not go looking for one. Attribute each
+     returned keyword to the facet whose phrase it contains; anything that
+     matches none is still a valid candidate, just unattributed. On a project
+     with DataForSEO's own MCP in its repo, use that server's equivalents
+     instead - same two numbers out.
+   - **Score each facet on two numbers only**: how many of its candidates
+     carry volume inside this site's band AND KD under its auto-approve
+     ceiling, and the median volume of those. That is the opportunity
+     available to THIS site today - not the facet's total size, which is a
+     vanity number a young site cannot spend.
+   - **Cost discipline.** That is one metered call for the whole measurement
+     (about ten DataForSEO calls internally). Do NOT loop it per facet, and do
+     not re-measure a facet you already priced this run. If the budget is
+     spent the tool returns empty with a note - then fall back to
+     \`suggest_keywords\` plus \`check_serp\` on the most direct facet and say
+     in the report that the facet scoring was unpriced.
+
+   Then work ONE facet, and print the table - facet, candidates in range,
+   median volume, verdict - in the run report so the owner can see the choice
+   and disagree with it.
+
+   **Stickiness - do not facet-hop.** Twenty guides spread across five facets
+   build authority in none; twenty inside one build a cluster that lifts every
+   page in it. So look at what the last ~10 queued and published guides were
+   about (step 0 already loaded them): if that facet still shows candidates in
+   range, STAY IN IT. A facet is exhausted when its in-range count hits zero,
+   not when another looks shinier. Switch only when the current facet is
+   genuinely dry, or when another scores several times higher AND the current
+   cluster is still too thin to be worth defending. Say which case applies.
+
+   There is deliberately no stored "current facet" field: the queue and the
+   published pages ARE that record. They cannot drift from reality, and the
+   facet a site has been working is readable from them without anyone
+   maintaining a second copy.
+
+   **A facet never overrides the per-keyword bar.** Facets decide where to
+   HUNT; the product-is-the-answer test and the authority gate decide what may
+   be QUEUED - exactly the precedence intent already follows. The failure mode
+   to watch is widening to a facet's PARENT topic: "agents that do SEO" is a
+   facet of DispatchSEO, bare "agents" is not. We are not the answer to "what
+   is an ai agent", and no amount of volume rescues that.
 2. **Derive candidate queries** from that knowledge, and read the question
    strictly: what would someone google right before {{SITE_NAME}} is the
    ANSWER - not what your audience googles in general. Start from the problem
@@ -182,12 +269,24 @@ the miss is visible instead of silent.
 
 **Auto mode fills the tank; semi mode fills the backlog.** Read
 \`get_project\`'s \`auto_approve\`. When it is TRUE (the owner chose Auto -
-hands-off publishing), reaching the weekly target is MANDATORY: **7 approved
-guides, every week, so the builder ships one a day.** Do NOT stop at the two
-or three that cleared the auto-approve zone and leave the rest sitting as
-pending "optional" ideas - on an Auto-mode site that is a BUG the owner sees
-as "why do I still have to add these myself?". The pending zone is a holding
-area for the owner's judgment on SEMI projects only.
+hands-off publishing), pursue the weekly target HARD but through **rung 1
+only**: hunt wider until 7 keywords clear the bar on their own merits.
+
+Two things are forbidden on an Auto project, and they pull in opposite
+directions - hold both lines at once:
+- **Never close the gap by handing the owner work.** Ending a run with pending
+  ideas the owner is expected to approve is the "why do I still have to add
+  these myself?" bug the mode exists to prevent. Held ideas are held, per the
+  quality bar - not asked about, not flagged, not framed as optional extras.
+- **Never close the gap by approving what the bar rejects.** A queue of seven
+  pages that land past position 50 is worse than three that rank.
+
+So when the honest yield is 4, queue 4, hold the rest, and report it plainly:
+"4 of 7 queued - ladder worked to rung N, 3 held above the KD ceiling". On a
+young site, fewer winnable guides IS the product. The gap then closes by
+itself, from two directions: step 0.5 releases held ideas as DR lifts the
+ceiling, and the facet measurement in step 1.5 moves the hunt to a less
+crowded space where more keywords clear the bar in the first place.
 
 **The daily cadence and the quality bar are both non-negotiable, and rung 1
 is how you satisfy both.** They only appear to conflict when the hunt is too

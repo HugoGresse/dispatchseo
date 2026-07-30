@@ -30,6 +30,52 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-30.1",
+    date: "2026-07-30",
+    title: "Better keywords, and automatic mode stops asking you things",
+    summary:
+      "Your site now competes in whichever description of your product it can actually win, instead of the most obvious and most crowded one - and on automatic mode you're never asked to approve anything again.",
+    changes: [
+      {
+        kind: "new",
+        text:
+          "Your product can be described honestly in several ways, and they are not equally " +
+          "winnable. A tool for SEO sits in a market Ahrefs and Semrush have published into since " +
+          "2011; the same tool described as \"an agent that does the work unattended\" sits in a " +
+          "market two years old. Research now measures each description against your site's " +
+          "current strength every week, spends the week on the one you can actually win, and " +
+          "prints the numbers so you can see why it chose. Setup writes those descriptions down " +
+          "for your site - re-run it from your dashboard to get them.",
+      },
+      {
+        kind: "improved",
+        text:
+          "It sticks with one subject rather than hopping between them. Twenty guides spread over " +
+          "five subjects makes you an authority on none; twenty inside one build a cluster where " +
+          "every page lifts the others. It moves on only when a subject is genuinely used up.",
+      },
+      {
+        kind: "improved",
+        text:
+          "On automatic mode you are never asked to approve anything. Ideas too hard for your site " +
+          "today are HELD, with no Approve button and no chore - and every research run releases " +
+          "them by itself once your site's authority has grown enough to win them. Some weeks that " +
+          "means 4 guides instead of 7: it will not pad your queue with keywords it doesn't " +
+          "believe in, and it will not hand you the difference either.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Keyword suggestions were coming back wrong for anyone on our hosted plan - we were " +
+          "asking our data provider for keywords in the same shopping CATEGORY as yours rather " +
+          "than keywords that actually mean the same thing, and asking for English never filtered " +
+          "out other languages. A search about SEO automation could return French ad agencies. " +
+          "Now it asks the two right ways, merges them, and throws out anything non-English or " +
+          "with no search traffic - with a test that fails if that ever regresses.",
+      },
+    ],
+  },
+  {
     version: "2026-07-30",
     date: "2026-07-30",
     title: "Fixed: the daily builder could die before it started",

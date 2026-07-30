@@ -74,6 +74,14 @@ export async function GET(req: Request): Promise<Response> {
     const seeds = Array.from(new Set([...seedEnv, ...trackedSet, ...gscQueries])).slice(0, 20);
 
     // --- expand ---
+    // WARNING before re-enabling this route (it is not on any schedule - no
+    // entry in vercel.json or any workflow as of 2026-07-30): keywordIdeas
+    // hits DataForSEO's CATEGORY-matching endpoint, which returns keywords
+    // from the seeds' product category rather than keywords related to them,
+    // and does not filter the result language. English SEO seeds came back
+    // with French ad agencies. The keyword_ideas MCP tool was rewritten off it
+    // that day onto keywordSuggestions + relatedKeywords; port this the same
+    // way before trusting its output for anything.
     const { ideas, cost } = await keywordIdeas(seeds, creds, 200);
     result.expansion = { seeds: seeds.length, ideas: ideas.length, cost };
 

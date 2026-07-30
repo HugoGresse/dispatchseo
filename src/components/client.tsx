@@ -165,19 +165,17 @@ export function QueueApproveButton({
   id,
   onApproved,
   onReverted,
-  auto = false,
 }: {
   id: string;
   // Optional hooks so a client parent (DraggableQueue) can flip the row to
   // its queued look instantly and walk it back on the rare failure.
   onApproved?: () => void;
   onReverted?: () => void;
-  // Auto mode. Kept as a prop for the tooltip's wording - the button itself
-  // says "Approve" in both modes now. It used to say "Add", framing the row as
-  // an optional extra, which stopped being honest once nothing promoted these
-  // on its own (see StatusLabel in queue-table.tsx): approving is the only
-  // thing that ever builds them, so the button should say what it does.
-  auto?: boolean;
+  // No `auto` prop any more: on Auto projects this button is not rendered at
+  // all (queue-table.tsx), because hands-off mode must never ask for hands.
+  // Held ideas there are released by the research run when the site's authority
+  // grows into their difficulty zone. So every render of this button is a Semi
+  // project, where the decision genuinely is the owner's.
 }) {
   const [, start] = useTransition();
   const [state, setState] = useState<"idle" | "approved" | "failed">("idle");
@@ -206,11 +204,7 @@ export function QueueApproveButton({
             }
           });
         }}
-        title={
-          auto
-            ? "Approve - research left this one to you, this queues it for the builders"
-            : "Approve - queue it for the builders"
-        }
+        title="Approve - queue it for the builders"
         className="rounded-md bg-emerald-500 px-2 py-1 text-xs font-semibold text-neutral-950 transition-colors hover:bg-emerald-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
       >
         Approve

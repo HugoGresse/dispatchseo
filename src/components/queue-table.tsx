@@ -54,16 +54,27 @@ function StatusLabel({
 }) {
   if (status === "in_progress") return <span className="text-neutral-300">building now</span>;
   if (status === "pending") {
-    const reason =
+    const why =
       kd == null
         ? "no difficulty score"
         : kdCeiling != null && kd >= kdCeiling
           ? `KD ${kd}, over your ceiling of ${kdCeiling}`
           : null;
+    // On Auto the owner delegated the decision, so this row is NOT a request -
+    // it is an idea the bar does not admit YET, and saying "pending" next to an
+    // Approve button made hands-off mode ask for hands. It reads "held" and
+    // names what frees it: every research run releases held ideas the moment
+    // the site's rising authority puts them inside the auto-approve zone, so
+    // nothing is asked of the owner and nothing is stranded either.
+    const sub = autoApproved
+      ? [why, "frees up as your site gains authority"].filter(Boolean).join(" - ")
+      : why;
     return (
       <span className="flex flex-col gap-0.5">
-        <span className={autoApproved ? "text-neutral-400" : "text-amber-300"}>pending</span>
-        {reason ? <span className="text-xs text-neutral-500">{reason}</span> : null}
+        <span className={autoApproved ? "text-neutral-400" : "text-amber-300"}>
+          {autoApproved ? "held" : "your call"}
+        </span>
+        {sub ? <span className="text-xs text-neutral-500">{sub}</span> : null}
       </span>
     );
   }
@@ -334,8 +345,11 @@ export function DraggableQueue({
                       />
                     </span>
                   ) : null}
-                  {r.status === "pending" ? (
-                    <QueueApproveButton id={r.id} auto={autoApproved} />
+                  {/* Auto mode never asks: no Approve button at all. The held
+                      row is information, not a chore - research releases it
+                      when the site's authority catches up. */}
+                  {r.status === "pending" && !autoApproved ? (
+                    <QueueApproveButton id={r.id} />
                   ) : null}
                   {kind === "tool" && movable ? <QueueBuildNowButton id={r.id} /> : null}
                   <QueueRemoveButton
@@ -453,7 +467,10 @@ export function DraggableQueue({
                 <div className={`${cell} pr-4 text-right`}>
                   {r.status !== "in_progress" ? (
                     <span className="inline-flex items-center gap-1.5">
-                      {r.status === "pending" ? <QueueApproveButton id={r.id} auto={autoApproved} /> : null}
+                      {/* See the card list above: Auto mode shows no Approve. */}
+                      {r.status === "pending" && !autoApproved ? (
+                        <QueueApproveButton id={r.id} />
+                      ) : null}
                       {kind === "tool" && movable ? <QueueBuildNowButton id={r.id} /> : null}
                       <QueueRemoveButton
                         id={r.id}

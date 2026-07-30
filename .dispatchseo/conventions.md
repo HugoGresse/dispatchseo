@@ -24,6 +24,20 @@ Claude Code, MCP, Vercel and the rest are how the product is BUILT and what
 its readers happen to run - they are not the subject. (See the quality
 bar's product-is-the-answer test; this paragraph is what it reads.)
 
+**Facets** - the honest descriptions of this product's job, most direct first.
+The research run measures these against the site's current authority every week
+and works whichever is winnable (research step 1.5). "SEO" is the most obvious
+one and the most saturated: Ahrefs and Semrush have published into it since
+2011, so at DR 0 everything both relevant and winnable there is a long-tail.
+The agent facets are much younger markets and equally true of the product.
+1. **SEO automation** - doing the SEO work itself, not advising on it
+2. **Agents that do real work unattended** - an agent that ships, on a
+   schedule, without a human in the loop (NOT "agents" in general, and NOT
+   coding-agent tooling - see the remit test)
+3. **Content pipelines** - research to published page as one automated flow
+4. **Rank tracking + Search Console** - the measurement half, self-hosted
+5. **Marketing that lives in a dev workflow** - PRs, CI, a repo, no CMS
+
 Product-surface files to read fresh each research run.
 
 Positioning - what the site is ABOUT; the topic remit comes from here:

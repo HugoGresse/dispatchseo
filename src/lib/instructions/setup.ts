@@ -149,6 +149,25 @@ command once to confirm it. The file must contain these sections:
    nothing. If the repo genuinely has no marketing surface, say so and point
    at the closest thing (README intro, docs landing) rather than omitting
    the group.
+
+   Then, from the positioning surface, write the site's **facets**: 3-6 honest
+   descriptions of the job this product does, most direct first, each one a
+   subject people search. DispatchSEO's own, as the worked example: "SEO
+   automation" / "agents that do real work unattended" / "content publishing
+   pipelines" / "rank tracking and Search Console without a subscription".
+   The research run measures these against the site's current authority every
+   week and spends the week on whichever is actually winnable, so a product
+   whose most obvious market is saturated is not trapped in it.
+
+   Two rules, and they are what keep this from becoming a licence to write
+   about anything:
+   - A facet is what the product **does** - never what it is built with, and
+     never a tool its audience happens to use alongside it. "Runs on Vercel"
+     is not a facet. "Works with Claude Code" is not a facet.
+   - A facet must be narrow enough that the product is a plausible ANSWER to
+     searches inside it. "Agents that do SEO" qualifies; bare "agents" does
+     not, because nobody searching "what is an ai agent" is looking for this
+     product.
 2. **Stack & build** - framework and content system (e.g. Next.js + MDX,
    Astro, Hugo), package manager, the exact build/verify command, and any
    CI validators that gate merges.

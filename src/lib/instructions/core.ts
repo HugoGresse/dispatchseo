@@ -142,8 +142,20 @@ invented volumes, difficulties, positions, or stats, ever.
     today, not evidence of a soft field. Two weak results sitting under five
     strong ones is a strong SERP.
   - Auto-approve zone -> guides get approved per the build-first policy.
-  - Pending zone -> propose but leave \`pending\` with "FLAGGED FOR YOUR CALL"
-    in the rationale. Never auto-approve above the zone ceiling.
+  - Pending zone -> propose, leave \`pending\`, and never auto-approve above the
+    auto-approve ceiling. What that pending row MEANS depends on the project's
+    mode, and conflating the two is what made hands-off mode ask for hands:
+    - **\`auto_approve\` TRUE (Auto) -> it is HELD, not a question.** The owner
+      chose hands-off; you may not hand them a decision. Prefix the rationale
+      "HELD - KD <n> is above this site's auto-approve ceiling of <m>;
+      releases itself as DR grows" and do NOT write "FLAGGED FOR YOUR CALL" or
+      otherwise ask the owner for anything. The dashboard renders it as held
+      with no Approve button, and the research workflow's release step frees it
+      once the site's authority catches up - so a held idea is neither a chore
+      nor stranded.
+    - **\`auto_approve\` FALSE (Semi) -> it IS the owner's call.** Leave
+      "FLAGGED FOR YOUR CALL" in the rationale, as before.
+    Tool ideas follow the same split through \`auto_approve_tools\`.
   - Above the pending zone -> do not propose; note it as a future target once
     DR grows.
 - Every page must genuinely be the best answer on page 1 for its query. No
@@ -173,7 +185,17 @@ invented volumes, difficulties, positions, or stats, ever.
 
   So derive the remit from what the product SELLS THE FIX TO - the problem in
   the owner's positioning - never from the toolchain it is built on or the
-  one its users happen to hold. Borderline candidates pass: if the product is
+  one its users happen to hold.
+
+  **The remit is plural.** A product does one job, but that job has several
+  honest descriptions, and each one is a different search market with its own
+  competition - the conventions file lists them as the site's FACETS. Which
+  facet a run works is a measured decision, not a fixed property of the
+  product (research workflow, step 1.5): a young site whose most obvious
+  market is saturated can compete in a less crowded description of the same
+  product without writing a word that is off-remit. What never changes is this
+  test - every facet, and every keyword inside it, still has to be something
+  the product can honestly answer. Borderline candidates pass: if the product is
   one plausible answer among several, that is inside the remit. The test only
   kills the ones where the product cannot honestly be an answer at all. State
   the verdict in the rationale in one clause ("remit: we are the answer - the
