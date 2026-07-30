@@ -110,13 +110,40 @@ jobs:
               exit 1 ;;
           esac
 
-      - name: Set up pnpm
-        # INSTALL-ADAPT: if this repo's package.json has a packageManager
-        # field ("pnpm@x.y.z"), DELETE the version input below - action-setup
-        # reads the field itself, and a version input alongside packageManager
-        # hard-errors on any mismatch (plain string compare, not semver). If
-        # there is no packageManager field, keep a version here matching the
-        # major that wrote pnpm-lock.yaml. pnpm 11+ also requires Node 22+.
+      # Deliberately NOT an INSTALL-ADAPT step any more. This used to say "if
+      # this repo has a packageManager field, DELETE the version input below" -
+      # a conditional edit left to whoever ran the install, with a fatal
+      # failure mode when it was missed: pnpm/action-setup hard-errors if a
+      # version input sits alongside a packageManager pin, so the builder died
+      # right here on every run, 13 seconds in, BEFORE reaching the step that
+      # reports failures to the dashboard. It shipped that way and broke every
+      # installed repo carrying a pin (2026-07-30). The two cases are now two
+      # mutually-exclusive steps resolved at RUN time: there is nothing to
+      # adapt, so there is nothing to forget. Do not reintroduce a `version:`
+      # input on an unconditional step - scripts/pipeline-pack-lint.mjs fails
+      # the build if the fatal shape comes back.
+      - name: Read this repo's pnpm pin
+        id: pnpm_pin
+        run: |
+          pinned=0
+          if [ -f package.json ] && node -e 'process.exit(require("./package.json").packageManager ? 0 : 1)' 2>/dev/null; then
+            pinned=1
+          fi
+          echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
+          echo "packageManager pin in package.json: $pinned"
+
+      # Pinned -> action-setup reads the exact version out of the field.
+      # Passing a version input as well is precisely what hard-errors.
+      - name: Set up pnpm (version from the repo's packageManager pin)
+        if: steps.pnpm_pin.outputs.pinned == '1'
+        uses: pnpm/action-setup@v4
+
+      # No pin -> action-setup has to be told. pnpm 11 matches the Node 22
+      # pinned below; a repo whose lockfile was written by an older major
+      # should add a packageManager field rather than edit this, which
+      # routes it to the exact path above.
+      - name: Set up pnpm (no packageManager pin in this repo)
+        if: steps.pnpm_pin.outputs.pinned == '0'
         uses: pnpm/action-setup@v4
         with:
           version: 11

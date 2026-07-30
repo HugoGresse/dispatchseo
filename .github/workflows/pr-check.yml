@@ -54,6 +54,20 @@ jobs:
             exit 1
           }
 
+      # What we ship into other people's repos must not be able to fail
+      # UNSAFELY. The pack once told the installer to delete a line by hand and
+      # hard-failed at setup when that was missed, killing the builder on every
+      # run in every repo with a packageManager pin - before the step that
+      # reports failures, so it died quietly too. This lints for that class:
+      # install-time edits whose omission is fatal, and the pnpm version shape
+      # specifically. Credential-free, like the gates around it.
+      - name: Pipeline pack cannot fail unsafely
+        run: |
+          node scripts/pipeline-pack-lint.mjs || {
+            echo "::error::pipeline-pack-lint failed - a shipped workflow has a shape that breaks installed repos. See the rule output above."
+            exit 1
+          }
+
       # The Claude regression guard. Routing hardcoded Claude strings through
       # the agent registry must not change a single byte an owner pastes into a
       # terminal - these commands carry detail that took real installs to find
@@ -92,6 +106,89 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: "https://placeholder.supabase.co"
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder-anon-key"
           NEXT_PUBLIC_SITE_URL: "https://dispatchseo.com"
+
+  # Proof that the toolchain setup we ship BOOTS - in both repo shapes it can
+  # land in. The 2026-07-30 outage was not a logic bug anyone could review their
+  # way out of: pnpm/action-setup rejects a version input next to a
+  # packageManager pin, and nothing here had ever executed those steps, so the
+  # first run of the shipped setup path was on customers' 05:13 schedules.
+  #
+  # This runs the two blessed shapes against fixture package.json files - one
+  # pinned, one not - and proves pnpm ends up installed either way. It is a
+  # replica of the shipped steps rather than the pack file itself (GitHub cannot
+  # execute a workflow from a JSON blob), and pipeline-pack-lint.mjs is what
+  # ties the pack to these two shapes: the lint says the pack may only use them,
+  # this job proves they work. Neither is sufficient alone.
+  #
+  # Credential-free, so it runs on fork PRs like the build job.
+  pnpm-setup-shapes:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shape: [pinned, unpinned]
+    steps:
+      - uses: actions/checkout@v4
+
+      # Written outside the repo root on purpose: this repo's own package.json
+      # carries a pin, and the action defaults to reading that one - which would
+      # make the "unpinned" case silently test the pinned path.
+      - name: Write a fixture package.json of this shape
+        env:
+          SHAPE: ${{ matrix.shape }}
+        run: |
+          set -euo pipefail
+          mkdir -p fixture
+          if [ "$SHAPE" = "pinned" ]; then
+            printf '{ "name": "fixture", "packageManager": "pnpm@11.5.2" }\n' > fixture/package.json
+          else
+            printf '{ "name": "fixture" }\n' > fixture/package.json
+          fi
+          cat fixture/package.json
+
+      # Byte-for-byte the detection the shipped workflows run.
+      - name: Detect the pin exactly as the shipped workflows do
+        id: pnpm_pin
+        run: |
+          set -euo pipefail
+          cd fixture
+          pinned=0
+          if [ -f package.json ] && node -e 'process.exit(require("./package.json").packageManager ? 0 : 1)' 2>/dev/null; then
+            pinned=1
+          fi
+          echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
+          echo "packageManager pin in package.json: $pinned"
+
+      - name: Detection agrees with the fixture
+        env:
+          SHAPE: ${{ matrix.shape }}
+          PINNED: ${{ steps.pnpm_pin.outputs.pinned }}
+        run: |
+          set -euo pipefail
+          expected=0
+          [ "$SHAPE" = "pinned" ] && expected=1
+          if [ "$PINNED" != "$expected" ]; then
+            echo "::error::pin detection returned $PINNED for the $SHAPE fixture (expected $expected) - the detector in the shipped workflows is wrong"
+            exit 1
+          fi
+
+      - name: Set up pnpm (version from the repo's packageManager pin)
+        if: steps.pnpm_pin.outputs.pinned == '1'
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: fixture/package.json
+
+      - name: Set up pnpm (no packageManager pin in this repo)
+        if: steps.pnpm_pin.outputs.pinned == '0'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+          package_json_file: fixture/package.json
+
+      - name: pnpm is actually installed and runnable
+        run: |
+          set -euo pipefail
+          pnpm --version
 
   # Agent-portability gate for the MCP tool surface. Claude Code is forgiving
   # about tool schemas; OpenAI's function-calling validator (which Codex feeds

@@ -193,6 +193,19 @@ re-snapshot.
   migration change, run `node scripts/generate-setup-sql.mjs` and commit the
   regenerated `setup.sql` — CI (`migrations-vanilla-postgres.yml`) applies it
   twice against `postgres:17-alpine` and fails the push otherwise.
+- **Nothing in `templates/pipeline/` may depend on an install-time edit whose
+  omission is fatal.** The installer is an agent adapting an unfamiliar repo, so
+  "usually adapts it correctly" is not a safety property when the failure mode
+  is a permanently dead pipeline. Encode the decision in the workflow so it
+  resolves at run time in the repo (two mutually-exclusive steps with `if:`
+  conditions), rather than leaving an `INSTALL-ADAPT: … DELETE this line`
+  comment. The rule exists because that exact comment on the pnpm setup step
+  killed the builder in every installed repo carrying a `packageManager` pin on
+  2026-07-30 — at step 2, before the step that reports failures, so it died
+  silently as well. `scripts/pipeline-pack-lint.mjs` (a `pr-check` gate) fails
+  the build on that shape, and `pr-check`'s `pnpm-setup-shapes` job executes the
+  shipped setup path against a pinned and an unpinned fixture, because a
+  template nobody ever runs is first run by customers.
 - Any new operational table needs a `project_id` (default the ClockedCode id) and
   its uniqueness constraints scoped per-project — see `0004_projects.sql`.
 - Server-only modules (`db.ts`, anything touching the service role or secrets)

@@ -30,6 +30,49 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-30",
+    date: "2026-07-30",
+    title: "Fixed: the daily builder could die before it started",
+    summary:
+      "If your package.json pins a pnpm version, your builder was failing in 13 seconds on every run - and failing too early to tell anyone. Re-run the setup command from your dashboard to pick up the fix.",
+    changes: [
+      {
+        kind: "fixed",
+        text:
+          "The workflows DispatchSEO installs in your repo set up pnpm before building. That step " +
+          "passed a pnpm version, and if your package.json also pins one (a \"packageManager\" " +
+          "field), the setup action refuses to run at all - so the builder died at step two of " +
+          "every run, before it wrote a line. Nothing was lost and nothing was published wrong; " +
+          "the builds simply never happened. The workflow now reads your pin and matches it, and " +
+          "only picks a version itself when you have not pinned one.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "It also failed BEFORE the step that reports problems to your dashboard, so the banner " +
+          "and the alert email stayed quiet - you would only have seen it in GitHub's own emails. " +
+          "The stale-run check would have caught the silence within 36 hours, which is the backstop " +
+          "working but slower than it should be.",
+      },
+      {
+        kind: "improved",
+        text:
+          "The cause was a workflow comment asking whoever ran your install to delete a line by " +
+          "hand when your repo pinned a version - so getting it right depended on that being " +
+          "noticed. Nothing we install in your repo is allowed to work that way any more: the " +
+          "workflows decide for themselves when they run, and two new checks on our side refuse " +
+          "to ship a workflow that needs hand-editing or that has never been proved to start.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "To pick this up, re-run the setup command from your dashboard - your repo keeps the " +
+          "version of the pipeline it installed, and the daily health check will also tell you an " +
+          "update is waiting.",
+      },
+    ],
+  },
+  {
     version: "2026-07-29.6",
     date: "2026-07-29",
     title: "The queue tells you why an idea is waiting",
