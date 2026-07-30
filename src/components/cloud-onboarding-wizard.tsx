@@ -182,10 +182,29 @@ export function CloudOnboardingWizard(props: {
 
   // ---- c4: publish mode -------------------------------------------------------
   const [pendingMode, startMode] = useTransition();
+  // c4 was the one screen with no error surface, and it is the screen that
+  // unlocks the product: setProjectMode THROWS (unknown project, DB error, or
+  // an expired session via assertAuthed), and an unhandled throw inside the
+  // transition meant setScreen("c5") never ran. So the onboarding_screen stamp
+  // never landed, the gate kept bouncing every dashboard page back here, and
+  // the only feedback was a Continue button that re-enabled with nothing said -
+  // or the generic app-level "Something broke on this page", which names
+  // neither the step nor the way out. The most likely trigger is the most
+  // mundane one: leave the tab open long enough for the Supabase session to
+  // lapse, come back, click Continue. Catch it and say so, like c0-c3 and c5
+  // all already do.
+  const [modeError, setModeError] = useState<string | null>(null);
   function confirmMode() {
+    setModeError(null);
     startMode(async () => {
-      await setProjectMode(modeChoice, created?.slug ?? "");
-      setScreen("c5");
+      try {
+        await setProjectMode(modeChoice, created?.slug ?? "");
+        setScreen("c5");
+      } catch {
+        setModeError(
+          "Couldn't save that choice - your sign-in may have expired. Reload the page and try again.",
+        );
+      }
     });
   }
 
@@ -474,7 +493,7 @@ export function CloudOnboardingWizard(props: {
           <div className="rounded-xl bg-neutral-900 p-4">
             {githubRepo ? (
               <p className="text-sm text-neutral-400">GitHub is connected. Continuing…</p>
-            ) : installationId ? (
+            ) : installationId && installationRepos && installationRepos.length > 0 ? (
               <form action={repoAction} className="space-y-2.5">
                 {repoState && "error" in repoState ? <ErrorLine msg={repoState.error} /> : null}
                 {/* Which site this repo is being bound to. Everything the
@@ -485,7 +504,7 @@ export function CloudOnboardingWizard(props: {
                   Pick the repo DispatchSEO should publish into
                 </p>
                 <div className="space-y-1.5">
-                  {(installationRepos ?? []).map((r, i) => (
+                  {installationRepos.map((r, i) => (
                     <label
                       key={r}
                       className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-neutral-700 px-3 py-2.5 text-sm text-neutral-200 transition-colors hover:border-neutral-500 has-[:checked]:border-violet-500 has-[:checked]:bg-[#191521]"
@@ -511,6 +530,49 @@ export function CloudOnboardingWizard(props: {
                   </button>
                 </div>
               </form>
+            ) : installationId ? (
+              // The App is installed but we have no repo to offer. Two ways in,
+              // and the form used to render for both with ZERO radio options: a
+              // Continue button whose only possible answer was "Pick a
+              // repository." and no install link (that lives in the branch
+              // below, which an installationId makes unreachable). Onboarding
+              // simply could not proceed.
+              //   (a) listInstallationRepos threw - it has a 10s timeout and
+              //       throws on any non-2xx, and /onboarding swallows that to
+              //       null. A reload genuinely fixes this, but nothing on screen
+              //       ever said so.
+              //   (b) the installation really has no repos we can see (the repo
+              //       left the installation between installing and landing back
+              //       here - the install callback sends ?gh=pick_repo for 0 repos
+              //       exactly as it does for 2+). A reload never fixes that one;
+              //       only re-picking the shared repos on GitHub does.
+              // We can't tell (a) from (b) here, so offer both exits.
+              <>
+                <p className="mb-3.5 text-[15px] leading-relaxed text-neutral-400">
+                  The GitHub App is installed, but we couldn&apos;t get a list of repos back
+                  from GitHub. That&apos;s usually a hiccup on the way here - reload and it
+                  should appear. If it keeps happening, the App may not have any repo
+                  shared with it yet.
+                </p>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <a
+                    href="/onboarding"
+                    className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-violet-500 px-5 py-2 text-sm font-semibold text-neutral-950 transition-colors hover:bg-violet-400"
+                  >
+                    Reload
+                  </a>
+                  <a
+                    href={
+                      created
+                        ? `/api/github/install/start?slug=${encodeURIComponent(created.slug)}`
+                        : "#"
+                    }
+                    className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-neutral-800 px-5 py-2 text-sm font-semibold text-neutral-200 transition-colors hover:bg-neutral-700"
+                  >
+                    Choose which repos to share
+                  </a>
+                </div>
+              </>
             ) : (
               <>
                 <p className="mb-3.5 text-[15px] leading-relaxed text-neutral-400">
@@ -808,6 +870,11 @@ export function CloudOnboardingWizard(props: {
               <b className="font-medium text-neutral-100"> we email you</b> at your account address
               automatically. Nothing to set up; it&apos;s part of your plan.
             </p>
+          ) : null}
+          {modeError ? (
+            <div className="mt-4">
+              <ErrorLine msg={modeError} />
+            </div>
           ) : null}
           <div className="mt-5 flex items-center justify-end">
             <button
