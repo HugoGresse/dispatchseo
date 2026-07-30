@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { connectBuilderToken, type ConnectBuilderTokenState } from "@/app/actions";
 import { availableAgents, agentById } from "@/lib/agents";
+import { AgentMark } from "@/components/agent-mark";
 
 // Home's "Turn on automatic builds" card, paste-in-place edition - the same
 // connect the wizard finale uses (credential stored encrypted, fed to the
@@ -43,12 +44,13 @@ export function BuilderTokenConnect({ current = "claude" }: { current?: string }
               role="tab"
               aria-selected={agentId === a.id}
               onClick={() => setAgentId(a.id)}
-              className={`cursor-pointer rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              className={`flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                 agentId === a.id
                   ? "bg-neutral-800 text-neutral-100"
                   : "text-neutral-500 hover:text-neutral-300"
               }`}
             >
+              <AgentMark id={a.id} className="h-3.5 w-3.5 shrink-0" />
               {a.displayName}
             </button>
           ))}

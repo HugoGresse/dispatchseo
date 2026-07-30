@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { setAgent } from "@/app/actions";
 import { availableAgents } from "@/lib/agents";
+import { AgentMark } from "@/components/agent-mark";
 
 // Which coding agent runs this project's unattended builders.
 //
@@ -55,8 +56,11 @@ export function AgentSwitch({ current, slug }: { current: string; slug: string }
                   : "border-neutral-800 bg-neutral-900 hover:border-neutral-700"
               }`}
             >
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="font-medium text-neutral-100">{a.displayName}</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  <AgentMark id={a.id} className="h-[18px] w-[18px] shrink-0" />
+                  <span className="font-medium text-neutral-100">{a.displayName}</span>
+                </span>
                 {on ? (
                   <span className="text-xs font-medium text-violet-300">in use</span>
                 ) : null}
