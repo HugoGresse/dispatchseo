@@ -34,6 +34,13 @@ export default async function BillingPage({
   const { success, error } = await searchParams;
   const sub = await getSubscription(auth.user.id);
   const active = isActive(sub);
+  // A subscription Polar still holds, whatever its payment state. `active`
+  // (active|trialing) decides what we UNLOCK; this decides where a plan button
+  // may send someone. past_due is not active - the plan is unpaid - but the
+  // subscription does still exist upstream, so the way out is the portal (fix
+  // the card, prorate, replace). A fresh checkout would stack a second
+  // subscription beside the unpaid one and charge the same account twice.
+  const hasUpstreamSub = Boolean(sub && ["active", "trialing", "past_due"].includes(sub.status));
   // Usage is metered per project (the shared budget is per-owner, but
   // check_serp's daily cap is per-project) - read it off the dashboard's
   // active project. A brand-new active subscriber with no project yet just

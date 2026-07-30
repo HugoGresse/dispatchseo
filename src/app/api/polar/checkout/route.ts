@@ -2,7 +2,13 @@ import { redirect } from "next/navigation";
 import { NextResponse, type NextRequest } from "next/server";
 import { currentUser } from "@/lib/cloud-auth";
 import { isCloudMode } from "@/lib/cloud";
-import { polar, polarConfigured, productIdForTier, type Tier } from "@/lib/billing";
+import {
+  getSubscription,
+  polar,
+  polarConfigured,
+  productIdForTier,
+  type Tier,
+} from "@/lib/billing";
 import { foundingOffer } from "@/lib/founding";
 import { captureServer } from "@/lib/posthog-server";
 
@@ -19,6 +25,22 @@ export async function GET(req: NextRequest) {
   const tier = (req.nextUrl.searchParams.get("tier") ?? "") as Tier;
   const productId = productIdForTier(tier);
   if (!productId) return NextResponse.json({ error: "unknown tier" }, { status: 400 });
+
+  // Last line of defence against a SECOND parallel subscription on one account.
+  // Both callers already try to avoid it - /plans redirects an active subscriber
+  // away, and /billing points them at the portal (which prorates and REPLACES
+  // rather than stacking) - but both of those decisions rest on getSubscription,
+  // which deliberately collapses a read error to null. So a transient Supabase
+  // blip is enough to show a paying customer the pricing page and let them buy a
+  // plan they already have, and their card gets charged twice with no
+  // reconciliation job to catch it. This route is the only place the charge
+  // actually originates, so the check belongs here too. past_due is included on
+  // purpose: the subscription still exists at Polar, so the fix for a failed
+  // payment is the portal, not a second subscription beside the unpaid one.
+  const existing = await getSubscription(user.id);
+  if (existing && ["active", "trialing", "past_due"].includes(existing.status)) {
+    redirect("/api/polar/portal");
+  }
 
   // Founding offer: a "50% off, forever" discount created in the Polar
   // dashboard. Advertising half price on the landing while checkout charges
