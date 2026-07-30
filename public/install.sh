@@ -33,7 +33,14 @@ fi
 
 if [ -d dispatchseo/.git ]; then
   echo "Existing install found in ./dispatchseo - updating it."
-  git -C dispatchseo pull --ff-only
+  # Never let a failed update stop the stack from BOOTING. Under `set -e` a
+  # pull that isn't fast-forwardable (a fork with local commits, a hand-edited
+  # file, a diverged clone) aborted this script before `sh start.sh` below, so
+  # the documented upgrade one-liner left the user's stack down with nothing but
+  # a raw git error. start.sh tolerates exactly this for the same reason;
+  # GIT_TERMINAL_PROMPT=0 stops a credential prompt hanging an unattended run.
+  GIT_TERMINAL_PROMPT=0 git -C dispatchseo pull --ff-only ||
+    echo "  Couldn't fast-forward (local changes?) - booting the version that's here."
 elif [ -d dispatchseo ]; then
   echo "./dispatchseo exists (tarball install) - refreshing the snapshot."
   curl -fsSL "$REPO/archive/refs/heads/main.tar.gz" | tar xz

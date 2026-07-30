@@ -99,12 +99,25 @@ export async function GET(req: Request): Promise<Response> {
   const mergeSweeps: Array<{ slug: string; repo: string; mcp_token: string }> = [];
 
   const projects = await listProjects();
-  for (const p of projects) {
-    // Builder only serves installed pipelines - mid-wizard projects wait,
-    // exactly like the crons' setup gates.
-    if (!p.github_repo || !p.pipeline_installed_at) continue;
-    const token = await fetchProjectToken(p.id);
-    if (!token) continue;
+  // Per-project work is ISOLATED, like every cron route (CLAUDE.md's rule). This
+  // loop used to be a plain `for...of` with ~5 awaits per project and no
+  // guard - the only tenant loop in the repo without one. A single throw
+  // anywhere inside it (a token decrypt failure, one bad creds row, a
+  // getCronHealth hiccup) 500'd the whole route, so the builder's poll came back
+  // empty and NO project got a job that tick. If the cause persisted, every
+  // build on the instance stopped - and this route never calls reportCronRun, so
+  // nothing announced it; the builder heartbeat only notices after 30h.
+  const perProject = await Promise.allSettled(
+    projects.map(async (p) => {
+      const out = {
+        jobs: [] as Job[],
+        mergeSweep: null as { slug: string; repo: string; mcp_token: string } | null,
+      };
+      // Builder only serves installed pipelines - mid-wizard projects wait,
+      // exactly like the crons' setup gates.
+      if (!p.github_repo || !p.pipeline_installed_at) return out;
+      const token = await fetchProjectToken(p.id);
+      if (!token) return out;
     const flags = effectiveAutomations(p);
     // Defense in depth: this route feeds the self-hosted docker builder, which
     // must never carry the cloud platform's bundled DataForSEO credentials -
@@ -154,7 +167,7 @@ export async function GET(req: Request): Promise<Response> {
       // see due() above). The container overwrites this with the real outcome
       // via deploy-check reporting, which defaults claimedOnly to false.
       if (claim) await reportCronRun(key, { claimed: "builder", handed_out: true }, false, true);
-      jobs.push({
+      out.jobs.push({
         key,
         workflow: wf,
         slug: p.slug,
@@ -165,14 +178,27 @@ export async function GET(req: Request): Promise<Response> {
       });
     }
 
-    // Auto-mode publishing: the container sweeps green seo-labeled guide
-    // PRs every tick (cheap gh calls, no Claude session), replacing
-    // seo-auto-merge.yml's green-checks gate for instances GitHub cannot
-    // call back into.
-    if (flags.auto_merge) {
-      mergeSweeps.push({ slug: p.slug, repo: p.github_repo, mcp_token: token });
+      // Auto-mode publishing: the container sweeps green seo-labeled guide
+      // PRs every tick (cheap gh calls, no Claude session), replacing
+      // seo-auto-merge.yml's green-checks gate for instances GitHub cannot
+      // call back into.
+      if (flags.auto_merge) {
+        out.mergeSweep = { slug: p.slug, repo: p.github_repo, mcp_token: token };
+      }
+      return out;
+    }),
+  );
+
+  // Serve everything that resolved; a project that threw is skipped for this
+  // tick and logged, never allowed to starve the others.
+  perProject.forEach((r, i) => {
+    if (r.status === "fulfilled") {
+      jobs.push(...r.value.jobs);
+      if (r.value.mergeSweep) mergeSweeps.push(r.value.mergeSweep);
+    } else {
+      console.error(`builder/jobs: skipped project ${projects[i]?.slug}:`, r.reason);
     }
-  }
+  });
 
   // The wizard's one-tap-merge token (repo scope) doubles as the builder's
   // git identity - clone, push, PR, merge. Served from here so the owner

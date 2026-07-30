@@ -36,7 +36,7 @@ import { getWeeklyProgress } from "@/lib/progress";
 import { JourneyCard } from "@/components/journey-card";
 import { NextUpdate } from "@/components/next-update";
 import { getActiveProject } from "@/lib/active-project";
-import { DEFAULT_PROJECT_ID, effectiveAutomations, fetchProjectToken } from "@/lib/projects";
+import { effectiveAutomations, fetchProjectToken } from "@/lib/projects";
 import { credsForProject } from "@/lib/dataforseo";
 import {
   platformBudgetGate,
@@ -247,7 +247,6 @@ export default async function Home() {
   await requireOnboarded();
 
   const project = await getActiveProject();
-  const isDefaultProject = project.id === DEFAULT_PROJECT_ID;
   // Free-tier DIY: every DataForSEO call bills the project's own account.
   const dfsCreds = await credsForProject(project);
 
@@ -529,18 +528,6 @@ export default async function Home() {
   const needsDataforseo =
     project.keyword_source === "dataforseo" && dfsCreds == null && !needsUsageLimit;
   const needsFunding = balance != null && balance < 10;
-  // "Build your first page" assumes the pipeline exists - that's true for the
-  // default project; a newly added project gets the pipeline-install card
-  // instead until content starts landing.
-  // In auto mode the daily builder handles the first page on schedule - the
-  // "build it right now" nudge only makes sense when a human drives.
-  const needsFirstPage =
-    isDefaultProject &&
-    guidesLoggedCount === 0 &&
-    !hasShipped &&
-    !effectiveAutomations(project).auto_build_guides;
-  const needsPipeline =
-    !isDefaultProject && guidesLoggedCount === 0 && !hasShipped && !skippedPowerup("pipeline");
   // The install's footprint: the workflow's final step stamps
   // pipeline_installed_at via mark_pipeline_installed (0018); the conventions
   // row (written by setup, which install chains into) stays as the fallback
@@ -548,8 +535,27 @@ export default async function Home() {
   const pipelineInstalled =
     project.pipeline_installed_at != null ||
     (!conventionsRes.error && conventionsRes.data != null);
+  // Which of these three cards to show turns on whether the pipeline is
+  // actually installed - NOT on project identity. It used to key off
+  // `isDefaultProject` as a proxy for "the pipeline exists", which holds only
+  // on the maintainer's own cloud deploy. On self-host the owner's FIRST site
+  // claims DEFAULT_PROJECT_ID in place (actions.ts createProjectCore), so that
+  // proxy inverted: the one project that most needs "install the pipeline"
+  // could never show it, and after a successful install never flipped to the
+  // installed state either. Both presets keep auto_build_guides on, so the
+  // first-page card's `!auto_build_guides` couldn't cover the gap - a
+  // self-hoster's Home showed neither card, and SKILL.md tells the installing
+  // agent to verify that this very card flipped, a check it could only fail.
+  // Same bug class as e23df8f (see the self-host-reuses-default-project-id
+  // note): DEFAULT_PROJECT_ID does not mean "the operator's env-backed site".
+  const autoBuildsGuides = effectiveAutomations(project).auto_build_guides;
+  const needsPipeline = guidesLoggedCount === 0 && !hasShipped && !skippedPowerup("pipeline");
   const pipelineTodo = needsPipeline && !pipelineInstalled;
-  const pipelineWaiting = needsPipeline && pipelineInstalled;
+  // Pipeline is in, nothing has landed yet. In auto mode the daily builder gets
+  // there on its own, so the honest card is "waiting"; in semi a human has to
+  // press the button, so it's "build your first page".
+  const pipelineWaiting = needsPipeline && pipelineInstalled && autoBuildsGuides;
+  const needsFirstPage = needsPipeline && pipelineInstalled && !autoBuildsGuides;
   // Playbook personalization: show until the site_profile row exists. A table
   // error (migration 0003 not applied yet) suppresses the card - the playbook
   // page carries the migration nudge instead. Also hidden while the install
