@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { connectBuilderToken, type ConnectBuilderTokenState } from "@/app/actions";
 import { availableAgents, agentById } from "@/lib/agents";
 import { AgentMark } from "@/components/agent-mark";
+import { MintLink } from "@/components/mint-link";
 
 // Home's "Turn on automatic builds" card, paste-in-place edition - the same
 // connect the wizard finale uses (credential stored encrypted, fed to the
@@ -57,6 +58,7 @@ export function BuilderTokenConnect({ current = "claude" }: { current?: string }
         </div>
       ) : null}
       <p className="text-xs text-neutral-500">{agent.credential.howToMint}</p>
+      <MintLink agent={agent} />
       {state && "error" in state ? (
         <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{state.error}</p>
       ) : null}

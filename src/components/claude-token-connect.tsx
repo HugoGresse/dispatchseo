@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { connectClaudeToken, type ConnectClaudeState } from "@/app/actions";
 import { CopyBox, ErrorLine, inputClass } from "@/components/wizard-ui";
 import { agentById } from "@/lib/agents";
+import { MintLink } from "@/components/mint-link";
 
 // Cloud Settings: rotate or re-store the builder credential repo secret through
 // the GitHub App - the permanent home of the wizard's c2 paste, for when the
@@ -50,10 +51,13 @@ export function ClaudeTokenConnect({
               looks identical to a good one from this side. Claiming it works
               is how someone learns their key was mangled from a failed build
               the next morning instead of from this box. */}
+          {/* The separator is written as an explicit string, not as loose JSX
+              text after </b>: written the other way the leading space is eaten
+              and it renders "stored- as a secret". */}
           <span>
-            <b className="font-semibold">A {agent.displayName} credential is stored</b> - as a
-            secret on your repo. Its value can&apos;t be read back from here, so the next build is
-            what proves it works; if one fails on the credential, paste it again below.
+            <b className="font-semibold">A {agent.displayName} credential is stored</b>
+            {" - as a secret on your repo. Its value can't be read back from here, so the next " +
+              "build is what proves it works; if one fails on the credential, paste it again below."}
           </span>
         </div>
       ) : (
@@ -62,6 +66,11 @@ export function ClaudeTokenConnect({
           never on our side:
         </p>
       )}
+
+      {/* Where to GET one, as a link rather than an address to retype. Shown
+          whether or not a credential is already stored, because the other time
+          you need this page is when the stored one stopped working. */}
+      <MintLink agent={agent} />
 
       {state && "error" in state ? <ErrorLine msg={state.error} /> : null}
       {state && "ok" in state ? (
