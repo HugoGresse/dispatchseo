@@ -21,6 +21,14 @@ export type AgentSwitchResult = {
    * to run has to say so at the moment of switching, not at 05:13 tomorrow.
    */
   todo: string | null;
+  /**
+   * True when the one outstanding task is "this agent has no credential where
+   * the builders run". Separate from the prose because the dashboard can do
+   * better than prose: it links straight to the box you paste the key into.
+   * Telling someone what is wrong and making them hunt for the fix is how a
+   * switch quietly becomes a broken build a day later.
+   */
+  needsCredential: boolean;
 };
 
 /**
@@ -59,7 +67,8 @@ export async function setProjectAgent(
     throw new Error(error.message);
   }
 
-  return { agent, todo: await agentTodo(project, agent) };
+  const todo = await agentTodo(project, agent);
+  return { agent, todo, needsCredential: todo != null };
 }
 
 /**
@@ -145,10 +154,15 @@ async function agentTodo(project: Project, agent: AgentDefinition): Promise<stri
     // a confident, useless instruction.
     if (project.github_installation_id) {
       if (await hasRepoSecret(project, agent.credential.repoSecretName)) return null;
+      // Dashboard first, CLI second. Pasting it here runs a real check against
+      // the provider before storing; `gh secret set` cannot, because GitHub
+      // secrets are write-only - which is exactly how a line-wrapped key gets
+      // accepted silently and only surfaces as a failed build the next morning.
       return (
         `Your builders now run ${agent.displayName}, but ${project.github_repo} has no ` +
-        `${agent.credential.repoSecretName} secret yet - the next scheduled build will stop and say so. ` +
-        `${agent.credential.howToMint} Then add it: gh secret set ${agent.credential.repoSecretName} --repo ${project.github_repo}`
+        `${agent.credential.repoSecretName} yet - the next scheduled build will stop and say so. ` +
+        `${agent.credential.howToMint} Paste it in the "${agent.displayName} credential" box on ` +
+        `Settings and it gets verified before it is saved.`
       );
     }
     if (await builderAgentToken(agent.id)) return null;

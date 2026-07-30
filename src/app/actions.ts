@@ -1406,14 +1406,17 @@ export async function setAutomationToggle(
 // cannot drift. Returns the follow-up task (usually "add the new agent's key")
 // rather than swallowing it - a switch that quietly leaves the builders unable
 // to run is the failure this whole feature is built to avoid.
-export async function setAgent(agentId: string, slug: string): Promise<{ todo: string | null }> {
+export async function setAgent(
+  agentId: string,
+  slug: string,
+): Promise<{ todo: string | null; needsCredential: boolean }> {
   await assertAuthed();
   const project = await getProjectBySlug(slug);
   if (!project) throw new Error("Unknown project.");
   if (isCloudMode()) await assertProjectOwned(project.id);
   const res = await setProjectAgent(project, agentId);
   revalidatePath("/", "layout");
-  return { todo: res.todo };
+  return { todo: res.todo, needsCredential: res.needsCredential };
 }
 
 // Internal back-linking: may the guide builder EDIT already-published posts so

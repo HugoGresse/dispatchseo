@@ -232,8 +232,11 @@ export default async function SettingsPage() {
         />
       </section>
 
+      {/* Anchored: the agent switch below links here the moment a switch leaves
+          the builders without a credential, so "set your key" is one click and
+          not a hunt. scroll-mt keeps the heading clear of the sticky header. */}
       {isCloudMode() && project.github_installation_id ? (
-        <section className="space-y-3">
+        <section id="agent-credential" className="scroll-mt-24 space-y-3">
           <SectionTitle sub="the credential builds run on - rotate it here whenever it expires or gets revoked">
             {agent.displayName} credential
           </SectionTitle>

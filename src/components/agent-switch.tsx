@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { setAgent } from "@/app/actions";
-import { availableAgents } from "@/lib/agents";
+import { availableAgents, agentById } from "@/lib/agents";
 import { AgentMark } from "@/components/agent-mark";
 
 // Which coding agent runs this project's unattended builders.
@@ -16,8 +16,10 @@ export function AgentSwitch({ current, slug }: { current: string; slug: string }
   const agents = availableAgents();
   const [selected, setSelected] = useState(current);
   const [todo, setTodo] = useState<string | null>(null);
+  const [needsCredential, setNeedsCredential] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const selectedAgent = agentById(selected);
 
   function choose(id: string) {
     if (id === selected || pending) return;
@@ -25,10 +27,12 @@ export function AgentSwitch({ current, slug }: { current: string; slug: string }
     setSelected(id);
     setError(null);
     setTodo(null);
+    setNeedsCredential(false);
     start(async () => {
       try {
         const res = await setAgent(id, slug);
         setTodo(res.todo);
+        setNeedsCredential(res.needsCredential);
       } catch (e) {
         // Put the radio back where it was. A control that stays on the value
         // you picked after the save failed is a lie about the stored state.
@@ -77,9 +81,25 @@ export function AgentSwitch({ current, slug }: { current: string; slug: string }
           switching rather than left for the builder to discover overnight -
           the run WILL stop and say so, but that is a worse place to learn it. */}
       {todo ? (
-        <p className="rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2.5 text-sm text-amber-200/90">
-          {todo}
-        </p>
+        <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2.5 text-sm text-amber-200/90">
+          <p>
+            <b className="font-semibold text-amber-200">
+              Set your {selectedAgent.displayName} API key so builds actually run.
+            </b>{" "}
+            {todo}
+          </p>
+          {/* A link, not just an instruction. The credential box is on this same
+              page, but "on Settings" is not findable when you are already on
+              Settings and the box is two screens away. */}
+          {needsCredential ? (
+            <a
+              href="#agent-credential"
+              className="mt-2 inline-block font-medium text-amber-200 underline underline-offset-2 hover:text-amber-100"
+            >
+              Take me to the key box
+            </a>
+          ) : null}
+        </div>
       ) : null}
 
       <p className="text-xs text-neutral-500">

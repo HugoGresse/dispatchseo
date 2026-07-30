@@ -45,10 +45,15 @@ export function ClaudeTokenConnect({
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" aria-hidden>
             <polyline points="20 6 9 17 4 12" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
+          {/* "Stored", not "working". A repo secret is write-only - nothing
+              here can read the value back, so a truncated or line-wrapped paste
+              looks identical to a good one from this side. Claiming it works
+              is how someone learns their key was mangled from a failed build
+              the next morning instead of from this box. */}
           <span>
-            <b className="font-semibold">Your {agent.displayName} credential is connected</b> -
-            stored as a secret on your repo during setup. Nothing to do here unless it expires or
-            gets revoked.
+            <b className="font-semibold">A {agent.displayName} credential is stored</b> - as a
+            secret on your repo. Its value can&apos;t be read back from here, so the next build is
+            what proves it works; if one fails on the credential, paste it again below.
           </span>
         </div>
       ) : (
