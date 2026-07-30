@@ -20,6 +20,7 @@
 //
 //   node --experimental-strip-types scripts/agent-golden.mjs          # regenerate
 //   node --experimental-strip-types scripts/agent-golden.mjs --check  # verify
+import { registerHooks } from "node:module";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,6 +32,58 @@ const GOLDEN = resolve(here, "../test/golden/agent-commands.json");
 // type stripping, which has no idea about tsconfig paths. mcp-connect.ts is
 // import-free by design (it is client-safe), so it loads standalone.
 const mcp = await import("../src/lib/mcp-connect.ts");
+
+// agents/index.ts imports through the @/ alias like the rest of src/, and plain
+// node has no idea what that means. Teaching the resolver the one alias this
+// repo uses is cheaper than making that module the odd one out - and it keeps
+// the registry assertion below possible at all.
+registerHooks({
+  resolve(specifier, context, next) {
+    if (specifier.startsWith("@/")) {
+      const abs = resolve(here, "../src", specifier.slice(2));
+      return next(abs.endsWith(".ts") ? abs : `${abs}.ts`, context);
+    }
+    return next(specifier, context);
+  },
+});
+
+// The registry's id lookup, asserted here rather than only type-checked,
+// because TypeScript cannot see this class of bug at all: REGISTRY is a plain
+// object literal, so a bare REGISTRY[id] reads Object.prototype and answers
+// "yes, that's an agent" for "constructor", "toString", "__proto__" and the
+// rest. That made isSupportedAgent() a validation bypass whose value got
+// persisted into projects.agent by the dashboard's setAgent action, after
+// which every read of that row returned the Object constructor and threw.
+// Own-property check only. If someone reintroduces a bare index, this fails.
+const agents = await import("../src/lib/agents/index.ts");
+const NOT_AGENTS = ["constructor", "toString", "__proto__", "hasOwnProperty", "valueOf"];
+for (const id of NOT_AGENTS) {
+  if (agents.isSupportedAgent(id)) {
+    console.error(
+      `Registry regression: isSupportedAgent(${JSON.stringify(id)}) returned true.\n` +
+        "That is an Object.prototype key, not an agent - the lookup must use Object.hasOwn.",
+    );
+    process.exit(1);
+  }
+  if (agents.agentById(id).id !== "claude") {
+    console.error(
+      `Registry regression: agentById(${JSON.stringify(id)}) did not fall back to Claude.`,
+    );
+    process.exit(1);
+  }
+  if (agents.projectAgent({ agent: id }).id !== "claude") {
+    console.error(
+      `Registry regression: projectAgent({agent:${JSON.stringify(id)}}) did not fall back to Claude.`,
+    );
+    process.exit(1);
+  }
+}
+for (const id of ["claude", "codex"]) {
+  if (!agents.isSupportedAgent(id) || agents.agentById(id).id !== id) {
+    console.error(`Registry regression: ${id} is no longer resolvable by id.`);
+    process.exit(1);
+  }
+}
 
 // A fixture, never a real project. The values are obviously fake so a snapshot
 // diff can never be mistaken for a leaked token.

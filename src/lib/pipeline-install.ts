@@ -2,6 +2,7 @@ import { getPipelinePack } from "./pipeline-pack";
 import { installationToken } from "./github-app";
 import { hasRepoSecret, setRepoSecret } from "./github-app-secrets";
 import { fetchProjectToken, type Project } from "./projects";
+import { projectAgent } from "./agents";
 
 // Cloud zero-touch install: the backend commits the pipeline pack into the
 // customer's repo through the GitHub App and fires the seo-setup workflow -
@@ -16,7 +17,7 @@ const INSTALL_BRANCH = "dispatchseo-install";
 
 type GhProject = Pick<
   Project,
-  "id" | "slug" | "name" | "domain" | "github_repo" | "pipeline_installed_at"
+  "id" | "slug" | "name" | "domain" | "github_repo" | "pipeline_installed_at" | "agent"
 > & { github_installation_id: number | null };
 
 function headers(token: string): Record<string, string> {
@@ -54,7 +55,15 @@ export type InstallResult = {
   mode?: "direct" | "pr" | "already-installed" | "up-to-date";
   pr_url?: string;
   setup_dispatched: boolean;
-  claude_token_present: boolean;
+  /**
+   * Whether the repo carries the credential for THIS project's agent. Named
+   * for the agent rather than for Claude because the check is agent-specific:
+   * a Codex project measured against CLAUDE_CODE_OAUTH_TOKEN is always false,
+   * which silently withheld the setup dispatch and dead-ended onboarding.
+   */
+  agent_token_present: boolean;
+  /** Display name of the agent the check was made against, for the message. */
+  agent_name: string;
   actions_pr_permission: "set" | "manual-needed";
   error?: string;
 };
@@ -69,11 +78,13 @@ export async function installPipelineToRepo(
   // redoing done work. Defaults true for the install path.
   opts: { dispatchSetup?: boolean } = {},
 ): Promise<InstallResult> {
+  const agent = projectAgent(project);
   const fail = (error: string): InstallResult => ({
     ok: false,
     error,
     setup_dispatched: false,
-    claude_token_present: false,
+    agent_token_present: false,
+    agent_name: agent.displayName,
     actions_pr_permission: "manual-needed",
   });
   if (!project.github_repo) return fail("no repo connected");
@@ -204,12 +215,14 @@ export async function installPipelineToRepo(
     // stays manual-needed
   }
 
-  // Personalization needs the customer's Claude token (wizard c2). Without
+  // Personalization needs the customer's agent credential (wizard c2). Without
   // it the dispatch would burn a run on the preflight - skip and let the
-  // wizard/Home nudge instead.
-  const claudeTokenPresent = await hasRepoSecret(project, "CLAUDE_CODE_OAUTH_TOKEN");
+  // wizard/Home nudge instead. Which secret that is depends on the project's
+  // agent: hardcoding Claude's name here meant every Codex project failed this
+  // check, never dispatched setup, and was told its Claude token was missing.
+  const agentTokenPresent = await hasRepoSecret(project, agent.credential.repoSecretName);
   let setupDispatched = false;
-  if (opts.dispatchSetup !== false && claudeTokenPresent && mode !== "pr") {
+  if (opts.dispatchSetup !== false && agentTokenPresent && mode !== "pr") {
     // Don't stack a second setup on top of one already running. The wizard
     // finale re-fires runPipelineInstall on every mount/resume (minutes apart),
     // and a setup run takes 4-7 min - without this guard 2-3 overlapping
@@ -243,7 +256,8 @@ export async function installPipelineToRepo(
     mode,
     pr_url: prUrl,
     setup_dispatched: setupDispatched,
-    claude_token_present: claudeTokenPresent,
+    agent_token_present: agentTokenPresent,
+    agent_name: agent.displayName,
     actions_pr_permission: actionsPerm,
   };
 }

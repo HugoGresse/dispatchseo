@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { getActiveProjectOrNull, scopedProjects } from "@/lib/active-project";
 import { isCloudMode } from "@/lib/cloud";
 import { fetchProjectToken } from "@/lib/projects";
+import { projectAgent } from "@/lib/agents";
 import { requestOrigin } from "@/lib/request-origin";
 import { OnboardingWizard, type WizardResume } from "@/components/onboarding-wizard";
 import {
@@ -145,6 +146,10 @@ async function buildCloudResume(): Promise<CloudWizardResume | null> {
     gscSites,
     gscSiteUrl: project.gsc_site_url,
     mode: project.mode,
+    // Through projectAgent() rather than project.agent directly: a database
+    // that has not run 0044 reads the column back as undefined, and the picker
+    // needs a real id to check a radio against.
+    agent: projectAgent(project).id,
   };
 }
 

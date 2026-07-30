@@ -222,6 +222,22 @@ const REGISTRY: Record<AgentId, AgentDefinition | undefined> = {
   codex,
 };
 
+/**
+ * The ONE place an untrusted string becomes an agent id.
+ *
+ * `REGISTRY[id]` on its own is not a whitelist: the object literal inherits
+ * Object.prototype, so "constructor", "toString", "__proto__" and friends all
+ * read back truthy. That turned every lookup below into a bypass - the worst of
+ * them being the dashboard's setAgent action, which persisted whatever it was
+ * handed into projects.agent and then threw on every later read of that row,
+ * because the "agent" it got back was the Object constructor. Own-property
+ * check only; never a bare index.
+ */
+function lookup(id: string | null | undefined): AgentDefinition | undefined {
+  if (!id || !Object.hasOwn(REGISTRY, id)) return undefined;
+  return REGISTRY[id as AgentId];
+}
+
 /** Every agent that can actually be selected today. */
 export function availableAgents(): AgentDefinition[] {
   return (Object.keys(REGISTRY) as AgentId[])
@@ -237,17 +253,15 @@ export function availableAgents(): AgentDefinition[] {
  * option. Callers must never read `project.agent` directly for this reason.
  */
 export function projectAgent(project: { agent?: string | null } | null | undefined): AgentDefinition {
-  const id = project?.agent;
-  const found = id ? REGISTRY[id as AgentId] : undefined;
-  return found ?? claude;
+  return lookup(project?.agent) ?? claude;
 }
 
 /** Look one up by id, falling back to the default rather than throwing. */
 export function agentById(id: string | null | undefined): AgentDefinition {
-  return (id ? REGISTRY[id as AgentId] : undefined) ?? claude;
+  return lookup(id) ?? claude;
 }
 
 /** Whether an id names an agent that is actually usable right now. */
 export function isSupportedAgent(id: string | null | undefined): id is AgentId {
-  return Boolean(id && REGISTRY[id as AgentId]);
+  return lookup(id) != null;
 }

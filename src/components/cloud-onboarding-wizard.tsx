@@ -4,10 +4,12 @@ import { useEffect, useRef, useState, useTransition, type JSX } from "react";
 import { useActionState } from "react";
 import { JOURNEY_STAGES, STAGE_META } from "@/lib/journey-meta";
 import { FirstRunStatus } from "@/components/first-run-status";
+import { agentById, type AgentId } from "@/lib/agents";
 import {
   chooseGithubRepo,
   connectClaudeToken,
   runPipelineInstall,
+  setAgent,
   setProjectMode,
   setWizardScreen,
   wizardCreateProject,
@@ -50,7 +52,7 @@ const STEP_COUNT = 5;
 const META: Record<Exclude<CloudWizardScreen, "c5">, { name: string; time: string }> = {
   c0: { name: "Add your site", time: "about 30 seconds" },
   c1: { name: "Connect GitHub", time: "about 1 minute" },
-  c2: { name: "Connect Claude Code", time: "about 1 minute" },
+  c2: { name: "Connect your coding agent", time: "about 1 minute" },
   c3: { name: "Search Console", time: "about 2 minutes" },
   c4: { name: "Publish mode", time: "30 seconds" },
 };
@@ -73,6 +75,7 @@ export type CloudWizardResume = {
   gscSites: string[] | null; // live property list when connected, else null
   gscSiteUrl: string | null; // current tracked property
   mode: "semi" | "auto" | "custom";
+  agent: AgentId; // which coding agent c2 is currently set to
 };
 
 type PipelineInstallResult = Awaited<ReturnType<typeof runPipelineInstall>>;
@@ -163,7 +166,33 @@ export function CloudOnboardingWizard(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---- c2: Claude Code token -------------------------------------------------
+  // ---- c2: the coding agent, then its credential -----------------------------
+  // The choice is persisted the moment it is made rather than on submit: a
+  // reload here is common (people go install the CLI mid-screen), and coming
+  // back to Claude Code after picking Codex would send them to mint the wrong
+  // credential. It is also what the builders read at run time, so writing it
+  // late would leave a window where the repo secret and projects.agent disagree.
+  const [agentChoice, setAgentChoice] = useState<AgentId>(resume?.agent ?? "claude");
+  const agent = agentById(agentChoice);
+  const [agentSaving, startAgentSave] = useTransition();
+  function pickAgent(next: AgentId) {
+    if (next === agentChoice) return;
+    setAgentChoice(next);
+    const slug = created?.slug;
+    if (!slug) return;
+    startAgentSave(async () => {
+      // A failed write is not worth blocking the screen for - the paste below
+      // sends its own `agent` field, so the credential still lands in the right
+      // secret, and c5's install resolves the agent server-side from the same
+      // form. Worst case the switch is re-applied on Settings.
+      try {
+        await setAgent(next, slug);
+      } catch {
+        /* non-fatal, see above */
+      }
+    });
+  }
+
   const [claudeState, claudeAction, claudePending] = useActionState<ConnectClaudeState, FormData>(
     connectClaudeToken,
     null,
@@ -315,15 +344,16 @@ export function CloudOnboardingWizard(props: {
       // Two very different states, and telling them apart is the whole point:
       // no token on the repo is a dead end that Retry cannot clear, so send the
       // owner back to the step that fixes it instead of asking them to wait.
-      const noToken = !installResult.claude_token_present;
+      const noToken = !installResult.agent_token_present;
       return (
         <div className="space-y-3">
           {noToken ? (
             <p className="text-sm text-amber-100/90">
-              <b className="font-semibold text-amber-200">Your Claude Code token didn&apos;t make it
-              onto the repo.</b>{" "}
+              <b className="font-semibold text-amber-200">
+                Your {installResult.agent_name} credential didn&apos;t make it onto the repo.
+              </b>{" "}
               Setup can&apos;t start without it, and waiting won&apos;t fix it - go back to the
-              Claude Code step and paste the token again.
+              agent step and paste it again.
             </p>
           ) : (
             <p className="text-sm text-neutral-400">
@@ -600,53 +630,138 @@ export function CloudOnboardingWizard(props: {
               <line x1="12" y1="19" x2="20" y2="19" strokeLinecap="round" />
             </svg>
           </StepIcon>
-          <h2 className="text-2xl font-semibold tracking-tight">Connect your Claude Code</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">Connect your coding agent</h2>
           <p className="mb-2.5 text-base text-neutral-400">
-            Your Claude Code does the research and writing, on your existing subscription -
-            nothing extra to pay, and nothing is billed by DispatchSEO.
+            Your agent does the research and writing. {agent.cost.note}
           </p>
-          <StepHelp href="/docs/install-claude-code" label="I don't have Claude Code yet" />
+          <StepHelp
+            href={agent.installDocsPath}
+            label={`I don't have ${agent.displayName} yet`}
+          />
           <div className="rounded-xl bg-neutral-900 p-4">
+            {/* The picker sits above everything else on this screen, because
+                every line below it - the prerequisite, the command, the
+                placeholder, the failure text - is different per agent. Claude
+                Code stays the default: it is the more-tested path and the
+                cheaper story, and Codex is one click rather than one scroll. */}
+            <div className="mb-4">
+              <p className="mb-1 text-base font-medium text-neutral-200">
+                Which coding agent will do the work?
+              </p>
+              <p className="mb-2.5 text-sm leading-relaxed text-neutral-400">
+                Both do the same job here - research, writing, pull requests. The difference is who
+                bills you.
+              </p>
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                {(["claude", "codex"] as const).map((id) => (
+                  <label
+                    key={id}
+                    className="flex cursor-pointer flex-col gap-1 rounded-lg border border-neutral-700 p-3.5 transition-colors hover:border-neutral-500 has-[:checked]:border-violet-500 has-[:checked]:bg-[#191521]"
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <input
+                        type="radio"
+                        name="agent-pick"
+                        value={id}
+                        checked={agentChoice === id}
+                        onChange={() => pickAgent(id)}
+                        disabled={agentSaving}
+                        className="h-4 w-4 accent-violet-500"
+                      />
+                      <span className="text-sm font-semibold text-neutral-100">
+                        {agentById(id).displayName}
+                      </span>
+                    </span>
+                    <span className="pl-6 text-[13px] leading-relaxed text-neutral-400">
+                      {id === "claude"
+                        ? "Needs a Claude subscription · builds cost nothing extra, they run on your plan"
+                        : "Needs an OpenAI API key · builds are metered by OpenAI per run"}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
             {/* The prerequisite goes ABOVE the command, not below it: with no
                 Claude Code installed the command prints "command not found",
                 and a beginner reads that as a broken product rather than a
                 missing tool. This screen is where the funnel used to end. */}
-            <PrereqCallout
-              title="Never used Claude Code before?"
-              body={
-                <>
-                  Install it first - it takes about 2 minutes. Until you do, the command below
-                  prints <code className="font-mono text-neutral-300">command not found</code>.
-                </>
-              }
-              href="/docs/install-claude-code"
-              cta="Install Claude Code"
-            />
-            <p className="mb-2 mt-4 text-base font-medium text-neutral-200">
-              Run this in a terminal and copy what it prints
-            </p>
-            <CopyBox text="claude setup-token" />
-            <p className="mt-3 text-sm leading-relaxed text-neutral-400">
-              Open a terminal on your computer — the macOS <b className="font-medium text-neutral-300">Terminal</b> app,
-              or the terminal panel in VS Code — and run the command above. It opens a browser login, then prints a
-              token starting with <code className="font-mono text-neutral-300">sk-ant-oat...</code>. Paste it below.
-            </p>
+            {agentChoice === "claude" ? (
+              <>
+                <PrereqCallout
+                  title="Never used Claude Code before?"
+                  body={
+                    <>
+                      Install it first - it takes about 2 minutes. Until you do, the command below
+                      prints <code className="font-mono text-neutral-300">command not found</code>.
+                    </>
+                  }
+                  href="/docs/install-claude-code"
+                  cta="Install Claude Code"
+                />
+                <p className="mb-2 mt-4 text-base font-medium text-neutral-200">
+                  Run this in a terminal and copy what it prints
+                </p>
+                <CopyBox text="claude setup-token" />
+                <p className="mt-3 text-sm leading-relaxed text-neutral-400">
+                  Open a terminal on your computer — the macOS <b className="font-medium text-neutral-300">Terminal</b> app,
+                  or the terminal panel in VS Code — and run the command above. It opens a browser login, then prints a
+                  token starting with <code className="font-mono text-neutral-300">sk-ant-oat...</code>. Paste it below.
+                </p>
+              </>
+            ) : (
+              <>
+                {/* No command to run: an OpenAI key is minted in a browser, so
+                    the Codex CLI is not a prerequisite for THIS screen at all.
+                    Saying so matters - telling someone to install a CLI they
+                    do not yet need is how a one-minute step becomes ten. */}
+                <PrereqCallout
+                  title="You need an OpenAI API key"
+                  body={
+                    <>
+                      Create one at platform.openai.com - it takes about a minute, and the account
+                      needs credit on it before a build can run. You do not need the Codex CLI
+                      installed for this step.
+                    </>
+                  }
+                  href="https://platform.openai.com/api-keys"
+                  cta="Create an API key"
+                />
+                <p className="mt-4 text-sm leading-relaxed text-neutral-400">
+                  Copy the key — it starts with{" "}
+                  <code className="font-mono text-neutral-300">sk-...</code> and OpenAI only shows
+                  it once — and paste it below. We check it against OpenAI before storing it, so a
+                  half-copied key or an account with no credit is caught here rather than at 5am.
+                </p>
+              </>
+            )}
             <form action={claudeAction} className="mt-3.5 space-y-2.5">
               {claudeState && "error" in claudeState ? <ErrorLine msg={claudeState.error} /> : null}
               {/* Name the target project: this writes the pasted token into a
                   repo as an Actions secret, and resolving "which repo" from the
                   active-project cookie can silently land on the wrong one. */}
               <input type="hidden" name="slug" value={created?.slug ?? ""} />
+              {/* And name the agent, so the credential lands in the secret that
+                  agent's workflows read. Sent explicitly rather than resolved
+                  from projects.agent, because the write above is fire-and-forget
+                  and may not have landed when this submits. */}
+              <input type="hidden" name="agent" value={agentChoice} />
               <input
                 name="token"
                 type="password"
-                placeholder="sk-ant-oat-..."
+                placeholder={agent.credential.placeholder}
                 autoComplete="off"
                 className={inputClass}
               />
+              {/* Only true for Claude Code. There is no Claude session on this
+                  server to verify an OAuth token against, so that one is shape-
+                  checked here and proven for real by seo-token-check minutes
+                  later. An OpenAI key IS checked live before it is stored, and
+                  saying otherwise would train people to ignore this screen. */}
               <p className="text-sm text-neutral-500">
-                Verification happens in the background after setup starts - this screen won&apos;t
-                show an instant green check, and that&apos;s expected.
+                {agentChoice === "claude"
+                  ? "Verification happens in the background after setup starts - this screen won't show an instant green check, and that's expected."
+                  : "This is checked against OpenAI before it is stored, so it takes a second or two."}
               </p>
               <div className="flex justify-end pt-1">
                 <button

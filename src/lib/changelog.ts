@@ -35,15 +35,17 @@ export const CHANGELOG: ChangelogEntry[] = [
     title: "DispatchSEO runs on Codex too",
     summary:
       "Codex now does everything Claude Code does here, including the overnight builder. " +
-      "Pick one on Settings; nothing about an existing Claude setup changes.",
+      "Pick one when you set a site up, or switch any time on Settings; nothing about an " +
+      "existing Claude setup changes.",
     changes: [
       {
         kind: "new",
         text:
-          "Codex is a full alternative to Claude Code. Connect it with one paste (Settings -> " +
-          "Project key now has a tab per agent) and it drives everything: research, the queue, " +
-          "approvals, backlinks, reports, building a guide on request - and the scheduled " +
-          "builders that run overnight without you.",
+          "Codex is a full alternative to Claude Code. Setting up a new site now asks which " +
+          "one you want, and Settings -> Project key has a tab per agent for sites you already " +
+          "have. Either way it drives everything: research, the queue, approvals, backlinks, " +
+          "reports, building a guide on request - and the scheduled builders that run " +
+          "overnight without you.",
       },
       {
         kind: "new",

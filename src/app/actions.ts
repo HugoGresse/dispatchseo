@@ -1538,6 +1538,22 @@ export async function connectClaudeToken(
   if (!token) return { error: `Paste your ${agent.displayName} credential. ${agent.credential.howToMint}` };
   const verified = await verifyAgentCredential(agent.id, token);
   if ("error" in verified) return { error: verified.error };
+  // Reconcile projects.agent BEFORE storing, so the row and the secret cannot
+  // disagree. The wizard's picker writes this too, but that write is
+  // fire-and-forget from a click: it can fail, or still be in flight when this
+  // submits. A stale row is not cosmetic - installPipelineToRepo checks the
+  // repo for THIS row's agent secret, so "row says claude, key sits in
+  // OPENAI_API_KEY" means setup never dispatches and the finale tells the owner
+  // to re-paste a credential they already pasted, with nothing in the wizard
+  // able to clear it. Failing here instead leaves nothing half-done: no secret
+  // stored, and the real reason returned (a pre-0044 database says so by name).
+  if (projectAgent(project).id !== agent.id) {
+    try {
+      await setProjectAgent(project, agent.id);
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : String(e) };
+    }
+  }
   const { setRepoSecret } = await import("@/lib/github-app-secrets");
   const res = await setRepoSecret(project, agent.credential.repoSecretName, token);
   if (!res.ok) return { error: `Could not store the credential on your repo: ${res.error}` };
@@ -1626,7 +1642,8 @@ export async function runPipelineInstall(
       // was the wrong story for the common one: no token on the repo means
       // nothing is verifying and nothing ever will, so "wait a few minutes,
       // then retry" sent people to wait out a dead end.
-      claude_token_present: boolean;
+      agent_token_present: boolean;
+      agent_name: string;
     }
   | { error: string }
 > {
@@ -1646,7 +1663,13 @@ export async function runPipelineInstall(
   // pre-0030 database the gate grandfathers screenless rows anyway.
   await db().from("projects").update({ onboarding_screen: "c5" }).eq("id", project.id);
   if (project.pipeline_installed_at) {
-    return { ok: true, mode: "already-installed", setup_dispatched: true, claude_token_present: true };
+    return {
+      ok: true,
+      mode: "already-installed",
+      setup_dispatched: true,
+      agent_token_present: true,
+      agent_name: projectAgent(project).displayName,
+    };
   }
   const { installPipelineToRepo } = await import("@/lib/pipeline-install");
   // installPipelineToRepo returns {ok:false} for handled failures, but it can
@@ -1672,7 +1695,8 @@ export async function runPipelineInstall(
     mode: result.mode ?? "direct",
     pr_url: result.pr_url,
     setup_dispatched: result.setup_dispatched,
-    claude_token_present: result.claude_token_present,
+    agent_token_present: result.agent_token_present,
+    agent_name: result.agent_name,
   };
 }
 
