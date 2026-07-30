@@ -12,6 +12,12 @@
 // no previous copy to compare against, only the head entry is eligible, so a
 // first run can't dump 25 historical releases into the channel.
 //
+// The post is a SUMMARY of the entry, not a copy of it: headline, the summary
+// line, and each change trimmed to its first sentence or two, grouped by kind.
+// Someone scrolling a Discord channel should learn what shipped at a glance
+// and click through only if they want the reasoning - so the caps under
+// "Discord's own limits" are deliberately far tighter than Discord requires.
+//
 // It waits for the release to actually be live on /changelog before posting,
 // because the embed links to `#v-<version>` - announcing a release the site
 // isn't serving yet is a dead link in a permanent, public channel.
@@ -51,10 +57,16 @@ const mention = process.env.DISCORD_MENTION?.trim() || "";
 // messages someone can delete rather than flooding the channel.
 const MAX_POSTS = 5;
 
-// Discord's own limits, minus a little headroom.
-const BULLET_MAX = 500; // per change line, before "…"
+// A Discord post is not the changelog. The changelog entry argues the case -
+// what changed, why, what it replaces - and reads well when you went looking
+// for it. A post arrives uninvited in a feed, so it gets the headline and
+// nothing else: someone should learn what shipped in one glance and click
+// through only if they want the reasoning. These caps are what enforce that,
+// and they're well under what Discord would allow.
+const BULLET_MAX = 200; // per change line - roughly one scannable sentence
+const MAX_BULLETS = 5; // per kind, then "…and N more"
+const DESC_MAX = 350; // the summary line
 const FIELD_MAX = 1024; // hard Discord limit on a field value
-const DESC_MAX = 1200; // hard limit is 4096; summaries are 2-3 sentences
 const EMBED_BUDGET = 5500; // hard limit is 6000 across the whole embed
 
 const KIND = {
@@ -123,17 +135,44 @@ function clamp(text, max) {
   return `${(space > max * 0.6 ? cut.slice(0, space) : cut).trimEnd()}…`;
 }
 
+// Trim to whole sentences rather than to a character count. Changelog entries
+// are written headline-first - "Codex is a full alternative to Claude Code."
+// and then the detail - so taking the sentences that fit under the cap keeps
+// the point and drops the argument, with no "…" mid-thought. A first sentence
+// that busts the cap on its own is the only case that gets cut mid-sentence.
+// Two sentences at most, and never past `max`. Two is what "headline plus the
+// one thing you'd ask next" costs; the third sentence in a changelog entry is
+// almost always the justification, which is what the link is for. The sentence
+// budget is what makes short headline fragments work - "Changed your mind?"
+// alone says nothing, so it keeps the sentence that follows it.
+function condense(text, max, maxSentences = 2) {
+  const s = text.replace(/\s+/g, " ").trim();
+  const sentences = s.split(/(?<=[.!?])\s+/);
+  let out = sentences[0];
+  for (const next of sentences.slice(1, maxSentences)) {
+    if (out.length + 1 + next.length > max) break;
+    out += ` ${next}`;
+  }
+  // A headline fragment whose follow-up didn't fit is worse than a cut
+  // sentence: "A Coding agent setting." on its own tells a reader nothing,
+  // where the same line truncated mid-clause at least says what it does. So
+  // when the sentence rules leave too little to be worth reading, take the
+  // next sentence anyway and let the character cap do the cutting.
+  if (out.length < 60 && sentences.length > 1) out = `${sentences[0]} ${sentences[1]}`;
+  return out.length > max ? clamp(out, max) : out;
+}
+
 /** One kind's bullets, split across as many fields as Discord's 1024 needs. */
 function packFields(label, items) {
   const fields = [];
   let buf = [];
   const flush = () => {
     if (!buf.length) return;
-    fields.push({ name: fields.length ? `${label} (cont.)` : label, value: buf.join("\n\n") });
+    fields.push({ name: fields.length ? `${label} (cont.)` : label, value: buf.join("\n") });
     buf = [];
   };
   for (const item of items) {
-    const projected = buf.length ? buf.join("\n\n").length + 2 + item.length : item.length;
+    const projected = buf.length ? buf.join("\n").length + 1 + item.length : item.length;
     if (projected > FIELD_MAX) flush();
     buf.push(item);
   }
@@ -149,7 +188,10 @@ function buildEmbed(entry) {
   const color = KIND[KIND_ORDER.find((k) => kinds.has(k)) ?? "fixed"].color;
 
   const title = clamp(entry.title, 240);
-  const description = clamp(entry.summary, DESC_MAX);
+  // Three sentences here, two per bullet: the summary is the one place that
+  // gets to set context, and it's already written to be short (it's the line
+  // the dashboard banner shows).
+  const description = condense(entry.summary, DESC_MAX, 3);
   let spent = title.length + description.length + 80; // + footer, roughly
 
   // Every field, tagged with where it belongs in the embed (`order`) and how
@@ -159,9 +201,11 @@ function buildEmbed(entry) {
   // whole budget on Added and silently dropping the other two.
   const wanted = [];
   KIND_ORDER.forEach((kind, group) => {
-    const items = entry.changes
-      .filter((c) => c.kind === kind)
-      .map((c) => `• ${clamp(c.text, BULLET_MAX)}`);
+    const all = entry.changes.filter((c) => c.kind === kind);
+    const items = all.slice(0, MAX_BULLETS).map((c) => `• ${condense(c.text, BULLET_MAX)}`);
+    // A release with eleven fixes doesn't get eleven lines. Five and a count
+    // says the same thing and still fits on one screen.
+    if (all.length > items.length) items.push(`• *…and ${all.length - items.length} more*`);
     packFields(KIND[kind].label, items).forEach((field, i) => {
       wanted.push({ ...field, group, order: wanted.length, rank: i === 0 ? 0 : 1 + i });
     });
@@ -187,12 +231,12 @@ function buildEmbed(entry) {
   const fields = kept
     .sort((a, b) => a.order - b.order)
     .map(({ name, value }) => ({ name, value }));
-  if (dropped) {
-    fields.push({
-      name: "​",
-      value: `[There's more in the full release notes →](${url})`,
-    });
-  }
+  // Always, not just when something was trimmed: every post is a summary now,
+  // so the way to the whole story shouldn't depend on how much got cut.
+  fields.push({
+    name: "​",
+    value: `[${dropped ? "There's more in the full release notes" : "Full release notes"} →](${url})`,
+  });
 
   return {
     title,
