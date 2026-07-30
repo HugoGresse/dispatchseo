@@ -41,6 +41,8 @@ import { saveContentPrefs } from "@/lib/content-prefs-store";
 import { renderInstructions, WORKFLOWS } from "@/lib/instructions";
 import { getPipelinePack, hasDataforseo } from "@/lib/pipeline-pack";
 import { effectiveAutomations, getProjectByToken, internalLinkingEnabled } from "@/lib/projects";
+import { projectAgent } from "@/lib/agents";
+import { setProjectAgent } from "@/lib/agent-settings";
 import { loadSiteProfile } from "@/lib/site-profile";
 import { currentProject, projectStore } from "@/lib/mcp-context";
 import { duplicateNote, findDuplicateSuggestion, isDuplicateKeyError } from "@/lib/suggestion-dedupe";
@@ -1837,6 +1839,44 @@ const mcpHandler = createMcpHandler(
     );
 
     server.registerTool(
+      "set_agent",
+      {
+        title: "Set the coding agent",
+        description:
+          "Choose which coding agent runs this project's UNATTENDED builders - " +
+          "the scheduled GitHub Actions, or the in-stack container on a " +
+          "self-hosted install. This does NOT change which agent you are: any " +
+          "agent connected over MCP can drive everything interactively " +
+          "regardless of this setting. It takes effect on the next scheduled " +
+          "run with no repo change, because the workflow files carry both " +
+          "agents and ask which to use at run time. The reply names anything " +
+          "the owner still has to do - chiefly adding the new agent's API " +
+          "credential where the builders run. Ask the owner before switching; " +
+          "the two agents bill differently (a Claude subscription vs metered " +
+          "OpenAI usage), so this is their call, not yours.",
+        inputSchema: {
+          agent: z
+            .enum(["claude", "codex"])
+            .describe("claude = Claude Code (runs on a Claude subscription), codex = Codex (metered OpenAI API key)"),
+        },
+      },
+      async ({ agent }) => {
+        try {
+          const res = await setProjectAgent(currentProject(), agent);
+          return ok({
+            agent: res.agent.id,
+            display_name: res.agent.displayName,
+            cost_model: res.agent.cost.model,
+            applies: "next scheduled run - no repo change needed",
+            todo: res.todo,
+          });
+        } catch (e) {
+          return fail(e instanceof Error ? e.message : String(e));
+        }
+      },
+    );
+
+    server.registerTool(
       "set_internal_linking",
       {
         title: "Set internal back-linking",
@@ -2382,6 +2422,11 @@ const mcpHandler = createMcpHandler(
           slug: p.slug,
           domain: p.domain,
           mode: p.mode,
+          // Which coding agent this project's unattended builders run. Read
+          // through the registry, never off the row: the column is absent on a
+          // database that has not run migration 0044, and absent means Claude
+          // (the column exists only because a second agent does).
+          agent: projectAgent(p).id,
           // Effective approval flags (mode-derived, same source the approval
           // gate coerces on). auto_approve=true means research guides land
           // straight in the build queue - the research run must FILL to the
@@ -3093,7 +3138,7 @@ async function authed(req: Request): Promise<Response> {
     // that message carries real URLs, not just "the dashboard".
     const error = token
       ? "Unknown project key. The Bearer token IS the project - this one matches no project on this deploy (deleted project, wrong backend, or a stale copy). Copy the current connect command from the dashboard: Settings -> Project key."
-      : "No DispatchSEO project connected yet. New here? Sign up free at https://dispatchseo.com, or self-host in one command: https://github.com/NeoZi12/dispatchseo. Already have a project? Copy the exact `claude mcp add` command from your dashboard: Settings -> Project key.";
+      : "No DispatchSEO project connected yet. New here? Sign up free at https://dispatchseo.com, or self-host in one command: https://github.com/NeoZi12/dispatchseo. Already have a project? Copy the exact connect command for your agent from your dashboard: Settings -> Project key.";
     return Response.json(
       { error },
       { status: 401, headers: { "WWW-Authenticate": 'Bearer realm="dispatchseo"' } },

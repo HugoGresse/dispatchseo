@@ -2,8 +2,9 @@ import { checkCron } from "@/lib/cron-auth";
 import { db } from "@/lib/db";
 import { getCronHealth, reportCronRun } from "@/lib/cron-alerts";
 import { credsForProject } from "@/lib/dataforseo";
-import { mergeToken, builderClaudeToken } from "@/lib/github";
+import { mergeToken, builderClaudeToken, builderAgentToken, builderAgentTokens } from "@/lib/github";
 import { listProjects, fetchProjectToken, effectiveAutomations } from "@/lib/projects";
+import { projectAgent, type AgentId } from "@/lib/agents";
 import { isCloudMode } from "@/lib/cloud";
 import { guideQueueDry } from "@/lib/queue-refill";
 
@@ -86,6 +87,24 @@ export async function GET(req: Request): Promise<Response> {
       .not("id", "is", null);
   }
 
+  // Which agents the polling container can actually execute. The container
+  // knows things this route cannot - chiefly whether its own .env carries a
+  // credential - so it declares them rather than being guessed at.
+  //
+  // This matters because handing out a job COSTS a cadence window: the claim
+  // row makes the next poll skip it for CLAIM_GRACE_HOURS. A job claimed for an
+  // agent the container has no key for is a build that silently does not
+  // happen. So the filter belongs here, where the claim is written.
+  //
+  // Absent param = an older container, which only ever ran Claude and predates
+  // any project being able to choose otherwise. Reading that as "claude only"
+  // is both the truthful interpretation and the safe one: a Codex project on an
+  // un-upgraded stack idles visibly instead of being claimed and dropped.
+  const declared = new URL(req.url).searchParams.get("agents");
+  const runnable = new Set<string>(
+    declared ? declared.split(",").map((a) => a.trim()).filter(Boolean) : ["claude"],
+  );
+
   type Job = {
     key: string;
     workflow: string;
@@ -94,6 +113,10 @@ export async function GET(req: Request): Promise<Response> {
     mcp_token: string;
     prompt: string;
     dataforseo: { login: string; password: string } | null;
+    /** Which coding agent runs this job - from the project, not the instance. */
+    agent: AgentId;
+    /** The credential for THAT agent. The container never picks one. */
+    agent_token: string | null;
   };
   const jobs: Job[] = [];
   const mergeSweeps: Array<{ slug: string; repo: string; mcp_token: string }> = [];
@@ -119,6 +142,36 @@ export async function GET(req: Request): Promise<Response> {
       const token = await fetchProjectToken(p.id);
       if (!token) return out;
     const flags = effectiveAutomations(p);
+
+    // Auto-merge publishing: the container sweeps green seo-labeled guide PRs
+    // every tick (cheap gh calls, no agent session), replacing
+    // seo-auto-merge.yml's green-checks gate for instances GitHub cannot call
+    // back into.
+    //
+    // Set BEFORE the agent gates below, and that ordering is the point: merging
+    // an already-built PR needs no coding agent at all. After them, an owner who
+    // switched to Codex and had not pasted the key yet would find their
+    // finished, green, ready-to-merge PR sitting there indefinitely - work
+    // already paid for, stranded by a credential it never needed.
+    if (flags.auto_merge) {
+      out.mergeSweep = { slug: p.slug, repo: p.github_repo, mcp_token: token };
+    }
+
+    // From here on it is BUILD work, which does need an agent. The project's
+    // agent decides which credential is resolved, which MCP config the container
+    // writes, and which binary it runs. Resolving here rather than in the
+    // container is what keeps a mixed stack honest - one site on Claude and one
+    // on Codex both get served, and neither is handed the other's key.
+    const agent = projectAgent(p).id;
+    if (!runnable.has(agent)) return out;
+    const agentToken = await builderAgentToken(agent);
+    // No credential for this project's agent: leave the work unclaimed so it is
+    // waiting the moment a key is pasted, instead of burning a cadence window on
+    // a run that cannot start. Deliberately quiet - an instance mid-setup has no
+    // key yet, and that is a normal state, not a regression (CLAUDE.md's
+    // setup-gate rule).
+    if (!agentToken) return out;
+
     // Defense in depth: this route feeds the self-hosted docker builder, which
     // must never carry the cloud platform's bundled DataForSEO credentials -
     // strip them even if a hybrid setup somehow got this far.
@@ -175,16 +228,11 @@ export async function GET(req: Request): Promise<Response> {
         mcp_token: token,
         prompt: PROMPTS[wf],
         dataforseo: jobDataforseo,
+        agent,
+        agent_token: agentToken,
       });
     }
 
-      // Auto-mode publishing: the container sweeps green seo-labeled guide
-      // PRs every tick (cheap gh calls, no Claude session), replacing
-      // seo-auto-merge.yml's green-checks gate for instances GitHub cannot
-      // call back into.
-      if (flags.auto_merge) {
-        out.mergeSweep = { slug: p.slug, repo: p.github_repo, mcp_token: token };
-      }
       return out;
     }),
   );
@@ -211,7 +259,16 @@ export async function GET(req: Request): Promise<Response> {
     // edit. The container's own CLAUDE_CODE_OAUTH_TOKEN env still wins in
     // run.sh; this is the fallback it reaches for when that env is unset.
     // Always sent (claim or not) so the token resolves before any job runs.
+    // Kept alongside agent_tokens below rather than replaced by it: a container
+    // running an image from before this change reads this field and nothing
+    // else, and self-hosters upgrade their stack when they get round to it. A
+    // rename here would strand every one of them on a builder that suddenly has
+    // no token.
     claude_token: (await builderClaudeToken()) ?? null,
+    // Every agent this instance holds a key for. The container uses this to
+    // decide what to DECLARE on its next claiming poll (?agents=), which closes
+    // the loop: it only claims work it can run.
+    agent_tokens: await builderAgentTokens(),
     jobs,
     merge_sweeps: mergeSweeps,
   });

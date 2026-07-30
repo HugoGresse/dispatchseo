@@ -1,0 +1,266 @@
+---
+title: Use Codex instead
+description: DispatchSEO runs on OpenAI Codex end to end - connect over MCP, drive it by hand, and let it build overnight. Here is the setup, and the three places Codex differs from Claude Code.
+---
+
+DispatchSEO is a backend with an MCP server on the front of it. Any coding
+agent that speaks MCP can drive it, and Codex speaks MCP. So if Codex is
+the agent you already use, you don't have to switch.
+
+This page is the Codex version of
+[Install Claude Code](/docs/install-claude-code). It is shorter, because
+there is less to do.
+
+## What you get
+
+Read this bit before you set anything up. Half-answers here cost people
+whole evenings.
+
+| | Claude Code | Codex |
+|---|---|---|
+| Connect over MCP | Yes | **Yes** |
+| Every tool the dashboard has | Yes - all of them | **Yes - all of them, verified** |
+| Research keywords, fill the queue | Yes | **Yes** |
+| Approve, reorder, edit the queue | Yes | **Yes** |
+| Build a guide when you ask for one | Yes | **Yes** |
+| Backlink prospecting, reports, trend scans | Yes | **Yes** |
+| The unattended overnight builder | Yes | **Yes** |
+
+Every `seo-*` workflow the pipeline installs carries both agents and asks
+the backend which one to run when it wakes up. Switching agent on the
+dashboard therefore takes effect on the next scheduled run: no repo edit,
+no reinstall, nothing to remember. On a self-hosted install the in-stack
+docker builder works the same way, per job.
+
+## Three things that genuinely differ
+
+The capability list is the same. These three are not, and flattening them
+into "identical" would cost you money or an evening.
+
+**You pay per run.** Claude Code runs on the Claude subscription you
+already have, so an overnight build costs nothing extra. Codex runs on your
+own OpenAI API key and OpenAI meters it per run - a nightly guide build is
+a real, recurring charge on your OpenAI account. Nothing is billed by
+DispatchSEO either way. If you turn on the unattended builders, set a
+monthly spend limit at
+[platform.openai.com/settings/organization/limits](https://platform.openai.com/settings/organization/limits)
+first; that is the only thing standing between a runaway loop and your card.
+
+**There is no turn budget.** The Claude Code runner caps each build at 150
+turns, so a run that starts going in circles stops itself. Codex has no
+`--max-turns` equivalent - OpenAI closed the request as not planned - so
+the job's `timeout-minutes` is the only ceiling, and a stuck run burns
+tokens right up to it. Watch your first few unattended runs and check what
+they cost before you leave them alone.
+
+**Connections are not folder-scoped.** Claude Code has a `--scope local`
+that pins a connection to one repo folder. Codex has no equivalent -
+`codex mcp add` always writes its global config. In practice this is fine,
+because every project gets its own server name (`dispatchseo-<your-slug>`),
+so two sites never collide. But both will be visible from every folder. If
+you want strict per-repo isolation, set `CODEX_HOME` to a directory inside
+the repo before running Codex there.
+
+## Install Codex
+
+You need Node.js 18 or newer. Then, in a terminal:
+
+```bash
+npm i -g @openai/codex
+```
+
+Check it landed:
+
+```bash
+codex --version
+```
+
+If that prints a version, you're done. If `npm` itself is missing, install
+Node first from [nodejs.org](https://nodejs.org) - the LTS download,
+default options.
+
+Codex also has a Homebrew install on macOS (`brew install codex`) and its
+own installers; OpenAI's
+[CLI docs](https://developers.openai.com/codex/cli) cover every route.
+
+## Sign in
+
+Codex needs an OpenAI account. Run:
+
+```bash
+codex
+```
+
+and follow the sign-in it prompts for. A ChatGPT Plus, Pro, Business or
+Enterprise plan includes Codex usage; an API key works too, billed per use.
+Either is fine for the interactive side below - the connection doesn't care
+which you used. The unattended builders are the exception: they run
+headlessly and need a real API key, which is its own step further down.
+
+## Tell DispatchSEO you're on Codex
+
+Open your dashboard, go to **Settings → Coding agent**, and pick **Codex**.
+
+That one switch is what the scheduled builders read. It does not affect
+anything you do at a keyboard: whatever agent you have connected over MCP
+drives the dashboard's whole tool set regardless of what this says. It only
+decides who wakes up at 05:13.
+
+If the new agent has no credential where your builders run, the dashboard
+says so at the moment you switch rather than letting you find out from a
+failed run the next morning. The next two sections are how you fix that.
+
+## Connect it to your project
+
+Still on **Settings**, find **Project key** and pick the **Codex** tab.
+Copy the line and run it in a terminal:
+
+```bash
+codex mcp add dispatchseo-yoursite --url "https://dispatchseo.com/api/mcp?key=YOUR-PROJECT-KEY"
+```
+
+Use the command from your own dashboard rather than the shape above - it
+carries your project's key, and the key is what tells the server which site
+you mean.
+
+The same line works in PowerShell on Windows, unchanged. There is no header
+to quote and nothing to chain, which is exactly why the key rides in the
+URL.
+
+Check it took:
+
+```bash
+codex mcp list
+```
+
+You should see `dispatchseo-yoursite`, enabled.
+
+## Where OPENAI_API_KEY goes
+
+The unattended builders run without you there, so they can't use the
+browser sign-in - they need an API key. Create one at
+[platform.openai.com/api-keys](https://platform.openai.com/api-keys). It
+has to be on an account with credit; a key on an empty account passes every
+shape check ever written and then fails on the first real build.
+
+Where it goes depends on where your builds run:
+
+- **GitHub Actions** (the usual setup): it is a repo secret named
+  `OPENAI_API_KEY` on your site's repo. The install command the dashboard
+  hands out collects and verifies it for you. To set it by hand:
+  `gh secret set OPENAI_API_KEY --repo you/your-site`.
+- **Self-hosted docker**: paste it on Home's "Turn on automatic builds"
+  card - it is stored encrypted and the builder picks it up within a few
+  minutes. Setting `OPENAI_API_KEY` in your `.env` works too and overrides
+  the stored value, which is the path for scripted installs.
+
+Claude Code's equivalent is `CLAUDE_CODE_OAUTH_TOKEN`, in exactly the same
+two places. The names are different because the credentials are different;
+nothing else about the wiring changes.
+
+Both the install script and the dashboard verify a pasted key with a real
+inference call before storing it, rather than a shape check. A stored key
+that doesn't work reads as "automatic builds are set up" and only announces
+itself as a failed run at 05:13.
+
+## Things that surprise people
+
+**The key sits in the URL.** That's what makes the connect a single paste that
+works in every shell - Codex's only header-free alternative takes the *name* of
+an environment variable, which then has to exist in every terminal you ever
+launch Codex from. If you'd rather the key travelled as a header, that works
+too; it just can't be done from `codex mcp add`, so edit
+`~/.codex/config.toml` by hand:
+
+```toml
+[mcp_servers.dispatchseo-yoursite]
+url = "https://dispatchseo.com/api/mcp"
+http_headers = { Authorization = "Bearer YOUR-PROJECT-KEY" }
+```
+
+Both forms hit the same gate and see exactly the same data. Either way the key
+ends up on your disk in Codex's config, the same as Claude Code stores its own.
+
+**Codex asks before every tool call.** That's its normal behaviour and it's a
+reasonable default, but it gets old fast when a research run makes twenty
+calls. To stop the prompts for this server only, open your Codex config
+(`~/.codex/config.toml`) and add one line under the entry the connect command
+created:
+
+```toml
+[mcp_servers.dispatchseo-yoursite]
+url = "https://dispatchseo.com/api/mcp?key=YOUR-PROJECT-KEY"
+default_tools_approval_mode = "approve"
+```
+
+That auto-approves DispatchSEO's tools and nothing else - every other server,
+and every shell command Codex wants to run, still asks. There's no flag for it
+on `codex mcp add`; the line has to be added by hand.
+
+**Codex won't pick up a skill on its own.** Name the tool in your prompt.
+This works:
+
+> Call the dispatchseo-yoursite MCP tool get_instructions with workflow
+> research and follow it exactly.
+
+That pattern - naming the server and the workflow - is how you run any of
+them. Swap `research` for `setup`, `build-guide`, `backlinks`, `report`,
+`trend-scan`, or `geo-scan`. The
+[agent commands](/docs/agent-commands) page lists what each one does.
+
+Claude Code users have slash-command shorthands for these (`/seo-research`
+and friends) because slash commands are a Claude Code file convention.
+Codex has no equivalent, so the spelled-out prompt is the way - and it
+works in Claude Code too.
+
+## First run
+
+Start with the setup workflow. It reads your repo, works out where your
+content lives, and writes the site facts everything else depends on:
+
+```bash
+codex "Call the dispatchseo-yoursite MCP tool get_instructions with workflow setup and follow it exactly."
+```
+
+Codex will ask for approval before it runs commands or writes files. That's
+its normal behaviour - approve the ones you're happy with.
+
+Then research, to fill your queue:
+
+> Call the dispatchseo-yoursite MCP tool get_instructions with workflow
+> research and follow it exactly.
+
+From there it's the ordinary loop: the dashboard shows the queue, you
+approve what you like, and the overnight builder turns approved ideas into
+pull requests while you sleep - or you ask Codex to build one now, if you'd
+rather watch it happen.
+
+## Something's wrong
+
+**`codex: command not found`** - the install didn't finish, or your
+terminal predates it. Close the terminal, open a new one, try again.
+
+**`codex mcp` says it's not a command** - your Codex is too old for the MCP
+subcommands. `npm i -g @openai/codex` again to update.
+
+**Codex can't see the tools** - check `codex mcp list` shows the server as
+enabled, then start a fresh Codex session. Connections load at startup, so
+a session opened before you added the server can't see it.
+
+**A tool call gets cancelled** (`user cancelled MCP tool call`) - Codex asked
+permission and nothing answered. In an interactive session, approve it when it
+asks. If you're running `codex exec` with nobody watching, there is nobody to
+approve it - add the `default_tools_approval_mode = "approve"` line above.
+Widening the sandbox does not help; this is an approval, not a permission.
+
+**The key is rejected** - project keys change when a project is recreated.
+Copy the current one from Settings → Project key and run the connect
+command again; re-adding overwrites the old entry cleanly.
+
+**The overnight build didn't run, or ran the wrong agent** - check
+**Settings → Coding agent** actually says Codex. The workflows ask the
+backend at run time, so the dashboard is the source of truth, not anything
+in your repo. If it says Codex and the run still failed, the failure
+message names the reason - a missing or revoked `OPENAI_API_KEY` and an
+account out of credit are the two common ones, and both show on the
+dashboard's Home banner.

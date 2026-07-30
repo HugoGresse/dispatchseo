@@ -19,6 +19,7 @@ import { revalidateTag } from "next/cache";
 import { instanceSettings } from "./dashboard-auth";
 import { decryptSecret } from "./crypto";
 import { isCloudMode } from "./cloud";
+import { agentById, availableAgents, type AgentId } from "./agents";
 
 const API = "https://api.github.com";
 
@@ -86,14 +87,38 @@ export async function mergeToken(): Promise<string | null> {
 // cached: a freshly pasted token must reach the very next poll, and the
 // builder polls only every ~10 minutes, so a DB read here is free.
 export async function builderClaudeToken(): Promise<string | null> {
-  const env = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+  return builderAgentToken("claude");
+}
+
+// The general form. `agent` is per PROJECT (one owner can run several sites on
+// different agents) while this credential is per INSTANCE - one docker stack,
+// one set of keys - which is exactly the mismatch 0044 added a column per agent
+// to fix. Resolving here, in the route that already owns all the scheduling
+// brains, keeps the container a dumb executor: it never picks a credential, it
+// is handed the right one alongside the job.
+//
+// Same env-wins/DB-fallback shape and the same deliberate absence of caching as
+// the Claude original: a freshly pasted key must reach the very next poll, and
+// the builder polls every ~10 minutes, so a read here is free.
+export async function builderAgentToken(agent: AgentId): Promise<string | null> {
+  const def = agentById(agent);
+  const env = process.env[def.credential.envVar];
   if (env) return env;
   try {
-    const stored = (await instanceSettings())?.builder_claude_token;
-    return stored ? await decryptSecret(stored) : null;
+    const settings = (await instanceSettings()) as Record<string, unknown> | null;
+    const stored = settings?.[def.credential.instanceSettingsColumn];
+    return typeof stored === "string" && stored ? await decryptSecret(stored) : null;
   } catch {
     return null;
   }
+}
+
+/** Which agents this instance holds a usable credential for, cheapest first. */
+export async function builderAgentTokens(): Promise<Record<AgentId, string | null>> {
+  const entries = await Promise.all(
+    availableAgents().map(async (a) => [a.id, await builderAgentToken(a.id)] as const),
+  );
+  return Object.fromEntries(entries) as Record<AgentId, string | null>;
 }
 
 async function headers(ref?: RepoRef): Promise<Record<string, string>> {

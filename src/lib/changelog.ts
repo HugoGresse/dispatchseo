@@ -30,6 +30,57 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-30.8",
+    date: "2026-07-30",
+    title: "DispatchSEO runs on Codex too",
+    summary:
+      "Codex now does everything Claude Code does here, including the overnight builder. " +
+      "Pick one on Settings; nothing about an existing Claude setup changes.",
+    changes: [
+      {
+        kind: "new",
+        text:
+          "Codex is a full alternative to Claude Code. Connect it with one paste (Settings -> " +
+          "Project key now has a tab per agent) and it drives everything: research, the queue, " +
+          "approvals, backlinks, reports, building a guide on request - and the scheduled " +
+          "builders that run overnight without you.",
+      },
+      {
+        kind: "new",
+        text:
+          "A Coding agent setting. Switch a site between Claude Code and Codex and it takes " +
+          "effect on the next scheduled build - nothing to reinstall, no pull request, no repo " +
+          "edit, because your workflow files already carry both and ask which to use when they " +
+          "run. If the new agent's key isn't in place yet, the switch tells you right then " +
+          "instead of letting you find out at 5am.",
+      },
+      {
+        kind: "new",
+        text:
+          "An \"Other MCP client\" tab, for Cursor, Gemini CLI, Copilot, or anything else that " +
+          "speaks MCP. It hands you the URL, the header, and a header-free URL for clients that " +
+          "can't set one. Those connect and drive DispatchSEO by hand; the overnight builder " +
+          "needs Claude Code or Codex.",
+      },
+      {
+        kind: "improved",
+        text:
+          "The honest difference between the two is billing, and it is stated wherever you " +
+          "pick: Claude Code runs on the subscription you already pay for, Codex is metered by " +
+          "OpenAI per run. Either way the credential is yours and stays yours - DispatchSEO " +
+          "never proxies or pools it.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "A Codex build that stops because your OpenAI account is out of credit now says so, " +
+          "loudly, with the link to fix it. Codex reports that identically to a momentary rate " +
+          "limit, so taking its word for it would have meant a green run every night that built " +
+          "nothing - the builders ask OpenAI directly instead of guessing from the message.",
+      },
+    ],
+  },
+  {
     version: "2026-07-30.7",
     date: "2026-07-30",
     title: "Ask for what's missing",

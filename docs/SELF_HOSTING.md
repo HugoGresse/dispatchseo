@@ -45,7 +45,7 @@ automatic HTTPS - this block is the plain version that works anywhere.)
 - **[The setup wizard, step by step](https://dispatchseo.com/docs/setup-wizard)** -
   what each screen asks for and why: your site, the Search Console service
   account, keyword data (free mode vs DataForSEO), publish mode, one-tap
-  merge, and the two pastes that connect Claude Code.
+  merge, and the two pastes that connect your coding agent.
 - **[Day to day](https://dispatchseo.com/docs/day-to-day)** - what using it
   actually looks like after setup, plus the data tiers.
 - **[The dashboard, page by page](https://dispatchseo.com/docs/dashboard)** -
@@ -63,7 +63,7 @@ Reference, once you want the details:
   every variable, whether you need it, and where to get the value.
 - **[Schedules and jobs](https://dispatchseo.com/docs/schedules)** - what runs
   when, and what you see when something fails.
-- **[MCP tools](https://dispatchseo.com/docs/mcp-tools)** - all 52 tools your
+- **[MCP tools](https://dispatchseo.com/docs/mcp-tools)** - every tool your
   agent can call.
 - **[Security and your data](https://dispatchseo.com/docs/security)** - the
   auth model, what is stored, and what leaves your machine.
@@ -78,8 +78,14 @@ Reference, once you want the details:
 - **Your website's code in a GitHub repo.** Content ships as pull
   requests, so git-based sites only; WordPress and other database-backed
   CMSes won't work.
-- **Claude Code with a Claude subscription.** Your own agent does the
-  research and writing on the plan you already pay for.
+- **A coding agent - Claude Code or Codex.** Your own agent does the
+  research and the writing, and it also runs the in-stack builder that works
+  while you're away. Claude Code runs on the Claude subscription you already
+  pay for; Codex runs on your own OpenAI API key, which OpenAI meters per
+  run. Pick one on the dashboard's **Settings → Coding agent** - the builder
+  reads that, so switching needs no reinstall. Its credential goes in one of
+  two places: pasted on Home's "Turn on automatic builds" card, or set as
+  `CLAUDE_CODE_OAUTH_TOKEN` / `OPENAI_API_KEY` in your `.env`.
 - **Google Search Console access to your site** - free, at
   [search.google.com/search-console](https://search.google.com/search-console).
 

@@ -132,7 +132,8 @@ export default async function KeywordsPage() {
 
       {keywords.length === 0 ? (
         <EmptyState>
-          Nothing tracked yet. Run <Mono>/seo-research</Mono> in Claude Code to start tracking keywords.
+          Nothing tracked yet. Ask your connected agent for the research workflow (
+          <Mono>/seo-research</Mono> in Claude Code) to start tracking keywords.
         </EmptyState>
       ) : (
         <>

@@ -117,6 +117,20 @@ export async function getPipelinePack(project: Project): Promise<PackFile[]> {
         // rather than dying here.
       }
     }
+    // Codex's twin of the same rule. A stdio server wired to blank credentials
+    // is a maybe-crash in every scheduled run, so an absent DataForSEO account
+    // must configure itself away here exactly as it does above.
+    //
+    // A truncate rather than a parse-edit-serialize round trip because there is
+    // no TOML library in this dependency tree and adding one to delete a table
+    // is not a trade worth making. The template keeps the section last behind a
+    // marker comment, so cutting at the marker can only ever remove whole
+    // sections - it cannot leave a half-written table behind it, which is the
+    // one failure a text edit on TOML could plausibly cause.
+    if (f.path === ".github/mcp-codex.toml" && !hasDataforseo(project)) {
+      const marker = content.indexOf("# --- dataforseo ---");
+      if (marker !== -1) content = content.slice(0, marker).trimEnd() + "\n";
+    }
     return { path: f.path, content };
   });
 }

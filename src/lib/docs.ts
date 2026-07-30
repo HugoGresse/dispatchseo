@@ -58,6 +58,9 @@ export const DOCS_NAV: { section: string; items: DocsNavItem[] }[] = [
       // assumes is already done. Both onboarding wizards deep-link here
       // from their Claude Code screens.
       { slug: "install-claude-code", title: "Install Claude Code" },
+      // Immediately after it: the second agent is a choice people make at the
+      // same moment, and burying it further down reads as "unsupported".
+      { slug: "install-codex", title: "Use Codex instead" },
       { slug: "setup-wizard", title: "The setup wizard" },
       { slug: "search-console", title: "Google Search Console" },
       { slug: "keyword-data", title: "Keyword data sources" },

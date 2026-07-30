@@ -107,12 +107,38 @@ lives.
   </tr>
 </table>
 
+## 🤖 Which coding agent
+
+DispatchSEO talks to your agent over MCP, so "which agent" is a real question
+with a real answer — including the parts that aren't finished yet.
+
+| Agent | Connect + every tool | Unattended overnight builder |
+|---|---|---|
+| **Claude Code** | ✅ | ✅ |
+| **Codex** | ✅ | ✅ |
+| Cursor · Gemini CLI · Copilot · any MCP client | ✅ | ❌ |
+
+Connecting is one paste and gets you the whole tool set: research, the queue,
+approvals, backlinks, reports, and building a guide when you ask for one. The
+overnight builder is the separate thing — scheduled jobs that run an agent with
+nobody watching — and both Claude Code and Codex do that too. Every workflow
+carries both and asks the dashboard which to run, so switching agent takes
+effect on the next scheduled run with no repo change.
+
+The honest difference is who pays: Claude Code runs on a subscription you
+already have, while Codex is metered by OpenAI per run.
+
+[docs/AGENTS.md](docs/AGENTS.md) has the details, the support tiers, and how to
+add an agent.
+
 ## ✅ What you need before you start
 
 - **Your site's source in a GitHub repo.** The pipeline ships content as pull
   requests, so git-based sites only - WordPress won't work.
-- **A Claude subscription with Claude Code.** Your agent is the engine and it
-  runs on your existing plan.
+- **A coding agent.** Your agent is the engine. Claude Code runs on the Claude
+  subscription you already pay for; Codex does everything Claude Code does
+  here, including the overnight builder, but OpenAI meters it per run — see the
+  table above.
 - **A machine with Docker** (~1 GB RAM). A laptop works for a test drive, but
   a machine that stays on is much better for daily use - a $5 VPS, a Raspberry
   Pi, a desktop that never sleeps. Schedules only run while the machine is awake.
@@ -141,13 +167,15 @@ cd ~; git clone https://github.com/NeoZi12/dispatchseo; cd dispatchseo; .\start.
 ```
 
 That one command really is the whole install: database, migrations, schedules,
-and a headless Claude Code builder all come up together. Nothing on the internet
-needs to reach your machine, so there is no domain or port forwarding to set up.
+and a headless builder for your agent all come up together. Nothing on the
+internet needs to reach your machine, so there is no domain or port forwarding
+to set up.
 
 When it finishes it prints your dashboard URL. Open it and the setup wizard takes
 over: name your site, connect Search Console, point it at your GitHub repo.
 
-The last step is pasting one command into Claude Code inside your site's repo.
+The last step is pasting one command into your coding agent inside your site's
+repo - the dashboard hands out the right one for whichever agent you picked.
 Your agent does the rest of the install itself, including writing its own workflow
 files and setting its own secrets.
 
@@ -171,7 +199,7 @@ page, every setting, every tool.
 | --- | --- |
 | **New here** | [What DispatchSEO is](https://dispatchseo.com/docs/introduction) · [How it works](https://dispatchseo.com/docs/how-it-works) · [Cloud or self-hosted](https://dispatchseo.com/docs/choosing-how-to-run-it) |
 | **Install** | [Your own computer](https://dispatchseo.com/docs/docker-compose) · [A VPS](https://dispatchseo.com/docs/vps) · [From source](https://dispatchseo.com/docs/local-development) |
-| **Set up** | [Install Claude Code](https://dispatchseo.com/docs/install-claude-code) · [The setup wizard](https://dispatchseo.com/docs/setup-wizard) · [Search Console](https://dispatchseo.com/docs/search-console) · [Keyword data](https://dispatchseo.com/docs/keyword-data) · [Publishing](https://dispatchseo.com/docs/publishing) · [Connect your site](https://dispatchseo.com/docs/connect-your-site) |
+| **Set up** | [Install Claude Code](https://dispatchseo.com/docs/install-claude-code) · [Use Codex instead](https://dispatchseo.com/docs/install-codex) · [The setup wizard](https://dispatchseo.com/docs/setup-wizard) · [Search Console](https://dispatchseo.com/docs/search-console) · [Keyword data](https://dispatchseo.com/docs/keyword-data) · [Publishing](https://dispatchseo.com/docs/publishing) · [Connect your site](https://dispatchseo.com/docs/connect-your-site) |
 | **Use it** | [Day to day](https://dispatchseo.com/docs/day-to-day) · [The dashboard](https://dispatchseo.com/docs/dashboard) · [Automations](https://dispatchseo.com/docs/automations) · [Agent commands](https://dispatchseo.com/docs/agent-commands) |
 | **Reference** | [Concepts](https://dispatchseo.com/docs/concepts) · [MCP tools](https://dispatchseo.com/docs/mcp-tools) · [Environment variables](https://dispatchseo.com/docs/environment-variables) · [Schedules](https://dispatchseo.com/docs/schedules) · [Architecture](https://dispatchseo.com/docs/architecture) |
 | **Help** | [Troubleshooting](https://dispatchseo.com/docs/troubleshooting) · [Common questions](https://dispatchseo.com/docs/faq) · [Security](https://dispatchseo.com/docs/security) · [Upgrading](https://dispatchseo.com/docs/upgrading) |
@@ -198,7 +226,7 @@ out what to do when you open it.
 
 ## 🧰 What's in the box
 
-- **MCP server** with [52 tools](https://dispatchseo.com/docs/mcp-tools): the
+- **MCP server** with [the full tool set](https://dispatchseo.com/docs/mcp-tools): the
   queue, keywords, rankings, pages, GSC stats, backlink prospects, trend
   topics, site profile. Anything the dashboard can do, your agent can do over
   MCP; parity between the two is a hard rule in this codebase.

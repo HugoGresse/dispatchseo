@@ -13,12 +13,18 @@ name: Codex canary
 # questions, not to guard anything - once the Codex builder templates are real,
 # they carry their own reporting and this can go.
 #
-# Sandbox note: `danger-full-access` is required for MCP tool calls (verified
-# 2026-07-29: workspace-write fails with "user cancelled MCP tool call" even
-# with network_access enabled). That matches how Claude already runs here -
-# every seo-* template passes --permission-mode bypassPermissions, and the
-# docker builder does too. `safety-strategy: drop-sudo` keeps the run
-# non-root regardless, which the Claude action has no equivalent for.
+# Sandbox note, corrected 2026-07-30. The 07-29 run concluded that MCP tool
+# calls need `danger-full-access`, because workspace-write failed with "user
+# cancelled MCP tool call" even with network_access on. That read the symptom
+# right and the cause wrong: the gate is a per-server approval default, not the
+# sandbox. With `default_tools_approval_mode = "approve"` on the server entry,
+# a tool call completes at `read-only` with approvals set to `never` - verified
+# locally against production on codex-cli 0.146.0.
+#
+# So this canary runs SANDBOXED. That is a better posture than the Claude half
+# of this repo manages: every seo-* template passes
+# --permission-mode bypassPermissions, and the docker builder does too.
+# `safety-strategy: drop-sudo` keeps the run non-root on top.
 
 on:
   workflow_dispatch:
@@ -48,6 +54,10 @@ jobs:
           [mcp_servers.dispatchseo]
           url = "https://dispatchseo.com/api/mcp"
           bearer_token_env_var = "SEO_MCP_API_KEY"
+          # What actually authorises a tool call. Without it every call comes
+          # back "user cancelled MCP tool call" - there is nobody here to
+          # approve one - no matter how permissive the sandbox is.
+          default_tools_approval_mode = "approve"
           TOML
           echo "CODEX_HOME=$RUNNER_TEMP/codex-home" >> "$GITHUB_ENV"
           echo "--- config written ---"
@@ -77,7 +87,7 @@ jobs:
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           model: ${{ inputs.model }}
-          sandbox: danger-full-access
+          sandbox: workspace-write
           safety-strategy: drop-sudo
           output-file: ${{ runner.temp }}/codex-out.txt
           prompt: |

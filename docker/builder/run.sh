@@ -1,13 +1,21 @@
 #!/bin/sh
 # DispatchSEO in-stack builder loop. Polls /api/builder/jobs on the app
-# container, executes each returned job with headless Claude Code inside a
+# container, executes each returned job with a headless coding agent inside a
 # clone of the site's repo, sweeps green guide PRs for auto-merge projects,
 # and reports every outcome to the same cron_runs rails the dashboard
 # banner and alert emails read. POSIX sh - keep it boring.
 #
+# WHICH AGENT is decided per JOB, by the backend, and arrives in the feed
+# alongside the credential for it. The container never chooses - that is the
+# same split the /api/builder/jobs header insists on, and it is what lets one
+# stack host a Claude project and a Codex project at the same time.
+#
 # Env (set via docker-compose from .env):
 #   CRON_SECRET              required - authenticates against the backend
-#   CLAUDE_CODE_OAUTH_TOKEN  required for builds - from `claude setup-token`
+#   CLAUDE_CODE_OAUTH_TOKEN  optional - from `claude setup-token`
+#   OPENAI_API_KEY           optional - from platform.openai.com/api-keys
+#                            (at least one agent credential is needed to build;
+#                             either can come from the dashboard instead)
 #   BUILDER_GH_TOKEN         optional - overrides the wizard's merge token
 #   APP_INTERNAL_URL         default http://app:3000
 #   BUILDER_POLL_SECONDS     default 600 (the backend can lower/raise it)
@@ -148,18 +156,48 @@ run_job() { # run_job <base64 job json>
   DATAFORSEO_PASSWORD=$(echo "$j" | jq -r '.dataforseo.password // empty')
   export SEO_MCP_API_KEY DATAFORSEO_LOGIN DATAFORSEO_PASSWORD
 
-  log "job $key starting (repo $repo)"
+  # Per JOB, not per container: one stack can host projects on different
+  # agents. Older backends send neither field, and for them every job is a
+  # Claude job - which is true, because that is all those backends could
+  # describe.
+  agent=$(echo "$j" | jq -r '.agent // "claude"')
+  agent_token=$(echo "$j" | jq -r '.agent_token // empty')
+  [ -n "$agent_token" ] || agent_token="$RESOLVED_CLAUDE_TOKEN"
+
+  log "job $key starting (repo $repo, agent $agent)"
   dir="/data/repos/$slug"
   if ! sync_repo "$repo" "$dir"; then
     report "$key" fail "could not clone/sync $repo - check the GitHub token's access to it"
     return
   fi
 
-  # MCP config: seo-manager over the internal docker network; the token
-  # rides an env expansion so it never lands on disk. dataforseo joins
-  # only when the project has credentials.
+  # MCP config, in whichever format this job's agent reads: Claude takes JSON,
+  # Codex takes TOML. Either way the token rides an env expansion so it never
+  # lands on disk, and dataforseo joins only when the project has credentials -
+  # a stdio server wired to blank creds is a maybe-crash in every run.
   cfg="/data/mcp/$slug.json"
-  if [ -n "$DATAFORSEO_LOGIN" ]; then
+  codex_home="/data/mcp/codex-$slug"
+  if [ "$agent" = "codex" ]; then
+    mkdir -p "$codex_home"
+    cfg="$codex_home/config.toml"
+    {
+      echo '[mcp_servers.seo-manager]'
+      echo "url = \"$APP/api/mcp\""
+      echo 'bearer_token_env_var = "SEO_MCP_API_KEY"'
+      # Without this every tool call comes back "user cancelled MCP tool call".
+      # There is nobody in a container to approve one, and it is an approval
+      # rather than a permission, so no sandbox setting substitutes for it.
+      echo 'default_tools_approval_mode = "approve"'
+      if [ -n "$DATAFORSEO_LOGIN" ]; then
+        echo ''
+        echo '[mcp_servers.dataforseo]'
+        echo 'command = "npx"'
+        echo 'args = ["-y", "dataforseo-mcp-server@latest"]'
+        echo 'env = { DATAFORSEO_USERNAME = "${DATAFORSEO_LOGIN}", DATAFORSEO_PASSWORD = "${DATAFORSEO_PASSWORD}", ENABLED_MODULES = "SERP,DATAFORSEO_LABS,BACKLINKS" }'
+        echo 'default_tools_approval_mode = "approve"'
+      fi
+    } > "$cfg"
+  elif [ -n "$DATAFORSEO_LOGIN" ]; then
     jq -n --arg url "$APP/api/mcp" '{mcpServers:{
       "seo-manager":{type:"http",url:$url,headers:{Authorization:"Bearer ${SEO_MCP_API_KEY}"}},
       "dataforseo":{type:"stdio",command:"npx",args:["-y","dataforseo-mcp-server@latest"],
@@ -181,19 +219,78 @@ run_job() { # run_job <base64 job json>
   fi
 
   out="/data/logs/$key.$(date -u +%Y%m%d%H%M%S).json"
-  ( cd "$dir" && MCP_TIMEOUT=120000 timeout 5400 \
-      claude -p "$prompt" \
-        --mcp-config "$cfg" \
-        --permission-mode bypassPermissions \
-        --max-turns 150 \
-        --output-format json > "$out" 2>"$out.err" )
-  rc=$?
-  msg=$(jq -r 'if type=="array" then .[] else . end | select(.type?=="result") | (.result // .error // empty)' "$out" 2>/dev/null | tail -c 400)
-  [ -n "$msg" ] || msg=$(tail -c 400 "$out.err" 2>/dev/null)
+  if [ "$agent" = "codex" ]; then
+    # `codex exec` needs an explicit login: OPENAI_API_KEY in the environment
+    # alone is NOT enough - it 401s against /v1/responses until auth.json
+    # exists inside CODEX_HOME. Written per job because CODEX_HOME is per
+    # project here, and it is the only scoping Codex offers.
+    #
+    # This puts the key on disk in PLAINTEXT, which the Claude branch below
+    # never does - it passes its token through the environment and nothing
+    # persists. /data is a docker volume that outlives the container, so the
+    # file is deleted as soon as the run finishes (below), including when
+    # `timeout` kills it. A hard container kill would still leave it, so this
+    # narrows the window rather than closing it - the key is held encrypted in
+    # instance_settings either way, and the point is not to leave a second
+    # readable copy sitting in a volume backup.
+    ( printf '%s' "$agent_token" | CODEX_HOME="$codex_home" codex login --with-api-key >/dev/null 2>&1 )
+    # No --max-turns equivalent exists (OpenAI closed the request for one as
+    # not-planned), so the timeout below is the only ceiling - same 90 minutes
+    # the Claude branch gets.
+    ( cd "$dir" && OPENAI_API_KEY="$agent_token" CODEX_HOME="$codex_home" timeout 5400 \
+        codex exec "$prompt" \
+          --sandbox danger-full-access \
+          --skip-git-repo-check \
+          --model "${CODEX_MODEL:-gpt-5}" \
+          -o "$out.msg" > "$out" 2>"$out.err" )
+    rc=$?
+    # Before any classification branch, all of which can `return`.
+    rm -f "$codex_home/auth.json"
+    msg=$(tail -c 400 "$out.msg" 2>/dev/null)
+    [ -n "$msg" ] || msg=$(tail -c 400 "$out.err" 2>/dev/null)
+  else
+    ( cd "$dir" && MCP_TIMEOUT=120000 CLAUDE_CODE_OAUTH_TOKEN="$agent_token" timeout 5400 \
+        claude -p "$prompt" \
+          --mcp-config "$cfg" \
+          --permission-mode bypassPermissions \
+          --max-turns 150 \
+          --output-format json > "$out" 2>"$out.err" )
+    rc=$?
+    msg=$(jq -r 'if type=="array" then .[] else . end | select(.type?=="result") | (.result // .error // empty)' "$out" 2>/dev/null | tail -c 400)
+    [ -n "$msg" ] || msg=$(tail -c 400 "$out.err" 2>/dev/null)
+  fi
 
   if [ "$rc" = "0" ]; then
     log "job $key done"
     report "$key" ok
+  elif [ "$agent" = "codex" ]; then
+    # Codex collapses every 429 into one message, so its text cannot tell a
+    # transient rate limit from an account with no credit left. Guessing wrong
+    # in the generous direction would report green forever while building
+    # nothing, so ask OpenAI and branch on error.code, which is authoritative.
+    if echo "$msg" | grep -qiE '429|too many requests|exceeded retry limit|usage limit|rate.?limit'; then
+      pcode=$(curl -s --max-time 30 -o /tmp/probe.json -w "%{http_code}" https://api.openai.com/v1/responses \
+        -H "Authorization: Bearer $agent_token" -H "Content-Type: application/json" \
+        -d '{"model":"gpt-5-mini","input":"ok","max_output_tokens":16}') || pcode=000
+      perr=$(jq -r '.error.code // empty' /tmp/probe.json 2>/dev/null)
+      case "$pcode:$perr" in
+        2*:*|429:rate_limit_exceeded)
+          log "job $key deferred - Codex rate limit (clears by itself)"
+          report "$key" ok
+          return ;;
+        429:*|402:*)
+          log "job $key FAILED - OpenAI account out of credit ($perr)"
+          report "$key" fail "your OpenAI account cannot run builds (OpenAI said: ${perr:-quota exceeded}). This does not fix itself by retrying - add credit at platform.openai.com/settings/organization/billing."
+          return ;;
+        401:*|403:*)
+          log "job $key FAILED - OpenAI rejected the key"
+          report "$key" fail "OpenAI rejected the API key (HTTP $pcode). Paste a fresh one on the dashboard's automatic-builds card, or set OPENAI_API_KEY in .env."
+          return ;;
+      esac
+    fi
+    [ -n "$msg" ] || msg="codex exited $rc (see $out in the dispatch-builder volume)"
+    log "job $key FAILED: $msg"
+    report "$key" fail "$msg"
   elif echo "$msg" | grep -qiE 'usage limit|limit reached|rate.?limit'; then
     # A usage-limit hit is a deferral, not a failure - the next due window
     # retries, exactly like the cloud workflow's 12:00/19:00 reruns.
@@ -231,11 +328,12 @@ set_git_identity() { # commit as the GH_TOKEN's real user, cached per token
   fi
 }
 
-# Remember which Claude token source we booted with. The loop exports the
-# resolved token for the agent, and without this sentinel that export would
-# make every later iteration take the env branch - so a token rotated on
-# the dashboard would never be picked up until a container restart.
+# Remember which token sources we booted with. The loop exports the resolved
+# token per job, and without these sentinels that export would make every later
+# iteration take the env branch - so a token rotated on the dashboard would
+# never be picked up until a container restart.
 ENV_CLAUDE_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN:-}"
+ENV_OPENAI_KEY="${OPENAI_API_KEY:-}"
 
 while :; do
   # A non-claiming poll FIRST: it carries the tokens (gh + claude) and never
@@ -247,26 +345,46 @@ while :; do
     sleep 60; continue
   fi
 
-  # The Claude Code OAuth token. The container's own env wins (classic
-  # installs that set CLAUDE_CODE_OAUTH_TOKEN in .env); otherwise the
-  # wizard-stored token the backend just handed us - so owners who paste it
-  # on the dashboard's automatic-builds step never touch .env or hunt for the
-  # install folder. Poll every 5 min while unconfigured so a freshly pasted
-  # token goes live quickly, instead of the long idle a settled builder uses.
-  CLAUDE_TOK="${ENV_CLAUDE_TOKEN:-$(echo "$probe" | jq -r '.claude_token // empty')}"
-  case "$CLAUDE_TOK" in
-    "") log "idle - no Claude token yet. Paste it on the dashboard's 'Turn on automatic builds' step (or set CLAUDE_CODE_OAUTH_TOKEN in .env)."
-       sleep 300; continue ;;
-    *PASTE-YOUR-TOKEN*) log "idle - the token is still the placeholder; paste the real sk-ant-oat... token on the dashboard's automatic-builds step."
-       sleep 300; continue ;;
-    sk-ant-oat*) : ;;
-    *) log "idle - that doesn't look like a Claude Code OAuth token (expected sk-ant-oat...); re-run 'claude setup-token' and paste it again."
-       sleep 300; continue ;;
-  esac
-  export CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_TOK"
+  # Agent credentials. The container's own env wins (classic installs that set
+  # them in .env); otherwise whatever the backend just handed us - so owners who
+  # paste a key on the dashboard's automatic-builds step never touch .env or
+  # hunt for the install folder.
+  #
+  # Per agent, not one gate for the whole loop. A stack holding only an OpenAI
+  # key used to sit idle forever waiting for a Claude token it was never going
+  # to get, and the log line told it to go paste the wrong one.
+  CLAUDE_TOK="${ENV_CLAUDE_TOKEN:-$(echo "$probe" | jq -r '.claude_token // .agent_tokens.claude // empty')}"
+  OPENAI_TOK="${ENV_OPENAI_KEY:-$(echo "$probe" | jq -r '.agent_tokens.codex // empty')}"
+  RESOLVED_CLAUDE_TOKEN="$CLAUDE_TOK"
 
-  # Token good - now claim real work.
-  feed=$(curl -s --max-time 60 -H "Authorization: Bearer ${CRON_SECRET}" "$APP/api/builder/jobs?claim=1")
+  # A placeholder or a wrong-shaped paste is the common failure, and it must be
+  # named rather than silently treated as absent - "idle, no token" when a
+  # token IS pasted sends people hunting in the wrong place.
+  AGENTS=""
+  case "$CLAUDE_TOK" in
+    "") : ;;
+    *PASTE-YOUR-TOKEN*) log "the Claude token is still the placeholder; paste the real sk-ant-oat... token on the dashboard's automatic-builds step." ;;
+    sk-ant-oat*) AGENTS="claude" ;;
+    *) log "that doesn't look like a Claude Code OAuth token (expected sk-ant-oat...); re-run 'claude setup-token' and paste it again." ;;
+  esac
+  case "$OPENAI_TOK" in
+    "") : ;;
+    sk-*) AGENTS="${AGENTS:+$AGENTS,}codex" ;;
+    *) log "that doesn't look like an OpenAI API key (expected sk-...); create one at platform.openai.com/api-keys and paste it again." ;;
+  esac
+
+  if [ -z "$AGENTS" ]; then
+    # Poll every 5 min while unconfigured so a freshly pasted key goes live
+    # quickly, instead of the long idle a settled builder uses.
+    log "idle - no coding-agent credential yet. Paste one on the dashboard's 'Turn on automatic builds' step (or set CLAUDE_CODE_OAUTH_TOKEN or OPENAI_API_KEY in .env)."
+    sleep 300; continue
+  fi
+
+  # Credential good - now claim real work, declaring which agents this container
+  # can actually execute. The backend hands out nothing outside that set, so a
+  # job is never claimed (burning its cadence window) for an agent we could not
+  # have run.
+  feed=$(curl -s --max-time 60 -H "Authorization: Bearer ${CRON_SECRET}" "$APP/api/builder/jobs?claim=1&agents=$AGENTS")
   if [ -z "$feed" ] || ! echo "$feed" | jq -e . >/dev/null 2>&1; then
     log "backend not reachable yet - retrying in 60s"
     sleep 60; continue

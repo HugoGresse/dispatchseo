@@ -8,16 +8,25 @@
 // a second agent means every one of those has to ask the same question in the
 // same place instead of assuming an answer.
 //
-// This file is deliberately introduced with ONE agent registered. Nothing about
-// Claude's behaviour changes: every field below returns exactly what the
-// hardcoded path returned, so the seam can land and be proven byte-identical
-// before a second agent exists. See docs-private/CODEX_SUPPORT_PLAN.md.
+// It landed with ONE agent registered so the seam could be proven
+// byte-identical to the hardcoded path before a second agent existed. Codex is
+// now the second, and that guarantee did not lapse: scripts/agent-golden.mjs
+// still diffs every Claude string on every push, and the Claude block of
+// test/golden/agent-commands.json is unchanged since the day it was written.
+// See docs-private/CODEX_SUPPORT_PLAN.md.
+//
+// Adding a third agent is one object in this file - plus its golden entry, so a
+// later refactor cannot quietly rewrite a command someone pastes into a
+// terminal. docs/AGENTS.md is the contributor-facing version of that bar.
 //
 // CLIENT-SAFE. The onboarding wizard builds connect commands in the browser, so
 // nothing here may import db.ts, github-app.ts, or any server-only module -
 // same constraint mcp-connect.ts documents.
 
 import {
+  codexConnectCommand,
+  codexConnectCommandPS,
+  codexMcpAddCommand,
   connectCommand,
   connectCommandPS,
   mcpAddCommand,
@@ -37,8 +46,31 @@ export type AgentDefinition = {
   id: AgentId;
   /** Shown wherever the owner picks or reviews their agent. */
   displayName: string;
+  /** The executable on PATH. setup.sh checks for it; the docs name it. */
+  cli: string;
   /** Where to send someone who does not have this agent installed yet. */
   installDocsPath: string;
+  /** Where the vendor's own install instructions live. */
+  installUrl: string;
+
+  /**
+   * What this agent can actually do here TODAY, not what it will do when the
+   * next phase lands. Every surface that offers the agent reads this rather
+   * than assuming parity, because a capability that is offered and silently
+   * absent is the worst failure this product has - see the no-silent-failures
+   * rule. A false here must be visible in the UI, in the agent's own words.
+   */
+  capabilities: {
+    /** Connects over MCP: full dashboard-parity tool set, interactive workflows. */
+    mcp: boolean;
+    /** Runs the unattended builders (GitHub Actions / the docker builder). */
+    headlessBuilder: boolean;
+    /** One line naming whatever is false above. Empty when everything is true. */
+    caveat: string;
+  };
+
+  /** Starts an interactive session already holding a prompt. */
+  launch: (prompt: string) => string;
 
   connect: {
     /** Per-project MCP server name, unique so two projects never shadow each other. */
@@ -61,6 +93,14 @@ export type AgentDefinition = {
   credential: {
     /** The Actions secret the CI builders read. */
     repoSecretName: string;
+    /**
+     * The process env var the docker stack can supply instead of the stored
+     * value. Spelled the same as repoSecretName for both agents today, but kept
+     * separate on purpose: they answer different questions (what GitHub calls
+     * it vs what the container reads), and collapsing them would make a future
+     * divergence a silent wrong-credential bug rather than a type error.
+     */
+    envVar: string;
     /** The instance_settings column the docker builder's poll feed reads. */
     instanceSettingsColumn: string;
     /** Placeholder for the paste box, so a wrong paste is obvious before it is stored. */
@@ -82,7 +122,15 @@ export type AgentDefinition = {
 const claude: AgentDefinition = {
   id: "claude",
   displayName: "Claude Code",
+  cli: "claude",
   installDocsPath: "/docs/install-claude-code",
+  installUrl: "https://claude.com/claude-code",
+  capabilities: {
+    mcp: true,
+    headlessBuilder: true,
+    caveat: "",
+  },
+  launch: (prompt) => `claude "${prompt}"`,
   connect: {
     serverName: mcpServerName,
     bash: connectCommand,
@@ -96,6 +144,7 @@ const claude: AgentDefinition = {
   },
   credential: {
     repoSecretName: "CLAUDE_CODE_OAUTH_TOKEN",
+    envVar: "CLAUDE_CODE_OAUTH_TOKEN",
     instanceSettingsColumn: "builder_claude_token",
     placeholder: "sk-ant-oat...",
     // Shape only. The prefix is the single highest-value check there is: the
@@ -110,13 +159,67 @@ const claude: AgentDefinition = {
   },
 };
 
+// Codex. Every field below is measured against codex-cli 0.146.0 rather than
+// read off documentation - the connect syntax, the absence of a scope flag, the
+// fact that re-adding overwrites instead of erroring, and the tool count that
+// actually arrives (all of them, nothing dropped by its schema validator). See
+// docs-private/CODEX_FACTS.md for the runs behind each one.
+const codex: AgentDefinition = {
+  id: "codex",
+  displayName: "Codex",
+  cli: "codex",
+  installDocsPath: "/docs/install-codex",
+  installUrl: "https://developers.openai.com/codex/cli",
+  capabilities: {
+    mcp: true,
+    // True since 2026-07-30. Every seo-* workflow template now carries both
+    // agents and resolves which to run from the dashboard at run time, and the
+    // docker builder takes the agent per JOB off its poll feed. What made this
+    // safe to flip was not the wiring but the classifier: Codex collapses every
+    // 429 into one message, so a text-matching classifier would have read an
+    // unfunded account as a quiet deferral and reported green forever while
+    // building nothing. Both runners now ask OpenAI for error.code instead.
+    headlessBuilder: true,
+    caveat: "",
+  },
+  launch: (prompt) => `codex "${prompt}"`,
+  connect: {
+    serverName: mcpServerName,
+    bash: codexConnectCommand,
+    // Same string. Codex's connect has no header to quote and nothing to chain,
+    // so the paste that works in bash works unchanged in PowerShell - which is
+    // the reason the URL-key form was chosen over --bearer-token-env-var.
+    powershell: codexConnectCommandPS,
+    mcpAddBash: codexMcpAddCommand,
+    mcpAddPowershell: codexMcpAddCommand,
+  },
+  setup: {
+    bash: (slug, origin, token, bundled) => setupCommand(slug, origin, token, bundled, "codex"),
+    powershell: (slug, origin, token, bundled) =>
+      setupCommandPS(slug, origin, token, bundled, "codex"),
+  },
+  credential: {
+    repoSecretName: "OPENAI_API_KEY",
+    envVar: "OPENAI_API_KEY",
+    instanceSettingsColumn: "builder_openai_key",
+    placeholder: "sk-...",
+    // Shape only, and deliberately loose: OpenAI ships several prefixes
+    // (sk-proj-, sk-svcacct-, plain sk-) and adds more. Rejecting a real key
+    // because the prefix list went stale is worse than letting the real network
+    // check downstream be the one that says no.
+    looksValid: (v) => v.startsWith("sk-") && v.length > 20,
+    howToMint:
+      "Create a key at platform.openai.com/api-keys. A project key is fine; it must belong to an account with credit on it.",
+  },
+  cost: {
+    model: "metered",
+    note: "Runs on your own OpenAI API key - OpenAI bills you per run, and nothing is billed by DispatchSEO.",
+  },
+};
+
 const REGISTRY: Record<AgentId, AgentDefinition | undefined> = {
   claude,
-  // Codex lands here once the Phase 0 spike has answered how it actually
-  // behaves - its connect syntax, config scoping, sandbox needs, and quota
-  // failure text. Registering it from guessed documentation would produce
-  // something that compiles, ships, and fails on the first real run.
-  codex: undefined,
+  codex,
 };
 
 /** Every agent that can actually be selected today. */

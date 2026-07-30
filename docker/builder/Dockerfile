@@ -1,10 +1,16 @@
-# The in-stack builder: headless Claude Code + git + gh, polling the app
+# The in-stack builder: a headless coding agent + git + gh, polling the app
 # container for due jobs (daily guide, weekly research, tool builds,
 # geo-scan) and executing them right next to the backend - the Docker
 # replacement for the GitHub-Actions schedules, which cannot call back into
 # a localhost instance. All scheduling brains live in the backend
 # (/api/builder/jobs); this image is a dumb executor on purpose, so cadence
 # and prompt changes never require rebuilding it.
+#
+# BOTH tier-1 agent CLIs are baked in. That costs image size for something most
+# stacks use half of, and it is still the right trade: the agent is a per-PROJECT
+# setting, so one stack can legitimately need both at once, and switching a
+# project's agent on the dashboard has to work without the owner re-pulling an
+# image and reading a migration note to find out why builds stopped.
 FROM node:22-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -18,12 +24,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # corepack gives the agent pnpm/yarn shims for whatever stack the site repo
 # uses when the instructions say "run the repo's build to verify".
-RUN npm install -g @anthropic-ai/claude-code && corepack enable
+RUN npm install -g @anthropic-ai/claude-code @openai/codex && corepack enable
 
 COPY run.sh /usr/local/bin/run.sh
 
 # Claude Code refuses permission-bypass as root, same as on CI runners -
 # run as the image's unprivileged user, with all state on the /data volume.
+# Codex needs a writable home for the same reason: `codex login --with-api-key`
+# writes auth.json under CODEX_HOME, which run.sh points at /data per project.
 RUN mkdir -p /data && chown -R node:node /data
 USER node
 ENV HOME=/data

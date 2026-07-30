@@ -1,4 +1,5 @@
 import { effectiveAutomations, getProjectByToken, internalLinkingEnabled } from "@/lib/projects";
+import { projectAgent } from "@/lib/agents";
 import { db } from "@/lib/db";
 import pack from "@/lib/pipeline-pack.json";
 
@@ -80,6 +81,15 @@ export async function GET(req: Request) {
   return Response.json({
     slug: project.slug,
     mode: project.mode,
+    // Which coding agent this project's builders run. Served here rather than
+    // baked into the workflow files at install time, for the same reason the
+    // pnpm pin is resolved at run time: an install-time edit is a decision
+    // someone has to remember, and the failure mode when they don't is a
+    // builder that runs the wrong agent every night. Switching agent on the
+    // dashboard therefore takes effect on the next scheduled run with no repo
+    // change at all. Workflows fall back to secret-presence when this field is
+    // absent, so a repo installed against an older backend keeps working.
+    agent: projectAgent(project).id,
     automations: effectiveAutomations(project),
     // Deliberately OUTSIDE `automations`: this is not an automation level, it
     // is permission to edit already-published pages, and the auto-merge

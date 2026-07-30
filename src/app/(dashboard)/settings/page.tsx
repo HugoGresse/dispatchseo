@@ -1,9 +1,10 @@
 import { requireDashboard } from "@/lib/auth-gate";
 import { headers } from "next/headers";
 import { instanceCronSecret } from "@/lib/dashboard-auth";
-import { mcpAddCommand, mcpAddCommandPS } from "@/lib/mcp-connect";
 import { requestOrigin } from "@/lib/request-origin";
-import { ShellCommandTabs } from "@/components/shell-command-tabs";
+import { AgentConnectTabs } from "@/components/agent-connect-tabs";
+import { AgentSwitch } from "@/components/agent-switch";
+import { projectAgent } from "@/lib/agents";
 import { getActiveProjectOrNull } from "@/lib/active-project";
 import { credsForProject } from "@/lib/dataforseo";
 import { DEFAULT_PROJECT_ID, fetchProjectToken } from "@/lib/projects";
@@ -148,13 +149,16 @@ export default async function SettingsPage() {
 
   const isDefault = project.id === DEFAULT_PROJECT_ID;
   const mcpToken = await fetchProjectToken(project.id);
-  // Whether a Claude Code token is already stored on the repo, so Settings can
-  // say "you're done, this is only for rotating" instead of looking like a
-  // required first-time setup. GitHub never returns secret values, only
-  // existence; fail closed (treat as not-set) on any error.
-  const claudeTokenSet =
+  // Whether THIS project's agent already has its credential stored on the repo,
+  // so Settings can say "you're done, this is only for rotating" instead of
+  // looking like a required first-time setup. Keyed off the project's agent
+  // rather than Claude's secret name: after a switch to Codex, checking for a
+  // Claude token would report "connected" off a secret nothing reads any more.
+  // GitHub never returns secret values, only existence; fail closed on error.
+  const agent = projectAgent(project);
+  const agentCredentialSet =
     isCloudMode() && project.github_installation_id
-      ? await hasRepoSecret(project, "CLAUDE_CODE_OAUTH_TOKEN").catch(() => false)
+      ? await hasRepoSecret(project, agent.credential.repoSecretName).catch(() => false)
       : false;
   // Self-host only: the cron secret is INSTANCE-wide, not per-project, so in
   // cloud it would hand every tenant the platform's own key. Null on a classic
@@ -230,22 +234,33 @@ export default async function SettingsPage() {
 
       {isCloudMode() && project.github_installation_id ? (
         <section className="space-y-3">
-          <SectionTitle sub="the token builds run on - rotate it here whenever it expires or gets revoked">
-            Claude Code token
+          <SectionTitle sub="the credential builds run on - rotate it here whenever it expires or gets revoked">
+            {agent.displayName} credential
           </SectionTitle>
-          <ClaudeTokenConnect connected={claudeTokenSet} slug={project.slug} />
+          <ClaudeTokenConnect
+            agent={agent.id}
+            connected={agentCredentialSet}
+            slug={project.slug}
+          />
         </section>
       ) : null}
 
+      <section className="space-y-3">
+        <SectionTitle sub="which agent your scheduled builders run - not which agent you use day to day">
+          Coding agent
+        </SectionTitle>
+        <AgentSwitch current={agent.id} slug={project.slug} />
+      </section>
+
       {mcpToken ? (
         <section className="space-y-3">
-          <SectionTitle sub="what the CI workflows and Claude Code use to talk to this project - every call made with it only sees this project's data">
+          <SectionTitle sub="what the CI workflows and your coding agent use to talk to this project - every call made with it only sees this project's data">
             Project key
           </SectionTitle>
           <CopyBlock text={mcpToken} />
           <p className="text-sm text-neutral-400">
-            Connect Claude Code to this project (the server name carries the project slug, so
-            every connected site keeps its own entry):
+            Connect your coding agent to this project (the server name carries the project slug,
+            so every connected site keeps its own entry):
           </p>
           <p className="text-sm text-neutral-500">
             Once connected, your agent can drive everything the dashboard does -{" "}
@@ -255,13 +270,14 @@ export default async function SettingsPage() {
               rel="noopener noreferrer"
               className="text-violet-400 underline underline-offset-2 hover:text-violet-300"
             >
-              all 52 tools are documented here
+              every tool is documented here
             </a>
             .
           </p>
-          <ShellCommandTabs
-            bash={mcpAddCommand(project.slug, dashOrigin, mcpToken)}
-            powershell={mcpAddCommandPS(project.slug, dashOrigin, mcpToken)}
+          <AgentConnectTabs
+            slug={project.slug}
+            origin={dashOrigin}
+            token={mcpToken}
             box="card"
           />
         </section>

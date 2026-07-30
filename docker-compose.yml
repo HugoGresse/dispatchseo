@@ -19,12 +19,15 @@ name: dispatchseo
 #   app       - the Next.js dashboard + MCP server + cron endpoints
 #   cron      - BusyBox crond that curls the app's cron endpoints on the same
 #               schedules Vercel/GitHub Actions use for the cloud deployment
-#   builder   - headless Claude Code executor: polls the app for due content
+#   builder   - headless coding-agent executor: polls the app for due content
 #               jobs (daily guide, weekly research, tool builds, geo-scan)
 #               and runs them in-stack, so the pipeline works without any
-#               public URL. Idles politely until a Claude token exists - paste
-#               it on the dashboard's "Turn on automatic builds" step
-#               (easiest), or set CLAUDE_CODE_OAUTH_TOKEN in .env to override.
+#               public URL. Which agent runs a job comes from the PROJECT, so
+#               one stack can host a Claude site and a Codex site at once.
+#               Idles politely until at least one agent credential exists -
+#               paste it on the dashboard's "Turn on automatic builds" step
+#               (easiest), or set CLAUDE_CODE_OAUTH_TOKEN / OPENAI_API_KEY in
+#               .env to override.
 
 services:
   postgres:
@@ -150,6 +153,10 @@ services:
       CRON_SECRET: "${CRON_SECRET:?set CRON_SECRET in .env (generate one with openssl rand -hex 24)}"
       APP_INTERNAL_URL: http://app:3000
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+      # Both optional, and both are checked: the builder runs whichever agent
+      # each project asks for, so a stack needs a credential per agent it
+      # actually hosts - not one blessed credential for the whole instance.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       BUILDER_GH_TOKEN: ${BUILDER_GH_TOKEN:-}
       BUILDER_POLL_SECONDS: ${BUILDER_POLL_SECONDS:-600}
     volumes:

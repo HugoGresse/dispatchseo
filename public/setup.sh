@@ -1,16 +1,22 @@
 #!/bin/bash
 # DispatchSEO one-command setup.
 # Run from INSIDE your website's repo, with the line your dashboard gives you:
-#   curl -fsSL https://dispatchseo.com/setup.sh | bash -s -- <project-key> <slug> [backend-url] [bundled]
+#   curl -fsSL https://dispatchseo.com/setup.sh | bash -s -- <project-key> <slug> [backend-url] [bundled] [agent]
 #
-# What it does, in order: checks your folder + tools, connects Claude Code in
-# this folder to your DispatchSEO project, saves the GitHub Actions secrets
-# (each value VERIFIED before it is stored), enables PR permissions, then
-# hands off to your own Claude Code to install the pipeline.
+# What it does, in order: checks your folder + tools, connects your coding
+# agent in this folder to your DispatchSEO project, saves the GitHub Actions
+# secrets (each value VERIFIED before it is stored), enables PR permissions,
+# then hands off to that agent.
 #
 # Every value is verified before it is saved - this script prefers stopping
 # loudly over storing something broken. Reads answers from /dev/tty so it
 # works when piped from curl.
+#
+# AGENT (5th argument, default claude) picks which coding agent gets connected
+# and which builder credential is collected. It defaults so that every command
+# handed out before this argument existed keeps doing exactly what it did.
+# Both agents get the same pipeline: the workflow files carry both and resolve
+# which to run from the dashboard at run time.
 
 set -o pipefail
 
@@ -18,6 +24,13 @@ TOKEN="${1:-}"
 SLUG="${2:-project}"
 BASE="${3:-https://dispatchseo.com}"
 BUNDLED="${4:-0}"
+AGENT="${5:-claude}"
+
+case "$AGENT" in
+  claude) AGENT_CLI="claude"; AGENT_NAME="Claude Code" ;;
+  codex)  AGENT_CLI="codex";  AGENT_NAME="Codex" ;;
+  *) printf '\n!! Unknown agent "%s". Supported: claude, codex.\n\n' "$AGENT"; exit 1 ;;
+esac
 
 say() { printf '%s\n' "$*"; }
 hr()  { say "-----------------------------------------------"; }
@@ -49,8 +62,12 @@ ask
 # ---- 2. Tools --------------------------------------------------------------
 say ""
 say "Step 2 of 5 - checking your tools."
-command -v claude >/dev/null 2>&1 || \
-  die "Claude Code isn't installed. Install it first (https://claude.com/claude-code), then rerun."
+if ! command -v "$AGENT_CLI" >/dev/null 2>&1; then
+  case "$AGENT" in
+    claude) die "Claude Code isn't installed. Install it first (https://claude.com/claude-code), then rerun." ;;
+    codex)  die "Codex isn't installed. Install it first (npm i -g @openai/codex, or see https://developers.openai.com/codex/cli), then rerun." ;;
+  esac
+fi
 command -v gh >/dev/null 2>&1 || \
   die "The GitHub CLI (gh) isn't installed. Install it (macOS: brew install gh), run 'gh auth login', then rerun."
 gh auth status >/dev/null 2>&1 || \
@@ -59,7 +76,14 @@ say "  All tools present."
 
 # ---- 3. Connect Claude Code to your project --------------------------------
 say ""
-say "Step 3 of 5 - connecting Claude Code in this folder to your project."
+# "in this folder" is Claude's line and stays exactly as it was - it is true
+# because of --scope local. Codex must NOT claim it: its config is global, and
+# the per-project server name is what keeps two sites apart.
+if [ "$AGENT" = "claude" ]; then
+  say "Step 3 of 5 - connecting $AGENT_NAME in this folder to your project."
+else
+  say "Step 3 of 5 - connecting $AGENT_NAME to your project."
+fi
 code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 -X POST "$BASE/api/mcp" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
@@ -68,22 +92,39 @@ code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 -X POST "$BASE/api/m
 [ "$code" = "200" ] || \
   die "Your project key was rejected (HTTP $code). Keys change when a project is recreated - copy the CURRENT command from the dashboard and run it instead."
 NAME="dispatchseo-$SLUG"
-# --scope local pins this connection to THIS folder. Without it a connection
-# can end up at user scope and leak into every project the owner opens
-# Claude Code in - an owner with several projects connected would then have
-# all of them active at once in an unrelated repo, and the install
-# workflow's repo-remote check would keep failing against the wrong
-# project's token. Scope local on both remove and add so a stray user-scope
-# entry from an older run gets found and cleaned up too.
-claude mcp remove --scope local "$NAME" >/dev/null 2>&1
-claude mcp remove --scope user "$NAME" >/dev/null 2>&1
-# Name immediately after `add`: the CLI's parser is order-fragile
-# (anthropics/claude-code#2341 - options before the name can throw
-# "missing required argument 'name'").
-claude mcp add "$NAME" "$BASE/api/mcp" --transport http --scope local \
-  --header "Authorization: Bearer $TOKEN" >/dev/null 2>&1 || \
-  die "Could not add the connection to Claude Code (claude mcp add failed)."
+if [ "$AGENT" = "claude" ]; then
+  # --scope local pins this connection to THIS folder. Without it a connection
+  # can end up at user scope and leak into every project the owner opens
+  # Claude Code in - an owner with several projects connected would then have
+  # all of them active at once in an unrelated repo, and the install
+  # workflow's repo-remote check would keep failing against the wrong
+  # project's token. Scope local on both remove and add so a stray user-scope
+  # entry from an older run gets found and cleaned up too.
+  claude mcp remove --scope local "$NAME" >/dev/null 2>&1
+  claude mcp remove --scope user "$NAME" >/dev/null 2>&1
+  # Name immediately after `add`: the CLI's parser is order-fragile
+  # (anthropics/claude-code#2341 - options before the name can throw
+  # "missing required argument 'name'").
+  claude mcp add "$NAME" "$BASE/api/mcp" --transport http --scope local \
+    --header "Authorization: Bearer $TOKEN" >/dev/null 2>&1 || \
+    die "Could not add the connection to Claude Code (claude mcp add failed)."
+else
+  # Codex has no scope flag at all - `codex mcp add` always writes the config
+  # Codex calls global. The per-project server NAME is what keeps two projects
+  # from shadowing each other, and every prompt we hand the agent names its
+  # server literally. No remove step: unlike Claude's, this add overwrites an
+  # existing entry of the same name instead of erroring.
+  #
+  # The key rides in the URL rather than in --bearer-token-env-var, which takes
+  # the NAME of an environment variable - that variable would then have to
+  # exist in every shell the owner ever launches Codex from, and a missing one
+  # fails at tool-call time with nothing pointing at the cause.
+  codex mcp add "$NAME" --url "$BASE/api/mcp?key=$TOKEN" >/dev/null 2>&1 || \
+    die "Could not add the connection to Codex (codex mcp add failed). Check 'codex --version' - the mcp subcommand needs a recent build."
+fi
 say "  Connected (key verified against the server)."
+[ "$AGENT" = "codex" ] && \
+  say "  Tired of approving every call? $BASE/docs/install-codex shows the one config line that stops the prompts for this server."
 
 # Let the agent actually use gh. Claude Code gates terminal commands, and gh
 # is not allowed by default - so the install agent's FIRST step (gh auth
@@ -97,10 +138,17 @@ say "  Connected (key verified against the server)."
 # Additive on purpose: an existing settings.local.json belongs to the owner,
 # so we merge into it and never clobber it. Without a JSON tool we print the
 # line instead of risking their file.
+#
+# Claude only. Codex has no permissions file to pre-write: it asks for approval
+# at the moment it wants to run something and the owner answers, so there is no
+# dead stop to prevent - and writing an allowlist for an agent that does not
+# read one would be a comforting no-op.
 SETTINGS=".claude/settings.local.json"
 GH_RULE='Bash(gh *)'
-mkdir -p .claude 2>/dev/null
-if [ ! -f "$SETTINGS" ]; then
+[ "$AGENT" = "claude" ] && mkdir -p .claude 2>/dev/null
+if [ "$AGENT" != "claude" ]; then
+  say "  $AGENT_NAME asks before it runs a command - approve the gh ones when it does."
+elif [ ! -f "$SETTINGS" ]; then
   ( printf '%s\n' '{' '  "permissions": {' '    "allow": ["Bash(gh *)"]' '  }' '}' > "$SETTINGS" ) 2>/dev/null \
     && say "  Allowed Claude Code to run gh in this folder ($SETTINGS)." \
     || say "  ! Could not write $SETTINGS - if the agent stalls on a gh command, add \"$GH_RULE\" to its permissions.allow."
@@ -137,6 +185,59 @@ say "Step 4 of 5 - the GitHub secrets your automations run on."
 printf '%s' "$TOKEN" | gh secret set SEO_MCP_API_KEY --repo "$REPO" || \
   die "Could not save a secret to $REPO - does your GitHub login have admin access to it?"
 say "  Project key saved."
+
+# The builder credential, per agent. Both are VERIFIED against the real
+# provider before they are stored - the rule everywhere in this script - because
+# a saved-but-broken credential reads as "automatic builds are set up" and only
+# announces itself as a failed run at 05:13 the next morning.
+if [ "$AGENT" = "codex" ]; then
+  say ""
+  if gh secret list --repo "$REPO" 2>/dev/null | grep -q "^OPENAI_API_KEY"; then
+    say "  An OpenAI key is already saved for this repo."
+    say "  Keep it? [y = keep / n = replace with a different one]"
+    ask
+  else
+    REPLY="n"
+  fi
+  if [ "$REPLY" != "y" ] && [ "$REPLY" != "Y" ]; then
+    say ""
+    say "  Your builders run on your own OpenAI API key - OpenAI bills you"
+    say "  per run, and nothing is billed by DispatchSEO."
+    say ""
+    say "  Create a key at https://platform.openai.com/api-keys (it must be on"
+    say "  an account with credit on it), paste it here and press Enter."
+    say "  It won't be shown:"
+    while true; do
+      read -r -s OKEY < /dev/tty
+      say ""
+      OKEY=$(printf '%s' "$OKEY" | tr -d '[:space:]')
+      case "$OKEY" in
+        sk-*)
+          [ "${#OKEY}" -gt 20 ] && break
+          say "  That looks too short - paste the WHOLE key and press Enter." ;;
+        "") say "  Nothing pasted. Copy the key and press Enter." ;;
+        *)  say "  An OpenAI key starts with sk-. Copy just the key and press Enter." ;;
+      esac
+    done
+    say "  Verifying the key against OpenAI..."
+    # A real inference call, not a models list: an unfunded account happily
+    # lists models it cannot call, so anything cheaper than this would pass a
+    # key that then fails on the first real build.
+    ocode=$(curl -s --max-time 30 -o /tmp/dispatchseo-openai.json -w "%{http_code}" \
+      https://api.openai.com/v1/responses \
+      -H "Authorization: Bearer $OKEY" -H "Content-Type: application/json" \
+      -d '{"model":"gpt-5-mini","input":"ok","max_output_tokens":16}')
+    oerr=$(grep -o '"code": *"[^"]*"' /tmp/dispatchseo-openai.json 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+    rm -f /tmp/dispatchseo-openai.json
+    case "$ocode" in
+      2*) printf '%s' "$OKEY" | gh secret set OPENAI_API_KEY --repo "$REPO"
+          say "  OpenAI key verified and saved." ;;
+      401|403) die "OpenAI rejected that key. Copy it again from platform.openai.com/api-keys - a key is only shown once, so a half-copied one is the usual cause." ;;
+      429) die "That key is real but the account can't run anything right now (OpenAI said: ${oerr:-quota exceeded}). Add credit at platform.openai.com/settings/organization/billing, then run this script again." ;;
+      *)  die "Couldn't reach OpenAI to verify the key (HTTP $ocode). Check your connection and run this script again." ;;
+    esac
+  fi
+else
 
 # Claude Code token - minted fresh, verified with NO login fallback (a fake
 # HOME), because a keychain login otherwise masks a bad token.
@@ -186,6 +287,8 @@ if [ "$REPLY" != "y" ] && [ "$REPLY" != "Y" ]; then
     die "The token doesn't work - usually the browser approved the WRONG account. Log into your subscription account on claude.ai and run this script again."
   fi
 fi
+
+fi  # end of the per-agent builder-credential branch
 
 # DataForSEO - only if this project uses its own account. Cloud projects on
 # the bundled plan skip this entirely: the platform bills a DataForSEO
@@ -264,24 +367,28 @@ else
 fi
 
 # ---- 5. Hand off to the agent ----------------------------------------------
-say ""
-say "Step 5 of 5 - your agent installs the pipeline (a few minutes; it"
-say "opens a pull request and may ask you questions along the way)."
-say ""
-say "Launch Claude Code now to finish? [y/n]"
-ask
 # $NAME, not "seo-manager": the prompt must name the server exactly as it
 # was just registered - agents take the name literally and refuse on a
 # name they cannot find.
-INSTALL_PROMPT="Call the $NAME MCP tool get_instructions with workflow install and follow it exactly."
+#
+# Both agents install the same pipeline. The workflow files it writes carry
+# BOTH agents and resolve which one to run at run time from the dashboard, so
+# there is no per-agent install and no decision for the installer to get wrong.
+say ""
+say "Step 5 of 5 - your agent installs the pipeline (a few minutes; it"
+say "opens a pull request and may ask you questions along the way)."
+PROMPT="Call the $NAME MCP tool get_instructions with workflow install and follow it exactly."
+say ""
+say "Launch $AGENT_NAME now to finish? [y/n]"
+ask
 if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
-  exec claude "$INSTALL_PROMPT" < /dev/tty
+  exec "$AGENT_CLI" "$PROMPT" < /dev/tty
 else
   say ""
   say "==============================================="
-  say "  Setup saved. Whenever you're ready, open Claude Code in this"
+  say "  Setup saved. Whenever you're ready, open $AGENT_NAME in this"
   say "  folder and paste:"
   say ""
-  say "  $INSTALL_PROMPT"
+  say "  $PROMPT"
   say "==============================================="
 fi

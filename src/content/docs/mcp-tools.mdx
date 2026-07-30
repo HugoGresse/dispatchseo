@@ -38,9 +38,11 @@ a gap worth reporting, not a feature you should expect to live without.
 
 ### Connecting
 
-Your dashboard's Settings screen shows a ready-to-paste `claude mcp add`
-command with your project's slug, domain, and key already filled in -
-copy that one rather than typing this by hand:
+Your dashboard's Settings screen shows a ready-to-paste connect command
+per agent, with your project's slug, domain, and key already filled in -
+copy that one rather than typing any of these by hand.
+
+**Claude Code:**
 
 ```bash
 claude mcp add dispatchseo-<slug> <your-domain>/api/mcp \
@@ -51,6 +53,22 @@ claude mcp add dispatchseo-<slug> <your-domain>/api/mcp \
 `--scope local` pins the connection to the repo folder you run it in, so
 a second connected project never leaks into an unrelated repo and starts
 answering for the wrong site.
+
+**Codex:**
+
+```bash
+codex mcp add dispatchseo-<slug> --url "<your-domain>/api/mcp?key=<token>"
+```
+
+Identical in PowerShell - there's no header to quote. Codex has no
+`--scope local`; the per-project server name is what keeps two connected
+sites apart. [The Codex guide](/docs/install-codex) covers the rest.
+
+**Anything else** that speaks streamable-HTTP MCP: point it at
+`<your-domain>/api/mcp` with an `Authorization: Bearer <token>` header,
+or `?key=<token>` on the URL if it can't set headers. Same gate, same
+tools. See [docs/AGENTS.md](https://github.com/NeoZi12/dispatchseo/blob/main/docs/AGENTS.md)
+for where each agent stands.
 
 <Callout type="note" title="Windows: use the URL variant">
 Claude Code on Windows has a long-lived bug where a configured

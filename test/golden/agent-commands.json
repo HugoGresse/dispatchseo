@@ -16,5 +16,22 @@
     "setupBundled": "curl -fsSL https://backend.example.test/setup.sh | bash -s -- fixture-token-do-not-use goldensite https://backend.example.test 1",
     "setupPowershell": "$b = \"$env:ProgramFiles\\Git\\bin\\bash.exe\"; if (!(Test-Path $b)) { $b = \"$env:LocalAppData\\Programs\\Git\\bin\\bash.exe\" }; if (!(Test-Path $b)) { \"Git (with Git Bash) is required - install it from https://git-scm.com/downloads/win and run this again\" } else { & $b -c 'curl -fsSL https://backend.example.test/setup.sh | bash -s -- fixture-token-do-not-use goldensite https://backend.example.test 0' }",
     "setupPowershellBundled": "$b = \"$env:ProgramFiles\\Git\\bin\\bash.exe\"; if (!(Test-Path $b)) { $b = \"$env:LocalAppData\\Programs\\Git\\bin\\bash.exe\" }; if (!(Test-Path $b)) { \"Git (with Git Bash) is required - install it from https://git-scm.com/downloads/win and run this again\" } else { & $b -c 'curl -fsSL https://backend.example.test/setup.sh | bash -s -- fixture-token-do-not-use goldensite https://backend.example.test 1' }"
+  },
+  "codex": {
+    "serverName": "dispatchseo-goldensite",
+    "mcpAdd": "codex mcp add dispatchseo-goldensite --url \"https://backend.example.test/api/mcp?key=fixture-token-do-not-use\"",
+    "connect": "codex mcp add dispatchseo-goldensite --url \"https://backend.example.test/api/mcp?key=fixture-token-do-not-use\"",
+    "connectPowershell": "codex mcp add dispatchseo-goldensite --url \"https://backend.example.test/api/mcp?key=fixture-token-do-not-use\"",
+    "setup": "curl -fsSL https://backend.example.test/setup.sh | bash -s -- fixture-token-do-not-use goldensite https://backend.example.test 0 codex",
+    "setupBundled": "curl -fsSL https://backend.example.test/setup.sh | bash -s -- fixture-token-do-not-use goldensite https://backend.example.test 1 codex",
+    "setupPowershell": "$b = \"$env:ProgramFiles\\Git\\bin\\bash.exe\"; if (!(Test-Path $b)) { $b = \"$env:LocalAppData\\Programs\\Git\\bin\\bash.exe\" }; if (!(Test-Path $b)) { \"Git (with Git Bash) is required - install it from https://git-scm.com/downloads/win and run this again\" } else { & $b -c 'curl -fsSL https://backend.example.test/setup.sh | bash -s -- fixture-token-do-not-use goldensite https://backend.example.test 0 codex' }",
+    "setupPowershellBundled": "$b = \"$env:ProgramFiles\\Git\\bin\\bash.exe\"; if (!(Test-Path $b)) { $b = \"$env:LocalAppData\\Programs\\Git\\bin\\bash.exe\" }; if (!(Test-Path $b)) { \"Git (with Git Bash) is required - install it from https://git-scm.com/downloads/win and run this again\" } else { & $b -c 'curl -fsSL https://backend.example.test/setup.sh | bash -s -- fixture-token-do-not-use goldensite https://backend.example.test 1 codex' }"
+  },
+  "generic": {
+    "name": "dispatchseo-goldensite",
+    "url": "https://backend.example.test/api/mcp",
+    "transport": "http",
+    "header": "Authorization: Bearer fixture-token-do-not-use",
+    "urlWithKey": "https://backend.example.test/api/mcp?key=fixture-token-do-not-use"
   }
 }

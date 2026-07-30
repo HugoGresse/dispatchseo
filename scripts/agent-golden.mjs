@@ -56,6 +56,25 @@ const snapshot = {
     setupPowershell: mcp.setupCommandPS(SLUG, ORIGIN, TOKEN),
     setupPowershellBundled: mcp.setupCommandPS(SLUG, ORIGIN, TOKEN, true),
   },
+  // Codex earns the same treatment for the same reason: these are pastes, and a
+  // paste is either exactly right or it is a dead install. The bash and
+  // PowerShell entries being identical is not a copy-paste slip - it is the
+  // property the URL-key form was chosen for, and the snapshot is where that
+  // stays true.
+  codex: {
+    serverName: mcp.mcpServerName(SLUG),
+    mcpAdd: mcp.codexMcpAddCommand(SLUG, ORIGIN, TOKEN),
+    connect: mcp.codexConnectCommand(SLUG, ORIGIN, TOKEN),
+    connectPowershell: mcp.codexConnectCommandPS(SLUG, ORIGIN, TOKEN),
+    setup: mcp.setupCommand(SLUG, ORIGIN, TOKEN, false, "codex"),
+    setupBundled: mcp.setupCommand(SLUG, ORIGIN, TOKEN, true, "codex"),
+    setupPowershell: mcp.setupCommandPS(SLUG, ORIGIN, TOKEN, false, "codex"),
+    setupPowershellBundled: mcp.setupCommandPS(SLUG, ORIGIN, TOKEN, true, "codex"),
+  },
+  // The raw details handed to any other MCP client. No command to get wrong,
+  // but the URL shape and the header spelling are still things a client will
+  // reject character-for-character.
+  generic: mcp.genericMcpConfig(SLUG, ORIGIN, TOKEN),
 };
 
 const rendered = JSON.stringify(snapshot, null, 2) + "\n";

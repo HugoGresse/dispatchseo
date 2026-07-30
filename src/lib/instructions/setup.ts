@@ -6,7 +6,7 @@
 
 // Plain-English step summary for the dashboard's Instructions page.
 export const SETUP_STEPS = [
-  { title: "Inspect", plain: "Your Claude Code reads your repo: stack, build command, design tokens, existing content." },
+  { title: "Inspect", plain: "Your coding agent reads your repo: stack, build command, design tokens, existing content." },
   { title: "Content home", plain: "Finds where published content should live - or scaffolds a minimal blog as its own PR if the site has none. Never duplicates an existing one, and always public - never behind your login." },
   { title: "Tool home", plain: "Does the same for free interactive tools: finds your public tools section, or scaffolds an empty one so the first tool the builder makes has somewhere to land. A /tools route that is part of your logged-in app doesn't count - it publishes next to it instead." },
   { title: "Record", plain: "Writes the site-facts file every other workflow adapts from - discovered, never assumed." },

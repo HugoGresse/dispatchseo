@@ -2,7 +2,13 @@
 
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { JOURNEY_STAGES, STAGE_META } from "@/lib/journey-meta";
-import { connectCommand, connectCommandPS, mcpAddCommand, mcpServerName } from "@/lib/mcp-connect";
+import {
+  codexMcpAddCommand,
+  connectCommand,
+  connectCommandPS,
+  mcpAddCommand,
+  mcpServerName,
+} from "@/lib/mcp-connect";
 import { ShellCommandTabs } from "./shell-command-tabs";
 import { PixelDispatcher } from "./pixel-dispatcher";
 import { FirstRunStatus } from "@/components/first-run-status";
@@ -1373,6 +1379,43 @@ export function OnboardingWizard({
                   Both pastes are safe to re-run any time.
                 </p>
               </div>
+
+              {/* Codex is a real option here now, but it stays a disclosure
+                  rather than a second card: the screen's job is to get ONE
+                  agent connected, and a fork at the top of it turns a two-paste
+                  step into a decision. Claude Code stays the default because it
+                  is the cheaper story (a subscription people already pay for)
+                  and the more-tested path; Codex is one click away, not one
+                  scroll. */}
+              <details className="group mt-4">
+                <summary className="cursor-pointer list-none text-sm text-neutral-400 hover:text-neutral-200">
+                  Using Codex instead of Claude Code?
+                </summary>
+                <div className="mt-2 space-y-2 rounded-xl bg-neutral-900 px-4 py-3.5 text-sm text-neutral-400">
+                  <p>
+                    Everything works the same on Codex - research, the queue, approvals, and the
+                    scheduled builders. Connect it with this instead of the paste above:
+                  </p>
+                  <CopyBox
+                    text={created ? codexMcpAddCommand(created.slug, origin, created.mcpToken) : ""}
+                  />
+                  <p className="text-[13px] text-neutral-500">
+                    Then switch this project to Codex on Settings, and paste an OpenAI key on
+                    Home&apos;s automatic-builds card. Billing is the real difference: Claude Code
+                    runs on a subscription you already pay for, Codex is metered by OpenAI per
+                    run.{" "}
+                    <a
+                      href="/docs/install-codex"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-violet-400 underline underline-offset-2 hover:text-violet-300"
+                    >
+                      The Codex guide
+                    </a>{" "}
+                    walks through it.
+                  </p>
+                </div>
+              </details>
             </>
           )}
 

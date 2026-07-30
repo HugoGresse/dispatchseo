@@ -70,7 +70,7 @@ so you never need to rename anything either integration gives you.
 
 <Field name="MCP_API_KEY" type="string" tag="">
 
-The bearer token an external Claude Code agent uses to authenticate to your
+The bearer token an external coding agent uses to authenticate to your
 `/api/mcp` endpoint. Fresh deploys generate this at `/setup` and store it in
 the database - most installs never set this env var. Set it yourself
 (`openssl rand -hex 24`) only to force a specific value, which overrides
@@ -324,7 +324,7 @@ free port up if something already holds it. Set it to pin a specific port.
 
 The host interface the dashboard is published on. Defaults to `127.0.0.1` -
 reachable from the machine running Docker and nowhere else, which is what
-you want, since it holds your GitHub and Claude tokens. Only set this to
+you want, since it holds your GitHub and coding-agent credentials. Only set this to
 `0.0.0.0` if you deliberately want it reachable on your LAN and you have a
 firewall in front of it - Docker's published ports bypass tools like `ufw`,
 so "I enabled my firewall" isn't the protection it sounds like.
@@ -353,15 +353,44 @@ when they're pullable, and your local changes would silently not run.
 <Field name="CLAUDE_CODE_OAUTH_TOKEN" type="string" tag="Docker only">
 
 Your Claude Code OAuth token - lets the in-stack `builder` container run
-your agent headlessly, on your own existing Claude subscription. Get one by
+Claude Code headlessly, on your own existing Claude subscription. Get one by
 running `claude setup-token` on your own machine and copying the
 `sk-ant-oat...` token it prints, with no line breaks. **Easiest path:**
 skip this entirely and paste the token on the dashboard's "Turn on
 automatic builds" step instead - it's stored encrypted and the builder
 picks it up within a few minutes, no file to edit. Setting it here still
 works and overrides the dashboard-stored value, which is handy for
-scripted or headless installs. Without either, the builder idles and tells
-you so in its logs.
+scripted or headless installs.
+
+This is the credential for one specific agent. Which agent a project's
+builds actually run is set on **Settings → Coding agent**; see
+`OPENAI_API_KEY` below for the Codex side. The builder holds both and picks
+per job, so a stack that builds some projects with each only needs both
+credentials present. With neither, the builder idles and tells you so in
+its logs.
+
+</Field>
+
+<Field name="OPENAI_API_KEY" type="string" tag="Docker only">
+
+The Codex equivalent of `CLAUDE_CODE_OAUTH_TOKEN` above - lets the in-stack
+`builder` container run Codex headlessly for any project whose agent is set
+to Codex. Create one at
+[platform.openai.com/api-keys](https://platform.openai.com/api-keys). It has
+to be on an account with credit: an unfunded key passes every shape check
+and then fails on the first real build, which is why both this stack and
+the dashboard verify a pasted key with a real inference call before storing
+it.
+
+Same two paths as the Claude token: paste it on the dashboard's "Turn on
+automatic builds" step (stored encrypted, no file to edit), or set it here
+to override the stored value for scripted installs.
+
+Unlike Claude Code, Codex bills per run - OpenAI meters your key, and
+nothing is billed by DispatchSEO. If you leave the unattended builders on,
+set a monthly spend limit in your OpenAI account: the Codex runner has no
+turn budget (there is no `--max-turns` equivalent), so the job's own
+timeout is the only ceiling on a run that goes in circles.
 
 </Field>
 

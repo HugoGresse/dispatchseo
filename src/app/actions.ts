@@ -30,6 +30,8 @@ import {
   type AutomationFlags,
 } from "@/lib/projects";
 import { markCronFixed } from "@/lib/cron-alerts";
+import { setProjectAgent, verifyAgentCredential } from "@/lib/agent-settings";
+import { agentById, projectAgent } from "@/lib/agents";
 import { saveContentPrefs } from "@/lib/content-prefs-store";
 import { encryptSecret } from "@/lib/crypto";
 import { validateSerpapiKey } from "@/lib/serp";
@@ -1399,6 +1401,21 @@ export async function setAutomationToggle(
   revalidatePath("/", "layout");
 }
 
+// Which coding agent runs this project's unattended builders. Backed by the
+// set_agent MCP tool, and both call setProjectAgent so the two faces of this
+// cannot drift. Returns the follow-up task (usually "add the new agent's key")
+// rather than swallowing it - a switch that quietly leaves the builders unable
+// to run is the failure this whole feature is built to avoid.
+export async function setAgent(agentId: string, slug: string): Promise<{ todo: string | null }> {
+  await assertAuthed();
+  const project = await getProjectBySlug(slug);
+  if (!project) throw new Error("Unknown project.");
+  if (isCloudMode()) await assertProjectOwned(project.id);
+  const res = await setProjectAgent(project, agentId);
+  revalidatePath("/", "layout");
+  return { todo: res.todo };
+}
+
 // Internal back-linking: may the guide builder EDIT already-published posts so
 // they link to a new guide? Deliberately its own action rather than another
 // entry in setAutomationToggle - the automation flags answer "how much do I
@@ -1505,15 +1522,8 @@ export async function connectClaudeToken(
   // the copied text carries a real newline mid-token (the known VS Code
   // terminal gotcha).
   const token = String(formData.get("token") ?? "").replace(/\s+/g, "");
-  if (!token) return { error: "Paste the token that `claude setup-token` printed." };
-  if (!token.startsWith("sk-ant-oat") || token.length < 60) {
-    return {
-      error:
-        "That doesn't look like a Claude Code token (they start with sk-ant-oat). Run `claude setup-token` and copy its whole output.",
-    };
-  }
   // Explicit slug, same reasoning as runPipelineInstall - and with more at
-  // stake: this puts the owner's Claude credential into a repository as an
+  // stake: this puts the owner's agent credential into a repository as an
   // Actions secret, so resolving the target from a forgiving active-project
   // lookup could plant it in a repo they never chose.
   const slug = String(formData.get("slug") ?? "");
@@ -1521,9 +1531,16 @@ export async function connectClaudeToken(
   const project = await getProjectBySlug(slug);
   if (!project) return { error: "Unknown project." };
   await assertProjectOwned(project.id);
+  // Which credential this is depends on the project's agent, and the secret it
+  // lands in has to match - storing an OpenAI key as CLAUDE_CODE_OAUTH_TOKEN
+  // would pass every check here and fail on the first build.
+  const agent = agentById(formData.get("agent")?.toString() || projectAgent(project).id);
+  if (!token) return { error: `Paste your ${agent.displayName} credential. ${agent.credential.howToMint}` };
+  const verified = await verifyAgentCredential(agent.id, token);
+  if ("error" in verified) return { error: verified.error };
   const { setRepoSecret } = await import("@/lib/github-app-secrets");
-  const res = await setRepoSecret(project, "CLAUDE_CODE_OAUTH_TOKEN", token);
-  if (!res.ok) return { error: `Could not store the token on your repo: ${res.error}` };
+  const res = await setRepoSecret(project, agent.credential.repoSecretName, token);
+  if (!res.ok) return { error: `Could not store the credential on your repo: ${res.error}` };
   revalidatePath("/onboarding");
   return { ok: true };
 }
@@ -1549,30 +1566,30 @@ export async function connectBuilderToken(
   // Strip ALL whitespace, not just trim: pasted tokens line-wrap and can carry
   // a real newline mid-token (the known terminal-copy gotcha).
   const token = String(formData.get("token") ?? "").replace(/\s+/g, "");
-  if (!token) return { error: "Paste the token that `claude setup-token` printed." };
-  if (!token.startsWith("sk-ant-oat") || token.length < 60) {
-    return {
-      error:
-        "That doesn't look like a Claude Code token (they start with sk-ant-oat). Run `claude setup-token` and copy its whole output.",
-    };
-  }
+  // Self-host stores ONE credential per agent at instance level, and which
+  // column it lands in comes from the registry - the stack can host a Claude
+  // project and a Codex project at once, and /api/builder/jobs resolves the
+  // right one per job.
+  const agent = agentById(formData.get("agent")?.toString() || "claude");
+  if (!token) return { error: `Paste your ${agent.displayName} credential. ${agent.credential.howToMint}` };
+  const verified = await verifyAgentCredential(agent.id, token);
+  if ("error" in verified) return { error: verified.error };
   const enc = await encryptSecret(token);
   const { data, error } = await db()
     .from("instance_settings")
-    .update({ builder_claude_token: enc })
+    .update({ [agent.credential.instanceSettingsColumn]: enc })
     .eq("id", true)
     .select("id");
   if (error) {
     return {
-      error: /builder_claude_token|column/i.test(error.message)
-        ? "This install predates migration 0037 - re-run start.sh once to apply it, then try again."
+      error: /builder_claude_token|builder_openai_key|column/i.test(error.message)
+        ? "This install predates the migration that added builder credentials - re-run start.sh once to apply it, then try again."
         : error.message,
     };
   }
   if (!data || data.length === 0) {
     return {
-      error:
-        "This install is configured through environment variables - set CLAUDE_CODE_OAUTH_TOKEN in your .env instead.",
+      error: `This install is configured through environment variables - set ${agent.credential.envVar} in your .env instead.`,
     };
   }
   bustInstanceCache();

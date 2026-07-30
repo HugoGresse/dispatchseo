@@ -201,9 +201,9 @@ export default async function BacklinksPage() {
 
       {!fromDb && !tableMissing ? (
         <div className="rounded-xl bg-neutral-900 p-4 text-sm text-sky-300">
-          The copy below uses default values. Paste <Mono>/seo-setup</Mono> in Claude Code - in
-          your site&apos;s repo - to research your product and personalize every submission
-          automatically.
+          The copy below uses default values. Ask your connected agent for the setup workflow (
+          <Mono>/seo-setup</Mono> in Claude Code) - in your site&apos;s repo - to research your
+          product and personalize every submission automatically.
         </div>
       ) : null}
 
@@ -280,7 +280,8 @@ export default async function BacklinksPage() {
           </div>
         ) : prospects.length === 0 ? (
           <EmptyState>
-            None yet. Run <Mono>/seo-backlinks</Mono> in Claude Code to find prospects.
+            None yet. Ask your connected agent for the backlinks workflow (
+            <Mono>/seo-backlinks</Mono> in Claude Code) to find prospects.
           </EmptyState>
         ) : (
           <TableShell>
