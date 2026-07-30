@@ -4,6 +4,45 @@
 // these so the dashboard stays consistent.
 
 
+// Wrapper that gives a <select> a chevron we control the position of.
+//
+// A native select puts its arrow hard against the right inner edge of the box,
+// so the wider the control the further the arrow drifts from the text it
+// belongs to - a full-width one ends up with the label on the far left and a
+// lonely chevron a screen-width away. Killing the native arrow with
+// appearance-none and drawing our own lets it sit a fixed 0.625rem in, so it
+// reads as part of the control at every width.
+//
+// Usage: wrap the select and give it `appearance-none` plus right padding that
+// clears the icon (pr-8 at text-sm, pr-7 at text-xs).
+export function SelectWrap({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <span className={`relative inline-flex items-center ${className}`}>
+      {children}
+      {/* pointer-events-none so the icon never swallows a click meant for the
+          select underneath it - the whole box must stay clickable. */}
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        className="pointer-events-none absolute right-2.5 h-3.5 w-3.5 text-neutral-500"
+      >
+        <path d="M6 9l6 6 6-6" />
+      </svg>
+    </span>
+  );
+}
+
 export function PageHeader({ title, hint }: { title: string; hint?: string }) {
   return (
     <div className="space-y-1.5">

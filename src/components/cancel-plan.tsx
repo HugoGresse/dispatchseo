@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { cancelPlan, type CancelPlanState } from "@/app/actions";
 import { CANCELLATION_REASONS, REASON_LABELS } from "@/lib/cancellation-reasons";
 import { PixelDispatcher } from "@/components/pixel-dispatcher";
+import { SelectWrap } from "@/components/ui";
 
 // The cancel button, on the billing page, where someone looking for it will
 // actually look - plus the one screen that asks why.
@@ -252,18 +253,20 @@ function CancelDialog({
               What made you cancel?{" "}
               <span className="font-normal text-neutral-500">Optional</span>
             </span>
-            <select
-              name="reason"
-              defaultValue=""
-              className="w-full cursor-pointer rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 focus:border-violet-500/50 focus:outline-none"
-            >
-              <option value="">Rather not say</option>
-              {CANCELLATION_REASONS.map((r) => (
-                <option key={r} value={r}>
-                  {REASON_LABELS[r]}
-                </option>
-              ))}
-            </select>
+            <SelectWrap className="w-full">
+              <select
+                name="reason"
+                defaultValue=""
+                className="w-full cursor-pointer appearance-none rounded-lg border border-neutral-800 bg-neutral-900 py-2 pl-3 pr-8 text-sm text-neutral-100 focus:border-violet-500/50 focus:outline-none"
+              >
+                <option value="">Rather not say</option>
+                {CANCELLATION_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {REASON_LABELS[r]}
+                  </option>
+                ))}
+              </select>
+            </SelectWrap>
           </label>
 
           <label className="block">
