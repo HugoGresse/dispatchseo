@@ -1,8 +1,17 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import { MascotFace } from "@/components/mascot-face";
 
 // The Dispatcher's aside on the signup form: what a site needs before any of
 // this can work, said BEFORE an account exists and long before a card does.
+//
+// Collapsed at rest, opened by a click. The resting tab is labelled as an
+// important message rather than a mascot aside: hiding the content behind a
+// click already costs readers, so the trigger has to earn the click instead of
+// looking like decoration. It still stays out of the way of someone who only
+// wants to type an email.
 //
 // Why it lives here and not in AuthShell: the shell is shared with /login, and
 // a person signing back in has already been through setup. The notice belongs
@@ -25,34 +34,104 @@ import { MascotFace } from "@/components/mascot-face";
 // The wizard refuses to finish without a repo (pipeline-install.ts) AND
 // without a Claude Code token (screen c2 has no skip). Naming one and hiding
 // the other just moves the surprise one screen later.
+
+// The bubble's tail, shared by the resting tab and the opened panel so the
+// mascot keeps speaking from the same spot when it expands. Only the two edges
+// facing the face keep their border, so it reads as the outline continuing
+// rather than a diamond parked next to it.
+function Tail() {
+  return (
+    <span
+      aria-hidden="true"
+      className="absolute -left-[5px] top-4 h-2.5 w-2.5 rotate-45 border-b border-l border-amber-500/25 bg-amber-500/10"
+    />
+  );
+}
+
+// Labelled "Important", not "psst". The mascot supplies the character; this
+// line has to supply the weight, because the message it gates is the one that
+// decides whether the reader can use the product at all.
+function Eyebrow() {
+  return (
+    <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.13em] text-amber-300/90">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        className="h-3.5 w-3.5 shrink-0"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 8v4.5M12 16h.01" />
+      </svg>
+      Important
+    </span>
+  );
+}
+
 export function SignupRequirements() {
+  const [open, setOpen] = useState(false);
+
   return (
     <div className="flex items-start gap-2.5">
       <MascotFace className="mt-1.5 h-8 w-[42px] shrink-0" />
-      <div className="relative rounded-xl border border-amber-500/25 bg-amber-500/10 px-3.5 py-3">
-        {/* The tail. A rotated square sharing the bubble's fill, with only the
-            two edges that face the mascot keeping their border, so it reads as
-            a continuation of the outline rather than a diamond stuck to it. */}
-        <span
-          aria-hidden="true"
-          className="absolute -left-[5px] top-4 h-2.5 w-2.5 rotate-45 border-b border-l border-amber-500/25 bg-amber-500/10"
-        />
-        <p className="text-[11px] font-semibold uppercase tracking-[0.13em] text-amber-300/90">
-          psst
-        </p>
-        <p className="mt-1 text-[13px] leading-relaxed text-amber-200/90">
-          DispatchSEO publishes by opening pull requests on your site&apos;s code, so your site
-          needs to live in a GitHub repo. If it runs on WordPress, Wix, Squarespace, or Shopify,
-          this will not work for you yet. You will also need a Claude subscription with Claude
-          Code.
-        </p>
-        <Link
-          href="/docs/setup-wizard"
-          className="mt-1.5 inline-block text-[13px] font-medium text-amber-200 underline underline-offset-2 hover:text-white"
+      {open ? (
+        <div className="relative rounded-xl border border-amber-500/25 bg-amber-500/10 px-3.5 py-3">
+          <Tail />
+          <Eyebrow />
+          <p className="mt-1 text-[13px] leading-relaxed text-amber-200/90">
+            DispatchSEO publishes by opening pull requests on your site&apos;s code, so your site
+            needs to live in a GitHub repo. If it runs on WordPress, Wix, Squarespace, or Shopify,
+            this will not work for you yet. You will also need a Claude subscription with Claude
+            Code.
+          </p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <Link
+              href="/docs/setup-wizard"
+              className="text-[13px] font-medium text-amber-200 underline underline-offset-2 hover:text-white"
+            >
+              See what you need
+            </Link>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="cursor-pointer text-[13px] font-medium text-amber-200/60 transition-colors hover:text-amber-200"
+            >
+              Hide
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-expanded={false}
+          className="group relative flex cursor-pointer items-center gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/10 py-2 pl-3.5 pr-3 text-left transition-colors hover:border-amber-500/40 hover:bg-amber-500/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
         >
-          See what you need
-        </Link>
-      </div>
+          <Tail />
+          <span>
+            <Eyebrow />
+            <span className="block text-[13px] font-medium text-amber-200/90">
+              Open the message
+            </span>
+          </span>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            className="h-4 w-4 shrink-0 text-amber-300/60 transition-transform group-hover:translate-x-0.5"
+          >
+            <path d="m9 18 6-6-6-6" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }
