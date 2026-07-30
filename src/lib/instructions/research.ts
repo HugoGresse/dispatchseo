@@ -12,7 +12,7 @@ export const RESEARCH_STEPS = [
   { title: "Aim", plain: "Your product can be described honestly in several ways, and they're not equally winnable - \"SEO software\" is a market Ahrefs has owned for 15 years, \"agents that do work for you\" is two years old. So it measures each description against your site's current strength, then spends the week on whichever one you can actually win, and shows you the numbers behind the choice. It sticks with that subject rather than hopping, because twenty posts spread across five subjects makes you an authority on none." },
   { title: "Derive", plain: "Asks: what would someone google right before your product is the answer? 40-60 candidates, hunting buying-intent first (comparisons, 'best X', alternatives) rather than 'what is X' traffic that never converts - but the quality bar still decides what makes it in." },
   { title: "Scope", plain: "Throws out the keywords your product isn't actually an answer to, before spending a penny checking them. The trap it exists to stop: your buyers search about every other tool they use too, and writing about those brings in readers who never needed you - so a keyword only survives if a good post about it would end with 'and that's what this product does'." },
-  { title: "Validate", plain: "Checks real search volume and difficulty - keywords outside your site's league get dropped, including the ones that are too BIG. Until your site has some authority, a smaller query you can win beats a huge one you can't." },
+  { title: "Validate", plain: "Checks real search volume and difficulty - keywords outside your site's league get dropped, including the ones that are too BIG. Until your site has some authority, a smaller query you can win beats a huge one you can't. Difficulty scores are only a first pass though: if it looks at page 1 and finds nobody established there, a keyword scored too hard still goes ahead, because what it saw beats what the score guessed." },
   { title: "Inspect", plain: "Eyeballs page 1 for each survivor and counts who's already there. Four or more established players and it's dropped, however easy the difficulty score claimed it was - that score is often wrong, and the actual page 1 isn't. Capped at 25 of these checks a run, spent on the best candidates first, so a hard week can't run up your bill." },
   { title: "Queue", plain: "Fills the week's tank so the builder ships one guide a day, and gets there by hunting wider - your existing Search Console queries, error messages, new releases, trend topics - instead of by lowering the bar. Never filler to hit the number." },
   { title: "Tools", plain: "Every run also leaves a tool idea or two in the tool queue - the weekly tool builder has nothing to ship otherwise. A site that has no public tools page yet still gets ideas queued; the first tool build creates the page." },
@@ -105,19 +105,33 @@ product:
 
    The conventions file lists this site's facets (setup writes them, most
    direct first). Measure them in ONE call, not one per facet:
-   - **Find the phrasing** with \`suggest_keywords\` if a facet's search
-     wording is unclear - free, no credentials, real autocomplete queries. Use
-     it to pick the phrase people actually type, not to price anything: it
-     returns no volume.
-   - **Price all the facets in a single \`keyword_ideas\` call**, passing ONE
-     seed phrase per facet (the tool expands up to 5 seeds per call, which is
-     the facet count by design). It returns English, volume-backed candidates
-     carrying KD, so expansion and pricing are the same call - there is no
-     separate bulk-metrics lookup, do not go looking for one. Attribute each
-     returned keyword to the facet whose phrase it contains; anything that
-     matches none is still a valid candidate, just unattributed. On a project
-     with DataForSEO's own MCP in its repo, use that server's equivalents
-     instead - same two numbers out.
+   - **Build MID-TAIL seeds with \`suggest_keywords\` first - free, and this
+     step is what makes the measurement worth anything.** Run it on each facet
+     (2-3 modifier sets: "tool", "software", "free", "automation", "for
+     developers") and pick, per facet, the most product-shaped MULTI-WORD
+     phrase it returns - "ai seo tool", "seo automation software" - NOT the
+     bare head term.
+
+     **Never price a facet by its head term.** A head term on a young site is
+     always KD 15-40, so seeding the paid call with one measures the single
+     band this site cannot have and reports the facet as closed when its
+     winnable keywords were one level down all along. This is not theoretical:
+     the 2026-07-30 run priced "SEO automation" and "agents unattended" by
+     their head terms, reported KD 16-21 and no clean candidates, and fell
+     back to 70-170-volume long-tails - while the same facet held
+     "ai powered seo tool" at 1000/KD 8 and "ai seo services" at 1000/KD 0,
+     which nothing in that run ever looked at.
+   - **Price every facet in ONE \`keyword_ideas\` call**, passing the mid-tail
+     phrase for each facet as one seed (the tool expands up to 5 seeds per
+     call - the facet count, by design). It returns English, volume-backed
+     candidates carrying KD, and because those results are guaranteed to
+     CONTAIN the seed phrase, a mid-tail seed returns the mid-tail band
+     directly. Expansion and pricing are the same call; there is no separate
+     bulk-metrics lookup, do not go looking for one. Attribute each keyword to
+     the facet whose phrase it contains; unattributed ones are still valid
+     candidates. On a project with DataForSEO's own MCP in its repo, use that
+     server's equivalents - same two numbers out, and the same rule about
+     seeding mid-tail rather than head terms.
    - **Score each facet on two numbers only**: how many of its candidates
      carry volume inside this site's band AND KD under its auto-approve
      ceiling, and the median volume of those. That is the opportunity

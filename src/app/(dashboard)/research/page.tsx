@@ -153,7 +153,7 @@ export default async function ResearchPage() {
 
       <div className="grid gap-8 xl:grid-cols-2">
         <section className="space-y-3">
-          <SectionTitle sub="one ships each morning, top of the queue first">
+          <SectionTitle sub="one ships each morning, top of the queue first - held ideas are above your site's difficulty ceiling and free themselves as it gains authority">
             Guide queue
           </SectionTitle>
           {opportunities.length === 0 ? (

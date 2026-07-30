@@ -142,8 +142,23 @@ invented volumes, difficulties, positions, or stats, ever.
     today, not evidence of a soft field. Two weak results sitting under five
     strong ones is a strong SERP.
   - Auto-approve zone -> guides get approved per the build-first policy.
-  - Pending zone -> propose, leave \`pending\`, and never auto-approve above the
-    auto-approve ceiling. What that pending row MEANS depends on the project's
+  - **A measured-clean page 1 promotes a pending-zone candidate into the
+    auto-approve zone.** If the live SERP check returns an authority count of
+    **0-2**, the candidate may be auto-approved even though its KD sits in the
+    pending zone. That is not a loosening of this bar - it is this bar's own
+    precedence applied consistently. KD is a backlink-derived PROXY for
+    competition; the authority count is the thing the proxy is estimating, and
+    the rules above already say the SERP overrules KD and already waive the
+    VOLUME ceiling on exactly this signal. Refusing to approve a keyword whose
+    page 1 you have LOOKED AT and found soft is the proxy overruling the
+    measurement.
+    Authority count 3 stays held (the soft edge, dead-on ICP only); 4+ is
+    dropped by the gate regardless. Name the promotion in the rationale with
+    the count, so it stays auditable: "KD 16 is above the DR-0 auto-approve
+    line, promoted on a measured authority count of 1/10". This spends nothing
+    extra - the SERP check has already run by the time this applies.
+  - Pending zone (and no clean-page-1 promotion) -> propose, leave \`pending\`,
+    and never auto-approve above the auto-approve ceiling. What that pending row MEANS depends on the project's
     mode, and conflating the two is what made hands-off mode ask for hands:
     - **\`auto_approve\` TRUE (Auto) -> it is HELD, not a question.** The owner
       chose hands-off; you may not hand them a decision. Prefix the rationale

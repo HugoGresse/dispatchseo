@@ -30,7 +30,7 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: "2026-07-30.1",
+    version: "2026-07-30.2",
     date: "2026-07-30",
     title: "Better keywords, and automatic mode stops asking you things",
     summary:
@@ -62,6 +62,16 @@ export const CHANGELOG: ChangelogEntry[] = [
           "them by itself once your site's authority has grown enough to win them. Some weeks that " +
           "means 4 guides instead of 7: it will not pad your queue with keywords it doesn't " +
           "believe in, and it will not hand you the difference either.",
+      },
+      {
+        kind: "improved",
+        text:
+          "A difficulty score is now only the first pass. If it checks page 1 for a keyword and " +
+          "finds nobody established sitting there, it goes ahead even when the score called the " +
+          "keyword too hard for your site - because what it actually saw beats what the score " +
+          "guessed. Scores are calculated from links, and they read far too high on exactly the " +
+          "searches a new site can still win. This is how bigger keywords reach your queue " +
+          "without lowering the bar, and it costs nothing extra: it already looks at page 1.",
       },
       {
         kind: "fixed",

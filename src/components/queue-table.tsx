@@ -56,9 +56,9 @@ function StatusLabel({
   if (status === "pending") {
     const why =
       kd == null
-        ? "no difficulty score"
+        ? "no KD score"
         : kdCeiling != null && kd >= kdCeiling
-          ? `KD ${kd}, over your ceiling of ${kdCeiling}`
+          ? `KD ${kd} · ceiling ${kdCeiling}`
           : null;
     // On Auto the owner delegated the decision, so this row is NOT a request -
     // it is an idea the bar does not admit YET, and saying "pending" next to an
@@ -66,15 +66,25 @@ function StatusLabel({
     // names what frees it: every research run releases held ideas the moment
     // the site's rising authority puts them inside the auto-approve zone, so
     // nothing is asked of the owner and nothing is stranded either.
-    const sub = autoApproved
-      ? [why, "frees up as your site gains authority"].filter(Boolean).join(" - ")
-      : why;
+    // Keep this SHORT. The status cell is an `auto` grid track, so a long
+    // unbroken sentence here sizes the track to its max-content width and
+    // squeezes the keyword column to nothing - which is exactly what a first
+    // pass at this did, collapsing the header into "KeywordKD". The full
+    // explanation lives once in the section subtitle and in the tooltip, not
+    // on every row.
     return (
-      <span className="flex flex-col gap-0.5">
+      <span
+        className="flex max-w-[11rem] flex-col gap-0.5"
+        title={
+          autoApproved
+            ? "Held - above this site's difficulty ceiling for now. Research releases it automatically as your site gains authority; you are never asked to approve it."
+            : "Waiting on your decision."
+        }
+      >
         <span className={autoApproved ? "text-neutral-400" : "text-amber-300"}>
           {autoApproved ? "held" : "your call"}
         </span>
-        {sub ? <span className="text-xs text-neutral-500">{sub}</span> : null}
+        {why ? <span className="text-xs text-neutral-500">{why}</span> : null}
       </span>
     );
   }
