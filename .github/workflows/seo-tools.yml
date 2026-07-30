@@ -144,12 +144,16 @@ jobs:
           echo "seo-manager MCP OK ($url)"
 
       - name: Set up pnpm
+        # INSTALL-ADAPT: if this repo's package.json has a packageManager
+        # field ("pnpm@x.y.z"), DELETE the version input below - action-setup
+        # reads the field itself, and a version input alongside packageManager
+        # hard-errors on any mismatch (plain string compare, not semver). If
+        # there is no packageManager field, keep a version here matching the
+        # major that wrote pnpm-lock.yaml. pnpm 11+ also requires Node 22+.
         if: steps.guard.outputs.open == '0'
-        # No version input on purpose: pnpm/action-setup reads the exact pin
-        # from package.json's packageManager field (pnpm@11.5.2), so CI always
-        # runs the same pnpm as dev machines. (A version input alongside
-        # packageManager hard-errors on any mismatch - plain string compare.)
         uses: pnpm/action-setup@v4
+        with:
+          version: 11
 
       - name: Set up Node
         if: steps.guard.outputs.open == '0'

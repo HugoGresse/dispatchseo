@@ -53,6 +53,21 @@ jobs:
       checks: read # statusCheckRollup reads check runs (CodeRabbit et al.)
       statuses: read # ...and commit statuses (Vercel)
     steps:
+      # Local-backend guard FIRST. On a self-host whose backend lives on the
+      # owner's own machine (localhost/LAN), GitHub's runners can never reach
+      # it - the install disables this workflow, but check events can fire it
+      # in the gap between the install PR merging and that disable. Without
+      # this guard that gap emails the owner a scary "run failed" for a
+      # workflow that has nothing to do on their install anyway.
+      - name: Local backend? Nothing for GitHub-hosted runs to do
+        id: guard
+        run: |
+          case "https://dispatchseo.com" in
+            http://localhost*|http://127.*|http://0.0.0.0*|http://10.*|http://192.168.*|http://172.1[6-9].*|http://172.2[0-9].*|http://172.3[0-1].*)
+              echo "Backend https://dispatchseo.com is local - the in-stack builder owns merging on this install; exiting clean."
+              echo "skip=1" >> "$GITHUB_OUTPUT" ;;
+          esac
+
       # Publish-mode gate: the DispatchSEO dashboard controls whether merging
       # is hands-off via the auto_merge automation flag (off in semi mode,
       # on in auto, per-toggle in custom). When it's off the merge step is
@@ -63,6 +78,7 @@ jobs:
       # and must be loud, not a silent skip.
       - name: Look up the project's automation flags
         id: mode
+        if: steps.guard.outputs.skip != '1'
         env:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
         run: |
@@ -80,7 +96,7 @@ jobs:
           echo "merge=$merge" >> "$GITHUB_OUTPUT"
 
       - name: Merge green SEO PRs
-        if: steps.mode.outputs.merge != 'off'
+        if: steps.guard.outputs.skip != '1' && steps.mode.outputs.merge != 'off'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -177,18 +193,6 @@ jobs:
                 # exception to that rule).
                 gh workflow run indexnow.yml --repo "$REPO" -f slugs="$slugs" \
                   || echo "IndexNow dispatch failed - the sitemap still covers the URL on the next crawl."
-                # REPO-SPECIFIC (this backend repo): the same GITHUB_TOKEN rule
-                # silently skips publish-images (self-host docker images) and
-                # deploy-check (post-deploy smoke test) - both trigger on push,
-                # so an auto-merged commit left GHCR images stale and the deploy
-                # unverified until the next human push. Dispatch them explicitly
-                # too. (Not part of the pipeline pack - re-applied on pack
-                # updates; the || echo fallbacks make it a no-op in any repo
-                # that lacks these workflows.)
-                gh workflow run publish-images.yml --repo "$REPO" \
-                  || echo "publish-images dispatch failed - self-host images catch up on the next human push."
-                gh workflow run deploy-check.yml --repo "$REPO" \
-                  || echo "deploy-check dispatch failed - the deploy stays unverified until the next push."
                 ;;
               PENDING)
                 echo "PR #$n has checks still running - will retry next run."
@@ -219,6 +223,7 @@ jobs:
       # Bounded: after 3 executed validations for the same head SHA with no
       # verdict, leave the PR for the owner instead of burning usage all day.
       - name: Dispatch stalled tool validations
+        if: steps.guard.outputs.skip != '1'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -262,7 +267,7 @@ jobs:
       # banner + alert email (same rails as the crons); successes clear any
       # earlier red banner row for this job.
       - name: Report outcome to the dashboard
-        if: success() || failure()
+        if: (success() || failure()) && steps.guard.outputs.skip != '1'
         env:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
