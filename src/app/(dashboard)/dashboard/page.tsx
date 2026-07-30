@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { requireDashboard } from "@/lib/auth-gate";
 import { headers } from "next/headers";
 import Link from "next/link";
@@ -242,6 +243,56 @@ function PlaybookColumn({
   );
 }
 
+// Streams in behind Suspense instead of riding the page's blocking fan-out.
+// The activity log is the last thing on Home and nothing above it depends on
+// the report, so making the page wait on it only ever delayed the parts
+// people actually came for. Milestones still come from the journey (computed
+// up top from the analytics overview) and arrive as a prop.
+async function ActivitySection({
+  projectId,
+  milestones,
+}: {
+  projectId: string;
+  milestones: { label: string }[];
+}) {
+  const activity = await getActivityReport(projectId);
+  return (
+    <div className="grid items-start gap-4 [&>*]:min-w-0 lg:grid-cols-2">
+      <ActivityCard
+        title="Done today"
+        lines={activity.today}
+        empty="Nothing yet today - the builders run each morning."
+      />
+      <ActivityCard
+        title="This week"
+        lines={[
+          // First-time moments lead the week's feed - these are the lines
+          // worth remembering while the traffic graph is still flat.
+          ...milestones.map((m) => ({ label: `${m.label} 🎉` })),
+          ...activity.week,
+        ]}
+        empty="Quiet week so far - the daily builder starts filling this."
+      />
+    </div>
+  );
+}
+
+// Placeholder that reserves the same two-column shape the real section takes,
+// so streaming it in doesn't shove the page around underneath the reader.
+function SectionSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="grid items-start gap-4 [&>*]:min-w-0 lg:grid-cols-2">
+      {[0, 1].map((col) => (
+        <div key={col} className="space-y-2 rounded-xl bg-neutral-900 p-4">
+          {Array.from({ length: rows }).map((_, i) => (
+            <div key={i} className="h-4 animate-pulse rounded bg-neutral-800" />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default async function Home() {
   await requireDashboard();
   await requireOnboarded();
@@ -261,7 +312,6 @@ export default async function Home() {
     profileRes,
     conventionsRes,
     playbookRes,
-    activity,
     pagesRes,
     topicRes,
     scanRes,
@@ -299,7 +349,6 @@ export default async function Home() {
     client.from("site_profile").select("id").eq("project_id", project.id).maybeSingle(),
     client.from("conventions").select("project_id").eq("project_id", project.id).maybeSingle(),
     client.from("playbook_status").select("slug, status").eq("project_id", project.id),
-    getActivityReport(project.id),
     client
       .from("pages")
       .select("*")
@@ -1137,7 +1186,9 @@ export default async function Home() {
       </section>
 
       {/* ---------- AI VISIBILITY (GEO) - do AI assistants cite this site? ---------- */}
-      <AiVisibilitySection project={project} />
+      <Suspense fallback={<SectionSkeleton rows={4} />}>
+        <AiVisibilitySection project={project} />
+      </Suspense>
 
       {/* ---------- TREND RADAR (high on purpose - hype decays by the day) ---------- */}
       <section className="space-y-3">
@@ -1485,23 +1536,9 @@ export default async function Home() {
         <SectionTitle sub="what your SEO manager has been doing, without you asking">
           Activity
         </SectionTitle>
-        <div className="grid items-start gap-4 [&>*]:min-w-0 lg:grid-cols-2">
-          <ActivityCard
-            title="Done today"
-            lines={activity.today}
-            empty="Nothing yet today - the builders run each morning."
-          />
-          <ActivityCard
-            title="This week"
-            lines={[
-              // First-time moments lead the week's feed - these are the lines
-              // worth remembering while the traffic graph is still flat.
-              ...journey.fresh_milestones.map((m) => ({ label: `${m.label} 🎉` })),
-              ...activity.week,
-            ]}
-            empty="Quiet week so far - the daily builder starts filling this."
-          />
-        </div>
+        <Suspense fallback={<SectionSkeleton />}>
+          <ActivitySection projectId={project.id} milestones={journey.fresh_milestones} />
+        </Suspense>
       </section>
     </div>
   );
