@@ -30,6 +30,53 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-30.9",
+    date: "2026-07-30",
+    title: "Cancelling is a button now",
+    summary:
+      "Billing has a Cancel subscription button. It takes effect at the end of the period " +
+      "you've already paid for, and you can undo it from the same place.",
+    changes: [
+      {
+        kind: "new",
+        text:
+          "A Cancel subscription button on Billing. Two clicks, no email, no hunting through " +
+          "the payment provider's site. Cancelling during your trial means you're never " +
+          "charged at all.",
+      },
+      {
+        kind: "new",
+        text:
+          "One optional question on the way out. The cancel screen asks what made you leave " +
+          "and whether anything needs fixing - both skippable, and the cancel button works " +
+          "with the whole thing left blank. Whatever you write goes straight to the person " +
+          "who builds this.",
+      },
+      {
+        kind: "new",
+        text:
+          "Cancel now, keep what you paid for. Your plan runs to the end of the current " +
+          "period - sites keep being tracked and built the whole time - and Billing shows " +
+          "the exact date it ends. Nothing is deleted when it does, so coming back later " +
+          "picks up where you left off.",
+      },
+      {
+        kind: "new",
+        text:
+          "Changed your mind? A Keep my plan button appears while a cancellation is pending, " +
+          "so you can call it off without going through checkout again.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "A paused account now says so. If your plan ends or a payment fails, every dashboard " +
+          "screen carries a banner explaining that tracking and building have stopped, that " +
+          "nothing has been deleted, and how to start again. Until now the dashboard looked " +
+          "completely normal and just quietly stopped updating.",
+      },
+    ],
+  },
+  {
     version: "2026-07-30.8",
     date: "2026-07-30",
     title: "DispatchSEO runs on Codex too",

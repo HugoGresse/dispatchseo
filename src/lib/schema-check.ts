@@ -93,6 +93,15 @@ const PROBES: Probe[] = [
   // that has `feedback` ran the whole file, and `feedback_votes` is created
   // eleven lines below it.
   { migration: "0046_feedback", table: "feedback" },
+  // Pending-cancellation flag on the billing row. Worth probing loudly despite
+  // being one column: without it the cancel button can't tell anyone their
+  // cancellation landed, and the webhook is writing a column the database
+  // doesn't have.
+  {
+    migration: "0047_subscription_cancel_at_period_end",
+    table: "subscriptions",
+    column: "cancel_at_period_end",
+  },
 ];
 
 // Migrations that genuinely CANNOT be probed through this mechanism, with the

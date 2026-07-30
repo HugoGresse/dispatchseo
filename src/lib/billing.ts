@@ -3,6 +3,7 @@ import { Polar } from "@polar-sh/sdk";
 import { db } from "./db";
 import { isCloudMode } from "./cloud";
 import { captureServer } from "./posthog-server";
+import { REASON_LABELS, type CancellationReason } from "./cancellation-reasons";
 
 // Polar billing for CLOUD_MODE (Neo's 2026-07-22 decision: Polar as merchant
 // of record). One subscriptions row per user (migration 0031), upserted by
@@ -11,7 +12,10 @@ import { captureServer } from "./posthog-server";
 //
 // NOTE on MCP parity: billing is ACCOUNT state, not project state - the MCP
 // bearer token identifies a project, not a user, so there is deliberately no
-// MCP counterpart for checkout/portal.
+// MCP counterpart for checkout/portal/cancellation. A project-scoped token
+// able to cancel the account's plan (and with it every OTHER project the owner
+// pays for) would be a privilege escalation rather than parity - the same
+// reasoning that keeps deleteAccount off the MCP.
 
 export type Tier = "starter" | "growth" | "scale";
 
@@ -61,6 +65,12 @@ export type Subscription = {
   sites_limit: number;
   keywords_limit: number;
   current_period_end: string | null;
+  /**
+   * Pending cancellation. Polar leaves a cancelled-at-period-end subscription
+   * at status active/trialing until the period really ends, so `status` alone
+   * can't tell a renewing plan from an ending one - this can.
+   */
+  cancel_at_period_end: boolean;
 };
 
 // Per-request memo, POSITIVE RESULTS ONLY. cache(() => new Map()) hands every
@@ -91,9 +101,22 @@ export async function getSubscription(userId: string): Promise<Subscription | nu
     .eq("user_id", userId)
     .maybeSingle();
   if (error) return null;
-  const sub = (data as Subscription) ?? null;
+  // Normalize BEFORE memoizing, so the cached object is the same shape every
+  // reader gets on a miss.
+  const sub = normalize(data);
   if (sub) memo.set(userId, sub);
   return sub;
+}
+
+// `select("*")` against a database that hasn't run 0047 yet simply omits the
+// column, leaving a field typed boolean as undefined - falsy in practice, but
+// only by luck. Coerce it once here so every reader gets a real boolean, and
+// so "not migrated yet" reads as "nothing pending" - which is the truthful
+// answer: a database without the column has never recorded a cancellation.
+function normalize(data: unknown): Subscription | null {
+  if (!data) return null;
+  const row = data as Subscription;
+  return { ...row, cancel_at_period_end: Boolean(row.cancel_at_period_end) };
 }
 
 // Error-SURFACING twin of getSubscription, for the one caller where "couldn't
@@ -110,11 +133,57 @@ export async function getSubscriptionOrThrow(userId: string): Promise<Subscripti
     .eq("user_id", userId)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  return (data as Subscription) ?? null;
+  return normalize(data);
 }
 
 export function isActive(sub: Subscription | null): boolean {
   return sub?.status === "active" || sub?.status === "trialing";
+}
+
+export type PlanNotice = { kind: "past_due" | "ended"; endedAt: string | null };
+
+// Does this account need to be TOLD that its plan stopped working?
+//
+// This exists because of what an inactive plan actually looks like from the
+// inside. Nothing revokes dashboard access - requireDashboard only checks that
+// you're signed in - so a lapsed customer keeps every page, every chart and
+// every past result. What they lose is the WORK: planGate turns every cron into
+// an informational skip, so ranks stop refreshing, Search Console stops
+// importing, and the overnight builder stops building. The dashboard looks
+// completely normal and quietly stops changing, with nothing anywhere saying
+// why. Someone in that state can't tell "my plan ended" from "this product is
+// broken", and the second reading is the one that generates support mail and
+// chargebacks.
+//
+// Two states, because they need different sentences and different buttons:
+//   past_due - the card failed. Recoverable in thirty seconds at the portal,
+//              and the most valuable thing on this list to surface, since it is
+//              churn nobody chose.
+//   ended    - cancelled, revoked, unpaid or expired. Needs a plan, not a card.
+//
+// null for: healthy plans, self-host, billing not configured, and accounts that
+// never subscribed at all (a fresh signup is mid-onboarding, not lapsed).
+export function planNotice(sub: Subscription | null): PlanNotice | null {
+  if (!isCloudMode() || !polarConfigured() || !sub) return null;
+  if (sub.status === "past_due") return { kind: "past_due", endedAt: sub.current_period_end };
+  if (isActive(sub)) return null;
+  // Everything left is a plan that existed and no longer works. Deliberately
+  // not an allowlist of dead statuses: a provider can add one at any time, and
+  // an unrecognised status silently rendering NOTHING is how this gap got here.
+  return { kind: "ended", endedAt: sub.current_period_end };
+}
+
+// "This database doesn't have that column (yet)", told apart from every other
+// write failure. PostgREST answers PGRST204 on a write naming an unknown
+// column and 42703 when Postgres itself rejects it; both spell the message out,
+// and the column name must appear in it so an unrelated missing column can
+// never be waved through as "expected".
+function isMissingColumn(error: { code?: string; message?: string }, column: string): boolean {
+  const code = error.code ?? "";
+  const msg = error.message ?? "";
+  const known =
+    code === "PGRST204" || code === "42703" || /does not exist|could not find/i.test(msg);
+  return known && msg.includes(column);
 }
 
 // The webhook's single write path. Missing tier (unknown product) keeps the
@@ -126,6 +195,7 @@ export async function applySubscriptionState(state: {
   providerCustomerId?: string | null;
   providerSubscriptionId?: string | null;
   currentPeriodEnd?: string | null;
+  cancelAtPeriodEnd?: boolean;
 }): Promise<void> {
   const limits = state.tier ? TIER_LIMITS[state.tier] : null;
   const row: Record<string, unknown> = {
@@ -143,7 +213,20 @@ export async function applySubscriptionState(state: {
   if (state.providerSubscriptionId !== undefined)
     row.provider_subscription_id = state.providerSubscriptionId;
   if (state.currentPeriodEnd !== undefined) row.current_period_end = state.currentPeriodEnd;
-  const { error } = await db().from("subscriptions").upsert(row, { onConflict: "user_id" });
+  if (state.cancelAtPeriodEnd !== undefined) row.cancel_at_period_end = state.cancelAtPeriodEnd;
+  let { error } = await db().from("subscriptions").upsert(row, { onConflict: "user_id" });
+  // Migrations here are applied by hand, so a deploy can legitimately land
+  // minutes before 0047 does. Everything else in this row is older than that
+  // column, and a plan whose status/tier/period couldn't be written because a
+  // COSMETIC flag was unknown is a far worse outcome than a missing flag: it is
+  // the "customer paid, has no plan" failure the comment below is about. So on
+  // the one error that means exactly "this database predates 0047", drop the
+  // new field and write the rest. Any other error still throws.
+  if (error && isMissingColumn(error, "cancel_at_period_end")) {
+    delete row.cancel_at_period_end;
+    console.warn("[billing] subscriptions.cancel_at_period_end missing - apply migration 0047");
+    ({ error } = await db().from("subscriptions").upsert(row, { onConflict: "user_id" }));
+  }
   // THROW, do not swallow. This is the only write to `subscriptions` anywhere in
   // the repo, and there is no reconciliation job to repair a dropped one - so a
   // swallowed error here is permanent. Returning void meant the webhook route
@@ -170,12 +253,234 @@ export async function applySubscriptionState(state: {
     err.pgCode = error.code;
     throw err;
   }
-  const event = ["active", "trialing"].includes(state.status)
-    ? "subscription_activated"
-    : ["canceled", "revoked"].includes(state.status)
-      ? "subscription_canceled"
-      : "subscription_updated";
+  // The pending-cancel case has to be tested BEFORE the status test, because a
+  // subscription cancelled at period end is still `active` - so the plain
+  // status mapping filed every cancellation as an ACTIVATION, exactly
+  // backwards, and the churn it represents never showed up in the funnel.
+  // Doing it here rather than at the click means portal-initiated
+  // cancellations are counted too; the webhook sees both.
+  const event =
+    state.cancelAtPeriodEnd && ["active", "trialing"].includes(state.status)
+      ? "subscription_cancel_scheduled"
+      : ["active", "trialing"].includes(state.status)
+        ? "subscription_activated"
+        : ["canceled", "revoked"].includes(state.status)
+          ? "subscription_canceled"
+          : "subscription_updated";
   await captureServer(state.userId, event, { tier: state.tier ?? undefined, status: state.status });
+}
+
+export type CancelOutcome =
+  | { ok: true; endsAt: string | null }
+  | { ok: false; error: string; portal?: boolean };
+
+// Schedule (or call off) a cancellation, in one place, for whoever asks - the
+// billing page's server action today, anything else later.
+//
+// AT PERIOD END, never immediately. The customer paid through the end of the
+// period; taking their sites off autopilot the moment they click cancel would
+// be keeping money for a service we stopped providing. Polar models this
+// exactly: the subscription stays `active`/`trialing` until the period runs
+// out, so isActive() keeps returning true and every gate downstream keeps
+// letting them work, with no special-casing anywhere. During a TRIAL the same
+// call means the card is simply never charged.
+//
+// `cancel: false` is the same API call inverted - it un-schedules a pending
+// cancellation, which is what lets someone change their mind without going
+// through checkout again and landing a second parallel subscription.
+export async function setCancelAtPeriodEnd(
+  userId: string,
+  cancel: boolean,
+  opts: {
+    reason?: CancellationReason | null;
+    comment?: string | null;
+    /** For the owner notification only - "who cancelled" is the first thing you want to know. */
+    email?: string | null;
+  } = {},
+): Promise<CancelOutcome> {
+  const reason = opts.reason ?? null;
+  // Polar rejects overlong values and nobody writes an essay in a cancel box.
+  const comment = opts.comment?.trim().slice(0, 1000) || null;
+  if (!isCloudMode() || !polarConfigured()) {
+    return { ok: false, error: "Billing isn't enabled on this deployment." };
+  }
+
+  let sub: Subscription | null;
+  try {
+    sub = await getSubscriptionOrThrow(userId);
+  } catch {
+    // Same posture as deleteAccount: "couldn't read it" must never be acted on
+    // as "there's nothing there". Nothing has changed yet, so retrying is free.
+    return {
+      ok: false,
+      error: "Couldn't reach your billing record just now. Try again in a moment.",
+    };
+  }
+
+  // No id to act on - a pre-billing row, or a plan that never went through
+  // Polar. Send them to the portal rather than claim there's nothing to cancel.
+  if (!sub?.provider_subscription_id) {
+    return {
+      ok: false,
+      error: "We couldn't find a subscription to change on this account.",
+      portal: true,
+    };
+  }
+  // Polar can't uncancel a subscription that has actually ended, and there's
+  // nothing left to cancel on one either - but the two need different sentences
+  // or the resume button answers a question nobody asked.
+  if (TERMINAL_STATUSES.has(sub.status)) {
+    return {
+      ok: false,
+      error: cancel
+        ? "This plan has already ended - there's nothing left to cancel."
+        : "This plan has already ended, so it can't be restarted. Pick a plan above to start again.",
+    };
+  }
+
+  let endsAt: string | null = sub.current_period_end;
+  try {
+    const updated = await polar().subscriptions.update({
+      id: sub.provider_subscription_id,
+      subscriptionUpdate: {
+        cancelAtPeriodEnd: cancel,
+        // Polar surfaces these back to the customer in their purchases library,
+        // so only send what they actually chose to say. Sending them here is
+        // also what makes the feedback DURABLE: it lives on the subscription
+        // record whether or not the notification email below goes through.
+        ...(cancel && reason ? { customerCancellationReason: reason } : {}),
+        ...(cancel && comment ? { customerCancellationComment: comment } : {}),
+      },
+    });
+    endsAt = (updated.endsAt ?? updated.currentPeriodEnd)?.toISOString() ?? endsAt;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    // Polar rejects re-cancelling an already-cancelled subscription. That is
+    // the state the caller wanted, so treat it as success rather than making
+    // someone stare at an error about a thing that is already done.
+    if (cancel && /already.?cancell?ed/i.test(msg)) {
+      await writeCancelFlag(userId, true, endsAt);
+      return { ok: true, endsAt };
+    }
+    console.error(`[billing] ${cancel ? "cancel" : "resume"} failed for ${userId}: ${msg}`);
+    return {
+      ok: false,
+      error: cancel
+        ? "We couldn't cancel your plan automatically. Open the billing portal and cancel there - it takes effect the same way."
+        : "We couldn't restart your plan automatically. Open the billing portal to sort it out.",
+      portal: true,
+    };
+  }
+
+  // Polar has accepted it; write it locally too. The `subscription.canceled`
+  // webhook will say the same thing seconds later (and is still the source of
+  // truth), but a dashboard that looks unchanged after the click is how someone
+  // ends up cancelling twice or emailing support to ask whether it worked.
+  await writeCancelFlag(userId, cancel, endsAt);
+  // Only the resume is captured here. `subscription_cancel_scheduled` belongs
+  // to the webhook (see applySubscriptionState) so that cancellations made in
+  // the provider's own portal are counted the same as these - emitting it from
+  // both places would double-count every dashboard cancellation. The reason the
+  // customer picked is stored on their subscription at Polar, which is where
+  // churn reasons are read anyway.
+  if (!cancel) await captureServer(userId, "subscription_resumed", { tier: sub.tier });
+  if (cancel) {
+    await notifyOwnerOfCancellation({
+      email: opts.email ?? null,
+      tier: sub.tier,
+      reason,
+      comment,
+      endsAt,
+    });
+  }
+  return { ok: true, endsAt };
+}
+
+// Tell the owner someone cancelled, and what they said on the way out.
+//
+// Every cancellation is sent, feedback or not: churn is worth knowing about on
+// its own, and an empty one still says "this person left without telling us
+// why", which is its own signal. Volume is low enough that this can't become
+// noise, and unlike the churn event in PostHog it lands somewhere a human
+// actually reads.
+//
+// Best-effort by design. The customer's cancellation has already gone through
+// at this point, and no mail problem may be allowed to fail it or to make them
+// think it didn't work. The feedback is NOT lost if this fails - it is stored
+// on the subscription at Polar by the call above, which is the durable copy.
+// The console line is there so a missing RESEND_API_KEY shows up in the logs
+// instead of silently swallowing customer feedback forever.
+async function notifyOwnerOfCancellation(input: {
+  email: string | null;
+  tier: Tier;
+  reason: CancellationReason | null;
+  comment: string | null;
+  endsAt: string | null;
+}): Promise<void> {
+  const who = input.email ?? "an account with no email on file";
+  const reasonLine = input.reason ? REASON_LABELS[input.reason] : "(not given)";
+  const body =
+    `${who} cancelled their ${input.tier} plan.\n\n` +
+    `Reason: ${reasonLine}\n` +
+    `What they said: ${input.comment || "(nothing)"}\n\n` +
+    `Access runs until: ${input.endsAt ? new Date(input.endsAt).toDateString() : "unknown"}\n` +
+    `The full record, including this feedback, is on the subscription in Polar.`;
+
+  const apiKey = process.env.RESEND_API_KEY;
+  const to = process.env.ALERT_EMAIL;
+  if (!apiKey || !to) {
+    console.warn(
+      `[billing] cancellation feedback not emailed (no RESEND_API_KEY/ALERT_EMAIL):\n${body}`,
+    );
+    return;
+  }
+  // `||` not `??` - docker passes this through as a present-but-empty string.
+  // Same fix and full story in cron-alerts.ts.
+  const from = process.env.ALERT_EMAIL_FROM || "DispatchSEO <onboarding@resend.dev>";
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from,
+        to,
+        subject: `DispatchSEO cancellation: ${who} (${input.tier})`.slice(0, 180),
+        text: body,
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    // Log the body on a failed send so the feedback still reaches the logs
+    // rather than evaporating with the HTTP error.
+    if (!res.ok) console.error(`[billing] cancellation email failed HTTP ${res.status}:\n${body}`);
+  } catch (e) {
+    console.error(`[billing] cancellation email failed: ${String(e)}\n${body}`);
+  }
+}
+
+// States where a cancellation is already a settled fact. A DENYLIST for the
+// same reason deleteAccount uses one: an unknown status errs toward "try to
+// cancel it", and a redundant cancel is a no-op while a missed one keeps
+// charging a card.
+const TERMINAL_STATUSES = new Set(["canceled", "cancelled", "revoked", "incomplete_expired"]);
+
+// Best-effort local mirror of what Polar just confirmed. Deliberately does NOT
+// throw: the money side already succeeded, and failing the whole action over a
+// display flag would tell someone their cancellation didn't go through when it
+// did - the one lie this flow must never tell. The webhook repairs the row.
+async function writeCancelFlag(
+  userId: string,
+  cancel: boolean,
+  endsAt: string | null,
+): Promise<void> {
+  const { error } = await db()
+    .from("subscriptions")
+    .update({
+      cancel_at_period_end: cancel,
+      current_period_end: endsAt,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", userId);
+  if (error) console.error(`[billing] cancel flag write failed for ${userId}: ${error.message}`);
 }
 
 // How many more sites this user's plan allows. null = unlimited (self-host,

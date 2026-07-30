@@ -880,6 +880,52 @@ export async function deleteProject(
   redirect("/dashboard");
 }
 
+export type CancelPlanState =
+  | { error: string; portal?: boolean }
+  | { done: "cancelled" | "resumed" }
+  | null;
+
+// Cancelling (and un-cancelling) the plan from the dashboard, rather than
+// sending someone to the provider's site to hunt for the button.
+//
+// The whole point is that this is ONE form post. Everything hard - period-end
+// semantics, an already-cancelled subscription, a provider that won't answer -
+// is decided in setCancelAtPeriodEnd; this only proves who is asking and hands
+// back something the page can render.
+//
+// No MCP counterpart, deliberately: see the parity note at the top of
+// src/lib/billing.ts. The MCP token identifies a PROJECT, and letting one
+// project's token cancel the account plan that pays for all of them would be an
+// escalation, not parity.
+export async function cancelPlan(
+  _prev: CancelPlanState,
+  formData: FormData,
+): Promise<CancelPlanState> {
+  if (!isCloudMode()) return { error: "Plans only exist on the hosted version." };
+  const auth = await dashboardAuth();
+  const user = auth?.user;
+  if (!user) return { error: "Not signed in." };
+
+  const resume = String(formData.get("intent") ?? "") === "resume";
+  const raw = String(formData.get("reason") ?? "");
+  const { setCancelAtPeriodEnd } = await import("@/lib/billing");
+  const { CANCELLATION_REASONS } = await import("@/lib/cancellation-reasons");
+  // Only a reason from our own list is forwarded - Polar shows it back to the
+  // customer, so an arbitrary string from the form has no business reaching it.
+  const reason = (CANCELLATION_REASONS as readonly string[]).includes(raw)
+    ? (raw as (typeof CANCELLATION_REASONS)[number])
+    : null;
+
+  const result = await setCancelAtPeriodEnd(user.id, !resume, {
+    reason,
+    comment: String(formData.get("comment") ?? ""),
+    email: user.email ?? null,
+  });
+  if (!result.ok) return { error: result.error, portal: result.portal };
+  revalidatePath("/billing");
+  return { done: resume ? "resumed" : "cancelled" };
+}
+
 export type DeleteAccountState = { error: string } | null;
 
 // Closing the account for real: cancel the money, remove the data, remove the
