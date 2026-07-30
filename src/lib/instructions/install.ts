@@ -120,13 +120,20 @@ Inspect this repo and adjust these known spots before committing:
 - **Package manager / Node setup** in seo-daily.yml, seo-tools.yml, and
   seo-tool-validate.yml: the pnpm/action-setup + cache steps and every
   \`pnpm install/build/start\` become this repo's real commands (npm, yarn,
-  bun - and the Node version the repo actually uses). Two version rules
-  learned the hard way:
-  - If package.json has a \`packageManager\` field ("pnpm@x.y.z"), DELETE the
-    \`version:\` input from pnpm/action-setup - the action reads the field,
-    and version input + packageManager together hard-error on ANY mismatch
-    (plain string compare, "11" vs "11.5.2" included). No field: keep a
-    version matching the major that wrote pnpm-lock.yaml.
+  bun - and the Node version the repo actually uses). Two rules:
+  - **Leave the pnpm setup steps ALONE.** They ship as TWO mutually-exclusive
+    steps guarded by a \`pnpm_pin\` check that resolves at RUN time in this
+    repo: one for a repo with a \`packageManager\` pin (no \`version:\` input,
+    because the action reads the pin) and one for a repo without (\`version:
+    11\`). There is nothing to adapt here, so there is nothing to get wrong.
+    Do NOT delete the \`version:\` input, do NOT collapse the two steps into
+    one, and do NOT add a \`version:\` to the unconditional path. This exact
+    edit is what killed the builder in every installed repo carrying a pin on
+    2026-07-30: \`pnpm/action-setup\` hard-errors when a \`version:\` input
+    sits beside a \`packageManager\` pin (plain string compare, "11" vs
+    "11.5.2" included), and it died at step 2 - BEFORE the step that reports
+    failures - so it failed silently. If a repo uses npm/yarn/bun instead,
+    replace BOTH steps together with that tool's single setup step.
   - pnpm 11 requires Node 22+; keep node-version in sync with what the repo
     really builds on.
 - **Prove the install step exactly the way CI will run it - BEFORE the PR

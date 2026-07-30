@@ -46,6 +46,11 @@ concurrency:
 jobs:
   merge:
     runs-on: ubuntu-latest
+    # Bounded on purpose: this job holds a GLOBAL, non-cancelling concurrency
+    # lock (group: seo-auto-merge above), so one wedged `gh` call would block ALL
+    # merging on the repo for GitHub-s 360-minute default. It is also the only
+    # job in the pack that had no bound at all.
+    timeout-minutes: 10
     permissions:
       contents: write
       pull-requests: write
@@ -267,7 +272,7 @@ jobs:
       # banner + alert email (same rails as the crons); successes clear any
       # earlier red banner row for this job.
       - name: Report outcome to the dashboard
-        if: (success() || failure()) && steps.guard.outputs.skip != '1'
+        if: always() && steps.guard.outputs.skip != '1'
         env:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

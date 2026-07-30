@@ -74,11 +74,35 @@ export function pipelinePackPaths(): string[] {
   return (pack.files as PackFile[]).map((f) => f.path);
 }
 
+// The project name is arbitrary user text (createProjectCore only rejects
+// empty), but it gets substituted into places where a few characters are
+// structural: a DOUBLE-QUOTED YAML scalar (seo-tool-validate.yml's prompt) and
+// `#` comment lines (seo-geo-scan.yml, seo-weekly-research.yml). A name like
+// `Bob's "Best" Bikes` produced a workflow file GitHub cannot parse, committed
+// straight into the customer's repo by the App with no agent reviewing it - and
+// an unparseable workflow can't run its own report step, so tool PRs simply
+// never got a verdict while the dashboard stayed green forever. A newline would
+// break out of the comment lines the same way.
+//
+// Sanitized at SERVE time rather than only at creation so projects that already
+// carry such a name are fixed by the next pack update too. Apostrophes are left
+// alone - they're harmless in both contexts and stripping them would mangle
+// ordinary names.
+function yamlSafeName(name: string): string {
+  return (
+    name
+      .replace(/[\\"]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 120) || "this site"
+  );
+}
+
 export async function getPipelinePack(project: Project): Promise<PackFile[]> {
   const base = await backendBaseUrl();
   return (pack.files as PackFile[]).map((f) => {
     let content = f.content
-      .replaceAll("{{SITE_NAME}}", project.name)
+      .replaceAll("{{SITE_NAME}}", yamlSafeName(project.name))
       .replaceAll("{{DOMAIN}}", project.domain)
       .replaceAll("{{BACKEND_URL}}", base);
     if (f.path === ".github/mcp-ci.json" && !hasDataforseo(project)) {

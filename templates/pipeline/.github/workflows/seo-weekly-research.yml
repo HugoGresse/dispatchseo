@@ -145,7 +145,7 @@ jobs:
       # banner + alert email (same rails as the crons); successes clear any
       # earlier red banner row for this job.
       - name: Report outcome to the dashboard
-        if: success() || failure()
+        if: always()
         env:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
