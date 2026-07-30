@@ -30,6 +30,35 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-30.7",
+    date: "2026-07-30",
+    title: "Ask for what's missing",
+    summary:
+      "A Feedback board in the sidebar: ask for a feature in one line, and vote on what " +
+      "everyone else asked for. The most wanted things get built first.",
+    changes: [
+      {
+        kind: "new",
+        text:
+          "Feedback, at the bottom of the sidebar. Type what you're missing and hit enter - " +
+          "that's the whole thing. Add detail if you want, or don't.",
+      },
+      {
+        kind: "new",
+        text:
+          "Vote on anyone else's request. One vote each, click again to take it back, and " +
+          "the board sorts by what people actually want. Requests get a status as they " +
+          "move - planned, in progress, shipped - so you can see where yours went.",
+      },
+      {
+        kind: "new",
+        text:
+          "Your agent can use the board too: get_feedback, submit_feedback and " +
+          "vote_feedback over MCP, so you can ask for something without leaving the terminal.",
+      },
+    ],
+  },
+  {
     version: "2026-07-30.5",
     date: "2026-07-30",
     title: "Fewer ways to get stuck, and alerts that actually arrive",

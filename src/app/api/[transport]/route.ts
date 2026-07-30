@@ -20,6 +20,14 @@ import {
   type IndexingPageRow,
 } from "@/lib/indexing";
 import { CHANGELOG, LATEST } from "@/lib/changelog";
+import {
+  isFeedbackAdminUser,
+  listFeedback,
+  setFeedbackHidden,
+  setFeedbackStatus,
+  setVote,
+  submitFeedback,
+} from "@/lib/feedback";
 import { browserCommand, resolveField } from "@/lib/playbook";
 import { FREE_BACKLINKS, PAID_BACKLINKS, PLAYBOOK_RESEARCHED } from "@/lib/playbook-data";
 import { loadConventions, saveConventions } from "@/lib/conventions";
@@ -2093,6 +2101,150 @@ const mcpHandler = createMcpHandler(
           dashboard_url: "/changelog",
           entries,
         });
+      },
+    );
+
+    // ---- feedback board ----------------------------------------------------
+    // Parity with the dashboard's /feedback screen. The board is shared across
+    // every tenant on the deployment, so unlike every other tool here these do
+    // not scope by project - the calling project only supplies WHO is asking
+    // (its owner account), which is what one-vote-per-person is counted by.
+    server.registerTool(
+      "get_feedback",
+      {
+        title: "Get feedback board",
+        description:
+          "Feature requests people have asked for in DispatchSEO itself, most-voted " +
+          "first - the same board the dashboard shows at /feedback. This is about " +
+          "the PRODUCT, not this project's site. Statuses: open, planned, " +
+          "in_progress, shipped, declined.",
+        inputSchema: {
+          limit: z.number().int().min(1).max(200).optional().describe("How many requests to return, most-voted first."),
+          status: z
+            .enum(["open", "planned", "in_progress", "shipped", "declined"])
+            .optional()
+            .describe("Only requests in this status."),
+        },
+      },
+      async ({ limit, status }) => {
+        const project = currentProject();
+        try {
+          const isAdmin = await isFeedbackAdminUser(project.owner_user_id);
+          const all = await listFeedback({
+            userId: project.owner_user_id,
+            includeHidden: isAdmin,
+          });
+          const filtered = status ? all.filter((i) => i.status === status) : all;
+          return ok({
+            dashboard_url: "/feedback",
+            moderator: isAdmin,
+            total: filtered.length,
+            requests: filtered.slice(0, limit ?? 50),
+          });
+        } catch (e) {
+          return fail(e instanceof Error ? e.message : String(e));
+        }
+      },
+    );
+
+    server.registerTool(
+      "submit_feedback",
+      {
+        title: "Submit feedback",
+        description:
+          "Ask for something in DispatchSEO itself - a feature, a change, a thing " +
+          "that's missing. Posts to the shared board at /feedback under the account " +
+          "that owns this project. PLAIN TEXT ONLY: links, email addresses and HTML " +
+          "are rejected, and there is a daily limit per account. Check get_feedback " +
+          "first - voting for an existing request beats posting a duplicate.",
+        inputSchema: {
+          title: z.string().describe("The request in one line, up to 120 characters."),
+          body: z.string().optional().describe("Optional detail: what you're trying to do and what gets in the way."),
+        },
+      },
+      async ({ title, body }) => {
+        const project = currentProject();
+        try {
+          const res = await submitFeedback({
+            title,
+            body: body ?? "",
+            userId: project.owner_user_id,
+            projectId: project.id,
+          });
+          return ok({
+            id: res.id,
+            title: res.title,
+            emailed: res.emailed,
+            dashboard_url: "/feedback",
+          });
+        } catch (e) {
+          return fail(e instanceof Error ? e.message : String(e));
+        }
+      },
+    );
+
+    server.registerTool(
+      "vote_feedback",
+      {
+        title: "Vote on feedback",
+        description:
+          "Add or remove this account's vote on a request from the feedback board. " +
+          "One vote per account per request, and setting a vote it already has is a " +
+          "no-op - safe to retry. Cloud deployments only (a vote needs an account).",
+        inputSchema: {
+          id: z.string().describe("The request's id, from get_feedback."),
+          vote: z.boolean().optional().describe("true to vote (default), false to take the vote back."),
+        },
+      },
+      async ({ id, vote }) => {
+        const project = currentProject();
+        if (!project.owner_user_id) {
+          return fail(
+            "Voting needs an account, and this deployment has none (self-hosted). " +
+              "Use submit_feedback to send a request instead.",
+          );
+        }
+        try {
+          const res = await setVote(id, project.owner_user_id, vote ?? true);
+          return ok({ id, ...res });
+        } catch (e) {
+          return fail(e instanceof Error ? e.message : String(e));
+        }
+      },
+    );
+
+    server.registerTool(
+      "update_feedback",
+      {
+        title: "Update feedback",
+        description:
+          "Moderator only - set a request's status or hide it from the board. Fails " +
+          "for everyone else. Hiding never deletes: the request stays in the " +
+          "database and only drops off the board.",
+        inputSchema: {
+          id: z.string().describe("The request's id, from get_feedback."),
+          status: z
+            .enum(["open", "planned", "in_progress", "shipped", "declined"])
+            .optional()
+            .describe("New status."),
+          hidden: z.boolean().optional().describe("true hides it from the board, false puts it back."),
+        },
+      },
+      async ({ id, status, hidden }) => {
+        const project = currentProject();
+        if (!(await isFeedbackAdminUser(project.owner_user_id))) {
+          return fail("Only the feedback board's moderator can change a request.");
+        }
+        if (status === undefined && hidden === undefined) {
+          return fail("Pass status, hidden, or both.");
+        }
+        try {
+          if (status !== undefined) await setFeedbackStatus(id, status);
+          if (hidden !== undefined) await setFeedbackHidden(id, hidden);
+          return ok({ id, status: status ?? null, hidden: hidden ?? null, updated: true });
+        } catch (e) {
+          return fail(e instanceof Error ? e.message : String(e));
+        }
       },
     );
 

@@ -153,6 +153,18 @@ function DocsIcon({ className }: IconProps) {
   );
 }
 
+// A speech bubble with a spark: this is where you say something, and it's the
+// one nav item that's an invitation rather than a screen full of your data.
+function FeedbackIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z" />
+      <path d="M12 8.5v5" />
+      <path d="M9.5 11h5" />
+    </svg>
+  );
+}
+
 function SettingsIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
@@ -245,6 +257,13 @@ const LINKS: NavLink[] = GROUPS.flatMap((g) => g.links);
 
 const SETTINGS: NavLink = { href: "/settings", label: "Settings", Icon: SettingsIcon };
 
+// Pinned to the bottom next to Settings rather than dropped into a GROUP, for
+// two reasons: it is about the product, not about this site (every GROUP above
+// is one of your site's screens), and the groups are hidden entirely for an
+// account with no site yet - which is exactly the person most likely to have
+// something to tell us.
+const FEEDBACK: NavLink = { href: "/feedback", label: "Feedback", Icon: FeedbackIcon };
+
 function BillingIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
@@ -262,6 +281,7 @@ const BILLING: NavLink = { href: "/billing", label: "Billing", Icon: BillingIcon
 // Routes reachable outside the sidebar, so the topbar title still resolves.
 const EXTRA_TITLES: { href: string; label: string }[] = [
   { href: "/settings", label: "Settings" },
+  { href: "/feedback", label: "Feedback" },
   { href: "/new", label: "New project" },
   { href: "/playbook", label: "Backlinks" },
   { href: "/billing", label: "Billing" },
@@ -404,6 +424,7 @@ export function Sidebar({
         )}
       </nav>
       <div className="shrink-0 border-t border-neutral-800/80 px-3 py-3">
+        <SidebarLink link={FEEDBACK} pathname={pathname} />
         {billing ? <SidebarLink link={BILLING} pathname={pathname} /> : null}
         <SidebarLink link={SETTINGS} pathname={pathname} />
         <LogoutLink />
@@ -522,6 +543,7 @@ export function MobileNav({
               )}
             </nav>
             <div className="shrink-0 border-t border-neutral-800/80 px-3 py-3">
+              <SidebarLink link={FEEDBACK} pathname={pathname} />
               {billing ? <SidebarLink link={BILLING} pathname={pathname} /> : null}
               <SidebarLink link={SETTINGS} pathname={pathname} />
               <LogoutLink />

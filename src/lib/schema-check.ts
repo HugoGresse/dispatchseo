@@ -89,6 +89,10 @@ const PROBES: Probe[] = [
     table: "projects",
     column: "internal_linking",
   },
+  // The feedback board's two tables. Probing the parent is enough - a database
+  // that has `feedback` ran the whole file, and `feedback_votes` is created
+  // eleven lines below it.
+  { migration: "0046_feedback", table: "feedback" },
 ];
 
 // Migrations that genuinely CANNOT be probed through this mechanism, with the
