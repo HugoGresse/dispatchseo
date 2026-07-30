@@ -583,14 +583,13 @@ export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]>
         claimed_only: Boolean(row.claimed_only),
       };
     });
-  const heartbeat = await pipelineHeartbeatAlerts(
-    projectSlug,
-    new Set(health.map((h) => h.job)),
-  );
-  const builderHeartbeat = await builderJobHeartbeatAlerts(
-    projectSlug,
-    new Set(health.map((h) => h.job)),
-  );
+  // Independent of each other - both only read the reported-job set - so they
+  // run together. Serially they put two per-project sweeps in front of Home.
+  const reported = new Set(health.map((h) => h.job));
+  const [heartbeat, builderHeartbeat] = await Promise.all([
+    pipelineHeartbeatAlerts(projectSlug, reported),
+    builderJobHeartbeatAlerts(projectSlug, reported),
+  ]);
   return [...health, ...heartbeat, ...builderHeartbeat];
 }
 

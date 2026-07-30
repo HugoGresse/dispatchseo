@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { requireDashboard } from "@/lib/auth-gate";
 import { db } from "@/lib/db";
 import { requireOnboarded } from "@/lib/onboarding-gate";
@@ -131,11 +132,20 @@ export default async function PagesPage() {
   // latest snapshot date, or undefined if nothing has synced.
   const gscNote = gscFreshnessNote(project.gsc_site_url, gscRows[0]?.date ?? null);
 
-  // Verify any not-yet-live pages right now (bounded, best-effort): a guide
-  // whose PR just merged flips to live on this very render, and a guide whose
-  // PR is still parked stays honestly "awaiting publish" instead of counting
-  // as shipped (migration 0033 / the 2026-07-23 stranded-PR lesson).
-  await refreshPageLiveness(project, pages);
+  // Verify any not-yet-live pages (bounded, best-effort): a guide whose PR
+  // merged flips to live, and a guide whose PR is still parked stays honestly
+  // "awaiting publish" instead of counting as shipped (migration 0033 / the
+  // 2026-07-23 stranded-PR lesson).
+  //
+  // after() rather than await: these are real HTTP probes against the tenant's
+  // own site, up to 6 of them with a 6s timeout each, and awaiting them here
+  // put all of that in front of the page. Measured at ~765ms on a first visit
+  // (1191ms vs 426ms on the debounced second). They now run once the response
+  // is already sent, so the probe still happens on exactly the same schedule
+  // and the stamps still land - a newly-merged guide just flips to live on the
+  // NEXT visit instead of this one. The 5-minute debounce inside means that
+  // was already the common case; this makes it the only case.
+  after(() => refreshPageLiveness(project, pages));
 
   // Live = verified serving 200, OR proven by Google itself (impressions /
   // URL-Inspection pass) for sites whose WAF blocks our probe.
