@@ -18,7 +18,9 @@ async function notifyOwner(email: string, source: string): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   const to = process.env.ALERT_EMAIL;
   if (!apiKey || !to) return;
-  const from = process.env.ALERT_EMAIL_FROM ?? "DispatchSEO <onboarding@resend.dev>";
+  // `||` not `??` - Docker passes this through as a present-but-empty string.
+  // See the same fix and its full story in cron-alerts.ts.
+  const from = process.env.ALERT_EMAIL_FROM || "DispatchSEO <onboarding@resend.dev>";
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",

@@ -38,7 +38,14 @@ export type CronJob =
 // no entry here on purpose - see RETIRED_JOBS below.)
 const STALE_HOURS: Record<string, number> = {
   "daily-ranks": 36,
-  "hourly-gsc": 6,
+  // Named "hourly" but scheduled every 3 HOURS (`7 */3 * * *` in both
+  // .github/workflows/hourly-gsc.yml and docker/cron/crontab). At 6h that was
+  // only 2x the cadence, and GitHub Actions routinely defers scheduled runs and
+  // sometimes drops one outright - a single skipped tick plus normal jitter was
+  // enough to show "hourly-gsc is overdue" on Home and flip the agent pill red
+  // with nothing actually wrong. 10h is ~3x the real cadence, matching the
+  // safety margin serp-collect gets over its hourly schedule.
+  "hourly-gsc": 10,
   // Hourly (GH Actions). If it stalls, queued SERP tasks pile up uncollected
   // and rank charts silently freeze - 4h catches that the same morning.
   "serp-collect": 4,
@@ -187,7 +194,15 @@ async function sendFailureEmail(job: string, errors: string[]): Promise<boolean>
   const apiKey = process.env.RESEND_API_KEY;
   const to = process.env.ALERT_EMAIL;
   if (!apiKey || !to) return false;
-  const from = process.env.ALERT_EMAIL_FROM ?? "DispatchSEO <onboarding@resend.dev>";
+  // `||`, not `??`: docker-compose passes ALERT_EMAIL_FROM through as
+  // `${ALERT_EMAIL_FROM:-}`, so on every Docker install the variable is PRESENT
+  // and EMPTY rather than undefined. `??` only catches null/undefined, so the
+  // default never fired there and Resend got a request with an empty required
+  // `from` - a 422 on every alert, swallowed into console.error. The result was
+  // the worst possible shape for an alerting system: a self-hoster follows the
+  // documented two-line setup (RESEND_API_KEY + ALERT_EMAIL), no email ever
+  // arrives, and the docs tell them "no email means everything is working".
+  const from = process.env.ALERT_EMAIL_FROM || "DispatchSEO <onboarding@resend.dev>";
   const list = errors.slice(0, 20).map((e) => `- ${e}`).join("\n");
   const isDeploy = job === "deploy-check";
   // The stock body points at the Home banner for detail. When the run log is
@@ -315,7 +330,15 @@ async function sendCustomerFailureEmail(
 ): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return false;
-  const from = process.env.ALERT_EMAIL_FROM ?? "DispatchSEO <onboarding@resend.dev>";
+  // `||`, not `??`: docker-compose passes ALERT_EMAIL_FROM through as
+  // `${ALERT_EMAIL_FROM:-}`, so on every Docker install the variable is PRESENT
+  // and EMPTY rather than undefined. `??` only catches null/undefined, so the
+  // default never fired there and Resend got a request with an empty required
+  // `from` - a 422 on every alert, swallowed into console.error. The result was
+  // the worst possible shape for an alerting system: a self-hoster follows the
+  // documented two-line setup (RESEND_API_KEY + ALERT_EMAIL), no email ever
+  // arrives, and the docs tell them "no email means everything is working".
+  const from = process.env.ALERT_EMAIL_FROM || "DispatchSEO <onboarding@resend.dev>";
   const site = domain ?? "your site";
   // Strip the "slug: " prefix collectErrors adds, for a clean customer line.
   const list = errors
