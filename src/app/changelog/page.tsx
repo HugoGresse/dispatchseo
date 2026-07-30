@@ -7,6 +7,9 @@ import { CHANGELOG, LATEST } from "@/lib/changelog";
 export const metadata: Metadata = {
   title: "What's new · DispatchSEO",
   description: "Every release of DispatchSEO, newest first - what shipped and what changed.",
+  // Linked from the dashboard banner with a #version anchor per release; the
+  // canonical keeps every one of those pointing at the single page.
+  alternates: { canonical: "/changelog" },
 };
 
 // The update log. Content comes from src/lib/changelog.ts - the same list the
