@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { Polar } from "@polar-sh/sdk";
 import { db } from "./db";
 import { isCloudMode } from "./cloud";
@@ -62,14 +63,37 @@ export type Subscription = {
   current_period_end: string | null;
 };
 
+// Per-request memo, POSITIVE RESULTS ONLY. cache(() => new Map()) hands every
+// request its own map; with no request scope (scripts, module init, cron
+// module load) React calls the factory fresh each time, which just means no
+// memoizing - never an error.
+//
+// Only a FOUND subscription is memoized, and that restraint is load-bearing
+// twice over. A null here is either a transient read error or "hasn't landed
+// yet", and both can legitimately change inside one request:
+//   - /onboarding polls this in a server-side retry loop while it waits for
+//     the Polar webhook (onboarding/page.tsx). Memoizing the first null would
+//     make every retry return it and bounce someone who JUST paid.
+//   - planGate treats a null as "subscription inactive" and DENIES. Memoizing
+//     an error-null would turn one blipped read into a whole cron run's worth
+//     of denials for that owner.
+// A found subscription can't change mid-request (only the webhook writes one,
+// in its own request), so caching that direction is free.
+const subscriptionMemo = cache(() => new Map<string, Subscription>());
+
 export async function getSubscription(userId: string): Promise<Subscription | null> {
+  const memo = subscriptionMemo();
+  const hit = memo.get(userId);
+  if (hit) return hit;
   const { data, error } = await db()
     .from("subscriptions")
     .select("*")
     .eq("user_id", userId)
     .maybeSingle();
   if (error) return null;
-  return (data as Subscription) ?? null;
+  const sub = (data as Subscription) ?? null;
+  if (sub) memo.set(userId, sub);
+  return sub;
 }
 
 // Error-SURFACING twin of getSubscription, for the one caller where "couldn't
@@ -168,18 +192,29 @@ export async function remainingSites(userId: string): Promise<number | null> {
   return Math.max(0, sub!.sites_limit - (count ?? 0));
 }
 
+// Same positive-only memo as getSubscription above, for the same reason: a
+// null is "self-host / pre-0031 / couldn't read it", any of which can differ
+// on the next call within a request (project creation sets an owner mid-flow),
+// while a found owner is immutable for the life of the request.
+const projectOwnerMemo = cache(() => new Map<string, string>());
+
 // The owner lookup planGate, remainingKeywords, and platformBudgetGate (see
 // dataforseo-usage.ts) all need: which user owns this project, or null for
 // self-host/pre-0031 rows. Collapses any lookup error the same way every
 // caller already tolerated - "can't tell who owns it" reads as "don't gate".
 export async function ownerUserIdForProject(projectId: string): Promise<string | null> {
+  const memo = projectOwnerMemo();
+  const hit = memo.get(projectId);
+  if (hit) return hit;
   const { data, error } = await db()
     .from("projects")
     .select("owner_user_id")
     .eq("id", projectId)
     .maybeSingle();
   if (error || !data) return null;
-  return (data as { owner_user_id: string | null }).owner_user_id;
+  const ownerId = (data as { owner_user_id: string | null }).owner_user_id;
+  if (ownerId) memo.set(projectId, ownerId);
+  return ownerId;
 }
 
 // The projects an owner's plan actually covers: the OLDEST sites_limit ones.

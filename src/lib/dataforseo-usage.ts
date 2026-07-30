@@ -160,17 +160,12 @@ export type PacingState = {
   budget_usd: number;
 };
 
-export async function platformPacingState(projectId: string): Promise<PacingState> {
-  const open: PacingState = { level: "normal", projected_usd: 0, budget_usd: 0 };
-  // Same fail-open tolerances as platformBudgetGate: pacing only ever applies
-  // to an active, covered cloud subscriber.
-  if (!isCloudMode() || !polarConfigured()) return open;
-  const ownerId = await ownerUserIdForProject(projectId);
-  if (!ownerId) return open;
-  const sub = await getSubscription(ownerId);
-  if (!isActive(sub)) return open;
-  const budgetUsd = TIER_BUDGET_MICROUSD[sub!.tier] / 1_000_000;
-  const spentUsd = (await monthToDateCostMicrousd(ownerId)) / 1_000_000;
+const PACING_OPEN: PacingState = { level: "normal", projected_usd: 0, budget_usd: 0 };
+
+// The pacing MATH, split out from the lookups so a caller that already holds
+// the spend and budget (platformUsageStatus) can derive the level without
+// re-running the same three queries.
+function pacingFrom(spentUsd: number, budgetUsd: number): PacingState {
   const now = new Date();
   const daysInMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
   // Divide by at least 3 days: on the 1st-2nd a single research run projects
@@ -183,6 +178,19 @@ export async function platformPacingState(projectId: string): Promise<PacingStat
         ? "slowed"
         : "normal";
   return { level, projected_usd: projectedUsd, budget_usd: budgetUsd };
+}
+
+export async function platformPacingState(projectId: string): Promise<PacingState> {
+  // Same fail-open tolerances as platformBudgetGate: pacing only ever applies
+  // to an active, covered cloud subscriber.
+  if (!isCloudMode() || !polarConfigured()) return PACING_OPEN;
+  const ownerId = await ownerUserIdForProject(projectId);
+  if (!ownerId) return PACING_OPEN;
+  const sub = await getSubscription(ownerId);
+  if (!isActive(sub)) return PACING_OPEN;
+  const budgetUsd = TIER_BUDGET_MICROUSD[sub!.tier] / 1_000_000;
+  const spentUsd = (await monthToDateCostMicrousd(ownerId)) / 1_000_000;
+  return pacingFrom(spentUsd, budgetUsd);
 }
 
 // Would this project resolve to platform-billed DataForSEO right now, ignoring
@@ -239,14 +247,28 @@ export type PlatformUsageStatus = {
 // /billing page render from - never used to gate a live call (see
 // platformBudgetGate for that).
 export async function platformUsageStatus(projectId: string): Promise<PlatformUsageStatus> {
-  const project = await getProjectById(projectId);
-  const billedTo = project ? await resolveBilledTo(project) : null;
-
-  const ownerId = await ownerUserIdForProject(projectId);
-  const sub = ownerId ? await getSubscription(ownerId) : null;
+  // Three independent lookups, so start them together rather than in series.
+  const [project, ownerId, serpToday] = await Promise.all([
+    getProjectById(projectId),
+    ownerUserIdForProject(projectId),
+    checkSerpCallsToday(projectId),
+  ]);
+  // Both need a result from above, but not from each other.
+  const [billedTo, sub] = await Promise.all([
+    project ? resolveBilledTo(project) : null,
+    ownerId ? getSubscription(ownerId) : null,
+  ]);
   const budgetMicrousd = sub && isActive(sub) ? TIER_BUDGET_MICROUSD[sub.tier] : 0;
   const spentMicrousd = ownerId ? await monthToDateCostMicrousd(ownerId) : 0;
-  const pacing = await platformPacingState(projectId);
+  // Derived from the spend and budget already in hand. Calling
+  // platformPacingState here instead would re-run ownerUserIdForProject,
+  // getSubscription AND monthToDateCostMicrousd - the last of which is a
+  // deliberately un-memoized spend counter, so it is a real repeat query.
+  // The guard mirrors that function's own fail-open conditions exactly.
+  const pacing =
+    isCloudMode() && polarConfigured() && ownerId && isActive(sub)
+      ? pacingFrom(spentMicrousd / 1_000_000, budgetMicrousd / 1_000_000)
+      : PACING_OPEN;
 
   return {
     billed_to: billedTo,
@@ -255,7 +277,7 @@ export async function platformUsageStatus(projectId: string): Promise<PlatformUs
     percent_used: budgetMicrousd > 0 ? Math.round((spentMicrousd / budgetMicrousd) * 100) : 0,
     projected_usd: pacing.projected_usd,
     pacing: pacing.level,
-    check_serp_today: await checkSerpCallsToday(projectId),
+    check_serp_today: serpToday,
     check_serp_daily_cap: CHECK_SERP_DAILY_CAP,
     resets_at: nextMonthStartUtc(),
   };

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireDashboard } from "@/lib/auth-gate";
 import { isCloudMode } from "@/lib/cloud";
@@ -188,9 +189,9 @@ export default async function BillingPage({
                   day: "numeric",
                 })}{" "}
                 UTC. Connect your own DataForSEO account on{" "}
-                <a href="/settings" className="text-neutral-300 underline">
+                <Link href="/settings" className="text-neutral-300 underline">
                   Settings
-                </a>{" "}
+                </Link>{" "}
                 for unmetered usage.
               </p>
             </>
