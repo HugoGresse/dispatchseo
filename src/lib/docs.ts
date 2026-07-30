@@ -22,8 +22,11 @@ export type DocHeading = { id: string; text: string };
 // A nav item is normally an MDX page (slug -> src/content/docs/<slug>.mdx).
 // An item carrying `href` instead is a link out of the docs tree - it has no
 // MDX file, so it is skipped by getDocSlugs/getAllDocs and by the prev/next
-// footer, and the sidebar renders it as a plain anchor.
-export type DocsNavItem = { slug: string; title: string; href?: string };
+// footer, and the sidebar renders it with an outbound arrow.
+// `external` marks an href that leaves the app (or, like /discord, redirects
+// off it): the sidebar renders those as a plain anchor in a new tab, because a
+// client-side Link into a redirect has nothing to render on the way out.
+export type DocsNavItem = { slug: string; title: string; href?: string; external?: boolean };
 
 export const DOCS_NAV: { section: string; items: DocsNavItem[] }[] = [
   {
@@ -88,6 +91,11 @@ export const DOCS_NAV: { section: string; items: DocsNavItem[] }[] = [
   {
     section: "Help",
     items: [
+      // First in Help, above the pages: someone opening this section is
+      // already stuck, and the fastest answer is a person. /discord is our own
+      // redirect (next.config.ts), so the invite code stays in one place and a
+      // self-hosted install resolves it against its own origin.
+      { slug: "", title: "Ask on Discord", href: "/discord", external: true },
       { slug: "troubleshooting", title: "Troubleshooting" },
       { slug: "faq", title: "Common questions" },
       { slug: "security", title: "Security and your data" },

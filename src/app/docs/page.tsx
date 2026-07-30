@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { DISCORD_URL, DiscordMark } from "@/components/discord-mark";
 
 // Docs landing - the Quickstart. Its whole job is routing: three install
 // paths, then the two setup steps every path converges on. Deliberately
@@ -274,6 +275,22 @@ export default function DocsQuickstart() {
             </span>
           </Link>
         ))}
+      </div>
+
+      {/* Closing the quickstart with a person, not a dead end. This page is
+          where repo traffic lands, so it's also where someone decides whether
+          they'd be on their own if an install went sideways. */}
+      <div className="mt-8 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-neutral-800 bg-neutral-900/40 px-5 py-4">
+        <span className="text-sm text-neutral-400">Stuck on any of it?</span>
+        <a
+          href={DISCORD_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-2 text-sm font-medium text-[#7d87f5] outline-none transition-colors hover:text-[#98a0f8] focus-visible:ring-2 focus-visible:ring-violet-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
+        >
+          <DiscordMark className="size-4 shrink-0" />
+          Ask in the Discord
+        </a>
       </div>
     </div>
   );

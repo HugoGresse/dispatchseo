@@ -15,6 +15,7 @@ import {
 } from "@/components/cloud-onboarding-wizard";
 import { CLOUD_WIZARD_SCREENS, SELF_HOST_WIZARD_SCREENS } from "@/lib/wizard-screens";
 import { DispatchMark } from "@/components/logo";
+import { DISCORD_URL, DiscordMark } from "@/components/discord-mark";
 import { PixelDispatcher } from "@/components/pixel-dispatcher";
 
 export const dynamic = "force-dynamic";
@@ -321,7 +322,23 @@ export default async function OnboardingPage({
               rel="noopener noreferrer"
               className="text-sm font-medium text-neutral-500 transition-colors hover:text-neutral-300"
             >
-              Stuck? Open the quick guide ↗
+              Stuck? <span className="hidden sm:inline">Open the </span>quick guide ↗
+            </a>
+            {/* The other escape hatch: a person, for the half of "stuck" no
+                guide covers (Google won't verify, the repo has no workflows
+                folder, the token paste 401s). Sits beside the guide because
+                this header is the only chrome the wizard has - someone stalled
+                on step 3 shouldn't have to finish setup to find the server.
+                Brand blue and icon-only on phones, same as the docs header. */}
+            <a
+              href={DISCORD_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-[#7d87f5] transition-colors hover:text-[#98a0f8]"
+            >
+              <DiscordMark className="size-4 shrink-0" />
+              <span className="hidden sm:inline">Ask on Discord</span>
+              <span className="sr-only sm:hidden">Ask on Discord</span>
             </a>
           </div>
         </div>

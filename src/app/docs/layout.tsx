@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DispatchMark } from "@/components/logo";
+import { DISCORD_URL, DiscordMark } from "@/components/discord-mark";
 import { DOCS_NAV } from "@/lib/docs";
 import { DocsSidebar, DocsMobileNav } from "@/components/docs/DocsNav";
 
@@ -36,15 +37,34 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
             </span>
             <span className="text-neutral-400">Docs</span>
           </Link>
-          <a
-            href="https://github.com/NeoZi12/dispatchseo"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-md text-sm font-medium text-neutral-400 outline-none transition-colors hover:text-neutral-200 focus-visible:ring-2 focus-visible:ring-violet-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
-          >
-            <GithubIcon />
-            GitHub
-          </a>
+          {/* Two ways out of a page that didn't answer the question: the
+              source, and people. Discord leads because a stuck reader wants an
+              answer, not a repo - and it keeps its brand blue while GitHub
+              stays in the header's neutral grammar, so the community link is
+              the one the eye lands on. On phones both collapse to their icon;
+              the label would push the wordmark off a 360px screen. */}
+          <div className="flex items-center gap-4">
+            <a
+              href={DISCORD_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md text-sm font-medium text-[#7d87f5] outline-none transition-colors hover:text-[#98a0f8] focus-visible:ring-2 focus-visible:ring-violet-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
+            >
+              <DiscordMark className="size-4 shrink-0" />
+              <span className="hidden sm:inline">Discord</span>
+              <span className="sr-only sm:hidden">Join the Discord</span>
+            </a>
+            <a
+              href="https://github.com/NeoZi12/dispatchseo"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md text-sm font-medium text-neutral-400 outline-none transition-colors hover:text-neutral-200 focus-visible:ring-2 focus-visible:ring-violet-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
+            >
+              <GithubIcon />
+              <span className="hidden sm:inline">GitHub</span>
+              <span className="sr-only sm:hidden">GitHub</span>
+            </a>
+          </div>
         </div>
       </header>
 

@@ -10,7 +10,10 @@ import { usePathname } from "next/navigation";
 // active when its href matches the current pathname exactly (not prefix
 // match, so /docs doesn't light up for every /docs/* page).
 
-type Nav = { section: string; items: { slug: string; title: string; href?: string }[] }[];
+type Nav = {
+  section: string;
+  items: { slug: string; title: string; href?: string; external?: boolean }[];
+}[];
 
 function hrefFor(item: { slug: string; href?: string }) {
   if (item.href) return item.href;
@@ -37,10 +40,19 @@ function NavList({ nav, pathname, onNavigate }: { nav: Nav; pathname: string; on
                   ? "border-violet-400 font-medium text-neutral-100"
                   : "border-transparent text-neutral-400 hover:border-neutral-700 hover:text-neutral-200"
               }`;
+              // An external href (item.external) leaves the app entirely, or -
+              // like /discord - redirects off it. Router navigation has nothing
+              // to render at the other end, so those go out as a plain anchor
+              // in a new tab and the docs page the reader was on stays put.
+              const Tag = item.external ? "a" : Link;
+              const linkProps = item.external
+                ? ({ target: "_blank", rel: "noreferrer" } as const)
+                : {};
               return (
                 <li key={href}>
-                  <Link
+                  <Tag
                     href={href}
+                    {...linkProps}
                     onClick={onNavigate}
                     aria-current={active ? "page" : undefined}
                     className={cls}
@@ -62,7 +74,7 @@ function NavList({ nav, pathname, onNavigate }: { nav: Nav; pathname: string; on
                         />
                       </svg>
                     )}
-                  </Link>
+                  </Tag>
                 </li>
               );
             })}

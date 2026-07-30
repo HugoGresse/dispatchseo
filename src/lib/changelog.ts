@@ -30,6 +30,31 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-30.4",
+    date: "2026-07-30",
+    title: "Someone to ask, from wherever you're stuck",
+    summary:
+      "The Discord is now one click away from the setup wizard and from every page of the docs, instead of only from your settings page.",
+    changes: [
+      {
+        kind: "new",
+        text:
+          "Setup has a link to the Discord in its header, next to the quick guide. Some of setup " +
+          "depends on things no guide can check for you, like whether Google has verified your " +
+          "property yet, and being stalled on step three is when you want a person rather than " +
+          "another page to read.",
+      },
+      {
+        kind: "new",
+        text:
+          "The docs carry the same link in their header and in the Help section of the sidebar, " +
+          "so it's reachable from any page rather than only from the one that happens to mention " +
+          "it. Troubleshooting and Common questions now point there first, with GitHub " +
+          "Discussions kept for anything worth leaving behind for the next person.",
+      },
+    ],
+  },
+  {
     version: "2026-07-30.3",
     date: "2026-07-30",
     title: "Better keywords, and automatic mode stops asking you things",
