@@ -10,8 +10,20 @@
   WHERE IT GOES
     Supabase dashboard -> Authentication -> Email Templates -> "Confirm signup".
     Paste the whole block below (everything after this comment) into the
-    message body field. The template variable {{ .ConfirmationURL }} is
-    rendered by Supabase's Go templating, so the link mechanics are unchanged.
+    message body field. The {{ .SiteURL }} / {{ .TokenHash }} variables are
+    rendered by Supabase's Go templating.
+
+  THE LINK SHAPE IS LOAD-BEARING - DO NOT SWAP IT BACK
+    The confirm link uses token_hash, NOT Supabase's default
+    {{ .ConfirmationURL }}. ConfirmationURL is a PKCE `code` grant, which can
+    only be redeemed in the SAME BROWSER that started the signup: the code
+    exchange needs a verifier cookie that exists nowhere else. Open the email
+    on your phone after signing up on a laptop and Supabase still marks the
+    address confirmed, then /auth/callback fails the exchange and drops the
+    user on "Sign-in failed - check the email and password" - for an account
+    that IS confirmed, with a single-use code now burned so the laptop can't
+    finish either. token_hash goes through verifyOtp instead and is
+    device-independent. See the footnote at the bottom.
 
   NOT LOADED BY THE APP
     Nothing in this repo reads this file at runtime. It lives here as the
@@ -170,7 +182,7 @@
                       style="background-color: #7c3aed; border-radius: 10px; padding: 15px 30px;"
                     >
                       <a
-                        href="{{ .ConfirmationURL }}"
+                        href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=signup"
                         style="display: inline-block; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; line-height: 1; color: #ffffff; text-decoration: none;"
                         >Confirm email address</a
                       >
@@ -201,10 +213,10 @@
                   <tr>
                     <td style="padding: 12px 14px;">
                       <a
-                        href="{{ .ConfirmationURL }}"
+                        href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=signup"
                         class="ds-link"
                         style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Courier New', monospace; font-size: 12px; line-height: 1.6; color: #6d28d9; text-decoration: none; word-break: break-all; overflow-wrap: anywhere;"
-                        >{{ .ConfirmationURL }}</a
+                        >{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=signup</a
                       >
                     </td>
                   </tr>
@@ -267,23 +279,31 @@
 
 <!--
   ============================================================================
-  ALTERNATIVE LINK SHAPE (cross-device confirmation)
+  WHY NOT {{ .ConfirmationURL }} (the shape this template used to ship)
   ============================================================================
 
   {{ .ConfirmationURL }} is Supabase's default: it points at the Supabase
-  /verify endpoint, which consumes the token and redirects. It works, but the
-  session lands wherever the link was opened.
+  /verify endpoint, which consumes the token and redirects back with a PKCE
+  `code`. /auth/callback then calls exchangeCodeForSession, which requires the
+  code-verifier cookie set when signup started - so it only ever works in the
+  browser that signed up.
 
-  The app's /auth/callback route already handles the token_hash shape via
-  verifyOtp, which is the shape that survives a user opening the link on a
-  different device than they signed up on. To switch later, replace BOTH
-  occurrences of {{ .ConfirmationURL }} above (the button href and the plain
-  fallback link, href and text) with:
+  That made a routine thing fatal: sign up on a laptop, open the email on a
+  phone. Supabase's /verify already stamped email_confirmed_at before
+  redirecting, so the account is confirmed - but the phone has no verifier, the
+  exchange fails, and fail() sends the user to /login?error=1, whose only
+  message is "Sign-in failed - check the email and password". The code is
+  single-use, so going back to the laptop and re-clicking fails too, and
+  nothing anywhere says "you're actually confirmed, just sign in."
 
-    {{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=signup
+  token_hash (above) goes through verifyOtp, which carries no browser-bound
+  state and works from any device. This is the same shape the password-recovery
+  template already uses.
 
-  Nothing else in the template changes. Verify Site URL and the redirect
-  allow-list in the Supabase dashboard before switching, or the callback will
-  bounce.
+  Prerequisites, both already configured for the recovery flow: Site URL must be
+  set (it fills {{ .SiteURL }}), and /auth/callback must be covered by the
+  redirect allow-list. If either is wrong the callback bounces.
+
+  Found in the 2026-07-30 reliability audit. Do not revert to ConfirmationURL.
   ============================================================================
 -->
