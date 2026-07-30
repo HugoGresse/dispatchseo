@@ -30,6 +30,53 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-30.5",
+    date: "2026-07-30",
+    title: "Fewer ways to get stuck, and alerts that actually arrive",
+    summary:
+      "A pass over the paths that only break for someone who isn't us: the setup wizard, the " +
+      "confirmation email, the failure alerts, and the jobs running in your repo.",
+    changes: [
+      {
+        kind: "fixed",
+        text:
+          "Failure alert emails now send on Docker installs. They never had: the sender address " +
+          "arrived empty rather than missing, so every alert was rejected on the way out and the " +
+          "error only landed in the container log - while the docs told you no email meant " +
+          "nothing was wrong. If you self-host and wired up Resend, you'll start hearing from it.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Confirming your email works from a different device than you signed up on. The link " +
+          "only worked in the browser that started the signup; anywhere else it confirmed your " +
+          "address and then told you your password was wrong.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "A job in your repo that hangs and hits its time limit now reports that it failed. " +
+          "A cancelled run is neither a success nor a failure to GitHub, so those runs told us " +
+          "nothing at all - the one situation the time limit exists to catch was the one that " +
+          "stayed invisible.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Rank tracking waits quietly while your DataForSEO account is still unfunded instead " +
+          "of reporting a broken job every night. Connecting the credentials and wiring the " +
+          "deposit are two separate steps, and the gap between them is normal.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "The setup wizard says so when a step fails instead of leaving the button dead, the " +
+          "repo picker always offers a way forward even when GitHub returns nothing, and " +
+          "self-hosted installs get the pipeline install card on their first site.",
+      },
+    ],
+  },
+  {
     version: "2026-07-30.4",
     date: "2026-07-30",
     title: "Someone to ask, from wherever you're stuck",

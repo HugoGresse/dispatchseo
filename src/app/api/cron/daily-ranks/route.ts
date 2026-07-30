@@ -7,6 +7,7 @@ import { serpProviderForProject, providerRank, takeSerpapiDecryptFailure } from 
 import { refreshDomainRatingIfStale } from "@/lib/domain-rating";
 import { getLatestSnapshot, gscQueryPositions, gscClientForProject } from "@/lib/gsc";
 import { gscCronReadiness, type GscReadiness } from "@/lib/gsc-readiness";
+import { dataforseoCronReadiness } from "@/lib/dataforseo-readiness";
 import { checkCron } from "@/lib/cron-auth";
 import {
   buildGoogleAiSnapshot,
@@ -119,6 +120,12 @@ async function runRanks(
       if (decryptErr) return { failed: [decryptErr] };
       return { skipped: "no DataForSEO connected" };
     }
+    // Credentials saved is not the same as an account that can pay. An unfunded
+    // BYO account is a normal mid-setup state (Home's "Fund DataForSEO" card
+    // owns it), and without this gate it threw a non-transient error that 500'd
+    // the run and emailed on the first failure, every night.
+    const dfsReady = await dataforseoCronReadiness(project, creds);
+    if (!dfsReady.ready) return { skipped: dfsReady.skipped };
     // The governor only ever throttles platform-billed projects - BYO
     // accounts spend their own money at full cadence.
     let pacing: PacingLevel = "normal";
@@ -259,6 +266,11 @@ async function runProject(project: Project): Promise<Record<string, unknown>> {
     } else {
       result.dr = { skipped: "no DataForSEO connected" };
     }
+  } else if (!(await dataforseoCronReadiness(project, creds)).ready) {
+    // Same funding gate as the ranks half. DR is the other call that turned an
+    // unfunded account into a nightly 500 + email: refreshDomainRatingIfStale
+    // reports failed:true, which sets hadError directly.
+    result.dr = { skipped: "setup incomplete: DataForSEO account has no funds yet" };
   } else {
     try {
       const { rating, refreshed, failed } = await refreshDomainRatingIfStale(
