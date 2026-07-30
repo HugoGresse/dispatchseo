@@ -6,6 +6,7 @@ import { AuthDivider, GoogleSignInButton } from "@/components/google-signin";
 import { AuthShell } from "@/components/auth-shell";
 import { FormPending } from "@/components/dispatching";
 import { ResendConfirmation, type ResendResult } from "@/components/resend-confirmation";
+import { SignupRequirements } from "@/components/signup-requirements";
 import { isCloudMode } from "@/lib/cloud";
 import { supabaseAuth } from "@/lib/cloud-auth";
 import { authCallbackUrl } from "@/lib/origin";
@@ -239,6 +240,10 @@ export default async function SignupPage({
             <>Create a free account and have Claude Code run your site&apos;s SEO for you.</>
           )}
         </p>
+        {/* Said before the email field, not after checkout: the wizard's first
+            screen is where a WordPress owner used to discover there was no
+            repo to publish into, and that screen sits past the card. */}
+        <SignupRequirements />
         <GoogleSignInButton label="Sign up with Google" domain={domain} />
         <AuthDivider />
         <form action={signup} className="space-y-4">

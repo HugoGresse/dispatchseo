@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { MascotFace } from "@/components/mascot-face";
 import { PixelDispatcher } from "@/components/pixel-dispatcher";
 
 // "Why DispatchSEO?" mascot explainer for the public landing page.
@@ -25,51 +26,8 @@ import { PixelDispatcher } from "@/components/pixel-dispatcher";
 // popover becomes a bottom sheet, which is the only thing `compact` still
 // decides: modal semantics, the scrim, and the scroll lock.
 
-// The clay agent's front face - the exact BODY_OPEN grid from the pixel
-// dispatcher, minus the headset. Same character as the animation, drawn as
-// crisp SVG rects. Sits fully inside the resting tab as a contained avatar.
-const FACE = [
-  "...cccccc...",
-  "..cccccccc..",
-  ".cccccccccc.",
-  ".cccccccccc.",
-  ".ccccecccec.",
-  ".ccccecccec.",
-  ".cccccccccc.",
-  ".cCCCCCCCCc.",
-  "..CCCCCCCC..",
-];
-const FACE_COLORS: Record<string, string> = {
-  c: "#d97757",
-  C: "#b0563a",
-  e: "#1a1a1e",
-};
-
-function MascotFace({ className }: { className?: string }) {
-  const cols = FACE[0].length;
-  const rows = FACE.length;
-  const rects: ReactNode[] = [];
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const ch = FACE[r][c];
-      if (ch === ".") continue;
-      rects.push(
-        <rect key={`${r}-${c}`} x={c} y={r} width={1} height={1} fill={FACE_COLORS[ch]} />,
-      );
-    }
-  }
-  return (
-    <svg
-      className={className}
-      viewBox={`0 0 ${cols} ${rows}`}
-      aria-hidden="true"
-      shapeRendering="crispEdges"
-    >
-      {rects}
-    </svg>
-  );
-}
-
+// The resting tab's avatar is the shared clay face (mascot-face.tsx) - the
+// same character the signup notice draws, so the two surfaces cannot drift.
 const POINTS: Array<{ icon: ReactNode; lead: string; body: string }> = [
   {
     icon: (
