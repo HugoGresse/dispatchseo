@@ -30,7 +30,7 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: "2026-07-30.2",
+    version: "2026-07-30.3",
     date: "2026-07-30",
     title: "Better keywords, and automatic mode stops asking you things",
     summary:
@@ -57,11 +57,19 @@ export const CHANGELOG: ChangelogEntry[] = [
       {
         kind: "improved",
         text:
-          "On automatic mode you are never asked to approve anything. Ideas too hard for your site " +
-          "today are HELD, with no Approve button and no chore - and every research run releases " +
-          "them by itself once your site's authority has grown enough to win them. Some weeks that " +
-          "means 4 guides instead of 7: it will not pad your queue with keywords it doesn't " +
-          "believe in, and it will not hand you the difference either.",
+          "On automatic mode you are never asked to approve anything, and nothing sits in limbo " +
+          "either. Ideas are decided when they're researched - approved or dropped, with the reason " +
+          "recorded - rather than parked \"until your site is stronger\", which on a new site means " +
+          "months away and possibly never. The decision uses the page-1 check it already paid for: " +
+          "if nobody established was ranking there, it goes ahead, even when the data provider " +
+          "returned no difficulty score at all. A missing score is a missing guess about a page " +
+          "we already looked at.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Some weeks that means 4 guides instead of 7. It won't pad your queue with keywords it " +
+          "doesn't believe in, and it won't hand you the difference to sort out either.",
       },
       {
         kind: "improved",

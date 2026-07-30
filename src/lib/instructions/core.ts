@@ -142,37 +142,35 @@ invented volumes, difficulties, positions, or stats, ever.
     today, not evidence of a soft field. Two weak results sitting under five
     strong ones is a strong SERP.
   - Auto-approve zone -> guides get approved per the build-first policy.
-  - **A measured-clean page 1 promotes a pending-zone candidate into the
-    auto-approve zone.** If the live SERP check returns an authority count of
-    **0-2**, the candidate may be auto-approved even though its KD sits in the
-    pending zone. That is not a loosening of this bar - it is this bar's own
-    precedence applied consistently. KD is a backlink-derived PROXY for
-    competition; the authority count is the thing the proxy is estimating, and
-    the rules above already say the SERP overrules KD and already waive the
-    VOLUME ceiling on exactly this signal. Refusing to approve a keyword whose
-    page 1 you have LOOKED AT and found soft is the proxy overruling the
-    measurement.
-    Authority count 3 stays held (the soft edge, dead-on ICP only); 4+ is
-    dropped by the gate regardless. Name the promotion in the rationale with
-    the count, so it stays auditable: "KD 16 is above the DR-0 auto-approve
-    line, promoted on a measured authority count of 1/10". This spends nothing
-    extra - the SERP check has already run by the time this applies.
-  - Pending zone (and no clean-page-1 promotion) -> propose, leave \`pending\`,
-    and never auto-approve above the auto-approve ceiling. What that pending row MEANS depends on the project's
-    mode, and conflating the two is what made hands-off mode ask for hands:
-    - **\`auto_approve\` TRUE (Auto) -> it is HELD, not a question.** The owner
-      chose hands-off; you may not hand them a decision. Prefix the rationale
-      "HELD - KD <n> is above this site's auto-approve ceiling of <m>;
-      releases itself as DR grows" and do NOT write "FLAGGED FOR YOUR CALL" or
-      otherwise ask the owner for anything. The dashboard renders it as held
-      with no Approve button, and the research workflow's release step frees it
-      once the site's authority catches up - so a held idea is neither a chore
-      nor stranded.
-    - **\`auto_approve\` FALSE (Semi) -> it IS the owner's call.** Leave
-      "FLAGGED FOR YOUR CALL" in the rationale, as before.
-    Tool ideas follow the same split through \`auto_approve_tools\`.
-  - Above the pending zone -> do not propose; note it as a future target once
-    DR grows.
+  - **Once you have checked the SERP, the authority count IS the verdict and
+    KD stops gating.** KD's only remaining job is deciding which candidates are
+    worth spending a check on (cheap filters first - see the budget rule).
+    After you have looked at page 1, what you SAW decides, because that count
+    measures directly the thing KD only estimates from backlink profiles:
+    - **Authority count 0-2 -> APPROVE**, whatever KD said, and equally when
+      DataForSEO returned no KD at all. A missing KD is not grounds to
+      withhold: it is a missing ESTIMATE of the thing you just MEASURED.
+    - **3 -> approve only if the ICP fit is dead-on** (the soft edge);
+      otherwise reject, and say which it was.
+    - **4+ -> reject.** The gate is unchanged and nothing overrides it.
+    Name the count in every rationale so the call stays auditable: "KD 16 is
+    above the DR-0 line, approved on a measured authority count of 1/10".
+    This spends nothing extra - the check has already run by this point.
+  - **On an Auto project there is no HELD state. Decide, do not park.** A
+    hands-off project ends every run with each researched idea either approved
+    or rejected and the reason recorded. Parking one "until DR grows" sounds
+    patient and is really shelving: DR movement on a young site is months away
+    and not guaranteed, so a held row is a decision nobody ever makes. You have
+    the SERP evidence at proposal time - use it. The only rows that may sit
+    undecided on an Auto project are the owner's own \`manual\` drafts and
+    anything they rejected themselves.
+    An unchecked candidate is still never queued on assumption (budget rule) -
+    it simply is not proposed, so it never becomes a held row either.
+  - **On a Semi project pending IS the product**, not a failure: leave
+    "FLAGGED FOR YOUR CALL" in the rationale and let the owner decide. Tool
+    ideas follow the same split through \`auto_approve_tools\`.
+  - Above the pending zone with no SERP check to overrule it -> do not propose;
+    note it as a future target once DR grows.
 - Every page must genuinely be the best answer on page 1 for its query. No
   thin content, no padding. If the best you can produce is a me-too page, do
   not propose it.

@@ -7,7 +7,7 @@
 // together with the markdown below - they describe the same pipeline.
 export const RESEARCH_STEPS = [
   { title: "Review", plain: "Looks at how the pages it already published are actually doing in Google - what ranked, what stalled - and lets that steer this week's picks. It waits until at least 10 pages have had three weeks to settle before drawing any conclusion, so it can't invent a pattern from two lucky posts." },
-  { title: "Release", plain: "Frees any idea that was parked as too hard for your site, but isn't any more - your site gets stronger, the bar rises with it, and parked ideas come back on their own. On automatic mode this is the only way they ever get built, because automatic mode never asks you to approve anything." },
+  { title: "Decide", plain: "Clears out anything left undecided. On automatic mode nothing is ever parked \"until your site is stronger\" - that day is months away and might not come, so it decides now using the page-1 evidence it already paid for: if nobody established was sitting there, it goes ahead, even when there was no difficulty score at all. Missing score, already-measured page - the measurement wins." },
   { title: "Learn", plain: "Re-reads what your product actually is, from your repo, every single run." },
   { title: "Aim", plain: "Your product can be described honestly in several ways, and they're not equally winnable - \"SEO software\" is a market Ahrefs has owned for 15 years, \"agents that do work for you\" is two years old. So it measures each description against your site's current strength, then spends the week on whichever one you can actually win, and shows you the numbers behind the choice. It sticks with that subject rather than hopping, because twenty posts spread across five subjects makes you an authority on none." },
   { title: "Derive", plain: "Asks: what would someone google right before your product is the answer? 40-60 candidates, hunting buying-intent first (comparisons, 'best X', alternatives) rather than 'what is X' traffic that never converts - but the quality bar still decides what makes it in." },
@@ -65,27 +65,35 @@ product:
    On a site with no settled pages at all, say "no outcome data yet - first
    runs" and move on. This step gets sharper every week; once past the
    threshold it should be the single biggest influence on what gets queued.
-0.5 **Release the held ideas the bar now admits (Auto projects especially).**
-   Your site's authority rises over time, and the KD ceiling rises with it, so
-   ideas parked in the pending zone months ago may now sit INSIDE the
-   auto-approve zone. Read \`get_domain_rank\`, compute this run's ceiling from
-   the quality bar's table, list \`get_suggestions\` status "pending" source
-   "research", and \`update_suggestion(id, status="approved")\` every one whose
-   KD is now UNDER that ceiling - oldest first. Say in the report how many were
-   released and at what ceiling.
+0.5 **Clear the held backlog - an Auto project ends this step with ZERO
+   undecided research ideas.** List \`get_suggestions\` status "pending" source
+   "research". On a project with \`auto_approve\` on, every one of these is a
+   decision somebody deferred, and deferral is not a state this mode has. Do
+   NOT wait for DR to rise: on a young site that is months away and may never
+   happen, so "held until the ceiling moves" is shelving with a kinder name.
 
-   **This is NOT the quota ladder's rung 2, and the difference is the whole
-   point.** Rung 2 promotes ideas that are STILL above the bar, to hit a
-   number - it stays closed under DR 20. This step releases ideas the bar now
-   ADMITS on their own merits, which is not a favour to the cadence and needs
-   no exception. Nothing here bends the bar; the bar moved.
+   Decide each one now, from the authority count ALREADY RECORDED in its
+   rationale and \`serp_notes\` - that check was paid for when the idea was
+   proposed, so this step costs nothing:
+   - count **0-2** -> \`update_suggestion(id, status="approved")\`, including
+     when the row has no KD at all. Missing KD is a missing estimate of a thing
+     already measured; it is not a reason to withhold.
+   - count **3** -> approve if the ICP fit is dead-on, else reject with the
+     reason.
+   - count **4+** -> reject; the gate has not changed.
+   - **no count recorded** (an older row, or a run that ran out of budget) ->
+     spend one SERP check on it if the budget allows and decide as above. If
+     the budget is gone, reject it with "unchecked - re-propose when budget
+     allows" rather than leaving it parked, and say so in the report.
 
-   On an Auto project this step is also what makes "held" honest: the owner is
-   never asked to approve anything, so releasing held ideas as authority grows
-   is the ONLY path by which they ever get built. Skipping it strands them
-   permanently. Never release an idea the owner rejected, and never one with
-   source "manual" (those are the owner's own drafts, awaiting THEIR decision
-   in both modes).
+   Report the counts: how many released, how many rejected, and how many
+   remain undecided (which should be 0 on Auto). Never touch an idea the owner
+   rejected, and never one with source "manual" - those are the owner's own
+   drafts, awaiting THEIR decision in both modes.
+
+   On a SEMI project this step does the opposite: leave pending ideas pending,
+   because there the owner's judgment is the feature. Just report what awaits
+   them, oldest first.
 1. **Read the product surface** (skim, do not deep-read): the product-surface
    files listed in the conventions file, plus the existing content
    inventory - published slugs in the guides directory and the tools
