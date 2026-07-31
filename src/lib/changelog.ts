@@ -56,7 +56,33 @@ export type ChangelogEntry = {
 // Shipped, but not yet announced. Append here as the work lands; empty this
 // into a new CHANGELOG entry when it's time to cut a release. Nothing reads
 // this list - it exists so that writing the note down doesn't ping anyone.
-export const UNRELEASED: { kind: ChangeKind; text: string }[] = [];
+export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
+  {
+    kind: "improved",
+    text:
+      "The sweep that merges finished guides used to run on every status your CI reported - " +
+      "including the ones saying a check had only just started. Vercel alone posts several " +
+      "of those per preview, and each one cost a whole billed minute to wake up and discover " +
+      "there was nothing to do yet. It now sits out anything that can't possibly be ready. " +
+      "A green guide still merges within a minute of its last check, exactly as before.",
+  },
+  {
+    kind: "improved",
+    text:
+      "The safety sweep behind it dropped from hourly to every six hours. It exists for the " +
+      "rare case where GitHub loses an event, and it was spending about 300 minutes a month " +
+      "per site confirming there was nothing to merge - 15% of the free GitHub allowance on " +
+      "a check that almost never finds anything. Public repos have always had unlimited " +
+      "minutes and were never affected.",
+  },
+  {
+    kind: "improved",
+    text:
+      "DispatchSEO stopped describing itself as a Claude Code product. Codex does everything " +
+      "Claude Code does here, so the site, the docs and the dashboard now say \"your coding " +
+      "agent\" and name both wherever it matters - no change to how anything works.",
+  },
+];
 
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [

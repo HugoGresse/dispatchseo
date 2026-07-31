@@ -57,7 +57,6 @@ import {
 } from "@/lib/indexing";
 import { getPacing } from "@/lib/pacing";
 import { mcpAddCommand, mcpServerName, setupCommand, setupCommandPS } from "@/lib/mcp-connect";
-import { projectAgent } from "@/lib/agents";
 import { requestOrigin } from "@/lib/request-origin";
 import { ShellCommandTabs } from "@/components/shell-command-tabs";
 import { PacingLine } from "@/components/pacing-info";
