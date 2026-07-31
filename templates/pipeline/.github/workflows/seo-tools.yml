@@ -7,15 +7,18 @@ name: SEO tool builder
 #
 # Tools are approve-idea-first: nothing builds until the user greenlights the
 # concept on the dashboard. Three triggers:
-#   1. repository_dispatch "seo-tool-approved" - the dashboard fires this the
-#      moment a tool suggestion is approved, so the build starts immediately.
-#   2. Weekly sweep (Wednesday 05:42, 12:42, 19:42 UTC) - fallback that catches
-#      anything the dispatch missed (backend hiccup, approval made while
-#      Actions was down), with same-day retries if GitHub's scheduler drops or
-#      delays the first attempt - the guard step's ran-today check skips any
-#      later attempt once one of them already succeeded.
+#   1. repository_dispatch "seo-tool-approved" - fired both the moment a tool
+#      suggestion is approved AND by the backend's scheduler when the weekly
+#      cadence comes due with something approved waiting (api/cron/seo-dispatch).
+#      This is the real schedule now.
+#   2. Weekly cron (Wednesday 19:42 UTC) - a DEAD-MAN'S SWITCH for a backend
+#      that cannot dispatch at all. It was three crons (05:42, 12:42, 19:42)
+#      purely to self-heal a trigger GitHub might drop; the backend re-fires
+#      until a run reports back, so the other two were paying GitHub's
+#      one-minute-minimum to discover there was nothing to do.
 #   3. workflow_dispatch - manual runs.
-# If the queue has no approved tools, the run exits cleanly.
+# If the queue has no approved tools, the run exits cleanly - and the backend
+# will not dispatch at all in that case, so the runner never starts.
 #
 # Merging: tool PRs are NOT merged by this workflow. The seo-tool-validate
 # workflow smoke-tests the built tool live and labels it tool-validated; the
@@ -25,9 +28,7 @@ on:
   repository_dispatch:
     types: [seo-tool-approved]
   schedule:
-    - cron: "42 5 * * 3" # Wednesdays 05:42 UTC (offset off the top of the hour) - researcher fills the queue Monday
-    - cron: "42 12 * * 3" # 12:42 UTC retry, if the 05:42 attempt was dropped/delayed
-    - cron: "42 19 * * 3" # 19:42 UTC retry, if the 12:42 attempt was dropped/delayed too
+    - cron: "42 19 * * 3" # Wednesdays 19:42 UTC - dead-man's switch only, see above
   workflow_dispatch:
 
 concurrency:
@@ -84,19 +85,28 @@ jobs:
               echo "::error::project-mode endpoint returned HTTP $code"; exit 1
             fi
           fi
-          # Already-ran-today gate: this workflow now retries at 12:42 and
-          # 19:42 UTC if an earlier attempt was dropped or delayed by GitHub's
-          # scheduler - a retry must not re-run once today's earlier attempt
-          # already succeeded. Reuses the project-mode fetch above (same
-          # tolerant rule: anything but a clean "true" reads as "not run yet").
-          # SCHEDULE-only. This exists so a same-day retry does not redo the
-          # earlier attempt's work; it was never meant to gate an ON-DEMAND run.
+          # Already-ran-today gate, for the dead-man's cron: it must not redo
+          # work an earlier dispatch already did the same day. Reuses the
+          # project-mode fetch above (same tolerant rule: anything but a clean
+          # "true" reads as "not run yet").
+          # SCHEDULE-only. This exists so the fallback does not redo the
+          # dispatched run's work; it was never meant to gate an ON-DEMAND run.
           # Without the event_name test, an owner approving a tool after that
           # day's sweep had the build silently skipped - every step no-op'd, the
           # final step still reported ok=1, and the next chance was seven days
           # later (2026-07-27).
           if [ "$EVENT_NAME" = "schedule" ] && [ "$open" = "0" ] && [ "$code" = "200" ] && [ "$(jq -r '.ran_today."seo-tools" // false' /tmp/mode.json 2>/dev/null)" = "true" ]; then
             echo "Today's tool sweep already ran - skipping this attempt."
+            open=skip
+          fi
+          # Empty-queue gate. The backend never dispatches with nothing
+          # approved, so this is for the dead-man's cron: without it, a weekly
+          # fallback on a project with an empty tool queue starts a full
+          # coding-agent session purely to have the agent exit clean.
+          # Absent field (older backend) or any non-200 reads as "work is
+          # waiting", so this can only ever cost a run, never suppress one.
+          if [ "$open" = "0" ] && [ "$code" = "200" ] && [ "$(jq -r '.approved_waiting.tool // true' /tmp/mode.json 2>/dev/null)" = "false" ]; then
+            echo "No approved tool suggestions are waiting - nothing to build."
             open=skip
           fi
           echo "open=$open" >> "$GITHUB_OUTPUT"

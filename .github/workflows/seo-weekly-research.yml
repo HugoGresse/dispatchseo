@@ -8,21 +8,26 @@ name: SEO weekly research
 # pending). No PR - it only writes to the queue via the seo-manager MCP, which
 # you then see on the dashboard. This replaces the old REST opportunities cron.
 #
-# Runs up to three times on Monday (06:23, 13:23, 20:23 UTC) so a trigger
-# GitHub's scheduler drops or delays self-heals the same day instead of
-# losing the whole week: the guard step's ran-today check skips any later
-# attempt once one of them already succeeded. Offset off the top of the
-# hour - GitHub's scheduler queues/drops on-the-hour triggers more than odd
-# minutes.
+# WOKEN BY THE BACKEND, which owns the weekly cadence and re-fires until a run
+# actually reports back (api/cron/seo-dispatch). This used to be three crons on
+# Monday (06:23, 13:23, 20:23 UTC) purely so a trigger GitHub dropped or delayed
+# self-healed the same day instead of losing the whole week - and GitHub bills a
+# full minute for each attempt that woke a runner only to find the week's
+# research already done.
+#
+# The remaining cron is a DEAD-MAN'S SWITCH for a backend that cannot dispatch
+# at all. It is the LAST of the old three, so on a healthy week the morning
+# dispatch has already run and the guard below exits in seconds. Offset off the
+# top of the hour - GitHub's scheduler queues/drops on-the-hour triggers more
+# than odd minutes.
 
 on:
   schedule:
-    - cron: "23 6 * * 1" # Mondays 06:23 UTC (offset off the top of the hour)
-    - cron: "23 13 * * 1" # 13:23 UTC retry, if the 06:23 attempt was dropped/delayed
-    - cron: "23 20 * * 1" # 20:23 UTC retry, if the 13:23 attempt was dropped/delayed too
-  # The backend fires this the first time a freshly-installed project's queue is
-  # still empty (onboarding/status first-run trigger), so the dashboard fills
-  # itself instead of asking the owner to run a command.
+    - cron: "23 20 * * 1" # Mondays 20:23 UTC - dead-man's switch only, see above
+  # Also the backend's on-demand trigger: fired the first time a freshly
+  # installed project's queue is still empty (so the dashboard fills itself
+  # instead of asking the owner to run a command), and by the scheduler above
+  # whenever the weekly cadence comes due.
   repository_dispatch:
     types: [seo-research]
   workflow_dispatch:
@@ -41,11 +46,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # This workflow now retries later the same day (13:23/20:23 UTC) if an
-      # earlier attempt was dropped or delayed by GitHub's scheduler - a retry
-      # must not re-run once today's earlier attempt already succeeded.
-      # Best-effort: missing field, non-200, or a parse failure all read as
-      # "not run yet" so this check can never itself block a run.
+      # The dead-man's cron must not redo work the backend's dispatch already
+      # did earlier the same day. Best-effort: missing field, non-200, or a
+      # parse failure all read as "not run yet" so this check can never itself
+      # block a run.
       - name: Skip if today's research already ran
         id: guard
         env:
@@ -53,10 +57,10 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           skip=0
-          # The ran-today check exists for SCHEDULE-vs-SCHEDULE retries: this
-          # workflow runs several times a day so a trigger GitHub drops or
-          # delays self-heals, and a later attempt must not redo the earlier
-          # one's work. It was never meant to gate an ON-DEMAND run, but it did
+          # The ran-today check gates the SCHEDULED run only - now the
+          # dead-man's cron, historically the later of three same-day retries.
+          # Either way it must not redo work an earlier trigger already did.
+          # It was never meant to gate an ON-DEMAND run, but it once did
           # - the check ignored github.event_name, so any repository_dispatch or
           # workflow_dispatch arriving after a scheduled run that day was
           # silently no-op'd, and the final step still reported ok=1. Approve a

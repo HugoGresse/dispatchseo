@@ -35,10 +35,22 @@ log() { echo "[builder] $(date -u '+%Y-%m-%dT%H:%M:%SZ') $*"; }
 # 40-char job-name cap that every long slug tripped) looked identical to a
 # successful one. Still non-fatal by design - a logging failure must never kill
 # the builder - but now it SAYS so in the container logs.
-report() { # report <job-key> <ok|fail> [message]
+report() { # report <job-key> <ok|fail|deferred> [message]
   if [ "$2" = "ok" ]; then
     resp=$(curl -sG --max-time 30 -w '\n%{http_code}' -H "Authorization: Bearer ${CRON_SECRET}" \
       --data-urlencode "job=$1" --data-urlencode "ok=1" \
+      "${APP}/api/cron/deploy-check" 2>&1) || resp="${resp}
+000"
+  elif [ "$2" = "deferred" ]; then
+    # Ran, hit a usage limit, built nothing. NOT ok: the backend works out what
+    # is due by reading these rows (build-schedule.ts), and an ok row is a
+    # completed run - it would restart the full cadence window and hold the job
+    # back for up to 20h, so an evening deferral silently costs a day while the
+    # dashboard shows green. `deferred` lands as a claim instead, which the
+    # short grace window re-offers on the next poll, and which goes stale and
+    # alarms if the deferrals never stop.
+    resp=$(curl -sG --max-time 30 -w '\n%{http_code}' -H "Authorization: Bearer ${CRON_SECRET}" \
+      --data-urlencode "job=$1" --data-urlencode "deferred=$3" \
       "${APP}/api/cron/deploy-check" 2>&1) || resp="${resp}
 000"
   else
@@ -324,7 +336,7 @@ run_job() { # run_job <base64 job json>
       case "$pcode:$perr" in
         2*:*|429:rate_limit_exceeded)
           log "job $key deferred - Codex rate limit (clears by itself)"
-          report "$key" ok
+          report "$key" deferred "Codex was rate-limited this run - retried automatically."
           return ;;
         429:*|402:*)
           log "job $key FAILED - OpenAI account out of credit ($perr)"
@@ -340,10 +352,11 @@ run_job() { # run_job <base64 job json>
     log "job $key FAILED: $msg"
     report "$key" fail "$msg"
   elif echo "$msg" | grep -qiE 'usage limit|limit reached|rate.?limit'; then
-    # A usage-limit hit is a deferral, not a failure - the next due window
-    # retries, exactly like the cloud workflow's 12:00/19:00 reruns.
+    # A usage-limit hit is a deferral, not a failure - the job stays due and
+    # the next poll picks it back up, the same contract the GitHub Actions
+    # builder gets from its own defer path.
     log "job $key deferred - Claude usage limit"
-    report "$key" ok
+    report "$key" deferred "Claude hit a usage limit this run - retried automatically."
   else
     [ -n "$msg" ] || msg="claude exited $rc (see $out in the dispatch-builder volume)"
     log "job $key FAILED: $msg"

@@ -9,17 +9,38 @@ name: SEO daily builder
 # more on top. Publishing is handled by seo-auto-merge.yml: guide PRs whose
 # checks all pass are merged hands-off; tool PRs are left for you to merge.
 #
-# Runs up to three times a day (05:13, 12:13, 19:13 UTC) so a Claude usage-limit
-# hit is a quiet deferral, not a lost day: the guard step's built-today check
-# skips any later attempt once one of them actually built a guide. Offset off
-# the top of the hour - GitHub's scheduler queues/drops on-the-hour triggers
-# more than odd minutes.
+# WOKEN BY THE BACKEND, not by a cron chain. The dashboard decides when a build
+# is due and fires the seo-guide-build repository_dispatch (see
+# api/cron/seo-dispatch) - it already knows whether anything is approved,
+# whether a PR is still open, and whether today's guide is built, so it can
+# answer all of that without starting a runner.
+#
+# This used to run three times a day (05:13, 12:13, 19:13 UTC): once to work,
+# twice as insurance against GitHub's scheduler dropping a trigger and against
+# a Claude usage-limit deferral. GitHub bills a full minute minimum for every
+# job that claims a runner, so those two extra attempts cost real money on your
+# account to re-discover, in the guard step below, something the dashboard
+# already knew. The backend retries instead - its own scheduler ticks every few
+# hours, and a deferred run simply stays due.
+#
+# The single cron below is a DEAD-MAN'S SWITCH, not the schedule. It covers the
+# one case the backend cannot report on: the backend itself being down or
+# unable to reach this repo, which would otherwise stop every dispatch with
+# nothing left running to notice. It fires LATE in the day on purpose - by
+# 19:13 a healthy backend has long since dispatched, so the guard below finds
+# today's guide already built and exits in seconds.
+#
+# Daily rather than weekly, deliberately. A weekly switch is cheaper (~8 billed
+# minutes a month against ~60) but it lets a dead backend cost up to six days
+# of publishing on a product whose whole promise is a guide a day. One day is
+# an acceptable worst case; six is not. Offset off the top of the hour: GitHub
+# queues/drops on-the-hour triggers more than odd minutes.
 
 on:
+  repository_dispatch:
+    types: [seo-guide-build]
   schedule:
-    - cron: "13 5 * * *" # 05:13 UTC daily
-    - cron: "13 12 * * *" # 12:13 UTC retry, if the 05:13 attempt deferred (usage limit)
-    - cron: "13 19 * * *" # 19:13 UTC retry, if the 12:13 attempt deferred too
+    - cron: "13 19 * * *" # 19:13 UTC - dead-man's switch only, see above
   workflow_dispatch:
 
 concurrency:
@@ -67,17 +88,20 @@ jobs:
               open=paused
             elif [ "$code" = "unreachable" ] || [ "$code" = "000" ] || [ "$code" = "502" ] || [ "$code" = "503" ] || [ "$code" = "504" ]; then
               # Self-hosted backends reboot (kernel updates, docker restarts).
-              # Unreachable is a delay, not a failure - the later scheduled
-              # attempt and the in-stack builder both cover this window.
-              echo "Backend unreachable right now (rebooting?) - deferring to the next scheduled attempt."
+              # Unreachable is a delay, not a failure - the backend re-dispatches
+              # on its next tick (the job stays due until something reports a
+              # real outcome), and the in-stack builder covers this window too.
+              echo "Backend unreachable right now (rebooting?) - deferring; it will re-dispatch when it is back."
               open=defer
             elif [ "$code" != "200" ] && [ "$code" != "404" ]; then
               echo "::error::project-mode endpoint returned HTTP $code"; exit 1
             fi
           fi
-          # Already-built-today gate: this workflow now retries at 12:00 and
-          # 19:00 if an earlier attempt deferred (usage limit) - a retry must
-          # not build a second guide once one attempt today already succeeded.
+          # Already-built-today gate. The backend also checks cadence before it
+          # dispatches, so this is the second of two gates, not the only one -
+          # it still matters because workflow_dispatch, the daily dead-man's
+          # cron, and a re-dispatch after an unreported run can all arrive on a
+          # day that already has its guide.
           # Best-effort: missing field, non-200, or a parse failure all read
           # as "not built yet" so this check can never itself block a build.
           if [ "$open" = "0" ]; then
@@ -86,6 +110,21 @@ jobs:
               {{BACKEND_URL}}/api/project-mode) || code=unreachable
             if [ "$code" = "200" ] && [ "$(jq -r '.built_today.guide // false' /tmp/mode.json 2>/dev/null)" = "true" ]; then
               echo "Today's guide is already built - skipping this attempt."
+              open=skip
+            fi
+          fi
+          # Empty-queue gate, and it belongs HERE rather than inside the agent
+          # run. The backend never dispatches with an empty queue, so on the
+          # normal path this is already known - but the dead-man's cron below
+          # has no such knowledge, and without this it would start a full
+          # coding-agent session every day on a project with nothing approved,
+          # just to have the agent exit cleanly. That is the expensive shape of
+          # the no-op this whole design removes.
+          # Absent field (older backend) or any non-200 reads as "work is
+          # waiting", so this can only ever cost a run, never suppress one.
+          if [ "$open" = "0" ] && [ "$code" = "200" ]; then
+            if [ "$(jq -r '.approved_waiting.guide // true' /tmp/mode.json 2>/dev/null)" = "false" ]; then
+              echo "No approved guide suggestions are waiting - nothing to build."
               open=skip
             fi
           fi
@@ -361,10 +400,18 @@ jobs:
             fi
           fi
 
+          # A deferral is reported as `deferred`, NOT as ok. The difference
+          # decides whether this guide gets built today at all: the dashboard
+          # works out what is due by reading these reports, and an `ok` row is a
+          # COMPLETED run - it would start the full daily window over and
+          # suppress the retry, so an evening usage limit would silently cost a
+          # day while the dashboard showed green. `deferred` says "ran, built
+          # nothing", which keeps the job due and gets it re-dispatched within
+          # hours.
           defer() {
             echo "::notice::$1"
             curl -sG --max-time 30 -H "Authorization: Bearer $SEO_MCP_API_KEY" \
-              --data-urlencode "job=seo-daily" --data-urlencode "ok=1" \
+              --data-urlencode "job=seo-daily" --data-urlencode "deferred=$1" \
               "{{BACKEND_URL}}/api/cron/deploy-check" || true
             exit 0
           }
@@ -383,7 +430,7 @@ jobs:
             # A subscription usage limit is a deferral, not a failure: the
             # 12:00/19:00 attempts pick it up.
             if echo "$msg" | grep -qiE 'usage limit|limit reached|rate.?limit'; then
-              defer "Claude hit a usage limit this run - deferring to the next scheduled attempt (12:00 or 19:00 UTC). Not a failure."
+              defer "Claude hit a usage limit this run - the dashboard keeps this build due and re-dispatches it within a few hours. Not a failure."
             fi
             reason="workflow failed (no error detail captured)"
             [ -n "$msg" ] && reason="$msg"
@@ -416,9 +463,9 @@ jobs:
           case "$probe:$err" in
             2*:*)
               # The key works now, so whatever 429 hit mid-run has cleared.
-              defer "Codex hit a transient rate limit this run - the key tests healthy now, so this is deferred to the next scheduled attempt (12:00 or 19:00 UTC). Not a failure." ;;
+              defer "Codex hit a transient rate limit this run - the key tests healthy now, so the dashboard keeps this build due and re-dispatches it within a few hours. Not a failure." ;;
             429:rate_limit_exceeded)
-              defer "Codex is rate-limited right now - deferring to the next scheduled attempt (12:00 or 19:00 UTC). Not a failure." ;;
+              defer "Codex is rate-limited right now - the dashboard keeps this build due and re-dispatches it within a few hours. Not a failure." ;;
             429:*|402:*)
               # Every other 429 is a billing state: credit_balance_exhausted,
               # insufficient_quota, or an org/project spend or usage cap. None

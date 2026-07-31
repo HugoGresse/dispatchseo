@@ -104,7 +104,7 @@ Open your dashboard, go to **Settings → Coding agent**, and pick **Codex**.
 That one switch is what the scheduled builders read. It does not affect
 anything you do at a keyboard: whatever agent you have connected over MCP
 drives the dashboard's whole tool set regardless of what this says. It only
-decides who wakes up at 05:13.
+decides who runs your scheduled builds.
 
 If the new agent has no credential where your builders run, the dashboard
 says so at the moment you switch rather than letting you find out from a
@@ -161,7 +161,7 @@ nothing else about the wiring changes.
 Both the install script and the dashboard verify a pasted key with a real
 inference call before storing it, rather than a shape check. A stored key
 that doesn't work reads as "automatic builds are set up" and only announces
-itself as a failed run at 05:13.
+itself as a failed run the next time a build is due.
 
 ## Things that surprise people
 

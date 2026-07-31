@@ -571,6 +571,10 @@ export default async function LandingPage({
               <summary>How do I get started on cloud?</summary>
               <div className="a">Sign up and start your 7-day free trial on Starter - you enter a card at checkout, nothing is charged until the trial ends, and you can cancel in one click before then. The setup wizard walks you through connecting your site, about ten minutes end to end. Need more sites right away? Pick Growth or Scale at checkout (billed today), or upgrade anytime.{founding ? <> Right now the first {founding.cap} sites get the founding price: {founding.discountPct}% off, locked for life, so Starter is {foundingPriceLabel("starter")}/mo instead of {listPriceLabel("starter")}. It ends {founding.endsAtLabel}. I&apos;m capping it at {founding.cap} because that&apos;s how many sites I can personally onboard and support while still building. When it&apos;s full, it&apos;s full.</> : null}</div>
             </details>
+            <details>
+              <summary>Are there any costs besides the subscription?</summary>
+              <div className="a">One, and it&apos;s not to us: your automations run as GitHub Actions in your own repo, billed to your own GitHub account. Your first two sites or so are covered by GitHub&apos;s free tier at $0. Beyond that it&apos;s roughly $5/site/month, paid straight to GitHub with nothing added by us - GitHub Pro at $4/month is the simplest way to cover a third site.</div>
+            </details>
           </div>
         </div>
       </section>

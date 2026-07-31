@@ -138,6 +138,44 @@ comparison, and
 [Step 6 of the setup wizard](/docs/setup-wizard#step-6-connect-github) for
 exactly what that step asks for on a self-hosted install.
 
+## GitHub Actions costs
+
+The 11 workflows above run as GitHub Actions in your own repo, on your own
+GitHub account - not on DispatchSEO's infrastructure, and we never touch or
+mark up what GitHub charges for them. Each connected site burns roughly 900
+Actions minutes a month keeping research, builds, and validation running.
+
+GitHub's free tier includes 2,000 Actions minutes a month, so your first two
+sites are comfortably covered at $0. From a third site you're past that
+allowance - [GitHub Pro](https://github.com/settings/billing) is $4/month
+and is the simplest fix, or you can let GitHub bill the overage directly.
+Rough numbers, since actual minutes depend on how long your builds run:
+
+| Sites | Roughly |
+| --- | --- |
+| 2 | $0 |
+| 3 | ~$4 (GitHub Pro covers it) |
+| 4 | ~$7 |
+| 5 | ~$12 |
+| 6 | ~$18 |
+| 8 | ~$28 |
+| 10 | ~$39 |
+
+Treat this as a ballpark, not a bill - repo size and build time move it in
+either direction.
+
+<Callout type="warning" title="GitHub doesn't bill you by default - it pauses you">
+GitHub's spending limit defaults to $0. That means once you're past the free
+minutes, GitHub does not send you a bill - it silently pauses your workflows
+until you add a payment method and raise the limit. Set yours before you
+need it, not after a build goes mysteriously quiet:
+[github.com/settings/billing](https://github.com/settings/billing).
+</Callout>
+
+One way to sidestep all of this: public repositories get unlimited free
+GitHub Actions minutes. If your site's repo can be public, GitHub Actions
+costs nothing at all, regardless of how many sites you connect.
+
 ## Publishing pace
 
 However fast ideas get approved, guides ship at a flat rate: **at most one

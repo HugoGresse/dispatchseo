@@ -18,7 +18,7 @@ export type AgentSwitchResult = {
   /**
    * What the owner still has to do, in their words, or null when nothing is
    * outstanding. Never empty-but-fine: a switch that leaves the builders unable
-   * to run has to say so at the moment of switching, not at 05:13 tomorrow.
+   * to run has to say so at the moment of switching, not at the next build.
    */
   todo: string | null;
   /**
@@ -81,7 +81,7 @@ export async function setProjectAgent(
  * shortly after. An OpenAI key CAN be checked here, in one metered call costing
  * a fraction of a cent, so it is - a key that is real but sits on an account
  * with no credit passes every shape check ever written and then fails on the
- * first build at 05:13.
+ * first scheduled build.
  */
 export async function verifyAgentCredential(
   agentId: string,

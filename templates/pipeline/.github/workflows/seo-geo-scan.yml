@@ -7,16 +7,22 @@ name: SEO geo scan
 # MCP. Google's AI Overview side needs no agent - the daily rank cron already
 # snapshots it. No PR - results land on the dashboard's AI-visibility section.
 #
-# Runs up to three times on Wednesday (06:27, 13:27, 20:27 UTC) so a trigger
-# GitHub's scheduler drops or delays self-heals the same day: the guard
-# step's ran-today check skips any later attempt once one of them already
-# succeeded. Offset off the top of the hour for the same reason.
+# WOKEN BY THE BACKEND (the seo-geo-scan repository_dispatch, see
+# api/cron/seo-dispatch), which tracks the weekly cadence itself and re-fires
+# until a run actually reports back. This used to be three crons on Wednesday
+# (06:27, 13:27, 20:27 UTC) purely to self-heal a trigger GitHub might drop -
+# and GitHub bills a full minute for every one of those attempts that woke a
+# runner only to find the scan already done.
+#
+# The remaining cron is a DEAD-MAN'S SWITCH for a backend that cannot dispatch
+# at all. It is the LAST of the old three, so on a healthy week the morning
+# dispatch has already run and the guard below exits in seconds.
 
 on:
+  repository_dispatch:
+    types: [seo-geo-scan]
   schedule:
-    - cron: "27 6 * * 3" # Wednesdays 06:27 UTC (offset off the top of the hour)
-    - cron: "27 13 * * 3" # 13:27 UTC retry, if the 06:27 attempt was dropped/delayed
-    - cron: "27 20 * * 3" # 20:27 UTC retry, if the 13:27 attempt was dropped/delayed too
+    - cron: "27 20 * * 3" # Wednesdays 20:27 UTC - dead-man's switch only, see above
   workflow_dispatch:
 
 concurrency:
@@ -33,11 +39,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # This workflow now retries later the same day (13:27/20:27 UTC) if an
-      # earlier attempt was dropped or delayed by GitHub's scheduler - a retry
-      # must not re-run once today's earlier attempt already succeeded.
-      # Best-effort: missing field, non-200, or a parse failure all read as
-      # "not run yet" so this check can never itself block a run.
+      # The dead-man's cron must not redo work the backend's dispatch already
+      # did earlier the same day. Best-effort: missing field, non-200, or a
+      # parse failure all read as "not run yet" so this check can never itself
+      # block a run.
       - name: Skip if today's geo scan already ran
         id: guard
         env:
@@ -45,10 +50,10 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           skip=0
-          # The ran-today check exists for SCHEDULE-vs-SCHEDULE retries: this
-          # workflow runs several times a day so a trigger GitHub drops or
-          # delays self-heals, and a later attempt must not redo the earlier
-          # one's work. It was never meant to gate an ON-DEMAND run, but it did
+          # The ran-today check gates the SCHEDULED run only - now the
+          # dead-man's cron, historically the later of three daily retries.
+          # Either way it must not redo work an earlier trigger already did.
+          # It was never meant to gate an ON-DEMAND run, but it did
           # - the check ignored github.event_name, so any repository_dispatch or
           # workflow_dispatch arriving after a scheduled run that day was
           # silently no-op'd, and the final step still reported ok=1. Approve a

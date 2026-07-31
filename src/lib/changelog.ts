@@ -30,6 +30,51 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-31",
+    date: "2026-07-31",
+    title: "Your automations use a lot less of your GitHub allowance",
+    summary:
+      "The dashboard now wakes your builders only when there is real work, instead of them " +
+      "waking up three times a day to check. Same output, roughly a quarter less of your " +
+      "monthly GitHub Actions allowance per site.",
+    changes: [
+      {
+        kind: "improved",
+        text:
+          "Your site's automations used to run on their own timers, three attempts a day, " +
+          "because GitHub sometimes drops a scheduled run. Two of those three woke up only " +
+          "to find nothing to do - and GitHub charges your account a full minute every time " +
+          "one starts. The dashboard now decides when there is something to build and wakes " +
+          "the workflow itself, so that check costs nothing. Nothing about what gets " +
+          "published changes.",
+      },
+      {
+        kind: "improved",
+        text:
+          "If a wake-up call goes out and nothing runs, you hear about it. GitHub accepts " +
+          "those calls even when a repo has Actions switched off or has run out of minutes, " +
+          "so the dashboard now tracks each one until the workflow reports back, and flags " +
+          "the ones that never do.",
+      },
+      {
+        kind: "new",
+        text:
+          "A plain-English alert when GitHub pauses your builds. Running out of monthly " +
+          "Actions minutes does not produce a bill or an email from GitHub - it just quietly " +
+          "stops running your workflows. When it looks like that happened, the dashboard now " +
+          "says so and links straight to the setting that fixes it.",
+      },
+      {
+        kind: "new",
+        text:
+          "Up-front numbers on what a third site costs. Two sites fit inside GitHub's free " +
+          "tier; past that GitHub charges you a few dollars a month directly, and we never " +
+          "touch or mark up that money. The plans page, the FAQ and the docs now all say so, " +
+          "and you get the exact figures when you add your third site.",
+      },
+    ],
+  },
+  {
     version: "2026-07-30.9",
     date: "2026-07-30",
     title: "Cancelling is a button now",

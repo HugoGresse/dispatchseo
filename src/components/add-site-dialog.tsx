@@ -34,6 +34,7 @@ export function AddSiteDialog({
   open,
   onClose,
   cloud,
+  existingSiteCount,
 }: {
   open: boolean;
   onClose: () => void;
@@ -43,6 +44,12 @@ export function AddSiteDialog({
   // step 1 for exactly that reason; this dialog has to keep that promise or
   // it hands a docker owner a site the UI can never attach a repo to.
   cloud: boolean;
+  // How many sites this account already has - scopedProjects().length from the
+  // layout, passed down through the switcher. Gates the GitHub Actions cost
+  // notice below: the site being added here is existingSiteCount + 1, and the
+  // owner should only ever see that notice when it's actionable (see the card
+  // itself for why the threshold is 2).
+  existingSiteCount: number;
 }) {
   const [state, formAction, pending] = useActionState<WizardCreateState, FormData>(
     addSiteAndStartSetup,
@@ -71,6 +78,18 @@ export function AddSiteDialog({
   // the viewport. Mounted-gated because document doesn't exist during SSR.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  // The GitHub Actions cost notice: dismissible but not persisted anywhere.
+  // It only shows up when the owner is actively adding their 3rd+ site (see
+  // the render below), which is already the one moment it's worth their
+  // attention - there's no "seen it before" state worth remembering across
+  // dialog opens the way the changelog banner remembers a version. Reset it
+  // whenever the dialog reopens so a dismissed notice doesn't stay hidden on
+  // a later, unrelated visit.
+  const [costNoticeDismissed, setCostNoticeDismissed] = useState(false);
+  useEffect(() => {
+    if (open) setCostNoticeDismissed(false);
+  }, [open]);
 
   // createProjectCore already switched the dash_project cookie to the new site,
   // so refreshing the current route re-renders every server component against
@@ -145,6 +164,105 @@ export function AddSiteDialog({
             ? "Then setup continues here: connecting your repo, Search Console, and publishing - the same few minutes your first site took."
             : "Then setup continues here: Search Console, publishing, and installing the pipeline in your repo - the same few minutes your first site took."}
         </p>
+
+        {/* GitHub Actions cost notice - only when this would be the 3rd+ site.
+            A 1st or 2nd site never sees this, on any plan: GitHub's free
+            Actions minutes cover about two sites' worth, so there's nothing
+            actionable to say yet. Non-blocking - it sits above the form and
+            never disables submit. */}
+        {existingSiteCount >= 2 && !costNoticeDismissed ? (
+          <div className="relative mt-4 rounded-lg border border-neutral-800 bg-neutral-900 px-3.5 py-3 text-sm">
+            <button
+              type="button"
+              onClick={() => setCostNoticeDismissed(true)}
+              aria-label="Dismiss"
+              className="absolute right-2 top-2 rounded p-1 text-neutral-600 transition-colors hover:text-neutral-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                className="h-3.5 w-3.5"
+                aria-hidden="true"
+              >
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+            <p className="pr-5 font-medium text-neutral-200">
+              A third site means GitHub may start billing you
+            </p>
+            <p className="mt-1.5 leading-relaxed text-neutral-400">
+              Your automations run as GitHub Actions in your own repo, on your own GitHub
+              account - that cost is GitHub&apos;s, not ours. GitHub&apos;s free plan covers about
+              two sites&apos; worth of Actions minutes. From the third site, GitHub Pro at
+              $4/month covers it, or you pay a few dollars of overage.
+            </p>
+            <p className="mt-1.5 leading-relaxed text-neutral-400">
+              One thing worth knowing: GitHub&apos;s spending limit defaults to $0. If you run
+              out of free minutes at that limit, GitHub does not bill you - it pauses your
+              workflows until you add a payment method or raise the limit. Set a spending
+              limit in GitHub&apos;s billing settings so your sites do not quietly stop
+              updating.
+            </p>
+            <table className="mt-3 w-full border-collapse text-xs">
+              <thead>
+                <tr className="text-neutral-500">
+                  <th className="border-b border-neutral-800 px-0 py-1 text-left font-medium">
+                    Sites
+                  </th>
+                  <th className="border-b border-neutral-800 px-0 py-1 text-right font-medium">
+                    Rough cost/mo
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="text-neutral-400">
+                <tr>
+                  <td className="border-b border-neutral-800/70 py-1">2</td>
+                  <td className="border-b border-neutral-800/70 py-1 text-right">$0</td>
+                </tr>
+                <tr>
+                  <td className="border-b border-neutral-800/70 py-1">3</td>
+                  <td className="border-b border-neutral-800/70 py-1 text-right">
+                    ~$4 (GitHub Pro covers it)
+                  </td>
+                </tr>
+                <tr>
+                  <td className="border-b border-neutral-800/70 py-1">4</td>
+                  <td className="border-b border-neutral-800/70 py-1 text-right">~$7</td>
+                </tr>
+                <tr>
+                  <td className="border-b border-neutral-800/70 py-1">5</td>
+                  <td className="border-b border-neutral-800/70 py-1 text-right">~$12</td>
+                </tr>
+                <tr>
+                  <td className="border-b border-neutral-800/70 py-1">6</td>
+                  <td className="border-b border-neutral-800/70 py-1 text-right">~$18</td>
+                </tr>
+                <tr>
+                  <td className="border-b border-neutral-800/70 py-1">8</td>
+                  <td className="border-b border-neutral-800/70 py-1 text-right">~$28</td>
+                </tr>
+                <tr>
+                  <td className="py-1">10</td>
+                  <td className="py-1 text-right">~$39</td>
+                </tr>
+              </tbody>
+            </table>
+            <p className="mt-1.5 text-xs text-neutral-500">
+              Rough estimates - actual cost depends on how long your builds run.
+            </p>
+            <a
+              href="https://github.com/settings/billing"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-block text-xs font-medium text-neutral-300 underline underline-offset-2 hover:text-neutral-100"
+            >
+              Open GitHub&apos;s billing settings →
+            </a>
+          </div>
+        ) : null}
 
         <form
           onSubmit={(e) => {

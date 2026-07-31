@@ -218,7 +218,13 @@ export function ProjectSwitcher({
         </div>
       ) : null}
       </div>
-      <AddSiteDialog open={adding} onClose={() => setAdding(false)} cloud={cloud} />
+      <AddSiteDialog
+        open={adding}
+        onClose={() => setAdding(false)}
+        cloud={cloud}
+        existingSiteCount={projects.length}
+      />
+
     </>
   );
 }

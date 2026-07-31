@@ -273,6 +273,12 @@ export default async function PlansPage() {
                       </li>
                     ))}
                   </ul>
+                  {tier !== "starter" ? (
+                    <p className="mt-4 text-xs leading-relaxed text-neutral-500">
+                      Runs on your GitHub account - free for about 2 sites, roughly $5/site/month
+                      to GitHub beyond.
+                    </p>
+                  ) : null}
                 </div>
               </div>
             );

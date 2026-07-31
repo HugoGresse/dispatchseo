@@ -9,7 +9,7 @@ import { AgentMark } from "@/components/agent-mark";
 //
 // Deliberately NOT framed as "which agent do you use". Any agent connected over
 // MCP drives everything interactively no matter what this says; the only thing
-// it decides is who wakes up at 05:13. Conflating the two would make people
+// it decides is who runs the scheduled builds. Conflating the two would make people
 // think switching here is required before they can use Codex at all, and it
 // isn't.
 export function AgentSwitch({ current, slug }: { current: string; slug: string }) {

@@ -1,12 +1,12 @@
 import { checkCron } from "@/lib/cron-auth";
 import { db } from "@/lib/db";
-import { getCronHealth, reportCronRun } from "@/lib/cron-alerts";
+import { reportCronRun } from "@/lib/cron-alerts";
 import { credsForProject } from "@/lib/dataforseo";
 import { mergeToken, builderClaudeToken, builderAgentToken, builderAgentTokens } from "@/lib/github";
 import { listProjects, fetchProjectToken, effectiveAutomations } from "@/lib/projects";
 import { projectAgent, type AgentId } from "@/lib/agents";
 import { isCloudMode } from "@/lib/cloud";
-import { guideQueueDry } from "@/lib/queue-refill";
+import { dueBuildWork, builderJobKey } from "@/lib/build-schedule";
 
 export const dynamic = "force-dynamic";
 
@@ -44,23 +44,14 @@ const PROMPTS: Record<string, string> = {
 // at 05:10 yesterday is already due at 05:00 today; weeklies use 6.5 days
 // for the same slack. The instructions' own gates (pacing, built-today,
 // empty queue) make an extra attempt a cheap no-op, never a double build.
-const CADENCE_HOURS: Record<string, number> = {
-  research: 156,
-  "build-guide": 20,
-  "build-tool": 20,
-  "geo-scan": 156,
-};
-
-// A claim row (below) only means "handed to the builder", not "finished" -
-// the container is expected to overwrite it with the real outcome via
-// deploy-check within one headless Claude Code session, which never takes
-// anywhere near this long. If nothing supersedes it within the grace window
-// (dead container, bad token, crash before reporting), treat the job as
-// never having run rather than silently sitting "done" for the full
-// CADENCE_HOURS window - up to 156h (2026-07-27: a stale token cache handed
-// the builder a null GitHub token at the exact moment it claimed three
-// jobs; all three then read as complete for the rest of the week).
-const CLAIM_GRACE_HOURS = 3;
+//
+// Cadence, claim-grace and the due-ness math itself now live in
+// build-schedule.ts, shared with /api/cron/seo-dispatch (the same four jobs,
+// executed through GitHub Actions instead of this container). They were
+// duplicated for exactly as long as there was one runner; the moment a second
+// one appeared, two copies of "is this due" would have been free to drift
+// apart per project - the kind of split that shows up as a site that builds
+// twice, or never.
 
 export async function GET(req: Request): Promise<Response> {
   // Self-host only. This feeds the docker in-stack builder; cloud schedules run
@@ -178,57 +169,16 @@ export async function GET(req: Request): Promise<Response> {
     const dfsCreds = await credsForProject(p);
     const jobDataforseo = dfsCreds?.billedTo === "platform" ? null : dfsCreds;
 
-    // Health once per project; due-ness = no run row inside the window - or
-    // the only row inside it is a claim that outlived its grace period,
-    // meaning the builder never actually finished the job it was handed.
-    const health = await getCronHealth(p.slug);
-    const due = (wf: string, cadenceOverrideHours?: number) => {
-      const row = health.find((h) => h.job === `builder-${wf}--${p.slug}`);
-      if (!row) return true;
-      const ageMs = Date.now() - new Date(row.last_run_at).getTime();
-      if (row.claimed_only) return ageMs > CLAIM_GRACE_HOURS * 3_600_000;
-      return ageMs > (cadenceOverrideHours ?? CADENCE_HOURS[wf]) * 3_600_000;
-    };
-
-    const wanted: string[] = [];
-    // Queue-empty self-heal, the in-stack twin of queue-refill.ts. Research on
-    // a 156h cadence drains to zero by day 7 exactly like the weekly cron did,
-    // and the builder would then hand out build-guide jobs that find nothing
-    // and exit clean - a week of "successful" runs and no published post.
-    // A dry queue collapses the cadence to daily; it does NOT bypass due(),
-    // so the claim row and its grace window still stop this re-handing research
-    // on every 10-minute poll. null (count failed) is never treated as dry.
-    const dryQueue = (await guideQueueDry(p.id)) === true;
-    if (due("research", dryQueue ? 20 : undefined)) wanted.push("research");
-    // Both builders run only when there is something to build - a scheduled
-    // no-op still costs a full agent session. Guides were exempt from this
-    // until 2026-07-31, and the exemption cost more than the session: with an
-    // empty queue a legitimate "nothing to do" run and a run that tried and
-    // silently failed look identical from the container, so neither the
-    // builder nor the dashboard could tell them apart. Gating here is what
-    // lets run.sh treat "a build job produced nothing" as the failure it is.
-    const approvedCount = async (type: "guide" | "tool") => {
-      const { count } = await db()
-        .from("suggestions")
-        .select("id", { count: "exact", head: true })
-        .eq("project_id", p.id)
-        .eq("type", type)
-        .eq("status", "approved");
-      return count ?? 0;
-    };
-    if (flags.auto_build_guides && due("build-guide") && (await approvedCount("guide")) > 0) {
-      wanted.push("build-guide");
-    }
-    if (flags.auto_build_tools && due("build-tool") && (await approvedCount("tool")) > 0) {
-      wanted.push("build-tool");
-    }
-    if (due("geo-scan")) wanted.push("geo-scan");
+    // Due-ness, cadence collapse on a dry queue, and the approved-count gates
+    // all live in build-schedule.ts now - see the header note above.
+    const wanted = await dueBuildWork(p, (wf) => builderJobKey(wf, p.slug));
 
     for (const wf of wanted) {
-      const key = `builder-${wf}--${p.slug}`;
-      // Claim: log the hand-out so the next poll skips it (for CLAIM_GRACE_HOURS -
-      // see due() above). The container overwrites this with the real outcome
-      // via deploy-check reporting, which defaults claimedOnly to false.
+      const key = builderJobKey(wf, p.slug);
+      // Claim: log the hand-out so the next poll skips it (for the claim grace
+      // window - see build-schedule.ts). The container overwrites this with the
+      // real outcome via deploy-check reporting, which defaults claimedOnly to
+      // false.
       if (claim) await reportCronRun(key, { claimed: "builder", handed_out: true }, false, true);
       out.jobs.push({
         key,

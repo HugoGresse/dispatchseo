@@ -294,6 +294,30 @@ export function dispatchTrendExpand(
   );
 }
 
+// The scheduler's wake-up call (see api/cron/seo-dispatch). Unlike the buttons
+// above, nobody is watching this one land, so the caller logs the outcome to
+// cron_runs instead of showing a message - which is why the failure text here
+// is written for an alert email, not a toast.
+//
+// What this CANNOT tell you is whether a workflow actually started. GitHub
+// answers 204 to any well-formed dispatch: a repo with Actions disabled, a
+// workflow file that was deleted, one whose `types:` never listed this event,
+// or a repo out of Actions minutes all accept it and run nothing. That silence
+// is the failure mode the caller's claim row exists to catch - a dispatch this
+// function calls successful is a dispatch GitHub ACCEPTED, never a run that
+// happened.
+export function dispatchScheduledBuild(
+  repo: RepoRef,
+  eventType: string,
+): Promise<{ ok: boolean; message: string }> {
+  return fireDispatch(
+    repo,
+    eventType,
+    { trigger: "scheduled" },
+    "dispatched",
+  );
+}
+
 
 export async function mergePr(
   repo: RepoRef,
