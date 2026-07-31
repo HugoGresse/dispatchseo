@@ -79,8 +79,9 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
     kind: "improved",
     text:
       "DispatchSEO stopped describing itself as a Claude Code product. Codex does everything " +
-      "Claude Code does here, so the site, the docs and the dashboard now say \"your coding " +
-      "agent\" and name both wherever it matters - no change to how anything works.",
+      "Claude Code does here, so the site now says \"AI agents\", the docs and dashboard say " +
+      "\"your coding agent\", and both are named wherever the difference matters - no change " +
+      "to how anything works.",
   },
 ];
 

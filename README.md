@@ -15,15 +15,18 @@
 
 <div align="center">
   <strong>
-  <h2>Turn your coding agent into your SEO manager</h2><br />
+  <h2>Turn your AI agent into your SEO manager</h2><br />
   <a href="https://dispatchseo.com">DispatchSEO</a>: an open-source alternative to SEObot and Outrank.<br /><br />
   </strong>
+  Works today with <b>Claude Code</b> and <b>Codex</b> - both first-class, including the unattended overnight builder.<br /><br />
   Other SEO tools learn about your product by crawling your homepage. Your agent already knows it,<br />so DispatchSEO gives that agent the missing half: keyword research, content that ships as pull requests, and rank tracking.
 </div>
 
 <div align="center">
   <br />
   <img alt="Claude Code" src="docs/brand/icons/claude.svg" width="32">
+  &nbsp;
+  <img alt="Codex" src="docs/brand/icons/openai.svg" width="32">
   &nbsp;
   <img alt="MCP" src="docs/brand/icons/mcp.svg" width="32">
   &nbsp;

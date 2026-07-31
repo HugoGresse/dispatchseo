@@ -36,7 +36,7 @@ const GITHUB_URL = "https://github.com/NeoZi12/dispatchseo";
 const DOCS_URL = "/docs";
 
 export const metadata: Metadata = {
-  title: "DispatchSEO - Automate your SEO with your coding agent",
+  title: "DispatchSEO - Automate your SEO with AI agents",
   description:
     "Claude Code or Codex researches keywords, writes guides, builds interactive tools, and tracks your ranks automatically. Every piece is a pull request you approve. Open source, free to self-host.",
   // "/" is reachable as itself and as "?home=1" (the signed-in opt-out below),
@@ -261,8 +261,8 @@ export default async function LandingPage({
           ) : null}
           {/* .br-desk: the composed two-line break is a desktop luxury - phones
               drop it so the headline reflows to whatever fits. */}
-          <h1>Automate your SEO<br className="br-desk" /> with your <span className="hl">coding agent</span></h1>
-          <p className="sub">Claude Code or Codex - the agent that built your product now runs your SEO: keyword research, guides, interactive tools, rank tracking - all automatic.</p>
+          <h1>Automate your SEO<br className="br-desk" /> with <span className="hl">AI agents</span></h1>
+          <p className="sub">The agent that built your product now runs your SEO: keyword research, guides, interactive tools, rank tracking - all automatic.<br className="br-desk" /> Use your agent: Claude Code / Codex</p>
 
           <div className="cta-row" id="get-started">
             <DomainCta />
@@ -322,7 +322,7 @@ export default async function LandingPage({
             </div>
             <div className="who-card">
               <svg className="who-doodle vio" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v5.5M12 15.5V21M3 12h5.5M15.5 12H21M5.64 5.64l3.89 3.89M14.47 14.47l3.89 3.89M18.36 5.64l-3.89 3.89M9.53 14.47l-3.89 3.89" /></svg>
-              <h3>Coding agent power users</h3>
+              <h3>AI agent power users</h3>
               <p>You already pay for Claude Code or Codex. DispatchSEO gives it memory, schedules, and a queue, so SEO stops being a weekend project.</p>
             </div>
             <div className="who-card">
@@ -396,7 +396,7 @@ export default async function LandingPage({
                 <li>Content quality checks</li>
                 <li>Approve or full-auto mode</li>
                 <li>Everything ships as PRs</li>
-                <li>Drive it from your coding agent</li>
+                <li>Drive it from your AI agent</li>
                 <li>Managed schedules</li>
                 <li>Failure alerts by email</li>
                 <li>Email support</li>
@@ -425,7 +425,7 @@ export default async function LandingPage({
                 <li>Content quality checks</li>
                 <li>Approve or full-auto mode</li>
                 <li>Everything ships as PRs</li>
-                <li>Drive it from your coding agent</li>
+                <li>Drive it from your AI agent</li>
                 <li>Managed schedules</li>
                 <li>Failure alerts by email</li>
                 <li>Email support</li>
@@ -453,7 +453,7 @@ export default async function LandingPage({
                 <li>Content quality checks</li>
                 <li>Approve or full-auto mode</li>
                 <li>Everything ships as PRs</li>
-                <li>Drive it from your coding agent</li>
+                <li>Drive it from your AI agent</li>
                 <li>Managed schedules</li>
                 <li>Failure alerts by email</li>
                 <li>Priority support</li>
@@ -531,7 +531,7 @@ export default async function LandingPage({
                 <li>Content quality checks</li>
                 <li>Approve or full-auto mode</li>
                 <li>Everything ships as PRs</li>
-                <li>Drive it from your coding agent</li>
+                <li>Drive it from your AI agent</li>
                 <li>Managed schedules</li>
                 <li>Failure alerts by email</li>
               </ul>
@@ -553,7 +553,7 @@ export default async function LandingPage({
             </details>
             <details>
               <summary>What do I need to run the free version?</summary>
-              <div className="a">A website that lives in a GitHub repo, a coding agent (Claude Code on your Claude subscription, or Codex on an OpenAI key), free Google Search Console access, and a machine with Docker. Your laptop works for a test drive, but we highly recommend a machine that stays awake for real use - a $5 VPS or a Raspberry Pi - since schedules only run while it&apos;s on. Rank tracking works with a free SerpApi key; search volume data needs a DataForSEO account, which is the main gap the cloud version fills. The <a href={DOCS_URL}>docs</a> walk you through it.</div>
+              <div className="a">A website that lives in a GitHub repo, an AI agent (Claude Code on your Claude subscription, or Codex on an OpenAI key), free Google Search Console access, and a machine with Docker. Your laptop works for a test drive, but we highly recommend a machine that stays awake for real use - a $5 VPS or a Raspberry Pi - since schedules only run while it&apos;s on. Rank tracking works with a free SerpApi key; search volume data needs a DataForSEO account, which is the main gap the cloud version fills. The <a href={DOCS_URL}>docs</a> walk you through it.</div>
             </details>
             <details>
               <summary>Is this another AI content spammer?</summary>
@@ -605,7 +605,7 @@ export default async function LandingPage({
                 <DispatchMark className="logo-mark" />
                 DispatchSEO
               </a>
-              <p>The open-source SEO autopilot for your coding agent. The agent that knows your product, running its SEO for you.</p>
+              <p>The open-source SEO autopilot for AI agents. The agent that knows your product, running its SEO for you.</p>
             </div>
             <div className="foot-col">
               <h4>Product</h4>

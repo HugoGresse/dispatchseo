@@ -37,7 +37,7 @@ const POINTS: Array<{ icon: ReactNode; lead: string; body: string }> = [
       </svg>
     ),
     lead: "Maximize your agent.",
-    body: "Claude Code or Codex is no longer just a coding agent. It's also your personal SEO manager.",
+    body: "Your AI agent is no longer just for code. It's also your personal SEO manager.",
   },
   {
     icon: (
@@ -46,7 +46,7 @@ const POINTS: Array<{ icon: ReactNode; lead: string; body: string }> = [
       </svg>
     ),
     lead: "It does the busywork.",
-    body: "Your coding agent runs the whole SEO grind for you, so you can focus on the important things.",
+    body: "Your AI agent runs the whole SEO grind for you, so you can focus on the important things.",
   },
   {
     icon: (
