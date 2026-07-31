@@ -88,17 +88,49 @@ Capability - what it does, feature by feature:
 - Public base path: **`/free-tools/<slug>`**. `/tools` is taken - it is the
   password-gated dashboard screen in the `(dashboard)` route group, NOT a
   public surface, and it must not be moved or reused.
-- **No tools home exists yet.** The first tool build scaffolds it in its own
-  PR (build-tool step 3): a registry module, `/free-tools` index page,
-  `/free-tools/[slug]` detail template rendering the locked funnel (large
-  centered title -> value line -> widget -> CTA -> description -> FAQ),
-  sitemap coverage in `src/app/sitemap.ts`, and the widget components under
-  `src/components/free-tools/`. Nothing here is auth-gated - the site has no
-  middleware; dashboard pages guard themselves individually, so a new public
-  route is public by default. Verify anyway with a cookie-less request.
-- Reference implementation: none yet - the first merged tool becomes it.
-  Update this section (base path, registry path, wiring steps, reference)
-  in that same PR.
+- **Tools home is live** (scaffolded by the internal-linking-tool build,
+  2026-07-31): a registry module at `src/lib/free-tools.ts` (one `ToolEntry`
+  per tool: slug, title, h1, value line, meta description, description copy
+  as an array of paragraph strings, FAQ items, `Widget` component
+  reference), the index page at `src/app/free-tools/page.tsx` (cards, same
+  visual grammar as `/blog`), and the detail template at
+  `src/app/free-tools/[slug]/page.tsx` rendering the locked funnel: back
+  link -> hero (h1 + value line, centered) -> the tool's `Widget` -> CTA
+  panel (links to `/signup`) -> description paragraphs (supports
+  `[text](/href)` markdown links only, via the template's own tiny parser -
+  not full MDX) -> FAQ (`<details>`/`<summary>`). Widget components live
+  under `src/components/free-tools/`, one file per tool, client components
+  (`"use client"`), pure - no fetch, no backend calls, all state local.
+  Sitemap coverage lives in `src/app/sitemap.ts` (`getAllTools()` mapped
+  alongside the blog/docs entries).
+- **CORS means "paste a URL and we'll fetch it" does not work.** A tool that
+  needs to read another page's content (the internal-linking tool is the
+  precedent) must collect that content by having the visitor paste it in,
+  not by fetching a URL client-side - cross-origin `fetch()` to an arbitrary
+  third-party site is blocked by the browser for the vast majority of
+  sites, and the "purely client-side, no backend calls" build rule rules out
+  a server-side proxy fetch as the workaround. Design the interaction around
+  paste-in content from the start; don't discover this after committing to a
+  fetch-based spec.
+- **`src/proxy.ts` (Next 16's `middleware.ts` successor - despite what
+  `CLAUDE.md`'s Auth section says, this repo does have route-level gating)
+  allowlists public paths and 307-redirects everything else to `/login`.**
+  `/free-tools` and `/free-tools/*` are in that allowlist now, alongside
+  `/blog` and `/docs`. Any FUTURE public route (a second tools-adjacent
+  surface, a new marketing page) needs its own allowlist entry here or it
+  silently redirects logged-out visitors to `/login` - the exact failure the
+  build-tool playbook's "verify like a logged-out stranger" step exists to
+  catch. Always run that check for real (`pnpm build && pnpm start`, `curl`
+  with no cookies) rather than assuming "no middleware.ts" means no gate.
+- Reference implementation: **`internal-linking-tool`**
+  (`src/components/free-tools/internal-linking-tool.tsx`,
+  `src/lib/internal-linking-analysis.ts` for the pure scoring logic,
+  registry entry in `src/lib/free-tools.ts`) - archetype **analyzer**,
+  adapted: instead of one paste box, a repeatable list of page-entry cards
+  (URL + title + body paste, 2 minimum) feeding a single Analyze action,
+  since comparing pages inherently needs more than one input. Read this one
+  first for the registry shape, the funnel template wiring, and the
+  paste-not-fetch pattern before building the next tool.
 - Tool ideas ARE queued every week regardless of the above; see the research
   workflow's tool slot.
 
