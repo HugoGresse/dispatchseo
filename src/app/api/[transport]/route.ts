@@ -58,6 +58,7 @@ import {
   extractFromMarkdown,
   tokenize,
 } from "@/lib/similarity";
+import { buildBrief } from "@/lib/build-brief";
 import { requestTrendExpand, requestTrendScan } from "@/lib/trends";
 import { serpProviderForProject, providerOrganic } from "@/lib/serp";
 import { gscAccessProbe } from "@/lib/gsc";
@@ -589,6 +590,65 @@ const mcpHandler = createMcpHandler(
     // reviewing one article at a time. The math lives in similarity.ts and
     // runs HERE (not in the agent's head) so the verdict is deterministic -
     // the builder cannot grade its own prose on vibes.
+    // The guide builder's opening payload. Replaces the dozen serial calls a
+    // build used to open with - and, more importantly, replaces READING two
+    // or three published posts in full just to learn their structural shape,
+    // which is the single most context-expensive habit in the old pipeline.
+    // Everything here is derived from data the backend already holds or from
+    // the same extractors the sameness gate uses.
+    //
+    // Every section fails open independently: the response's `degraded` array
+    // names what is missing and the playbook falls back to the original
+    // per-step method for exactly that section. This tool can never block a
+    // build; the worst it can do is leave the run doing what it did before.
+    server.registerTool(
+      "get_build_brief",
+      {
+        title: "Get build brief",
+        description:
+          "Call this FIRST in a guide build. One response with everything the run needs to " +
+          "start: the queue head (the approved guide to build, in the owner's exact build " +
+          "order), the live pacing verdict, structural fingerprints of the recent guides " +
+          "(opening word-runs, heading skeletons, cover hues) so the anti-sameness and " +
+          "anti-rhyme checks need no re-reading of published posts, ranked internal-link " +
+          "candidates when the project opted into back-linking, and the site's own GSC " +
+          "numbers for the information-gain step. Pass the target keyword when you know it " +
+          "so link candidates can be ranked against it. Fails OPEN section by section: " +
+          "anything unavailable is listed in `degraded` with the fallback to use, and a " +
+          "degraded brief is never a reason to stop a build.",
+        inputSchema: {
+          keyword: z
+            .string()
+            .optional()
+            .describe(
+              "The new guide's primary keyword, used to rank internal-link candidates by topical closeness. Omit on the first call if the queue head is what tells you the keyword.",
+            ),
+        },
+      },
+      async ({ keyword }) => {
+        const p = currentProject();
+        try {
+          return ok(await buildBrief(p, { keyword }));
+        } catch (e) {
+          // Belt to the module's own per-section braces: even a total failure
+          // returns a usable shape telling the agent to do it the old way.
+          return ok({
+            queue_head: null,
+            queue_depth: 0,
+            pacing: null,
+            recent_guides: [],
+            recent_covers: [],
+            link_candidates: [],
+            site_stats: null,
+            internal_linking: p.internal_linking === true,
+            degraded: [
+              `brief unavailable (${e instanceof Error ? e.message : "unknown error"}) - gather what you need with the individual tools exactly as before; this is not a reason to stop the build`,
+            ],
+          });
+        }
+      },
+    );
+
     server.registerTool(
       "check_sameness",
       {
@@ -611,9 +671,21 @@ const mcpHandler = createMcpHandler(
             .string()
             .optional()
             .describe("The keyword this draft targets, so the check can weigh it against pages already covering it."),
+          stage: z
+            .enum(["outline", "final"])
+            .optional()
+            .describe(
+              "'final' (the default) is the full pre-publish gate on the finished draft - unchanged. " +
+                "'outline' is the cheap EARLY probe: pass just the planned opening line plus the H2 " +
+                "headings as markdown, BEFORE drafting prose or building visuals, and it checks the " +
+                "two signals an outline can carry (opening word-run, heading skeleton). Catching a " +
+                "collision here costs a replanned outline instead of a discarded draft. It skips the " +
+                "stock-phrase signal, which needs body prose, so an outline pass NEVER substitutes " +
+                "for the final check - always run 'final' on the finished guide before the PR.",
+            ),
         },
       },
-      async ({ markdown, primary_keyword }) => {
+      async ({ markdown, primary_keyword, stage }) => {
         const p = currentProject();
         const { data, error } = await db()
           .from("pages")
@@ -663,7 +735,7 @@ const mcpHandler = createMcpHandler(
         ).filter((c): c is NonNullable<typeof c> => c != null);
 
         const draft = extractFromMarkdown(markdown, new Set(tokenize(primary_keyword ?? "")));
-        return ok(compareToCorpus(draft, corpus));
+        return ok(compareToCorpus(draft, corpus, stage ?? "final"));
       },
     );
 

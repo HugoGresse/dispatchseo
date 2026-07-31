@@ -20,11 +20,17 @@ import {
   renderGuidePrefsNote,
   renderToolPrefsNote,
 } from "@/lib/content-prefs";
-import { CORE } from "./core";
+import { CORE, CORE_TAIL, RESEARCH_QUALITY_BAR } from "./core";
+import { internalLinkingEnabled } from "@/lib/projects";
 import { INSTALL, INSTALL_STEPS } from "./install";
 import { SETUP, SETUP_STEPS } from "./setup";
 import { RESEARCH, RESEARCH_STEPS } from "./research";
-import { BUILD_GUIDE, BUILD_GUIDE_STEPS } from "./build-guide";
+import {
+  BUILD_GUIDE,
+  BUILD_GUIDE_STEPS,
+  BACKLINKS_STEP_ON,
+  BACKLINKS_STEP_OFF,
+} from "./build-guide";
 import { BUILD_TOOL, BUILD_TOOL_STEPS } from "./build-tool";
 import { REPORT, REPORT_STEPS } from "./report";
 import { BACKLINKS, BACKLINKS_STEPS } from "./backlinks";
@@ -32,7 +38,7 @@ import { TREND_SCAN, TREND_SCAN_STEPS } from "./trend-scan";
 import { TREND_EXPAND, TREND_EXPAND_STEPS } from "./trend-expand";
 import { GEO_SCAN, GEO_SCAN_STEPS } from "./geo-scan";
 
-export const INSTRUCTIONS_VERSION = "2026-07-30.4";
+export const INSTRUCTIONS_VERSION = "2026-07-31.1";
 
 export const WORKFLOWS = [
   "install",
@@ -102,6 +108,26 @@ const BODIES: Record<WorkflowName, string> = {
 // Workflows whose text embeds the live pacing verdict (one guide per day,
 // pacing.ts). Only these pay the extra pages query at render time.
 const PACED_WORKFLOWS: WorkflowName[] = ["build-guide", "research"];
+
+// Workflows that actually VET keywords, and therefore receive the keyword
+// half of the quality bar (volume bands, dynamic KD ceiling, authority gate,
+// SERP budget, topic remit, audience fit). See RESEARCH_QUALITY_BAR's comment
+// in core.ts for why builders are excluded rather than merely trimmed.
+//
+// `install` and `setup` are here because both END by kicking off the first
+// research run in the same session (install step: "then kick off the first
+// research run so the queue fills day one") - that run vets keywords, so the
+// session needs the bar. Getting this list wrong in the safe direction costs
+// tokens; getting it wrong in the unsafe direction would let a run queue
+// keywords without the gate, so anything that can reach propose_suggestion
+// on a fresh candidate is included.
+const KEYWORD_VETTING_WORKFLOWS: WorkflowName[] = [
+  "research",
+  "trend-scan",
+  "trend-expand",
+  "install",
+  "setup",
+];
 
 // Every response is self-contained: shared core + the workflow body, with the
 // project's own name/domain/repo - and, for paced workflows, the live pacing
@@ -174,8 +200,28 @@ export async function renderInstructions(workflow: WorkflowName, project: Projec
       "knowledge; NEVER report an empty week just because volume/SERP data was unavailable. " +
       "(Data-backed modes still apply every gate - this fallback is only for the genuinely " +
       "data-less case.)";
-  const raw = `${CORE}\n${BODIES[workflow]}`;
+  // Keyword-vetting policy goes only to runs that vet keywords. A builder
+  // works an already-approved idea it is forbidden to re-rank, so those
+  // tables were never actionable in a build - just tokens re-sent on every
+  // turn. Empty string (not a pointer) for builders: a dangling "see the
+  // research instructions" would invite a wasted get_instructions call.
+  const researchBar = KEYWORD_VETTING_WORKFLOWS.includes(workflow)
+    ? RESEARCH_QUALITY_BAR
+    : "";
+  // The back-link step edits pages the owner ALREADY published, so it is
+  // gated on an explicit per-project opt-in (internal_linking). When it is
+  // off - the default, and the state of most projects - the playbook carries
+  // a one-line note instead of ~60 lines of policy the run must not act on.
+  // internalLinkingEnabled() resolves absence to OFF, matching the DB
+  // fallback tiers, so a pre-0045 database renders the skip note rather than
+  // throwing.
+  const backlinksStep = internalLinkingEnabled(project)
+    ? BACKLINKS_STEP_ON
+    : BACKLINKS_STEP_OFF;
+  const raw = `${CORE}${CORE_TAIL}\n${BODIES[workflow]}`;
   let markdown = raw
+    .replaceAll("{{RESEARCH_QUALITY_BAR}}", researchBar)
+    .replaceAll("{{BACKLINKS_STEP}}", backlinksStep)
     .replaceAll("{{SITE_NAME}}", project.name)
     .replaceAll("{{DOMAIN}}", project.domain)
     .replaceAll("{{REPO}}", project.github_repo ?? "the project repo")

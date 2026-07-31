@@ -353,7 +353,7 @@ jobs:
           # sandbox at all.
           safety-strategy: drop-sudo
           output-file: ${{ runner.temp }}/codex-out.txt
-          prompt: "FIRST call the seo-manager MCP tool get_instructions with workflow build-guide, then follow the returned markdown exactly - it is the current playbook and overrides any cached knowledge of this pipeline. Also read .dispatchseo/conventions.md for this repo's site facts. In brief: take the oldest approved guide suggestion, mark it in_progress, build the guide MDX through the full pipeline (template, thin-content gate, draft, mandatory visuals, humanizer), run pnpm build to verify, open a PR labeled seo via gh, then update_suggestion to done with the PR url and log_page, and state the instructions version in the run report. Never build tool suggestions - those belong to the seo-build-tool workflow. If get_instructions is unavailable, fail loudly and exit without changes; if there are no approved guide suggestions, exit cleanly without any changes."
+          prompt: "ENVIRONMENT RULE (read first, it overrides habit): you have no apply_patch tool here - only the shell. NEVER write or edit a file with a heredoc, printf, or echo. The content is MDX and its backticks WILL be expanded by bash and corrupt the file or fail the command. Write files with python3, passing the content on stdin, never interpolated into the command string. Verify every write with ls -l and head before moving on, and never let a filename come from an unset shell variable. FIRST call the seo-manager MCP tool get_instructions with workflow build-guide, then follow the returned markdown exactly - it is the current playbook and overrides any cached knowledge of this pipeline. Also read .dispatchseo/conventions.md for this repo's site facts. In brief: take the oldest approved guide suggestion, mark it in_progress, build the guide MDX through the full pipeline (template, thin-content gate, draft, mandatory visuals, humanizer), run pnpm build to verify, open a PR labeled seo via gh, then update_suggestion to done with the PR url and log_page, and state the instructions version in the run report. Never build tool suggestions - those belong to the seo-build-tool workflow. If get_instructions is unavailable, fail loudly and exit without changes; if there are no approved guide suggestions, exit cleanly without any changes."
         env:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
           DATAFORSEO_LOGIN: ${{ secrets.DATAFORSEO_LOGIN }}
@@ -367,13 +367,38 @@ jobs:
       # The action hides Claude's transcript (these logs can be public), which
       # also hides the API error when a run dies on its first call - a dead
       # token shows only "is_error:true" with no way to tell a revoked token
+      # Turn-by-turn detail for tuning the pipeline. The dashboard only ever
+      # receives the aggregate outcome, which cannot answer the question that
+      # actually matters for cost - WHICH pipeline steps burn the turns. This
+      # step is what makes that measurable, since the agent run is ~98% of this
+      # job's billed wall clock and wall clock is turns x per-turn latency.
+      #
+      # PRIVATE REPOS ONLY, and that condition is the point rather than
+      # caution. Artifacts on a public repository are downloadable by anyone,
+      # and this file is the agent's execution log - which is exactly why the
+      # classify step below reads it instead of printing it ("these logs can be
+      # public"). Publishing it as an artifact would undo that decision for the
+      # public repos we specifically recommend to people avoiding Actions
+      # charges. Short retention because this is a debugging aid, not a record.
+      - name: Save the agent execution log for turn analysis
+        if: always() && steps.guard.outputs.open == '0' && github.event.repository.private
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-execution-log-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/claude-execution-output.json
+            ${{ runner.temp }}/codex-out.txt
+          retention-days: 7
+          if-no-files-found: ignore
+
       # from a usage limit. continue-on-error above keeps this step reachable
       # either way; read the final result/error message from the execution log
       # the action saves and decide what the run MEANS: a genuine usage-limit
-      # hit is not a pipeline failure, it is deferred to the next scheduled
-      # attempt (12:00/19:00 UTC) and reported as a GREEN run. Anything else is
-      # reported red with the real reason. GitHub's secret masking still
-      # applies to whatever prints.
+      # hit is not a pipeline failure, it is deferred (the dashboard keeps the
+      # job due and re-dispatches within hours) and reported as a GREEN run.
+      # Anything else is reported red with the real reason. GitHub's secret
+      # masking still applies to whatever prints.
       - name: Classify the outcome
         id: classify
         if: steps.guard.outputs.open == '0'
