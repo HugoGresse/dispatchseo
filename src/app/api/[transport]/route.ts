@@ -1769,6 +1769,58 @@ const mcpHandler = createMcpHandler(
       },
     );
 
+    // Parity for the Settings danger zone's Disconnect button (CLAUDE.md's
+    // rule that anything the dashboard can do, the agent can do too). Unlike
+    // set_github_repo above this is NOT cloud-only: the gap it closes is
+    // sharpest on self-host, where the home project cannot be deleted and this
+    // is the only way to stop a pipeline at all.
+    //
+    // Deleting a project deliberately has no MCP tool - it cascades across
+    // every table and ends in a redirect. Disconnecting is the reversible
+    // half: the repo is released, the project and all of its history stay.
+    server.registerTool(
+      "disconnect_repo",
+      {
+        title: "Disconnect the GitHub repo",
+        description:
+          "Stop DispatchSEO running in this project's repo: disable and delete the seo-* " +
+          "workflows, remove the .dispatchseo files and the SEO_MCP_API_KEY secret, and clear " +
+          "the connection. Schedules stop, so it stops consuming the owner's GitHub Actions " +
+          "minutes. Published guides, tools and pages are never touched, and the project keeps " +
+          "its keywords, rankings and history - reconnecting later re-installs the pipeline. " +
+          "If the repo cannot be reached the connection is KEPT, so the attempt can be retried.",
+        inputSchema: {
+          confirm: z
+            .string()
+            .describe(
+              "The connected repo as owner/name, typed exactly. Guards against a disconnect nobody asked for.",
+            ),
+        },
+      },
+      async ({ confirm }) => {
+        const p = currentProject();
+        if (!p.github_repo) return fail("No repo is connected to this project.");
+        if (confirm.trim().toLowerCase() !== p.github_repo.toLowerCase()) {
+          return fail(`Pass confirm="${p.github_repo}" exactly to disconnect it.`);
+        }
+        const { disconnectRepoFromProject } = await import("@/lib/pipeline-uninstall");
+        const result = await disconnectRepoFromProject(p);
+        if (!result.ok) {
+          return fail(
+            `DispatchSEO could not be fully removed from ${result.repo}: ${result.warnings.join(" ")} ` +
+              `The repo is still connected, so this can be retried.`,
+          );
+        }
+        return ok({
+          disconnected: result.repo,
+          workflows_disabled: result.teardown?.workflows_disabled ?? 0,
+          files_removed: result.teardown?.files_removed ?? 0,
+          secret_removed: result.teardown?.secret_removed ?? false,
+          note: "Schedules stopped. Published content and this project's history are unchanged.",
+        });
+      },
+    );
+
     server.registerTool(
       "set_github_repo",
       {

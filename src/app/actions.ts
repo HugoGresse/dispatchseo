@@ -880,6 +880,65 @@ export async function deleteProject(
   redirect("/dashboard");
 }
 
+export type DisconnectRepoState = { error: string } | { done: string } | null;
+
+// "Stop using DispatchSEO for this site" as a button, which until now did not
+// exist anywhere on the self-hosted version.
+//
+// Deleting the project is refused for the home project, Settings shows the repo
+// as read-only text, and set_github_repo is cloud-only and will not take an
+// empty value - so a self-hoster who tried this on one site was left with
+// scheduled workflows in their own repo, spending their own GitHub Actions
+// minutes, and no supported way to stop them. The only exit was deleting the
+// workflow files by hand through the GitHub API.
+//
+// Available on the home project on purpose: that is precisely the project that
+// cannot be deleted, so if disconnect skipped it too, the gap would still be
+// open for exactly the person who hit it.
+export async function disconnectRepo(
+  _prev: DisconnectRepoState,
+  formData: FormData,
+): Promise<DisconnectRepoState> {
+  await assertAuthed();
+
+  const slug = String(formData.get("slug") ?? "");
+  const confirm = String(formData.get("confirm") ?? "").trim().toLowerCase();
+
+  const project = await getProjectBySlug(slug);
+  if (!project) return { error: "Unknown project." };
+  // Same ownership check the delete path uses: this writes to the project row
+  // AND reaches into a GitHub repo, so a swapped id must not get either.
+  try {
+    await assertProjectOwned(project.id);
+  } catch {
+    return { error: "Unknown project." };
+  }
+  if (!project.github_repo) return { error: "No repo is connected to this project." };
+  if (confirm !== project.github_repo.toLowerCase()) {
+    return { error: `Type ${project.github_repo} exactly to confirm.` };
+  }
+
+  const { disconnectRepoFromProject } = await import("@/lib/pipeline-uninstall");
+  const result = await disconnectRepoFromProject(project);
+  if (!result.ok) {
+    // Say what is still live rather than a bare failure. The repo is still
+    // connected in this case by design, so the retry is right where they are.
+    return {
+      error:
+        `DispatchSEO could not be fully removed from ${result.repo}: ${result.warnings.join(" ")} ` +
+        `The repo is still connected here so you can try again - or remove ` +
+        `.github/workflows/seo-*.yml and the .dispatchseo folder yourself.`,
+    };
+  }
+
+  revalidatePath("/", "layout");
+  return {
+    done:
+      `DispatchSEO has been removed from ${result.repo}. Its workflows are disabled and deleted, ` +
+      `and nothing is scheduled there anymore. Your published pages are untouched.`,
+  };
+}
+
 export type CancelPlanState =
   | { error: string; portal?: boolean }
   | { done: "cancelled" | "resumed" }

@@ -179,6 +179,27 @@ One way to sidestep all of this: public repositories get unlimited free
 GitHub Actions minutes. If your site's repo can be public, GitHub Actions
 costs nothing at all, regardless of how many sites you connect.
 
+## Turning it off for a site
+
+Settings has a **Disconnect repo** button in the danger zone. It switches off the
+`seo-*` workflows in your repo, deletes them along with the `.dispatchseo` folder
+and the `SEO_MCP_API_KEY` secret, and clears the connection. Every schedule stops,
+so it stops using your GitHub Actions minutes.
+
+What it never touches: the guides and tools that already shipped, any templates
+the setup agent added to your site, and everything this dashboard has tracked -
+keywords, rankings, history. Reconnecting the repo later re-installs the pipeline.
+
+The button is there for your first site too. That one can't be deleted, because
+the rest of your setup is anchored to it, so disconnecting is how you stop it.
+
+If GitHub can't be reached - a rotated token, an uninstalled App - the repo stays
+connected on purpose and the error says why. Clearing the connection while the
+workflows were still live would leave them running against a project that no
+longer claims them, with nothing left to retry from.
+
+Claude Code can do the same thing with the `disconnect_repo` tool.
+
 ## Publishing pace
 
 However fast ideas get approved, guides ship at a flat rate: **at most one

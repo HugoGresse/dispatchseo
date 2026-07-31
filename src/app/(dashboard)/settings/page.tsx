@@ -12,6 +12,7 @@ import { isCloudMode } from "@/lib/cloud";
 import { ClaudeTokenConnect } from "@/components/claude-token-connect";
 import { hasRepoSecret } from "@/lib/github-app-secrets";
 import { DeleteProjectForm } from "@/components/delete-project";
+import { DisconnectRepoForm } from "@/components/disconnect-repo";
 import { DeleteAccountForm } from "@/components/delete-account";
 import { KeywordSourceSettings } from "@/components/keyword-source-settings";
 import { SiteLaunchedRow } from "@/components/site-launched";
@@ -300,9 +301,22 @@ export default async function SettingsPage() {
       <section className="space-y-3">
         <SectionTitle sub="irreversible - read before you click">Danger zone</SectionTitle>
         <div className="space-y-3 rounded-xl border border-red-500/25 bg-neutral-900 p-4 sm:p-5">
+          {/* Disconnect sits ABOVE delete and outside the isDefault branch,
+              because the home project is the one that cannot be deleted - if
+              this were inside the else, the only project a self-hoster can
+              have would still have no way to stop. */}
+          {project.github_repo ? (
+            <div className={isDefault ? "" : "border-b border-neutral-800 pb-4"}>
+              <p className="mb-2 text-sm font-medium text-neutral-200">Disconnect the repo</p>
+              <DisconnectRepoForm slug={project.slug} repo={project.github_repo} />
+            </div>
+          ) : null}
           {isDefault ? (
             <p className="text-sm text-neutral-400">
               This is the home project - it can&apos;t be deleted.
+              {project.github_repo
+                ? " Disconnecting the repo above is how you stop it running."
+                : ""}
             </p>
           ) : (
             <>

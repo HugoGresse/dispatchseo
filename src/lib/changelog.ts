@@ -30,6 +30,43 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-31.6",
+    date: "2026-07-31",
+    title: "You can stop DispatchSEO on a site without deleting it",
+    summary:
+      "Settings has a Disconnect button that turns off and removes the workflows in your repo, " +
+      "so schedules stop and they stop using your GitHub Actions minutes. Your published pages " +
+      "and all your history stay.",
+    changes: [
+      {
+        kind: "new",
+        text:
+          "A Disconnect repo button in Settings. It switches off the workflows we put in your " +
+          "repo, deletes them along with the .dispatchseo folder and the key we stored there, " +
+          "and forgets the connection. Everything scheduled stops, which means it stops " +
+          "spending your GitHub Actions minutes. Your guides, tools and pages are left exactly " +
+          "as they are, this dashboard keeps every keyword and ranking it has tracked, and you " +
+          "can connect the repo again whenever you want.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "On the self-hosted version there was previously no way to do this at all. Your first " +
+          "site can't be deleted (the rest of your setup is anchored to it), the repo was shown " +
+          "as read-only text, so a site you had only been trying out kept running builds in your " +
+          "repo with no button anywhere that stopped it. The button is on that first site too - " +
+          "it is the one that needed it most.",
+      },
+      {
+        kind: "new",
+        text:
+          "Claude Code can do it too, through the disconnect_repo tool, so you can ask for it in " +
+          "the terminal instead of clicking. If GitHub can't be reached, the repo stays connected " +
+          "on purpose and tells you why, so nothing is left half-removed with no way back to it.",
+      },
+    ],
+  },
+  {
     version: "2026-07-31.5",
     date: "2026-07-31",
     title: "A build that quietly did nothing now gets caught and retried",

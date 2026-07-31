@@ -280,3 +280,68 @@ export async function uninstallPipelineFromRepo(
 
   return result;
 }
+
+// Disconnect WITHOUT deleting: take the pipeline back out of the repo and
+// forget which repo it was, while the project, its keywords, rank history and
+// published pages all stay exactly as they are.
+//
+// This exists because "stop using DispatchSEO for this site" had no path at
+// all on self-host. Deleting is refused for the home project (it anchors the
+// schema's column defaults), Settings renders the repo as read-only text, and
+// set_github_repo is cloud-only and rejects an empty value - so a self-hoster
+// whose one site was a trial had workflows running in their repo, spending
+// their own Actions minutes, with no button anywhere that stopped it. The only
+// way out was deleting the workflow files by hand through the GitHub API.
+//
+// ON FAILURE THE REPO STAYS CONNECTED, deliberately. Clearing github_repo
+// while the workflows are still live in the repo would strand them: they would
+// keep firing on their schedules against a project that no longer claims them,
+// failing every run, emailing the owner, burning Actions minutes - and there
+// would be nothing left to retry the disconnect FROM, because the repo we
+// needed to reach is the field we just cleared. That is the exact trap this
+// module's header describes; leaving the connection in place keeps the retry
+// possible and the state honest.
+export type DisconnectResult = {
+  ok: boolean;
+  repo: string | null;
+  /** Null when there was nothing connected to begin with. */
+  teardown: UninstallResult | null;
+  warnings: string[];
+};
+
+export async function disconnectRepoFromProject(project: {
+  id: string;
+  github_repo: string | null;
+  github_installation_id?: number | null;
+}): Promise<DisconnectResult> {
+  const repo = project.github_repo;
+  if (!repo) {
+    return { ok: true, repo: null, teardown: null, warnings: [] };
+  }
+
+  const teardown = await uninstallPipelineFromRepo(project);
+  if (!teardown.ok) {
+    return { ok: false, repo, teardown, warnings: teardown.warnings };
+  }
+
+  // pipeline_installed_at goes too: a project with no repo cannot have an
+  // installed pipeline, and leaving the stamp behind would make a later
+  // reconnect look already-finished to every readiness gate that reads it.
+  const { db } = await import("./db");
+  const { error } = await db()
+    .from("projects")
+    .update({ github_repo: null, pipeline_installed_at: null })
+    .eq("id", project.id);
+  if (error) {
+    return {
+      ok: false,
+      repo,
+      teardown,
+      warnings: [
+        `DispatchSEO was removed from ${repo}, but this project still lists it as connected (${error.message}). Try again - re-running is safe, since everything it removes is already gone.`,
+      ],
+    };
+  }
+
+  return { ok: true, repo, teardown, warnings: [] };
+}
