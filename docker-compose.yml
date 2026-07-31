@@ -104,6 +104,16 @@ services:
       DATAFORSEO_LOGIN: ${DATAFORSEO_LOGIN:-}
       DATAFORSEO_PASSWORD: ${DATAFORSEO_PASSWORD:-}
       GH_MERGE_TOKEN: ${GH_MERGE_TOKEN:-}
+      # The two builder credentials, on the APP as well as the builder.
+      # /api/builder/jobs is what resolves a token per job and hands it to
+      # the container, so the app is the process that has to be able to see
+      # them. With them only on the builder, a stack configured the way
+      # .env.docker.example documents came up advertising an agent it was
+      # never handed work for: the container reported `?agents=codex`, the
+      # feed resolved no codex credential and emitted no codex job, and
+      # nothing anywhere said so. Silent stall, forever.
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       ALERT_EMAIL: ${ALERT_EMAIL:-}
       ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-}
