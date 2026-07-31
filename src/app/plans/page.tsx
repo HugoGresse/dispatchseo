@@ -248,8 +248,8 @@ export default async function PlansPage() {
                     someone adds their third site. */}
                 {tier !== "starter" ? (
                   <p className="mt-3 text-xs leading-relaxed text-neutral-400">
-                    Above 2 sites, GitHub bills you directly for the automation it runs - about $5
-                    per extra site a month, with nothing added by us.
+                    Two sites run free on your own GitHub account. Extra sites cost about $5 each a
+                    month, paid to GitHub, not to us.
                   </p>
                 ) : null}
 

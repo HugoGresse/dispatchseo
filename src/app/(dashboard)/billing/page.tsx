@@ -162,8 +162,8 @@ export default async function BillingPage({
                   tier, so on Starter this would warn about the impossible. */}
               {tier !== "starter" ? (
                 <p className="mt-3 text-xs leading-relaxed text-neutral-500">
-                  Above 2 sites, GitHub bills you directly for the automation it runs - about $5
-                  per extra site a month, with nothing added by us.
+                  Two sites run free on your own GitHub account. Extra sites cost about $5 each a
+                  month, paid to GitHub, not to us.
                 </p>
               ) : null}
               {isCurrent ? (
