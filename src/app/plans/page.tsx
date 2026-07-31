@@ -236,6 +236,23 @@ export default async function PlansPage() {
                   <p className="mt-1.5 text-xs font-medium text-neutral-500">Billed today</p>
                 )}
 
+                {/* ABOVE the button, deliberately. This is a pass-through cost
+                    the buyer pays to someone else, so it has to be read before
+                    the click, not found afterwards - it sat below the feature
+                    list until 2026-07-31, which technically disclosed it while
+                    putting it where nobody scrolls. Multi-site tiers only: one
+                    site cannot leave GitHub's free tier, so on Starter this
+                    would warn about something that cannot happen. Never on the
+                    public pricing section; the full table and the
+                    spending-limit instruction live on the card shown when
+                    someone adds their third site. */}
+                {tier !== "starter" ? (
+                  <p className="mt-3 text-xs leading-relaxed text-neutral-400">
+                    Above 2 sites, GitHub bills you directly for the automation it runs - about $5
+                    per extra site a month, with nothing added by us.
+                  </p>
+                ) : null}
+
                 <a
                   href={`/api/polar/checkout?tier=${tier}`}
                   className={[
@@ -273,19 +290,6 @@ export default async function PlansPage() {
                       </li>
                     ))}
                   </ul>
-                  {/* Multi-site plans only, and only here - never on the public
-                      pricing section. Starter is one site, comfortably inside
-                      GitHub's free tier, so telling a Starter buyer about a
-                      GitHub bill would be a warning about something that cannot
-                      happen to them. The full table and the spending-limit
-                      instruction live where they become actionable: the card
-                      shown when someone adds their third site. */}
-                  {tier !== "starter" ? (
-                    <p className="mt-4 text-xs leading-relaxed text-neutral-500">
-                      Above 2 sites, GitHub bills you directly for the automation it runs - about
-                      $5 per extra site a month, with nothing added by us.
-                    </p>
-                  ) : null}
                 </div>
               </div>
             );
