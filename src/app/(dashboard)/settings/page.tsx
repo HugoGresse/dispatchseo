@@ -252,35 +252,54 @@ export default async function SettingsPage() {
         <AgentSwitch current={agent.id} slug={project.slug} />
       </section>
 
+      {/* Folded away by default: the key and the connect paste are a
+          once-per-site errand, but they were the tallest thing on the page and
+          pushed everything you actually change past the fold. Plain <details>,
+          so it works identically on the cloud and self-hosted renders and needs
+          no client JS. */}
       {mcpToken ? (
-        <section className="space-y-3">
-          <SectionTitle sub="what the CI workflows and your coding agent use to talk to this project - every call made with it only sees this project's data">
-            Project key
-          </SectionTitle>
-          <CopyBlock text={mcpToken} />
-          <p className="text-sm text-neutral-400">
-            Connect your coding agent to this project (the server name carries the project slug,
-            so every connected site keeps its own entry):
-          </p>
-          <p className="text-sm text-neutral-500">
-            Once connected, your agent can drive everything the dashboard does -{" "}
-            <a
-              href="/docs/mcp-tools"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-violet-400 underline underline-offset-2 hover:text-violet-300"
+        <details className="group space-y-3">
+          <summary className="flex cursor-pointer select-none items-start justify-between gap-4 list-none [&::-webkit-details-marker]:hidden">
+            <SectionTitle sub="what the CI workflows and your coding agent use to talk to this project - every call made with it only sees this project's data">
+              Project key
+            </SectionTitle>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className="mt-1.5 h-4 w-4 shrink-0 text-neutral-500 transition-transform group-open:rotate-180"
+              aria-hidden
             >
-              every tool is documented here
-            </a>
-            .
-          </p>
-          <AgentConnectTabs
-            slug={project.slug}
-            origin={dashOrigin}
-            token={mcpToken}
-            box="card"
-          />
-        </section>
+              <polyline points="6 9 12 15 18 9" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </summary>
+          <div className="space-y-3">
+            <CopyBlock text={mcpToken} />
+            <p className="text-sm text-neutral-400">
+              Connect your coding agent to this project (the server name carries the project slug,
+              so every connected site keeps its own entry):
+            </p>
+            <p className="text-sm text-neutral-500">
+              Once connected, your agent can drive everything the dashboard does -{" "}
+              <a
+                href="/docs/mcp-tools"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-violet-400 underline underline-offset-2 hover:text-violet-300"
+              >
+                every tool is documented here
+              </a>
+              .
+            </p>
+            <AgentConnectTabs
+              slug={project.slug}
+              origin={dashOrigin}
+              token={mcpToken}
+              box="card"
+            />
+          </div>
+        </details>
       ) : null}
 
       {cronSecret ? (
