@@ -33,10 +33,19 @@ on:
   check_suite:
     types: [completed]
   status:
-  # Hourly backstop for anything the events miss (e.g. a check that never
-  # reports, or GitHub dropping an event).
+  # Backstop for anything the events miss (e.g. a check that never reports, or
+  # GitHub dropping an event) and the pacing for the stalled-validation sweep
+  # below, which polls rather than reacting to a payload.
+  # Every 6h, not hourly: this job bills a full minute per run (see the cost
+  # gate on the job), so an hourly sweep cost ~300 min/month of an installed
+  # repo's GitHub Actions quota - 15% of the GitHub Free allowance - almost
+  # always to discover there was nothing to merge. The merge path itself is
+  # event-driven and unaffected: a green PR still merges within a minute of
+  # its last check reporting. This only widens the worst case when an event is
+  # genuinely dropped (a guide publishes up to 6h late) and the re-dispatch
+  # window for a crashed tool validation, which is weekly work anyway.
   schedule:
-    - cron: "17 * * * *" # offset off the top of the hour
+    - cron: "17 */6 * * *" # 4x/day, offset off the top of the hour
   workflow_dispatch:
 
 concurrency:
@@ -45,6 +54,23 @@ concurrency:
 
 jobs:
   merge:
+    # COST GATE, at job level on purpose. GitHub bills every job that claims a
+    # runner a minimum of one WHOLE minute, so a 10-second sweep that finds
+    # nothing to do still costs a full minute. `status:` fires on EVERY commit
+    # status event, and Vercel alone posts several per preview deploy (pending
+    # while it builds, then success), so most of those minutes were spent
+    # waking a runner to discover a check was still in progress. A job skipped
+    # by an `if:` at this level never claims a runner and costs nothing -
+    # which an early `exit 0` inside the job cannot do, because by then the
+    # minute is already billed.
+    #
+    # Safe to skip: a status of `pending`, `failure` or `error` cannot make a
+    # PR green, so there is never anything to merge on one. The stalled-
+    # validation sweep further down polls open tool PRs by label instead of
+    # reading this event payload, so it loses no signal either - the schedule
+    # backstop below is what paces it. `check_suite`, `schedule` and
+    # `workflow_dispatch` are deliberately unaffected.
+    if: github.event_name != 'status' || github.event.state == 'success'
     runs-on: ubuntu-latest
     # Bounded on purpose: this job holds a GLOBAL, non-cancelling concurrency
     # lock (group: seo-auto-merge above), so one wedged `gh` call would block ALL

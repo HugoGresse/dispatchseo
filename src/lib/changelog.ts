@@ -30,6 +30,36 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-31",
+    date: "2026-07-31",
+    title: "The pipeline costs you far fewer GitHub Actions minutes",
+    summary:
+      "The publish sweep was waking a runner on almost every check your CI posted, and GitHub " +
+      "bills a full minute even for a two-second job. It now only wakes when something can " +
+      "actually be merged. Nothing about how or when your guides publish changes.",
+    changes: [
+      {
+        kind: "improved",
+        text:
+          "The sweep that merges finished guides used to run on every status your CI reported - " +
+          "including the ones saying a check had only just started. Vercel alone posts several " +
+          "of those per preview, and each one cost a whole billed minute to wake up and discover " +
+          "there was nothing to do yet. It now sits out anything that can't possibly be ready. " +
+          "A green guide still merges within a minute of its last check, exactly as before.",
+      },
+      {
+        kind: "improved",
+        text:
+          "The safety sweep behind it dropped from hourly to every six hours. It exists for the " +
+          "rare case where GitHub loses an event, and it was spending about 300 minutes a month " +
+          "per site confirming there was nothing to merge - 15% of the free GitHub allowance on " +
+          "a check that almost never finds anything. Together these roughly halve what the " +
+          "pipeline costs you, which matters if your site's repo is private and on GitHub's " +
+          "free tier. Public repos have always had unlimited minutes and were never affected.",
+      },
+    ],
+  },
+  {
     version: "2026-07-30.8",
     date: "2026-07-30",
     title: "DispatchSEO runs on Codex too",

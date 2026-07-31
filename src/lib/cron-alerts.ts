@@ -50,7 +50,14 @@ const STALE_HOURS: Record<string, number> = {
   // and rank charts silently freeze - 4h catches that the same morning.
   "serp-collect": 4,
   "seo-daily": 36,
-  "seo-auto-merge": 6, // hourly backstop schedule
+  // Backstop schedule is every 6h (`17 */6 * * *`), cut back from hourly
+  // because that job bills a full GitHub-Actions minute per sweep and spent
+  // ~300 min/month of an installed repo's quota finding nothing to merge.
+  // 20h is ~3.3x the cadence - the same safety margin hourly-gsc gets, and in
+  // the range secrets-canary uses for its identical 6h schedule (24h) - so a
+  // deferred or dropped tick doesn't flip Home red with nothing actually wrong.
+  // Merging itself is event-driven and does not depend on this schedule.
+  "seo-auto-merge": 20,
   "seo-tools": 8 * 24, // Wednesdays, 1-day buffer over the weekly cadence
   "seo-geo-scan": 8 * 24, // Wednesdays, same buffer as the other weeklies
   "seo-weekly-research": 8 * 24, // Mondays, same buffer as the other weeklies
