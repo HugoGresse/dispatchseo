@@ -163,7 +163,13 @@ export default async function BillingPage({
               {tier !== "starter" ? (
                 <p className="mt-3 text-xs leading-relaxed text-neutral-500">
                   Your first two sites are free on your own GitHub account. After that it&apos;s
-                  about $5 per site a month, paid to GitHub, not to us.
+                  about $5 per site a month, paid to GitHub, not to us.{" "}
+                  <a
+                    href="/docs/publishing#github-actions-costs"
+                    className="underline underline-offset-2 hover:text-neutral-300"
+                  >
+                    See the cost table
+                  </a>
                 </p>
               ) : null}
               {isCurrent ? (

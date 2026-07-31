@@ -306,7 +306,15 @@ html:has(.ld) { scroll-behavior: smooth; }
    scanning, without turning a few dollars into a red warning. */
 .ld .plan li .li-hint > button { font: inherit; font-size: 11.5px; font-weight: 600; line-height: 1; padding: 4px 9px 4px 7px; border-radius: 999px; border: 1px solid rgba(167,139,250,0.35); background: rgba(167,139,250,0.10); color: var(--vio2); cursor: help; display: inline-flex; align-items: center; gap: 4px; letter-spacing: 0.01em; }
 .ld .plan li .li-hint > button:hover, .ld .plan li .li-hint > button:focus-visible { border-color: var(--vio2); background: rgba(167,139,250,0.20); outline: none; }
-.ld .plan li .li-pop { position: absolute; bottom: calc(100% + 9px); left: 50%; transform: translateX(-50%); width: 250px; white-space: normal; background: #1b1b21; border: 1px solid var(--line2); border-radius: 10px; padding: 11px 13px; font-size: 12.5px; line-height: 1.5; color: var(--mut); box-shadow: 0 12px 28px rgba(0,0,0,0.5); opacity: 0; visibility: hidden; transition: opacity 0.12s ease; z-index: 20; pointer-events: none; }
+/* pointer-events stays ON: the bubble holds a link to the full cost table,
+   and an unclickable link is worse than no link. */
+.ld .plan li .li-pop { position: absolute; bottom: calc(100% + 9px); left: 50%; transform: translateX(-50%); width: 250px; white-space: normal; background: #1b1b21; border: 1px solid var(--line2); border-radius: 10px; padding: 11px 13px; font-size: 12.5px; line-height: 1.5; color: var(--mut); box-shadow: 0 12px 28px rgba(0,0,0,0.5); opacity: 0; visibility: hidden; transition: opacity 0.12s ease; z-index: 20; }
+/* Bridges the 9px gap between pill and bubble. Without it the pointer
+   leaves :hover crossing that gap and the bubble closes before it can be
+   reached, which makes the link inside unusable in practice. */
+.ld .plan li .li-pop::after { content: ""; position: absolute; top: 100%; left: 0; right: 0; height: 10px; }
+.ld .plan li .li-pop a { color: var(--vio2); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; display: inline-block; margin-top: 7px; }
+.ld .plan li .li-pop a:hover { color: #fff; }
 .ld .plan li .li-hint:hover .li-pop, .ld .plan li .li-hint:focus-within .li-pop { opacity: 1; visibility: visible; }
 /* The card is only ~300px wide, so an edge-anchored bubble would overflow it.
    Pin the outer plans to their own side instead of centring. */

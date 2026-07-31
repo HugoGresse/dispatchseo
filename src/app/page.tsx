@@ -405,7 +405,7 @@ export default async function LandingPage({
               <PlanPrice tier="growth" founding={founding} />
               <div className="p-sub">For a small portfolio</div>
               <ul>
-                <li>Up to 3 sites<span className="li-hint"><button type="button" aria-label="What this costs on GitHub">ⓘ GitHub cost</button><span className="li-pop" role="tooltip">Your first two sites are free on your own GitHub account. After that it&apos;s about $5 per site a month, paid to GitHub, not to us.</span></span></li>
+                <li>Up to 3 sites<span className="li-hint"><button type="button" aria-label="What this costs on GitHub">ⓘ GitHub cost</button><span className="li-pop" role="tooltip">Your first two sites are free on your own GitHub account. After that it&apos;s about $5 per site a month, paid to GitHub, not to us.<a href="/docs/publishing#github-actions-costs">See the cost table</a></span></span></li>
                 <li>300 tracked keywords</li>
                 <li>Unlimited articles</li>
                 <li>Unlimited AI-built tools</li>
@@ -433,7 +433,7 @@ export default async function LandingPage({
               <PlanPrice tier="scale" founding={founding} />
               <div className="p-sub">Portfolios and agencies</div>
               <ul>
-                <li>Up to 10 sites<span className="li-hint"><button type="button" aria-label="What this costs on GitHub">ⓘ GitHub cost</button><span className="li-pop" role="tooltip">Your first two sites are free on your own GitHub account. After that it&apos;s about $5 per site a month, paid to GitHub, not to us.</span></span></li>
+                <li>Up to 10 sites<span className="li-hint"><button type="button" aria-label="What this costs on GitHub">ⓘ GitHub cost</button><span className="li-pop" role="tooltip">Your first two sites are free on your own GitHub account. After that it&apos;s about $5 per site a month, paid to GitHub, not to us.<a href="/docs/publishing#github-actions-costs">See the cost table</a></span></span></li>
                 <li>1,000 tracked keywords</li>
                 <li>Unlimited articles</li>
                 <li>Unlimited AI-built tools</li>
