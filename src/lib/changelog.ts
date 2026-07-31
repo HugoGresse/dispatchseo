@@ -30,6 +30,28 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-31.4",
+    date: "2026-07-31",
+    title: "Every guide ships with its own custom graphics again",
+    summary:
+      "Guides built by Codex were coming out without the custom diagrams and cover art that " +
+      "guides built by Claude Code always have. The builder now checks its own work before " +
+      "opening the pull request, so a guide can't reach you missing them.",
+    changes: [
+      {
+        kind: "fixed",
+        text:
+          "Your guides are supposed to ship with two or three custom graphics drawn for that " +
+          "exact topic, plus a cover. Codex was reading that requirement and talking itself " +
+          "down to a plain table and a quote box - so a post would arrive looking noticeably " +
+          "thinner than the ones beside it on your blog. The builder now counts the files it " +
+          "actually created before it opens the pull request, and won't ship the guide until " +
+          "they are there. Guides built by Claude Code were never affected, and nothing about " +
+          "how they are written changes.",
+      },
+    ],
+  },
+  {
     version: "2026-07-31.3",
     date: "2026-07-31",
     title: "Your automations use a lot less of your GitHub allowance",

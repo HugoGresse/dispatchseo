@@ -281,6 +281,15 @@ the build-tool workflow and must never be picked up here.
    - Named for the concept it shows (never Visual1/GuideChart), imported
      only by this guide, with a top-of-file comment explaining what it shows
      and why.
+   **"Mandatory" is a file count, not an aspiration.** A markdown table, a
+   blockquote callout, a code fence and an ASCII diagram are PROSE - they are
+   already allowed anywhere in the draft and NONE of them satisfies this step.
+   This step is done when two or three NEW component files exist on disk and
+   this guide imports each one. Before moving on, list the component directory
+   and grep your own MDX for the imports; if that count is under two, you have
+   not done this step - go back and build them. Reasoning yourself down to
+   "a figure of some kind should be acceptable" is the one failure mode this
+   paragraph exists to stop.
    **COVER IMAGE (when the repo supports it).** If the repo has
    \`scripts/generate-cover.mjs\`, every guide also ships with a cover YOU
    author as vector art - no image model is involved. You know exactly what
@@ -320,6 +329,12 @@ the build-tool workflow and must never be picked up here.
    WITHOUT failing the run and note "no cover - generator not configured"
    in the report; the card falls back to its generated plate. Never hotlink
    an external image or fabricate a cover path.
+   **The generator being absent is the ONLY excuse, and you test for it
+   rather than assume it** - \`ls scripts/generate-cover.mjs\`. A conventions
+   file that calls \`cover\` "optional" is documenting the CARD FALLBACK that
+   keeps older posts rendering; it is not permission to skip. If the script
+   is there, this guide ships a cover, and "the fallback plate will do" is
+   not a decision this step lets you make.
 8. **HUMANIZER (mandatory, not optional).** Apply the humanizer pass the
    conventions file points at (or its principles if the repo carries no
    skill copy): kill AI tells, tighten, match the first-person practitioner
@@ -328,7 +343,18 @@ the build-tool workflow and must never be picked up here.
    re-check the FAQ mirror after edits.
 9. **VERIFY.** The site's build/verify command (from the conventions file)
    must pass - this also compiles the visual components. Sanity-check
-   internal links resolve to real slugs and the FAQ mirror holds.
+   internal links resolve to real slugs and the FAQ mirror holds - resolve
+   them by listing the files they point at, never by trusting that a route
+   you wrote from memory exists.
+   **SHIP CHECK - answer these with commands, not from memory, and put the
+   numbers in the run report:** (a) how many NEW component files this guide
+   imports (must be 2 or 3), (b) whether the cover file exists and
+   frontmatter points at it, or the generator is genuinely absent. A run that
+   is short on either is NOT ready to ship: go back to step 7 and finish it.
+   Never open a PR that fails this check, and never write a report that
+   claims visuals were done without the filenames to back it up - a guide
+   that ships without them looks broken next to every post beside it, which
+   is a cost the owner pays long after this run's log is gone.
    **Then the SAMENESS GATE, mandatory:** call \`check_sameness\` with the
    FINAL guide markdown (after the humanizer pass) and its primary keyword.
    It compares this draft against the guides this site has already published -
@@ -374,8 +400,11 @@ the build-tool workflow and must never be picked up here.
     \`log_page(url="https://{{DOMAIN}}/<path>", ...)\` - independent of each
     other, so issue them together in one turn.
 13. Report: what was built, the PR link, the gate verdict, the archetype and
-    information-gain asset chosen, which published posts (if any) were edited
-    to link back, and what to check on the preview.
+    information-gain asset chosen, **the step-9 ship-check numbers with the
+    component filenames and the cover path**, which published posts (if any)
+    were edited to link back, and what to check on the preview. Naming the
+    files is the point: "visuals: done" is not a report, it is the shape a
+    skipped step hides in.
 `;
 
 // Step 10 in the two states a project can be in. Only one is ever served.
