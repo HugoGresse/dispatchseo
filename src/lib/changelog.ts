@@ -30,6 +30,34 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-31.5",
+    date: "2026-07-31",
+    title: "A build that quietly did nothing now gets caught and retried",
+    summary:
+      "A builder run could finish, report success and have built nothing at all - costing you " +
+      "a day's post with a green tick beside it. Runs now have to show the pull request they " +
+      "made, and a run that made none is retried instead of counted.",
+    changes: [
+      {
+        kind: "fixed",
+        text:
+          "If the builder got stuck it could stop and ask a question - and on a scheduled run " +
+          "there is nobody there to answer, so it ended quietly and the day's post never " +
+          "happened. Worse, it counted as a completed run, so nothing retried. Runs now have " +
+          "to point at the pull request they opened; one that opened none is put back in the " +
+          "queue and picked up on the next pass, and you get told if it keeps happening.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "The underlying cause was a rule of ours that was too strict about how Codex is " +
+          "allowed to write files - it ruled out the one method that reliably works, so the " +
+          "builder painted itself into a corner on anything with code samples in it. Codex " +
+          "builds should now get through the same work Claude Code does.",
+      },
+    ],
+  },
+  {
     version: "2026-07-31.4",
     date: "2026-07-31",
     title: "Every guide ships with its own custom graphics again",

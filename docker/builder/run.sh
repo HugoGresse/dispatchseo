@@ -242,16 +242,29 @@ run_job() { # run_job <base64 job json>
   # Claude Code has built-in file tools. Codex, in `codex exec`, has the shell
   # and nothing else - `codex features list` reports apply_patch_freeform as
   # REMOVED, so there is no file-write tool to turn on. Left to itself the
-  # model reaches for a heredoc, and the content this pipeline writes is MDX:
-  # backticks everywhere, which bash expands as command substitution inside a
-  # heredoc. On 2026-07-31 that failed every write for a whole run - it tried
+  # model reaches for an UNQUOTED heredoc, and the content this pipeline writes
+  # is MDX: backticks everywhere, which bash expands as command substitution
+  # inside one. On 2026-07-31 that failed every write for a whole run - it tried
   # heredocs, printf, base64 and reformatting the code fences, then gave up and
   # exited 0 with nothing built.
   #
-  # So it is told, before the task, which methods survive quoting. Kept here
-  # rather than in the shared playbook because it is not a content rule - it is
-  # a fact about this container, and Claude must never be handed it.
-  CODEX_FILE_RULE='ENVIRONMENT RULE (read first, it overrides habit): you have no apply_patch tool here - only the shell. NEVER write or edit a file with a heredoc, printf, or echo. The content is MDX and its backticks WILL be expanded by bash and corrupt the file or fail the command. Write files exactly one of two ways: (1) pipe an OpenAI-format patch envelope into the `apply_patch` command on PATH, or (2) python3 -c with the content read from stdin, never interpolated into the command string. Verify every write with `ls -l` and `head` before moving on, and never let a filename come from an unset shell variable. '
+  # The first fix for that banned heredocs outright, and that over-corrected:
+  # a SINGLE-QUOTED delimiter (<<'DSEOF') makes bash expand nothing at all, so
+  # it is the one quoting-proof method available everywhere. Banning it left
+  # only awkward python -c invocations, and later the same day Codex hit the
+  # escaping wall on a .tsx file, stopped mid-run to ask permission to use a
+  # quoted heredoc, and exited 0 having built nothing. It was right; the rule
+  # was wrong. Hence the explicit allow, and the explicit "never ask" - an
+  # unattended run has nobody to answer, so a question is just a dead run.
+  #
+  # Kept here rather than in the shared playbook because it is not a content
+  # rule - it is a fact about this container, and Claude must never be handed
+  # it.
+  CODEX_FILE_RULE=$(cat <<'RULEEOF'
+ENVIRONMENT RULE (read first, it overrides habit): you have no apply_patch tool registered here - only the shell, and you are running UNATTENDED, so there is nobody to answer a question. Write every file exactly one of three ways: (1) a SINGLE-QUOTED heredoc, `cat > path <<'DSEOF'` ... `DSEOF` - the quoted delimiter is the whole point, bash expands NOTHING inside it so the backticks and $ in MDX and TSX survive verbatim; (2) pipe an OpenAI-format patch envelope into the `apply_patch` command on PATH; (3) python3 with the content read from stdin, never interpolated into the command string. NEVER use an unquoted heredoc, printf or echo to write file content - an unquoted heredoc is what expands backticks and corrupts the file. Pick a delimiter that cannot appear in the content. Verify every write with `ls -l` and `head` before moving on, and never let a filename come from an unset shell variable. If you ever find yourself about to ask for approval or a go/no-go, do not: pick the safest option that still completes the task, do it, and say what you chose in the final report. A run that stops to ask a question builds nothing and is a failed run.
+RULEEOF
+)
+  CODEX_FILE_RULE="$CODEX_FILE_RULE "
 
   if [ "$agent" = "codex" ]; then
     # `codex exec` needs an explicit login: OPENAI_API_KEY in the environment
