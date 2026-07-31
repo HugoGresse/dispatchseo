@@ -376,7 +376,7 @@ export default async function LandingPage({
               <PlanPrice tier="starter" founding={founding} />
               <div className="p-sub">One site on autopilot</div>
               <ul>
-                <li>1 site</li>
+                <li>Up to 1 site</li>
                 <li>100 tracked keywords</li>
                 <li>Unlimited articles</li>
                 <li>Unlimited AI-built tools</li>
@@ -405,7 +405,7 @@ export default async function LandingPage({
               <PlanPrice tier="growth" founding={founding} />
               <div className="p-sub">For a small portfolio</div>
               <ul>
-                <li>3 sites</li>
+                <li>Up to 3 sites</li>
                 <li>300 tracked keywords</li>
                 <li>Unlimited articles</li>
                 <li>Unlimited AI-built tools</li>
@@ -433,7 +433,7 @@ export default async function LandingPage({
               <PlanPrice tier="scale" founding={founding} />
               <div className="p-sub">Portfolios and agencies</div>
               <ul>
-                <li>10 sites</li>
+                <li>Up to 10 sites</li>
                 <li>1,000 tracked keywords</li>
                 <li>Unlimited articles</li>
                 <li>Unlimited AI-built tools</li>

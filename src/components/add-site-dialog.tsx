@@ -230,23 +230,23 @@ export function AddSiteDialog({
                 </tr>
                 <tr>
                   <td className="border-b border-neutral-800/70 py-1">4</td>
-                  <td className="border-b border-neutral-800/70 py-1 text-right">~$7</td>
+                  <td className="border-b border-neutral-800/70 py-1 text-right">~$5</td>
                 </tr>
                 <tr>
                   <td className="border-b border-neutral-800/70 py-1">5</td>
-                  <td className="border-b border-neutral-800/70 py-1 text-right">~$12</td>
+                  <td className="border-b border-neutral-800/70 py-1 text-right">~$10</td>
                 </tr>
                 <tr>
                   <td className="border-b border-neutral-800/70 py-1">6</td>
-                  <td className="border-b border-neutral-800/70 py-1 text-right">~$18</td>
+                  <td className="border-b border-neutral-800/70 py-1 text-right">~$15</td>
                 </tr>
                 <tr>
                   <td className="border-b border-neutral-800/70 py-1">8</td>
-                  <td className="border-b border-neutral-800/70 py-1 text-right">~$28</td>
+                  <td className="border-b border-neutral-800/70 py-1 text-right">~$24</td>
                 </tr>
                 <tr>
                   <td className="py-1">10</td>
-                  <td className="py-1 text-right">~$39</td>
+                  <td className="py-1 text-right">~$34</td>
                 </tr>
               </tbody>
             </table>

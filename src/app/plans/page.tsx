@@ -273,10 +273,17 @@ export default async function PlansPage() {
                       </li>
                     ))}
                   </ul>
+                  {/* Multi-site plans only, and only here - never on the public
+                      pricing section. Starter is one site, comfortably inside
+                      GitHub's free tier, so telling a Starter buyer about a
+                      GitHub bill would be a warning about something that cannot
+                      happen to them. The full table and the spending-limit
+                      instruction live where they become actionable: the card
+                      shown when someone adds their third site. */}
                   {tier !== "starter" ? (
                     <p className="mt-4 text-xs leading-relaxed text-neutral-500">
-                      Runs on your GitHub account - free for about 2 sites, roughly $5/site/month
-                      to GitHub beyond.
+                      Above 2 sites, GitHub bills you directly for the automation it runs - about
+                      $5 per extra site a month, with nothing added by us.
                     </p>
                   ) : null}
                 </div>
