@@ -169,6 +169,15 @@ export const CHANGELOG: ChangelogEntry[] = [
       {
         kind: "improved",
         text:
+          "The dashboard opens faster. Home shows its quick sections straight away and fills " +
+          "the slower ones in as they arrive, instead of holding the whole page back for the " +
+          "slowest thing on it. The Guides page stopped reaching out to your live site before " +
+          "it would render at all, and Billing stopped asking your payment provider the same " +
+          "three questions twice on every visit.",
+      },
+      {
+        kind: "improved",
+        text:
           "Tables in the docs render as tables. Every one of them was shipping as the literal " +
           "pipe characters the author typed, across 17 pages - including the cloud-versus-" +
           "self-hosted comparison people read specifically to make that decision.",
