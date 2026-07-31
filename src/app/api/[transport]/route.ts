@@ -59,6 +59,7 @@ import {
   tokenize,
 } from "@/lib/similarity";
 import { buildBrief } from "@/lib/build-brief";
+import { checkBuildPr } from "@/lib/build-pr-guard";
 import { requestTrendExpand, requestTrendScan } from "@/lib/trends";
 import { serpProviderForProject, providerOrganic } from "@/lib/serp";
 import { gscAccessProbe } from "@/lib/gsc";
@@ -408,6 +409,24 @@ const mcpHandler = createMcpHandler(
           coerced = !owner && (trendSourced || !autoApproved);
         }
         const effective = coerced ? "pending" : status;
+
+        // THE PR HAS TO CONTAIN THE WORK. An agent marking its own build done
+        // is the one moment we can cheaply check its claim against the diff,
+        // and on 2026-07-31 a run reported a full ship check - cover present,
+        // three visuals imported, heading and FAQ counts - on a branch whose
+        // MDX was zero bytes. Instructions cannot fix that; a self-report is
+        // only ever evidence of what the agent believes. So read the diff.
+        //
+        // Owner-driven updates skip it: when the owner says done in chat they
+        // are overriding on purpose, and second-guessing them with a GitHub
+        // call would be both wrong and slow. Unreadable diffs pass (see
+        // build-pr-guard) - this refuses damage it can SEE, never absence of
+        // information.
+        if (!owner && effective === "done" && result_pr_url) {
+          const verdict = await checkBuildPr(p, result_pr_url);
+          if (!verdict.ok) return fail(verdict.reason);
+        }
+
         const patch: Record<string, unknown> = {};
         if (effective) patch.status = effective;
         if (result_pr_url) patch.result_pr_url = result_pr_url;
