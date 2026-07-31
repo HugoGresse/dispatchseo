@@ -101,27 +101,70 @@ jobs:
           fi
           echo "open=$open" >> "$GITHUB_OUTPUT"
 
-      # Fail fast, in plain language, when the Claude token secret is broken.
-      # Without this the claude-code-action dies minutes in with a cryptic
-      # "Environment variable validation failed" (empty secret) or a 401
-      # (wrapped/wrong token) - the 2026-07-17 dogfood install burned four
-      # runs on exactly that. setup.sh verifies the token before storing it,
-      # so this preflight should only ever fire on hand-set secrets.
-      - name: Preflight - Claude token secret usable
+      # Which coding agent builds this project - resolved at RUN time from the
+      # dashboard, never baked in at install time.
+      #
+      # Same rule as the pnpm pin below, for the same reason: a decision left to
+      # whoever ran the install is a decision someone eventually forgets, and the
+      # failure mode here is a builder that runs the wrong agent every night.
+      # Asking the backend means switching agent on the dashboard takes effect on
+      # the next scheduled run with nothing to edit in this repo.
+      #
+      # The fallback matters as much as the happy path: a repo installed against
+      # a backend that predates the `agent` field gets no value here, and must
+      # keep behaving exactly as it did - which is Claude, because Claude was the
+      # only option that ever existed before the field.
+      - name: Resolve the coding agent
+        id: agent
         if: steps.guard.outputs.open == '0'
         env:
+          SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
           CLAUDE_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          if [ -z "$CLAUDE_TOKEN" ]; then
-            echo "::error::The CLAUDE_CODE_OAUTH_TOKEN secret is missing or empty on this repo. Rerun the setup command from your DispatchSEO dashboard (it mints and VERIFIES a fresh token), or set one by hand: run 'claude setup-token', then pipe the token into 'gh secret set CLAUDE_CODE_OAUTH_TOKEN' without any whitespace."
-            exit 1
+          agent=""
+          code=$(curl -s -o /tmp/agent.json -w "%{http_code}" --max-time 30 \
+            -H "Authorization: Bearer $SEO_MCP_API_KEY" \
+            https://dispatchseo.com/api/project-mode) || code=unreachable
+          [ "$code" = "200" ] && agent=$(jq -r '.agent // empty' /tmp/agent.json 2>/dev/null)
+          if [ -z "$agent" ] || [ "$agent" = "null" ]; then
+            # No answer from the backend. Infer from which secret exists, and
+            # tie-break to claude - see the note above.
+            if [ -n "$OPENAI_API_KEY" ] && [ -z "$CLAUDE_TOKEN" ]; then agent=codex; else agent=claude; fi
+            echo "Backend did not name an agent (HTTP $code) - inferred '$agent' from the secrets on this repo."
           fi
-          case "$CLAUDE_TOKEN" in
-            sk-ant-oat*) echo "Claude token present." ;;
+          # Fail here, in plain language, rather than letting the agent's own
+          # action die minutes in on a cryptic validation error. The 2026-07-17
+          # dogfood install burned four runs on exactly that.
+          case "$agent" in
+            claude)
+              if [ -z "$CLAUDE_TOKEN" ]; then
+                echo "::error::This project builds with Claude Code, but the CLAUDE_CODE_OAUTH_TOKEN secret is missing or empty on this repo. Rerun the setup command from your DispatchSEO dashboard (it mints and VERIFIES a fresh token), or set one by hand: run 'claude setup-token', then pipe the token into 'gh secret set CLAUDE_CODE_OAUTH_TOKEN' without any whitespace."
+                exit 1
+              fi
+              case "$CLAUDE_TOKEN" in
+                sk-ant-oat*) : ;;
+                *)
+                  echo "::error::CLAUDE_CODE_OAUTH_TOKEN does not look like a Claude Code OAuth token (expected it to start with sk-ant-oat). It was probably line-wrapped or the wrong text was pasted when it was saved. Rerun the setup command from your DispatchSEO dashboard to mint and verify a replacement."
+                  exit 1 ;;
+              esac ;;
+            codex)
+              if [ -z "$OPENAI_API_KEY" ]; then
+                echo "::error::This project builds with Codex, but the OPENAI_API_KEY secret is missing or empty on this repo. Add it with 'gh secret set OPENAI_API_KEY', or rerun the setup command from your DispatchSEO dashboard."
+                exit 1
+              fi
+              case "$OPENAI_API_KEY" in
+                sk-*) : ;;
+                *)
+                  echo "::error::OPENAI_API_KEY does not look like an OpenAI key (expected it to start with sk-). It was probably line-wrapped or the wrong text was pasted when it was saved. Create a fresh key at platform.openai.com/api-keys and set it again."
+                  exit 1 ;;
+              esac ;;
             *)
-              echo "::error::CLAUDE_CODE_OAUTH_TOKEN does not look like a Claude Code OAuth token (expected it to start with sk-ant-oat). It was probably line-wrapped or the wrong text was pasted when it was saved. Rerun the setup command from your DispatchSEO dashboard to mint and verify a replacement."
+              echo "::error::The dashboard reported an unknown agent '$agent'. This repo's workflows are older than that setting - re-run the setup command from your DispatchSEO dashboard to update them."
               exit 1 ;;
           esac
+          echo "agent=$agent" >> "$GITHUB_OUTPUT"
+          echo "Building with: $agent"
 
       # Fail loudly if the seo-manager MCP is unreachable. Without this, a
       # stale URL in mcp-ci.json makes Claude see an empty toolset and "exit
@@ -198,8 +241,32 @@ jobs:
             exit $s
           }
 
+      # Codex reads its MCP servers from a config.toml inside its own home
+      # directory. Two things here are easy to get wrong and both are silent:
+      #
+      # 1. The action does NOT honour an inbound CODEX_HOME env var - it takes a
+      #    `codex-home` INPUT and sets the env itself. Writing a config to a
+      #    hand-rolled $CODEX_HOME and hoping is a no-op, and the failure looks
+      #    like an agent with no tools rather than an error.
+      # 2. `sandbox: workspace-write` blocks network by default, which kills MCP
+      #    over HTTP. The network_access line below is what makes the sandboxed
+      #    posture usable at all.
+      - name: Write Codex's MCP config
+        if: steps.guard.outputs.open == '0' && steps.agent.outputs.agent == 'codex'
+        run: |
+          mkdir -p "$RUNNER_TEMP/codex-home"
+          cp .github/mcp-codex.toml "$RUNNER_TEMP/codex-home/config.toml"
+          cat >> "$RUNNER_TEMP/codex-home/config.toml" <<'TOML'
+
+          [sandbox_workspace_write]
+          network_access = true
+          TOML
+          echo "Codex home prepared. Servers configured:"
+          grep -E '^\[mcp_servers\.' "$RUNNER_TEMP/codex-home/config.toml"
+
       - name: Run the SEO tool builder
-        if: steps.guard.outputs.open == '0'
+        if: steps.guard.outputs.open == '0' && steps.agent.outputs.agent == 'claude'
+        id: claude
         uses: anthropics/claude-code-action@v1
         with:
           # Cloud fires this as the DispatchSEO GitHub App (a Bot actor), and the App also authored the workflow commits, so scheduled runs are bot-actored too. Every trigger here needs repo write access, so allowing bots is safe; without this claude-code-action aborts with "non-human actor".
@@ -223,6 +290,45 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MCP_TIMEOUT: "120000"
           # Placeholder public env so `next build` never trips on missing vars.
+          NEXT_PUBLIC_SUPABASE_URL: "https://placeholder.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder-anon-key"
+          NEXT_PUBLIC_SITE_URL: "https://dispatchseo.com"
+
+      # The Codex twin. Same prompt, verbatim - the agent's behaviour must not
+      # depend on which one is holding the playbook, and the playbook itself
+      # arrives from get_instructions either way.
+      #
+      # Model: gpt-5 by default, overridable with a repo variable because model
+      # availability is per-account, not universal - `gpt-5-codex` 404s on a
+      # pay-as-you-go project key even though it appears in GET /v1/models. Set
+      # SEO_CODEX_MODEL in the repo's Actions variables to change it without
+      # touching this file.
+      #
+      # There is NO turn budget to set. Codex has no --max-turns equivalent and
+      # OpenAI closed the request for one as not-planned, so the job's
+      # timeout-minutes above is the only ceiling on a runaway run.
+      - name: Run the SEO tool builder (Codex)
+        if: steps.guard.outputs.open == '0' && steps.agent.outputs.agent == 'codex'
+        id: codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: ${{ vars.SEO_CODEX_MODEL || 'gpt-5' }}
+          codex-home: ${{ runner.temp }}/codex-home
+          sandbox: workspace-write
+          # Strips sudo from the runner user for the rest of the job. Safe here:
+          # everything after this step is curl. It is also more than the Claude
+          # half of this pipeline does, which runs with bypassPermissions and no
+          # sandbox at all.
+          safety-strategy: drop-sudo
+          output-file: ${{ runner.temp }}/codex-out.txt
+          prompt: "FIRST call the seo-manager MCP tool get_instructions with workflow build-tool, then follow the returned markdown exactly - it is the current playbook and overrides any cached knowledge of this pipeline. Also read .dispatchseo/conventions.md for this repo's site facts (registry wiring, reference implementation, theme tokens). In brief: take the oldest approved tool suggestion, mark it in_progress, read the reference implementation completely, pass the live SERP gate, run the THEME step, write the mandatory EXECUTION PLAN and hold it against the VALUE BAR - a re-skinned template or canned-output widget is a failure, redesign or set the suggestion back to pending. Then build, humanize all registry copy, run pnpm build to verify plus the funnel composition check, open a PR labeled seo and seo-tool via gh with the execution plan in the body, then update_suggestion to done with the PR url and log_page, and state the instructions version in the run report. Never build guide suggestions - those belong to the daily seo-build workflow. If get_instructions is unavailable, fail loudly and exit without changes; if there are no approved tool suggestions, exit cleanly without any changes."
+        env:
+          SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
+          DATAFORSEO_LOGIN: ${{ secrets.DATAFORSEO_LOGIN }}
+          DATAFORSEO_PASSWORD: ${{ secrets.DATAFORSEO_PASSWORD }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NEXT_PUBLIC_SUPABASE_URL: "https://placeholder.supabase.co"
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder-anon-key"
           NEXT_PUBLIC_SITE_URL: "https://dispatchseo.com"

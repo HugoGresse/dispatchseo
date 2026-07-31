@@ -89,26 +89,71 @@ jobs:
           # the specific steps that need them.
           persist-credentials: false
 
-      # Fail fast, in plain language, when the Claude token secret is broken.
-      # Without this the claude-code-action dies minutes in with a cryptic
-      # "Environment variable validation failed" (empty secret) or a 401
-      # (wrapped/wrong token) - the 2026-07-17 dogfood install burned four
-      # runs on exactly that. setup.sh verifies the token before storing it,
-      # so this preflight should only ever fire on hand-set secrets.
-      - name: Preflight - Claude token secret usable
+      # Which coding agent validates, plus the fail-fast on a broken credential
+      # that used to be a Claude-only preflight here. Both agents get the same
+      # plain-language error rather than dying minutes in on a cryptic
+      # validation failure - the 2026-07-17 dogfood install burned four runs on
+      # exactly that.
+      #
+      # This job holds an AGENT credential and no project secrets, which is the
+      # posture the security note above describes. Worth stating plainly,
+      # because it is a real trade and not an oversight: the job executes the
+      # PR's LLM-authored code, so whichever agent credential is present is
+      # exfiltratable by that code. That was already true of the Claude token;
+      # an OpenAI key is the same exposure with a more direct blast radius,
+      # being metered money rather than a subscription. Accepted for the same
+      # reason as before - these PRs come from this project's own builder on the
+      # same repo, never a fork - and it is why the merge job stays separate
+      # with no checkout.
+      #
+      # UNLIKE every other workflow, this one does NOT ask the backend which
+      # agent to use. Asking means holding SEO_MCP_API_KEY, and the one thing
+      # this job must never do is acquire a reason to hold the project key. A
+      # secret is only visible to the step that names it, so the leak would not
+      # be direct - but the invariant is worth more than the consistency.
+      #
+      # Inferring from secret presence is sound because setup.sh puts exactly
+      # one agent's credential on a repo. If BOTH are present - someone switched
+      # agents and left the old secret behind - this tie-breaks to Claude and
+      # can disagree with the dashboard for one run. That is a cosmetic mismatch
+      # on a validation job, not a wrong build; the fix is to delete the stale
+      # secret.
+      - name: Resolve the coding agent
+        id: agent
         env:
           CLAUDE_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          if [ -z "$CLAUDE_TOKEN" ]; then
-            echo "::error::The CLAUDE_CODE_OAUTH_TOKEN secret is missing or empty on this repo. Rerun the setup command from your DispatchSEO dashboard (it mints and VERIFIES a fresh token), or set one by hand: run 'claude setup-token', then pipe the token into 'gh secret set CLAUDE_CODE_OAUTH_TOKEN' without any whitespace."
-            exit 1
-          fi
-          case "$CLAUDE_TOKEN" in
-            sk-ant-oat*) echo "Claude token present." ;;
+          if [ -n "$OPENAI_API_KEY" ] && [ -z "$CLAUDE_TOKEN" ]; then agent=codex; else agent=claude; fi
+          case "$agent" in
+            claude)
+              if [ -z "$CLAUDE_TOKEN" ]; then
+                echo "::error::This project validates with Claude Code, but the CLAUDE_CODE_OAUTH_TOKEN secret is missing or empty on this repo. Rerun the setup command from your DispatchSEO dashboard (it mints and VERIFIES a fresh token), or set one by hand: run 'claude setup-token', then pipe the token into 'gh secret set CLAUDE_CODE_OAUTH_TOKEN' without any whitespace."
+                exit 1
+              fi
+              case "$CLAUDE_TOKEN" in
+                sk-ant-oat*) : ;;
+                *)
+                  echo "::error::CLAUDE_CODE_OAUTH_TOKEN does not look like a Claude Code OAuth token (expected it to start with sk-ant-oat). It was probably line-wrapped or the wrong text was pasted when it was saved. Rerun the setup command from your DispatchSEO dashboard to mint and verify a replacement."
+                  exit 1 ;;
+              esac ;;
+            codex)
+              if [ -z "$OPENAI_API_KEY" ]; then
+                echo "::error::This project validates with Codex, but the OPENAI_API_KEY secret is missing or empty on this repo. Add it with 'gh secret set OPENAI_API_KEY', or rerun the setup command from your DispatchSEO dashboard."
+                exit 1
+              fi
+              case "$OPENAI_API_KEY" in
+                sk-*) : ;;
+                *)
+                  echo "::error::OPENAI_API_KEY does not look like an OpenAI key (expected it to start with sk-). It was probably line-wrapped or the wrong text was pasted when it was saved. Create a fresh key at platform.openai.com/api-keys and set it again."
+                  exit 1 ;;
+              esac ;;
             *)
-              echo "::error::CLAUDE_CODE_OAUTH_TOKEN does not look like a Claude Code OAuth token (expected it to start with sk-ant-oat). It was probably line-wrapped or the wrong text was pasted when it was saved. Rerun the setup command from your DispatchSEO dashboard to mint and verify a replacement."
+              echo "::error::The dashboard reported an unknown agent '$agent'. This repo's workflows are older than that setting - re-run the setup command from your DispatchSEO dashboard to update them."
               exit 1 ;;
           esac
+          echo "agent=$agent" >> "$GITHUB_OUTPUT"
+          echo "Validating with: $agent"
 
       # Deliberately NOT an INSTALL-ADAPT step any more. This used to say "if
       # this repo has a packageManager field, DELETE the version input below" -
@@ -186,7 +231,30 @@ jobs:
       - name: Install Playwright browser for the MCP
         run: npx -y playwright install --with-deps chromium
 
+      # Codex's twin of mcp-validate.json. Written here rather than shipped as a
+      # file because this job's MCP surface is one stdio server with no secrets
+      # in it - there is nothing to personalize per project, so a file would be
+      # a second thing to keep in sync for no benefit.
+      - name: Write Codex's MCP config
+        if: steps.agent.outputs.agent == 'codex'
+        run: |
+          mkdir -p "$RUNNER_TEMP/codex-home"
+          cat > "$RUNNER_TEMP/codex-home/config.toml" <<'TOML'
+          [mcp_servers.playwright]
+          command = "npx"
+          args = ["-y", "@playwright/mcp@latest", "--headless", "--isolated"]
+          # Nobody is here to approve a tool call on a scheduled runner, and
+          # without this every call comes back "user cancelled MCP tool call".
+          default_tools_approval_mode = "approve"
+
+          [sandbox_workspace_write]
+          # The validator drives a real browser against localhost:3000.
+          network_access = true
+          TOML
+
       - name: Validate the tool live
+        if: steps.agent.outputs.agent == 'claude'
+        id: claude
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -205,6 +273,30 @@ jobs:
             --max-turns 140
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+
+      # The Codex twin. Same prompt, byte-for-byte - a verdict must not depend
+      # on which agent reached it.
+      #
+      # No turn budget: Codex has no --max-turns equivalent (OpenAI closed the
+      # request for one as not-planned), so this job's timeout-minutes is the
+      # only ceiling. That is a weaker bound than the 140 above, and the honest
+      # place to note it is here.
+      - name: Validate the tool live (Codex)
+        if: steps.agent.outputs.agent == 'codex'
+        id: codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: ${{ vars.SEO_CODEX_MODEL || 'gpt-5' }}
+          codex-home: ${{ runner.temp }}/codex-home
+          sandbox: workspace-write
+          safety-strategy: drop-sudo
+          output-file: ${{ runner.temp }}/codex-out.txt
+          prompt: "You are the functional validator for an autonomously-built DispatchSEO tool PR. 1) Find the tool under review: run `git diff origin/main...HEAD --name-only` and read the diff of the tools registry (its path is listed in .dispatchseo/conventions.md) to get the NEW tool's slug (the entry added in this PR). 2) Work out the tool's PUBLIC path - never assume /tools/<slug>: take it from the route/page files the PR added, the registry entry's own path field, or the Tools section of .dispatchseo/conventions.md, and cross-check it against the sitemap. (Sites whose /tools route belongs to a logged-in app publish elsewhere, e.g. /free-tools/<slug>; a login redirect or 404 here means you have the wrong path, not a broken tool - re-derive it before judging.) Using the playwright MCP, open http://localhost:3000<path> and validate: the page returns 200 and renders the landing funnel (hero h1, the interactive widget, FAQ section); every primary widget interaction works (fill each input with realistic values, click every action button, verify output actually updates, test the copy action); edge cases do not break it (empty input, nonsense input - the widget must never throw); zero console errors during the whole session (check browser console messages). 3) Verdict: if EVERYTHING passes, run `gh pr edit <pr-number> --add-label tool-validated --remove-label tool-validation-failed || gh pr edit <pr-number> --add-label tool-validated` and post a short PR comment via `gh pr comment` summarizing what you exercised. If ANYTHING fails, run `gh pr edit <pr-number> --add-label tool-validation-failed --remove-label tool-validated || gh pr edit <pr-number> --add-label tool-validation-failed` (removing tool-validated matters: a stale pass from an earlier commit must not authorize a merge) and comment the concrete failures (what you did, what happened, console output). Create missing labels with `gh label create` if needed. The PR number is in the PR_NUMBER environment variable. Never modify code in this run - you are a reviewer only."
+        env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}

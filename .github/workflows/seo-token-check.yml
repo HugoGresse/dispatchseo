@@ -1,11 +1,14 @@
 name: SEO health check
 
-# Daily pre-flight, before the 05:13 builder: proves the Claude
-# token still works with one minimal model call, and checks whether the
-# installed pipeline is stale. Both outcomes phone home to the DispatchSEO
-# dashboard (banner + email on failure), so a dead token is a red alert at
-# 04:18 - not a mystery failed build at 05:13. Cost: one tiny Claude call per
-# day on the owner's own subscription.
+# Daily pre-flight, before the 05:13 builder: proves this project's coding-agent
+# credential still works, and checks whether the installed pipeline is stale.
+# Both outcomes phone home to the DispatchSEO dashboard (banner + email on
+# failure), so a dead credential is a red alert at 04:18 - not a mystery failed
+# build at 05:13.
+#
+# Cost: one tiny Claude call on the owner's own subscription, or - on Codex -
+# roughly a hundredth of a cent, because that branch asks OpenAI about the key
+# instead of spending a whole agent run to find out.
 
 on:
   schedule:
@@ -21,10 +24,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Which agent's credential to prove. Resolved at RUN time from the
+      # dashboard, same as the builders - a health check that tests the wrong
+      # credential is worse than none, because it reports green while the thing
+      # that actually builds is dead.
+      - name: Resolve the coding agent
+        id: agent
+        env:
+          SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
+          CLAUDE_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          agent=""
+          code=$(curl -s -o /tmp/agent.json -w "%{http_code}" --max-time 30 \
+            -H "Authorization: Bearer $SEO_MCP_API_KEY" \
+            https://dispatchseo.com/api/project-mode) || code=unreachable
+          [ "$code" = "200" ] && agent=$(jq -r '.agent // empty' /tmp/agent.json 2>/dev/null)
+          if [ -z "$agent" ] || [ "$agent" = "null" ]; then
+            if [ -n "$OPENAI_API_KEY" ] && [ -z "$CLAUDE_TOKEN" ]; then agent=codex; else agent=claude; fi
+          fi
+          case "$agent" in claude|codex) : ;; *) agent=claude ;; esac
+          echo "agent=$agent" >> "$GITHUB_OUTPUT"
+          echo "Checking the $agent credential."
+
       # One minimal model call. If the token is dead/revoked/limited, this
       # step fails and the failure handler below reports the real reason.
       - name: Claude token liveness
         id: liveness
+        if: steps.agent.outputs.agent == 'claude'
         uses: anthropics/claude-code-action@v1
         with:
           # Cloud fires this as the DispatchSEO GitHub App (a Bot actor), and the App also authored the workflow commits, so scheduled runs are bot-actored too. Every trigger here needs repo write access, so allowing bots is safe; without this claude-code-action aborts with "non-human actor".
@@ -34,6 +61,42 @@ jobs:
           prompt: "Reply with exactly: ok"
           claude_args: |
             --max-turns 1
+
+      # Codex's liveness is a direct API call rather than a Codex run, and that
+      # is deliberate. A Claude OAuth token can only be proven by using it, so
+      # that branch spends a model call. An OpenAI key's health is a property
+      # OpenAI will state outright - and its answer carries `error.code`, which
+      # distinguishes "rate-limited for a minute" from "this account is out of
+      # credit". Running the whole action here would cost more, take longer, and
+      # tell us LESS, because the CLI collapses every 429 into one message.
+      - name: Codex key liveness
+        id: liveness_codex
+        if: steps.agent.outputs.agent == 'codex'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "This project builds with Codex, but the OPENAI_API_KEY secret is missing or empty on this repo. Add it with 'gh secret set OPENAI_API_KEY', or re-run the setup command from your DispatchSEO dashboard." > "$RUNNER_TEMP/agent-failure.txt"
+            cat "$RUNNER_TEMP/agent-failure.txt"; exit 1
+          fi
+          code=$(curl -s --max-time 30 -o /tmp/live.json -w "%{http_code}" https://api.openai.com/v1/responses \
+            -H "Authorization: Bearer $OPENAI_API_KEY" -H "Content-Type: application/json" \
+            -d '{"model":"gpt-5-mini","input":"ok","max_output_tokens":16}') || code=000
+          err=$(jq -r '.error.code // empty' /tmp/live.json 2>/dev/null)
+          case "$code:$err" in
+            2*:*) echo "OpenAI key is live." ; exit 0 ;;
+            429:rate_limit_exceeded)
+              # Transient by definition. A health check that goes red on a
+              # momentary rate limit trains people to ignore the banner.
+              echo "OpenAI is rate-limiting this key right now - that clears by itself, so treating it as healthy." ; exit 0 ;;
+            429:*|402:*)
+              echo "your OpenAI account cannot run builds (OpenAI said: ${err:-quota exceeded}). Retrying will not fix this - add credit or raise the limit at platform.openai.com/settings/organization/billing." > "$RUNNER_TEMP/agent-failure.txt" ;;
+            401:*|403:*)
+              echo "OpenAI rejected the OPENAI_API_KEY secret on this repo (HTTP $code). The key was probably revoked or rotated - create a new one at platform.openai.com/api-keys and set it again with 'gh secret set OPENAI_API_KEY'." > "$RUNNER_TEMP/agent-failure.txt" ;;
+            *)
+              echo "could not reach OpenAI to check the key (HTTP $code)." > "$RUNNER_TEMP/agent-failure.txt" ;;
+          esac
+          cat "$RUNNER_TEMP/agent-failure.txt"; exit 1
 
       - name: Report token OK
         if: success()
@@ -50,19 +113,30 @@ jobs:
         if: failure()
         env:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
+          AGENT: ${{ steps.agent.outputs.agent }}
         run: |
-          f="$RUNNER_TEMP/claude-execution-output.json"
-          reason="token check failed (no error detail captured)"
-          if [ -f "$f" ]; then
-            msg=$(jq -r 'if type=="array" then .[] else . end
-                         | select(.type? == "result")
-                         | (.result // .error // empty)' "$f" 2>/dev/null | tail -1)
-            [ -n "$msg" ] && reason="Claude token check failed: $msg"
+          reason="credential check failed (no error detail captured)"
+          fix="re-run the setup command from your DispatchSEO dashboard"
+          if [ "$AGENT" = "codex" ]; then
+            # The Codex branch already resolved OpenAI's own error code into a
+            # sentence naming the actual fix, so pass that through rather than
+            # flattening it back into a generic message.
+            msg=$(cat "$RUNNER_TEMP/agent-failure.txt" 2>/dev/null)
+            [ -n "$msg" ] && reason="Codex credential check failed: $msg"
+          else
+            f="$RUNNER_TEMP/claude-execution-output.json"
+            if [ -f "$f" ]; then
+              msg=$(jq -r 'if type=="array" then .[] else . end
+                           | select(.type? == "result")
+                           | (.result // .error // empty)' "$f" 2>/dev/null | tail -1)
+              [ -n "$msg" ] && reason="Claude token check failed: $msg"
+            fi
+            fix="mint a fresh token (claude setup-token) and re-run the setup command from your DispatchSEO dashboard"
           fi
-          echo "::error::$reason - mint a fresh token (claude setup-token) and re-run the setup command from your DispatchSEO dashboard."
+          echo "::error::$reason - $fix."
           curl -sG --max-time 30 -H "Authorization: Bearer $SEO_MCP_API_KEY" \
             --data-urlencode "job=seo-token-check" \
-            --data-urlencode "fail=$reason - re-run the setup command to mint a fresh token" \
+            --data-urlencode "fail=$reason - $fix" \
             "https://dispatchseo.com/api/cron/deploy-check" || true
 
       # Pipeline staleness: compare this repo's installed pack version stamp
