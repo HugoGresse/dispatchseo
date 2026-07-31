@@ -33,7 +33,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Announce this exact version (e.g. 2026-07-30.8), instead of diffing for new ones"
+        description: "Announce this exact version (e.g. 1.2.0), instead of diffing for new ones"
         required: false
       dry_run:
         description: "Print the Discord payload instead of posting it"

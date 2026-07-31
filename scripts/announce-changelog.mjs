@@ -23,7 +23,7 @@
 // isn't serving yet is a dead link in a permanent, public channel.
 //
 //   node scripts/announce-changelog.mjs --previous /tmp/prev-changelog.ts
-//   node scripts/announce-changelog.mjs --version 2026-07-30.8 --dry-run
+//   node scripts/announce-changelog.mjs --version 1.2.0 --dry-run
 //
 // Env: DISCORD_WEBHOOK_URL (required unless --dry-run), SITE_URL
 // (default https://dispatchseo.com), DISCORD_MENTION (optional, e.g. a role
@@ -94,7 +94,7 @@ async function loadChangelog(path) {
 }
 
 const current = await loadChangelog(join(root, "src", "lib", "changelog.ts"));
-const { CHANGELOG, anchorFor } = current;
+const { CHANGELOG, anchorFor, releaseLabel } = current;
 if (!CHANGELOG.length) die("CHANGELOG is empty - nothing to announce");
 
 /** The releases this run should post, oldest first (so the newest lands last). */
@@ -192,7 +192,14 @@ function buildEmbed(entry) {
   // gets to set context, and it's already written to be short (it's the line
   // the dashboard banner shows).
   const description = condense(entry.summary, DESC_MAX, 3);
-  let spent = title.length + description.length + 80; // + footer, roughly
+  // The version rides ABOVE the headline, in the embed's author slot, so a post
+  // reads "DispatchSEO v1.2.0" and then what shipped - the release announces
+  // itself before it explains itself. Releases from before versioning have no
+  // number to show and keep carrying it in the footer instead.
+  const label = releaseLabel(entry.version);
+  const author = label ? { name: `DispatchSEO ${label}`, url } : undefined;
+  const footer = { text: label ? "DispatchSEO" : `DispatchSEO · ${entry.version}` };
+  let spent = title.length + description.length + (author?.name.length ?? 0) + footer.text.length + 60;
 
   // Every field, tagged with where it belongs in the embed (`order`) and how
   // much it deserves to survive a squeeze (`rank`). A kind's FIRST field
@@ -239,12 +246,13 @@ function buildEmbed(entry) {
   });
 
   return {
+    ...(author ? { author } : {}),
     title,
     url,
     description,
     color,
     fields,
-    footer: { text: `DispatchSEO · ${entry.version}` },
+    footer,
     timestamp: new Date(`${entry.date}T12:00:00Z`).toISOString(),
   };
 }

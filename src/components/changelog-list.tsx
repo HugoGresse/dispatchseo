@@ -13,7 +13,13 @@
 // release, so it has to arrive open, not collapsed.
 
 import { useEffect, useState } from "react";
-import { anchorFor, type ChangeKind, type ChangelogEntry } from "@/lib/changelog";
+import {
+  anchorFor,
+  foldedInto,
+  releaseLabel,
+  type ChangeKind,
+  type ChangelogEntry,
+} from "@/lib/changelog";
 
 const KIND_ORDER: ChangeKind[] = ["new", "improved", "fixed"];
 
@@ -71,7 +77,12 @@ export function ChangelogList({
     function openFromHash() {
       const hash = decodeURIComponent(window.location.hash.replace(/^#/, ""));
       if (!hash) return;
-      const match = entries.find((e) => anchorFor(e.version) === hash);
+      // A hash can name a release directly, or name one that was folded into a
+      // later release - an old Discord post deep-linking to a version that no
+      // longer stands on its own still has to open the entry that absorbed it.
+      const match =
+        entries.find((e) => anchorFor(e.version) === hash) ??
+        entries.find((e) => foldedInto(e.version).some((v) => anchorFor(v) === hash));
       if (!match) return;
       setOpen((prev) => (prev.includes(match.version) ? prev : [...prev, match.version]));
       requestAnimationFrame(() => {
@@ -116,6 +127,7 @@ function Release({
   onToggle: () => void;
 }) {
   const { md, year } = dateParts(entry.date);
+  const label = releaseLabel(entry.version);
   const groups = groupChanges(entry.changes);
   const panelId = `panel-${entry.version}`;
   const counts = groups.map((g) => `${g.items.length} ${KIND[g.kind].label.toLowerCase()}`).join(", ");
@@ -126,6 +138,11 @@ function Release({
       // scroll-mt clears the sticky header when a banner links straight here.
       className="scroll-mt-24 border-t border-neutral-800/60 first:border-t-0"
     >
+      {/* Anchors for releases this one absorbed, so the Discord posts that
+          announced them still land here instead of nowhere. */}
+      {foldedInto(entry.version).map((v) => (
+        <span key={v} id={anchorFor(v)} className="block scroll-mt-24" aria-hidden="true" />
+      ))}
       <h2>
         <button
           type="button"
@@ -136,12 +153,28 @@ function Release({
           // moving the columns, so the rail stays on the same x as the panel's.
           className="group -mx-3 grid w-full grid-cols-1 gap-y-3 rounded-lg px-3 py-6 text-left transition-colors hover:bg-neutral-900/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-neutral-500 focus-visible:[outline-offset:-2px] motion-reduce:transition-none sm:grid-cols-[7rem_1fr] sm:gap-y-0 sm:py-7"
         >
-          {/* Date stamp: inline on a phone, stacked in its own column above sm. */}
+          {/* Version stamp: inline on a phone, stacked in its own column above sm. */}
           {/* pt-2 above sm puts the stamp, the rail node and the title's first
               line on one optical centreline (all land at 16px). */}
           <span className="flex flex-wrap items-baseline gap-x-2 font-mono text-xs uppercase tracking-[0.12em] sm:block sm:pt-2">
-            <span className="text-neutral-300">{md}</span>
-            <span className="text-neutral-600">{year}</span>
+            {/* A versioned release is known by its number, so the number takes
+                the stamp and the date falls in behind it. The releases from
+                before versioning have only ever had a date, and keep it. */}
+            {label ? (
+              <>
+                <span className="text-sm normal-case tracking-[0.06em] text-neutral-200">
+                  {label}
+                </span>
+                <span className="text-neutral-600 sm:mt-1 sm:block">
+                  {md} {year}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-neutral-300">{md}</span>
+                <span className="text-neutral-600">{year}</span>
+              </>
+            )}
             {latest ? (
               <span className="text-emerald-400/90 sm:mt-2 sm:block">Latest</span>
             ) : null}

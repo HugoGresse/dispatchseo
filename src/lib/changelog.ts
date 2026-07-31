@@ -2,21 +2,47 @@
 // language. Same serve-content-from-the-backend pattern as the agent
 // instructions (src/lib/instructions/) and the backlink playbook: content IS
 // state, it lives here, and every surface (the dashboard banner, /changelog,
-// the get_changelog MCP tool) reads this one list.
+// the get_changelog MCP tool, the Discord announcement) reads this one list.
 //
-// Adding a release: prepend an entry. `version` is the anchor id and the value
-// stored in the "seen" cookie, so it must be unique and must never be reused
-// or reordered - a returning owner is shown the banner exactly when the newest
-// version differs from what their browser last acknowledged.
+// WRITING A NOTE IS NOT SHIPPING A RELEASE. Those were the same act until
+// versions landed, and it showed: on 2026-07-31 six separate releases went out
+// in one day, which is six dashboard banners and six Discord posts for what was
+// really one afternoon's work. Announcements are only worth reading if they're
+// rare. So:
 //
-// Write for the owner, not the commit log: name the thing they'd notice, not
-// the module that changed. Skip releases with nothing user-visible - a silent
-// week is better than a banner about an internal refactor.
+//   1. During the day, a user-visible change appends one line to UNRELEASED
+//      below. Costs nothing, gets written while the work is fresh, and is
+//      invisible everywhere - no banner, not on /changelog, not in Discord.
+//   2. Cutting a release is a separate, deliberate act: the staged lines move
+//      into a new entry at the head of CHANGELOG with a version, a title and a
+//      summary, and UNRELEASED goes back to empty. THAT is what announces.
+//
+// What earns a line at all: if the owner wouldn't notice it without being told,
+// it doesn't get one. If they'd notice but wouldn't do anything differently,
+// it's a bullet inside a release, never a release's title. Write for the owner,
+// not the commit log - name the thing they'd notice, not the module that
+// changed.
+//
+// `version` is the anchor id, the value stored in the "seen" cookie, and the
+// deep link in every Discord post ever made, so it must be unique and must
+// never be reused, renumbered or reordered - not even to tidy up. Those posts
+// are permanent and public; an edited version number turns them into dead
+// links.
 
 export type ChangeKind = "new" | "improved" | "fixed";
 
 export type ChangelogEntry = {
-  /** Unique, sortable, never reused: `YYYY-MM-DD`, or `YYYY-MM-DD.N` for a same-day second release. */
+  /**
+   * Unique, never reused: `MAJOR.MINOR.PATCH`.
+   *   - patch (`1.0.1`) - fixes and small improvements. Nothing new to try.
+   *   - minor (`1.1.0`) - anything new the owner can see or use. Most releases.
+   *   - major (`2.0.0`) - an overhaul, or something a self-hoster must ACT on
+   *     (a migration to run, a pipeline to reinstall). Reserve it; a 2.0 twice
+   *     a month means nothing.
+   *
+   * Entries below 1.0.0 use the older `YYYY-MM-DD[.N]` scheme from before
+   * versioning. They keep those ids forever - see the note above on why.
+   */
   version: string;
   /** ISO date the release went out. */
   date: string;
@@ -27,69 +53,22 @@ export type ChangelogEntry = {
   changes: { kind: ChangeKind; text: string }[];
 };
 
+// Shipped, but not yet announced. Append here as the work lands; empty this
+// into a new CHANGELOG entry when it's time to cut a release. Nothing reads
+// this list - it exists so that writing the note down doesn't ping anyone.
+export const UNRELEASED: { kind: ChangeKind; text: string }[] = [];
+
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: "2026-07-31.7",
+    version: "1.0.0",
     date: "2026-07-31",
-    title: "A full Codex audit, and everything it found is fixed",
+    title: "Full Codex support, much cheaper builds, and a lot less GitHub time",
     summary:
-      "Four independent reviews went through every Codex path on both the cloud and " +
-      "self-hosted versions before we call Codex support official. They found real problems - " +
-      "the worst stopped every scheduled Codex build on cloud before it started - and every " +
-      "one is fixed.",
-    changes: [
-      {
-        kind: "fixed",
-        text:
-          "Scheduled Codex builds on cloud were being turned away at the door: the tool that " +
-          "runs Codex on GitHub refuses runs started by automation unless told otherwise, and " +
-          "we only ever told it for manual runs - which is why manual tests passed while every " +
-          "scheduled run died. All eight workflows now allow it.",
-      },
-      {
-        kind: "fixed",
-        text:
-          "Keyword lookups inside Codex builds were silently broken for anyone with their own " +
-          "DataForSEO account: the credentials were handed over in a format only Claude Code " +
-          "understands, so Codex logged in with a placeholder instead of your login. Both " +
-          "runners now hand Codex the real values.",
-      },
-      {
-        kind: "fixed",
-        text:
-          "A tool build that produced nothing could report success and quietly stop the tool " +
-          "queue; a transient OpenAI rate limit could ring the alarm bell and cost a full " +
-          "cadence window. Every scheduled workflow now tells those apart the same way the " +
-          "daily guide build does: retries stay quiet and automatic, dead accounts stay loud.",
-      },
-      {
-        kind: "fixed",
-        text:
-          "Self-hosted stacks had no place left to paste a Codex key once the builder was " +
-          "running - the one card that took it disappears after first setup. Settings now " +
-          "always has a credential box for the builder, the setup wizard's paste step takes " +
-          "both agents, and a build that keeps getting deferred now goes stale and alarms " +
-          "instead of looking green forever.",
-      },
-      {
-        kind: "improved",
-        text:
-          "The docs now tell the whole truth about Codex: the landing page no longer says " +
-          "agent support is 'coming', the FAQ no longer says a Claude subscription is " +
-          "required, and the self-host guide, security page, and troubleshooting page all " +
-          "cover the Codex path - including which model builds use and how to change it.",
-      },
-    ],
-  },
-  {
-    version: "2026-07-31.6",
-    date: "2026-07-31",
-    title: "You can stop DispatchSEO on a site without deleting it",
-    summary:
-      "Settings has a Disconnect button that turns off and removes the workflows in your repo, " +
-      "so schedules stop and they stop using your GitHub Actions minutes. Your published pages " +
-      "and all your history stay.",
+      "Codex is a fully audited alternative to Claude Code now, a guide build costs about a " +
+      "third of the agent plan usage it did yesterday, and your automations use far less of " +
+      "your monthly GitHub allowance. You can also stop DispatchSEO on a site without " +
+      "deleting it, and every guide ships with its custom graphics again.",
     changes: [
       {
         kind: "new",
@@ -99,110 +78,21 @@ export const CHANGELOG: ChangelogEntry[] = [
           "and forgets the connection. Everything scheduled stops, which means it stops " +
           "spending your GitHub Actions minutes. Your guides, tools and pages are left exactly " +
           "as they are, this dashboard keeps every keyword and ranking it has tracked, and you " +
-          "can connect the repo again whenever you want.",
+          "can connect the repo again whenever you want. On the self-hosted version there was " +
+          "previously no way to do this at all: your first site can't be deleted, so a site you " +
+          "had only been trying out kept running builds in your repo with no button anywhere " +
+          "that stopped it. The button is on that first site too - it is the one that needed it " +
+          "most. Your agent can do it as well, through the disconnect_repo tool.",
       },
       {
         kind: "new",
         text:
-          "On the self-hosted version there was previously no way to do this at all. Your first " +
-          "site can't be deleted (the rest of your setup is anchored to it), the repo was shown " +
-          "as read-only text, so a site you had only been trying out kept running builds in your " +
-          "repo with no button anywhere that stopped it. The button is on that first site too - " +
-          "it is the one that needed it most.",
-      },
-      {
-        kind: "new",
-        text:
-          "Claude Code can do it too, through the disconnect_repo tool, so you can ask for it in " +
-          "the terminal instead of clicking. If GitHub can't be reached, the repo stays connected " +
-          "on purpose and tells you why, so nothing is left half-removed with no way back to it.",
-      },
-    ],
-  },
-  {
-    version: "2026-07-31.5",
-    date: "2026-07-31",
-    title: "A build that quietly did nothing now gets caught and retried",
-    summary:
-      "A builder run could finish, report success and have built nothing at all - costing you " +
-      "a day's post with a green tick beside it. Runs now have to show the pull request they " +
-      "made, and a run that made none is retried instead of counted.",
-    changes: [
-      {
-        kind: "fixed",
-        text:
-          "If the builder got stuck it could stop and ask a question - and on a scheduled run " +
-          "there is nobody there to answer, so it ended quietly and the day's post never " +
-          "happened. Worse, it counted as a completed run, so nothing retried. Runs now have " +
-          "to point at the pull request they opened; one that opened none is put back in the " +
-          "queue and picked up on the next pass, and you get told if it keeps happening.",
-      },
-      {
-        kind: "fixed",
-        text:
-          "The underlying cause was a rule of ours that was too strict about how Codex is " +
-          "allowed to write files - it ruled out the one method that reliably works, so the " +
-          "builder painted itself into a corner on anything with code samples in it. Codex " +
-          "builds should now get through the same work Claude Code does.",
-      },
-    ],
-  },
-  {
-    version: "2026-07-31.4",
-    date: "2026-07-31",
-    title: "Every guide ships with its own custom graphics again",
-    summary:
-      "Guides built by Codex were coming out without the custom diagrams and cover art that " +
-      "guides built by Claude Code always have. The builder now checks its own work before " +
-      "opening the pull request, so a guide can't reach you missing them.",
-    changes: [
-      {
-        kind: "fixed",
-        text:
-          "Your guides are supposed to ship with two or three custom graphics drawn for that " +
-          "exact topic, plus a cover. Codex was reading that requirement and talking itself " +
-          "down to a plain table and a quote box - so a post would arrive looking noticeably " +
-          "thinner than the ones beside it on your blog. The builder now counts the files it " +
-          "actually created before it opens the pull request, and won't ship the guide until " +
-          "they are there. Guides built by Claude Code were never affected, and nothing about " +
-          "how they are written changes.",
-      },
-    ],
-  },
-  {
-    version: "2026-07-31.3",
-    date: "2026-07-31",
-    title: "Your automations use a lot less of your GitHub allowance",
-    summary:
-      "The dashboard now wakes your builders only when there is real work, instead of them " +
-      "waking up three times a day to check. Same output, noticeably less of the monthly " +
-      "GitHub Actions allowance each site uses.",
-    changes: [
-      {
-        kind: "improved",
-        text:
-          "Your site's automations used to run on their own timers, three attempts a day, " +
-          "because GitHub sometimes drops a scheduled run. Two of those three woke up only " +
-          "to find nothing to do - and GitHub charges your account a full minute every time " +
-          "one starts. The dashboard now decides when there is something to build and wakes " +
-          "the workflow itself, so that check costs nothing. Nothing about what gets " +
-          "published changes.",
-      },
-      {
-        kind: "improved",
-        text:
-          "If a wake-up call goes out and nothing runs, you hear about it. GitHub accepts " +
-          "those calls even when a repo has Actions switched off or has run out of minutes, " +
-          "so the dashboard now tracks each one until the workflow reports back, and flags " +
-          "the ones that never do.",
-      },
-      {
-        kind: "fixed",
-        text:
-          "Hitting your agent's usage limit no longer costs you the day. A build that " +
-          "stopped that way was being recorded as a finished run, which held the next " +
-          "attempt back until the following day while the dashboard showed green. It is now " +
-          "recorded as what it is - ran, built nothing - and retried within hours.",
+          "A shape check before writing. The builder now sketches the guide's opening and " +
+          "headings and checks those against everything you've published BEFORE it writes " +
+          "the article, the graphics, or the cover. A post that would have read like a " +
+          "repeat gets reshaped in seconds now, instead of being written in full, caught at " +
+          "the end, and rewritten. The final check on the finished guide is unchanged and " +
+          "still has to pass before anything opens as a pull request.",
       },
       {
         kind: "new",
@@ -215,22 +105,14 @@ export const CHANGELOG: ChangelogEntry[] = [
       {
         kind: "new",
         text:
-          "Up-front numbers on what a third site costs. Two sites fit inside GitHub's free " +
-          "tier; past that GitHub charges you a few dollars a month directly, and we never " +
-          "touch or mark up that money. The plans page, the FAQ and the docs now all say so, " +
-          "and you get the exact figures when you add your third site.",
+          "Up-front numbers on what a third site costs, wherever you'd decide to buy one. Your " +
+          "first two sites fit inside GitHub's free tier; past that GitHub charges you a few " +
+          "dollars a month directly, and we never touch or mark up that money. The landing " +
+          "page's pricing section, the plan picker, the upgrade cards on Billing, the FAQ and " +
+          "the docs all say so now - above the button rather than below the fold - and a cost " +
+          "table covers every site count from one to ten so you can check your own number " +
+          "instead of working it out from a sentence.",
       },
-    ],
-  },
-  {
-    version: "2026-07-31.2",
-    date: "2026-07-31",
-    title: "Building a guide uses a lot less of your agent plan",
-    summary:
-      "A build was spending most of its budget re-reading things it had already been told. " +
-      "It now gets what it needs up front in one go, so the same guide costs you roughly a " +
-      "third of the plan usage it did yesterday. Nothing about how a guide is written changed.",
-    changes: [
       {
         kind: "improved",
         text:
@@ -251,22 +133,115 @@ export const CHANGELOG: ChangelogEntry[] = [
           "where they apply.",
       },
       {
-        kind: "new",
-        text:
-          "A shape check before writing. The builder now sketches the guide's opening and " +
-          "headings and checks those against everything you've published BEFORE it writes " +
-          "the article, the graphics, or the cover. A post that would have read like a " +
-          "repeat gets reshaped in seconds now, instead of being written in full, caught at " +
-          "the end, and rewritten. The final check on the finished guide is unchanged and " +
-          "still has to pass before anything opens as a pull request.",
-      },
-      {
         kind: "improved",
         text:
           "Weekly tool builds got the same treatment. Every quality gate is exactly where it " +
           "was - the page-1 check, the original-research requirement, the humanizer pass, " +
           "the sameness check, your site's own build, and your review of the pull request. " +
           "This changed how the work gets done, never the bar it has to clear.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Your site's automations used to run on their own timers, three attempts a day, " +
+          "because GitHub sometimes drops a scheduled run. Two of those three woke up only " +
+          "to find nothing to do - and GitHub charges your account a full minute every time " +
+          "one starts. The dashboard now decides when there is something to build and wakes " +
+          "the workflow itself, so that check costs nothing. Nothing about what gets " +
+          "published changes.",
+      },
+      {
+        kind: "improved",
+        text:
+          "If a wake-up call goes out and nothing runs, you hear about it. GitHub accepts " +
+          "those calls even when a repo has Actions switched off or has run out of minutes, " +
+          "so the dashboard now tracks each one until the workflow reports back, and flags " +
+          "the ones that never do.",
+      },
+      {
+        kind: "improved",
+        text:
+          "The docs now tell the whole truth about Codex: the landing page no longer says " +
+          "agent support is 'coming', the FAQ no longer says a Claude subscription is " +
+          "required, and the self-host guide, security page, and troubleshooting page all " +
+          "cover the Codex path - including which model builds use and how to change it.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Tables in the docs render as tables. Every one of them was shipping as the literal " +
+          "pipe characters the author typed, across 17 pages - including the cloud-versus-" +
+          "self-hosted comparison people read specifically to make that decision.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Scheduled Codex builds on cloud were being turned away at the door: the tool that " +
+          "runs Codex on GitHub refuses runs started by automation unless told otherwise, and " +
+          "we only ever told it for manual runs - which is why manual tests passed while every " +
+          "scheduled run died. All eight workflows now allow it.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Keyword lookups inside Codex builds were silently broken for anyone with their own " +
+          "DataForSEO account: the credentials were handed over in a format only Claude Code " +
+          "understands, so Codex logged in with a placeholder instead of your login. Both " +
+          "runners now hand Codex the real values.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "A builder run could finish, report success and have built nothing at all - costing " +
+          "you a day's post with a green tick beside it. If the builder got stuck it could stop " +
+          "and ask a question, and on a scheduled run there is nobody there to answer, so it " +
+          "ended quietly and the day's post never happened. Runs now have to point at the pull " +
+          "request they opened; one that opened none is put back in the queue and picked up on " +
+          "the next pass, and you get told if it keeps happening.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "The underlying cause was a rule of ours that was too strict about how Codex is " +
+          "allowed to write files - it ruled out the one method that reliably works, so the " +
+          "builder painted itself into a corner on anything with code samples in it. Codex " +
+          "builds should now get through the same work Claude Code does.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Every guide ships with its own custom graphics again. Your guides are supposed to " +
+          "ship with two or three custom graphics drawn for that exact topic, plus a cover. " +
+          "Codex was reading that requirement and talking itself down to a plain table and a " +
+          "quote box - so a post would arrive looking noticeably thinner than the ones beside " +
+          "it on your blog. The builder now counts the files it actually created before it " +
+          "opens the pull request, and won't ship the guide until they are there. Guides built " +
+          "by Claude Code were never affected.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "A tool build that produced nothing could report success and quietly stop the tool " +
+          "queue; a transient OpenAI rate limit could ring the alarm bell and cost a full " +
+          "cadence window. Every scheduled workflow now tells those apart the same way the " +
+          "daily guide build does: retries stay quiet and automatic, dead accounts stay loud.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Hitting your agent's usage limit no longer costs you the day. A build that " +
+          "stopped that way was being recorded as a finished run, which held the next " +
+          "attempt back until the following day while the dashboard showed green. It is now " +
+          "recorded as what it is - ran, built nothing - and retried within hours.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Self-hosted stacks had no place left to paste a Codex key once the builder was " +
+          "running - the one card that took it disappears after first setup. Settings now " +
+          "always has a credential box for the builder, the setup wizard's paste step takes " +
+          "both agents, and a build that keeps getting deferred now goes stale and alarms " +
+          "instead of looking green forever.",
       },
     ],
   },
@@ -1160,17 +1135,60 @@ export const CHANGELOG: ChangelogEntry[] = [
 
 export const LATEST = CHANGELOG[0];
 
-/** Anchor id for an entry - `/changelog#v-2026-07-25`. */
+/**
+ * Versions that were announced under their own id and have since been folded
+ * into a later release: `{ absorbed: the release that now tells its story }`.
+ *
+ * 1.0.0 exists because 2026-07-31 shipped six separate releases in one day -
+ * the spam that versioning is here to stop - so it absorbs all six. But those
+ * six were already posted to Discord, and a Discord post is permanent, public
+ * and deep-links to `#v-<version>`. Folding an entry without leaving its anchor
+ * behind would turn six real posts into six links to nothing.
+ *
+ * So /changelog keeps an anchor for every absorbed version on the release that
+ * absorbed it. Rows are never removed - the post a row rescues never expires -
+ * and folding should stay rare enough that this map stays short. The everyday
+ * answer is to cut fewer releases in the first place.
+ */
+export const FOLDED_INTO: Record<string, string> = {
+  "2026-07-31.7": "1.0.0",
+  "2026-07-31.6": "1.0.0",
+  "2026-07-31.5": "1.0.0",
+  "2026-07-31.4": "1.0.0",
+  "2026-07-31.3": "1.0.0",
+  "2026-07-31.2": "1.0.0",
+};
+
+/** The absorbed versions a release has to answer for, as extra page anchors. */
+export function foldedInto(version: string): string[] {
+  return Object.keys(FOLDED_INTO).filter((absorbed) => FOLDED_INTO[absorbed] === version);
+}
+
+/** Anchor id for an entry - `/changelog#v-1.0.0`. */
 export function anchorFor(version: string): string {
   return `v-${version}`;
 }
 
 export const CHANGELOG_COOKIE = "ds_whats_new";
 
+const SEMVER = /^\d+\.\d+\.\d+$/;
+const DATED = /^\d{4}-\d{2}-\d{2}(\.\d+)?$/;
+
 // Versions are echoed back from the client (the dismiss action) and used as
-// cookie values, so they get the same shape check both ways.
+// cookie values, so they get the same shape check both ways. The dated shape
+// stays accepted forever: browsers still hold cookies naming a pre-1.0.0
+// release, and rejecting one would re-announce that release to its owner.
 export function isVersionString(v: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}(\.\d+)?$/.test(v);
+  return SEMVER.test(v) || DATED.test(v);
+}
+
+/**
+ * How a release calls itself in the UI - `v1.2.0`, or null for the dated
+ * entries that predate versioning. Those already show their date on the rail,
+ * so a `v2026-07-31.4` badge beside it would just say the same thing twice.
+ */
+export function releaseLabel(version: string): string | null {
+  return SEMVER.test(version) ? `v${version}` : null;
 }
 
 // Whether to announce a release to this visitor. Two ways to stay quiet:
@@ -1180,13 +1198,23 @@ export function isVersionString(v: string): boolean {
 // The cookie is per-browser, not per-account: a returning owner on a new
 // device may see one release announced twice. That's the cheap tradeoff for
 // not putting a per-user row behind this.
+//
+// "Already acknowledged" is a POSITION in this list, not a string comparison.
+// Dated versions happened to sort correctly as strings; semver does not -
+// "1.10.0" sorts below "1.9.0", so a `>=` test would go permanently silent at
+// the tenth minor release, and the same bug was already latent in the dated
+// scheme ("2026-07-31.10" < "2026-07-31.9"). The list is append-only and
+// newest-first, so the cookie's index says it exactly: index 0 is the newest.
+// A version that isn't in the list at all - a hand-edited cookie, or one
+// naming an entry that somehow left - counts as unseen, because announcing
+// once too often is the harmless direction to be wrong in.
 export function unseenRelease(
   seenVersion: string | undefined,
   projectCreatedAt: string | null | undefined,
 ): ChangelogEntry | null {
   const latest = LATEST;
   if (!latest) return null;
-  if (seenVersion && seenVersion >= latest.version) return null;
+  if (seenVersion && CHANGELOG.findIndex((e) => e.version === seenVersion) === 0) return null;
   if (projectCreatedAt) {
     const created = new Date(projectCreatedAt).getTime();
     // Compare against the end of the release day: an entry dated the same day
