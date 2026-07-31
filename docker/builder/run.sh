@@ -218,7 +218,29 @@ run_job() { # run_job <base64 job json>
     return
   fi
 
+  # Snapshot the repo BEFORE the agent touches it, so "did this run actually
+  # build anything" is answerable afterwards rather than assumed from an exit
+  # code. See the rc=0 branch below for why that question has to be asked.
+  head_before=$(git -C "$dir" rev-parse HEAD 2>/dev/null || echo "?")
+  prs_before=$(timeout 60 gh pr list --repo "$repo" --label seo --state open --json number --jq 'length' 2>/dev/null || echo "?")
+
   out="/data/logs/$key.$(date -u +%Y%m%d%H%M%S).json"
+  # How Codex must write files here, prepended to every Codex prompt.
+  #
+  # Claude Code has built-in file tools. Codex, in `codex exec`, has the shell
+  # and nothing else - `codex features list` reports apply_patch_freeform as
+  # REMOVED, so there is no file-write tool to turn on. Left to itself the
+  # model reaches for a heredoc, and the content this pipeline writes is MDX:
+  # backticks everywhere, which bash expands as command substitution inside a
+  # heredoc. On 2026-07-31 that failed every write for a whole run - it tried
+  # heredocs, printf, base64 and reformatting the code fences, then gave up and
+  # exited 0 with nothing built.
+  #
+  # So it is told, before the task, which methods survive quoting. Kept here
+  # rather than in the shared playbook because it is not a content rule - it is
+  # a fact about this container, and Claude must never be handed it.
+  CODEX_FILE_RULE='ENVIRONMENT RULE (read first, it overrides habit): you have no apply_patch tool here - only the shell. NEVER write or edit a file with a heredoc, printf, or echo. The content is MDX and its backticks WILL be expanded by bash and corrupt the file or fail the command. Write files exactly one of two ways: (1) pipe an OpenAI-format patch envelope into the `apply_patch` command on PATH, or (2) python3 -c with the content read from stdin, never interpolated into the command string. Verify every write with `ls -l` and `head` before moving on, and never let a filename come from an unset shell variable. '
+
   if [ "$agent" = "codex" ]; then
     # `codex exec` needs an explicit login: OPENAI_API_KEY in the environment
     # alone is NOT enough - it 401s against /v1/responses until auth.json
@@ -238,7 +260,7 @@ run_job() { # run_job <base64 job json>
     # not-planned), so the timeout below is the only ceiling - same 90 minutes
     # the Claude branch gets.
     ( cd "$dir" && OPENAI_API_KEY="$agent_token" CODEX_HOME="$codex_home" timeout 5400 \
-        codex exec "$prompt" \
+        codex exec "$CODEX_FILE_RULE$prompt" \
           --sandbox danger-full-access \
           --skip-git-repo-check \
           --model "${CODEX_MODEL:-gpt-5}" \
@@ -261,6 +283,32 @@ run_job() { # run_job <base64 job json>
   fi
 
   if [ "$rc" = "0" ]; then
+    # Exit 0 is not the same as "it built something". An agent that cannot
+    # write a file, hits a tool it does not have, or talks itself out of the
+    # task will finish tidily, explain itself, and exit 0 - and this branch
+    # used to call that a success. It is the worst outcome the builder has:
+    # green every night, nothing published, nobody told. It happened for real
+    # on 2026-07-31, when Codex could not write MDX and reported done.
+    #
+    # Only build-* jobs are checked, and only because the backend now hands
+    # them out ONLY when an approved suggestion exists (jobs/route.ts). So for
+    # these two, "the repo is exactly as we found it" has one meaning: the
+    # build did not happen. research and geo-scan legitimately touch no files.
+    case "$wf" in
+      build-guide|build-tool)
+        head_now=$(git -C "$dir" rev-parse HEAD 2>/dev/null || echo "?")
+        prs_now=$(timeout 60 gh pr list --repo "$repo" --label seo --state open --json number --jq 'length' 2>/dev/null || echo "?")
+        # HEAD is the definitive half - the agent commits on a branch in this
+        # same clone, so an unmoved HEAD means it never committed. The PR count
+        # is the secondary guard, and deliberately cannot rescue a run on its
+        # own: "?" means gh could not answer, not that a PR appeared.
+        if [ "$head_now" = "$head_before" ] && [ "$prs_now" = "$prs_before" ]; then
+          log "job $key produced nothing - failing"
+          report "$key" fail "the $agent run finished without building anything: no commit, no new PR, and a suggestion was waiting. Its own last words: $(echo "$msg" | tr '\n' ' ' | tail -c 220)"
+          return
+        fi
+        ;;
+    esac
     log "job $key done"
     report "$key" ok
   elif [ "$agent" = "codex" ]; then

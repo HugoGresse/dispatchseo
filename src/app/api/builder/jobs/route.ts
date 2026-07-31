@@ -200,17 +200,27 @@ export async function GET(req: Request): Promise<Response> {
     // on every 10-minute poll. null (count failed) is never treated as dry.
     const dryQueue = (await guideQueueDry(p.id)) === true;
     if (due("research", dryQueue ? 20 : undefined)) wanted.push("research");
-    if (flags.auto_build_guides && due("build-guide")) wanted.push("build-guide");
-    if (flags.auto_build_tools && due("build-tool")) {
-      // Tool runs only when there is something to build - a scheduled
-      // no-op still costs a full Claude session, unlike the other gates.
+    // Both builders run only when there is something to build - a scheduled
+    // no-op still costs a full agent session. Guides were exempt from this
+    // until 2026-07-31, and the exemption cost more than the session: with an
+    // empty queue a legitimate "nothing to do" run and a run that tried and
+    // silently failed look identical from the container, so neither the
+    // builder nor the dashboard could tell them apart. Gating here is what
+    // lets run.sh treat "a build job produced nothing" as the failure it is.
+    const approvedCount = async (type: "guide" | "tool") => {
       const { count } = await db()
         .from("suggestions")
         .select("id", { count: "exact", head: true })
         .eq("project_id", p.id)
-        .eq("type", "tool")
+        .eq("type", type)
         .eq("status", "approved");
-      if ((count ?? 0) > 0) wanted.push("build-tool");
+      return count ?? 0;
+    };
+    if (flags.auto_build_guides && due("build-guide") && (await approvedCount("guide")) > 0) {
+      wanted.push("build-guide");
+    }
+    if (flags.auto_build_tools && due("build-tool") && (await approvedCount("tool")) > 0) {
+      wanted.push("build-tool");
     }
     if (due("geo-scan")) wanted.push("geo-scan");
 

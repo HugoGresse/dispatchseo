@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+"""apply_patch - write files from a patch envelope read on stdin.
+
+Codex reaches for a command called `apply_patch` when it wants to create or
+edit a file. The image did not have one, so it fell back to shell heredocs -
+and a guide is MDX, which is full of backticks, which bash treats as command
+substitution. Every write failed, the run produced nothing, and because the
+agent then exited 0 the builder reported success (2026-07-31).
+
+Claude Code never needed this: it has built-in file tools and never shells out
+to write. That asymmetry is why this survived every earlier test.
+
+Envelope (OpenAI's apply_patch format):
+
+    *** Begin Patch
+    *** Add File: path/to/new.mdx
+    +first line
+    +second line
+    *** Update File: path/to/existing.md
+    @@
+    -old line
+    +new line
+    *** Delete File: path/to/gone.txt
+    *** End Patch
+
+Deliberately strict: anything it cannot apply exactly is a non-zero exit with
+a message naming the file, never a partial write. A half-written guide that
+looks successful is worse than a failed run, which is the whole lesson above.
+"""
+import sys
+import os
+
+ADD = "*** Add File: "
+UPDATE = "*** Update File: "
+DELETE = "*** Delete File: "
+
+
+def fail(msg):
+    sys.stderr.write("apply_patch: %s\n" % msg)
+    sys.exit(1)
+
+
+def main():
+    text = sys.stdin.read()
+    lines = text.split("\n")
+    if "*** Begin Patch" not in text:
+        fail("input did not contain '*** Begin Patch'")
+
+    i = 0
+    while i < len(lines) and lines[i].strip() != "*** Begin Patch":
+        i += 1
+    i += 1
+
+    # Parse first, write second. A patch that names five files and is malformed
+    # at the fifth must not leave the first four written.
+    actions = []
+    while i < len(lines):
+        line = lines[i]
+        if line.strip() == "*** End Patch":
+            break
+        if line.startswith(ADD):
+            path = line[len(ADD):].strip()
+            i += 1
+            body = []
+            while i < len(lines) and not lines[i].startswith("*** "):
+                if lines[i].startswith("+"):
+                    body.append(lines[i][1:])
+                elif lines[i].strip() == "":
+                    body.append("")
+                else:
+                    fail("line %d in Add File %s must start with '+'" % (i + 1, path))
+                i += 1
+            actions.append(("add", path, "\n".join(body)))
+            continue
+        if line.startswith(DELETE):
+            actions.append(("delete", line[len(DELETE):].strip(), None))
+            i += 1
+            continue
+        if line.startswith(UPDATE):
+            path = line[len(UPDATE):].strip()
+            i += 1
+            hunks = []
+            cur = None
+            while i < len(lines) and not lines[i].startswith("*** "):
+                l = lines[i]
+                if l.startswith("@@"):
+                    cur = {"minus": [], "plus": []}
+                    hunks.append(cur)
+                elif cur is not None:
+                    if l.startswith("-"):
+                        cur["minus"].append(l[1:])
+                    elif l.startswith("+"):
+                        cur["plus"].append(l[1:])
+                    else:
+                        ctx = l[1:] if l.startswith(" ") else l
+                        cur["minus"].append(ctx)
+                        cur["plus"].append(ctx)
+                i += 1
+            if not hunks:
+                fail("Update File %s had no @@ hunk" % path)
+            actions.append(("update", path, hunks))
+            continue
+        i += 1
+
+    if not actions:
+        fail("patch contained no Add/Update/Delete section")
+
+    for kind, path, payload in actions:
+        if kind == "add":
+            d = os.path.dirname(path)
+            if d:
+                os.makedirs(d, exist_ok=True)
+            with open(path, "w") as fh:
+                fh.write(payload if payload.endswith("\n") else payload + "\n")
+            print("apply_patch: wrote %s" % path)
+        elif kind == "delete":
+            if os.path.exists(path):
+                os.remove(path)
+                print("apply_patch: deleted %s" % path)
+            else:
+                fail("Delete File %s does not exist" % path)
+        else:
+            if not os.path.exists(path):
+                fail("Update File %s does not exist" % path)
+            with open(path) as fh:
+                content = fh.read()
+            for hunk in payload:
+                old = "\n".join(hunk["minus"])
+                new = "\n".join(hunk["plus"])
+                if old and old not in content:
+                    fail("hunk did not match anything in %s" % path)
+                content = content.replace(old, new, 1) if old else content + new
+            with open(path, "w") as fh:
+                fh.write(content)
+            print("apply_patch: updated %s" % path)
+
+
+if __name__ == "__main__":
+    main()
