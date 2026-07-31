@@ -147,10 +147,25 @@ export default async function BillingPage({
               ) : null}
               <ul className="mt-3 space-y-1 text-sm text-neutral-400">
                 <li>
-                  {limits.sites} site{limits.sites === 1 ? "" : "s"}
+                  Up to {limits.sites} site{limits.sites === 1 ? "" : "s"}
                 </li>
                 <li>{limits.keywords} tracked keywords</li>
               </ul>
+              {/* The SECOND door to checkout, and the one that was missing this.
+                  /plans is where a new customer picks a tier; this page is where
+                  an existing one upgrades - and an upgrade from Starter is
+                  exactly the moment a GitHub bill becomes possible for someone
+                  it never applied to before. Finding out afterwards would be
+                  the "oh, by the way" this note exists to prevent, so it has to
+                  sit above the button, not behind it.
+                  Multi-site tiers only: one site cannot leave GitHub's free
+                  tier, so on Starter this would warn about the impossible. */}
+              {tier !== "starter" ? (
+                <p className="mt-3 text-xs leading-relaxed text-neutral-500">
+                  Above 2 sites, GitHub bills you directly for the automation it runs - about $5
+                  per extra site a month, with nothing added by us.
+                </p>
+              ) : null}
               {isCurrent ? (
                 <p className="mt-4 text-center text-sm font-medium text-neutral-300">
                   Current plan
