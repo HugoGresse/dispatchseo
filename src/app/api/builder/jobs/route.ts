@@ -2,7 +2,7 @@ import { checkCron } from "@/lib/cron-auth";
 import { db } from "@/lib/db";
 import { reportCronRun } from "@/lib/cron-alerts";
 import { credsForProject } from "@/lib/dataforseo";
-import { mergeToken, builderClaudeToken, builderAgentToken, builderAgentTokens } from "@/lib/github";
+import { mergeToken, builderClaudeToken, builderAgentToken, builderAgentTokens, openSeoPrs } from "@/lib/github";
 import { listProjects, fetchProjectToken, effectiveAutomations } from "@/lib/projects";
 import { projectAgent, type AgentId } from "@/lib/agents";
 import { isCloudMode } from "@/lib/cloud";
@@ -171,7 +171,22 @@ export async function GET(req: Request): Promise<Response> {
 
     // Due-ness, cadence collapse on a dry queue, and the approved-count gates
     // all live in build-schedule.ts now - see the header note above.
-    const wanted = await dueBuildWork(p, (wf) => builderJobKey(wf, p.slug));
+    let wanted = await dueBuildWork(p, (wf) => builderJobKey(wf, p.slug));
+
+    // Open-PR pre-check, the twin of seo-dispatch's: one SEO PR at a time is
+    // the pipeline's steady state (built, waiting on checks or a merge), and
+    // without this gate the container got build-guide handed out every cadence
+    // window while a PR sat open - the agent then either piled a second PR on
+    // top or exited clean, which the built-nothing check reads as a deferral.
+    // Same posture as the dispatcher: openSeoPrs returns [] on ANY failure,
+    // so a GitHub blip hands the job out (the agent's own guard still holds)
+    // rather than silently pausing all building. A saving, never a gate.
+    if (wanted.includes("build-guide") || wanted.includes("build-tool")) {
+      const open = await openSeoPrs(p);
+      if (open.length > 0) {
+        wanted = wanted.filter((w) => w !== "build-guide" && w !== "build-tool");
+      }
+    }
 
     for (const wf of wanted) {
       const key = builderJobKey(wf, p.slug);

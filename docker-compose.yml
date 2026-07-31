@@ -167,6 +167,13 @@ services:
       # each project asks for, so a stack needs a credential per agent it
       # actually hosts - not one blessed credential for the whole instance.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # Which model Codex builds run on. Model availability is per-account
+      # (gpt-5-codex 404s on a plain pay-as-you-go project key), so an account
+      # that cannot serve the default needs this override - the same knob the
+      # GitHub runner exposes as the SEO_CODEX_MODEL repo variable. run.sh has
+      # always read it; without this line the .env value never reached the
+      # container and the knob silently did nothing.
+      CODEX_MODEL: ${CODEX_MODEL:-}
       BUILDER_GH_TOKEN: ${BUILDER_GH_TOKEN:-}
       BUILDER_POLL_SECONDS: ${BUILDER_POLL_SECONDS:-600}
     volumes:

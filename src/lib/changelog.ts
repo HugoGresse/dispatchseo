@@ -30,6 +30,59 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-31.7",
+    date: "2026-07-31",
+    title: "A full Codex audit, and everything it found is fixed",
+    summary:
+      "Four independent reviews went through every Codex path on both the cloud and " +
+      "self-hosted versions before we call Codex support official. They found real problems - " +
+      "the worst stopped every scheduled Codex build on cloud before it started - and every " +
+      "one is fixed.",
+    changes: [
+      {
+        kind: "fixed",
+        text:
+          "Scheduled Codex builds on cloud were being turned away at the door: the tool that " +
+          "runs Codex on GitHub refuses runs started by automation unless told otherwise, and " +
+          "we only ever told it for manual runs - which is why manual tests passed while every " +
+          "scheduled run died. All eight workflows now allow it.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Keyword lookups inside Codex builds were silently broken for anyone with their own " +
+          "DataForSEO account: the credentials were handed over in a format only Claude Code " +
+          "understands, so Codex logged in with a placeholder instead of your login. Both " +
+          "runners now hand Codex the real values.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "A tool build that produced nothing could report success and quietly stop the tool " +
+          "queue; a transient OpenAI rate limit could ring the alarm bell and cost a full " +
+          "cadence window. Every scheduled workflow now tells those apart the same way the " +
+          "daily guide build does: retries stay quiet and automatic, dead accounts stay loud.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Self-hosted stacks had no place left to paste a Codex key once the builder was " +
+          "running - the one card that took it disappears after first setup. Settings now " +
+          "always has a credential box for the builder, the setup wizard's paste step takes " +
+          "both agents, and a build that keeps getting deferred now goes stale and alarms " +
+          "instead of looking green forever.",
+      },
+      {
+        kind: "improved",
+        text:
+          "The docs now tell the whole truth about Codex: the landing page no longer says " +
+          "agent support is 'coming', the FAQ no longer says a Claude subscription is " +
+          "required, and the self-host guide, security page, and troubleshooting page all " +
+          "cover the Codex path - including which model builds use and how to change it.",
+      },
+    ],
+  },
+  {
     version: "2026-07-31.6",
     date: "2026-07-31",
     title: "You can stop DispatchSEO on a site without deleting it",
@@ -49,7 +102,7 @@ export const CHANGELOG: ChangelogEntry[] = [
           "can connect the repo again whenever you want.",
       },
       {
-        kind: "fixed",
+        kind: "new",
         text:
           "On the self-hosted version there was previously no way to do this at all. Your first " +
           "site can't be deleted (the rest of your setup is anchored to it), the repo was shown " +

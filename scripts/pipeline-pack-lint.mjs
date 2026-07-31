@@ -147,6 +147,43 @@ for (const t of targets) {
   checkLooksLikeWorkflow(t);
 }
 
+// mcp-codex.toml's truncation contract. getPipelinePack strips the DataForSEO
+// section for no-DataForSEO projects by indexOf on the marker line - a plain
+// string match with no guard, so a reformatted comment silently disables the
+// truncation and every free-mode Codex project ships a dataforseo stdio
+// server wired to blank creds, crashing unattended runs. The JSON twin is
+// safe by construction (JSON.parse + delete); this asymmetry is Codex-only,
+// which is why the lint holds the TOML to the contract explicitly.
+{
+  const MARKER = "# --- dataforseo ---";
+  const tomlPath = "templates/pipeline/.github/mcp-codex.toml";
+  const where = tomlPath;
+  try {
+    const content = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", tomlPath), "utf8");
+    const idx = content.indexOf(MARKER);
+    if (idx === -1) {
+      fail(where, "codex-toml-marker", `missing the exact truncation marker line "${MARKER}" that getPipelinePack strips at`);
+    } else {
+      const truncated = content.slice(0, idx).trimEnd();
+      if (!/default_tools_approval_mode = "approve"/.test(truncated)) {
+        fail(where, "codex-toml-marker", "the truncated (free-mode) config loses the seo-manager approval mode - every tool call would return 'user cancelled'");
+      }
+      const afterMarker = content.slice(idx);
+      const tablesAfter = [...afterMarker.matchAll(/^\[mcp_servers\.([^\]]+)\]/gm)].map((m) => m[1]);
+      if (tablesAfter.join(",") !== "dataforseo") {
+        fail(where, "codex-toml-marker", `the dataforseo section must be the ONLY server table after the marker (found: ${tablesAfter.join(", ") || "none"}) - anything else gets truncated away for free-mode projects`);
+      }
+      for (const token of ["${DATAFORSEO_LOGIN}", "${DATAFORSEO_PASSWORD}"]) {
+        if (!afterMarker.includes(token)) {
+          fail(where, "codex-toml-marker", `missing the ${token} token the workflows substitute at run time - Codex does not expand \${VAR} itself`);
+        }
+      }
+    }
+  } catch (e) {
+    fail(where, "codex-toml-marker", `could not read: ${e.message}`);
+  }
+}
+
 if (problems.length) {
   console.error(`pipeline-pack-lint: ${problems.length} problem(s)\n`);
   for (const p of problems) {

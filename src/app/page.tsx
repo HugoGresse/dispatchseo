@@ -549,7 +549,7 @@ export default async function LandingPage({
             </details>
             <details>
               <summary>What do I need to run the free version?</summary>
-              <div className="a">A website that lives in a GitHub repo, a Claude subscription with Claude Code, free Google Search Console access, and a machine with Docker. Your laptop works for a test drive, but we highly recommend a machine that stays awake for real use - a $5 VPS or a Raspberry Pi - since schedules only run while it&apos;s on. Rank tracking works with a free SerpApi key; search volume data needs a DataForSEO account, which is the main gap the cloud version fills. The <a href={DOCS_URL}>docs</a> walk you through it.</div>
+              <div className="a">A website that lives in a GitHub repo, a coding agent (Claude Code on your Claude subscription, or Codex on an OpenAI key), free Google Search Console access, and a machine with Docker. Your laptop works for a test drive, but we highly recommend a machine that stays awake for real use - a $5 VPS or a Raspberry Pi - since schedules only run while it&apos;s on. Rank tracking works with a free SerpApi key; search volume data needs a DataForSEO account, which is the main gap the cloud version fills. The <a href={DOCS_URL}>docs</a> walk you through it.</div>
             </details>
             <details>
               <summary>Is this another AI content spammer?</summary>
@@ -561,7 +561,7 @@ export default async function LandingPage({
             </details>
             <details>
               <summary>Does it only work with Claude Code?</summary>
-              <div className="a">Claude Code is the first-class path and what we test against. The server speaks standard MCP though, so other MCP clients can connect to the same tools. Adapters for other coding agents will come when people ask for them.</div>
+              <div className="a">No - Codex is fully supported too, including the overnight builders. Every scheduled workflow carries both agents and asks the dashboard which one to run, so you can switch on Settings and it takes effect on the next build, no reinstall. The honest difference is billing: Claude Code runs on the subscription you already have, Codex is metered by OpenAI per run. Beyond those two, the server speaks standard MCP, so other MCP clients (Cursor, Gemini CLI) can connect to the same tools interactively - they just can&apos;t run the unattended builders yet.</div>
             </details>
             <details>
               <summary>What does DispatchSEO do with my Google data?</summary>

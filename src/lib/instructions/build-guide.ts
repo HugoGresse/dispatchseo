@@ -149,13 +149,16 @@ the build-tool workflow and must never be picked up here.
    (d) an original worked example or end-to-end config no docs page shows;
    (e) a clear, defended stance where every page 1 result hedges.
    **Only what THIS run can honestly do.** You are a headless CI run holding
-   the repo, the current official docs, the MCP, and Claude Code itself - and
-   nothing else. NEVER install or run a third-party or competitor tool (a
-   rival CLI, a paid API you have no key for, anything needing a browser or a
-   login) to manufacture an asset: that is what breaks the morning build, and
-   faking the number instead of running it is worse. So (a) and (b) mean the
-   stack you ARE and the commands you CAN run here - this site's own repo,
-   Claude Code itself - never a competitor's tool. For an X-vs-Y guide where
+   the repo, the current official docs, the MCP, and the coding agent you
+   are actually running as - and nothing else. NEVER install or run a
+   third-party or competitor tool (a rival CLI, a paid API you have no key
+   for, anything needing a browser or a login) to manufacture an asset: that
+   is what breaks the morning build, and faking the number instead of
+   running it is worse. So (a) and (b) mean the stack you ARE and the
+   commands you CAN run here - this site's own repo, the agent CLI this run
+   is executing in - never a competitor's tool, and never the OTHER coding
+   agent either: if you are Codex, you cannot honestly benchmark Claude
+   Code, and vice versa, however well you know it from training. For an X-vs-Y guide where
    you cannot run Y, the honest asset is deep, SOURCED specifics pulled from
    BOTH tools' current official docs and changelogs that the thin page-1 posts
    get wrong or omit (cite them), plus the side you CAN run for real, plus a

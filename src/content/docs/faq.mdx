@@ -22,9 +22,10 @@ user. See [what you need](/docs#before-you-start) before installing.
 Not to run DispatchSEO itself. The free tier (Search Console only) costs
 $0 forever and self-hosting has no feature limits - see
 [Is the self-hosted version limited?](#is-the-self-hosted-version-limited-vs-the-cloud-one)
-below. You bring your own Claude subscription (next question); beyond
-that, DispatchSEO never bills you for agent usage - it isn't a
-per-token service on top of your plan.
+below. You bring your own coding agent - a Claude subscription for Claude
+Code, or an OpenAI key for Codex (next question); beyond that, DispatchSEO
+never bills you for agent usage - it isn't a per-token service on top of
+your plan.
 
 ## What does it cost to run?
 
@@ -49,11 +50,16 @@ the real numbers and how to avoid a surprise pause.
 
 ## Do I need a Claude subscription? Which plan?
 
-Yes - Claude Code is the engine, and it isn't part of the free Claude
-plan. Pro, Max, Team, and current Enterprise plans all include it; Pro
-is the cheapest way in if you're starting from nothing. See
+Only if Claude Code is your agent - Codex works too, on an OpenAI API key
+instead of a subscription (see [Use Codex instead](/docs/install-codex)).
+
+For the Claude Code path: Claude Code isn't part of the free Claude plan.
+Pro, Max, Team, and current Enterprise plans all include it; Pro is the
+cheapest way in if you're starting from nothing. See
 [Install Claude Code](/docs/install-claude-code) for the full plan table
-and the five-minute setup.
+and the five-minute setup. For the Codex path there's no subscription at
+all - OpenAI meters each run against your key, so the account needs credit
+on it.
 
 ## Can I run it on my laptop?
 
@@ -79,9 +85,9 @@ doesn't try to replace that knowledge with its own crawler or its own
 writer model. It's a backend for the agent you already have: MCP tools
 holding the queue, the keywords, the rankings, and the Search Console
 data, plus crons that keep that state fresh. The research and the
-writing happen in your Claude Code, on your own subscription -
-DispatchSEO is state, scheduling, and an approval gate around it, not a
-competing content engine.
+writing happen in your own agent - Claude Code on your subscription, or
+Codex on your OpenAI key - DispatchSEO is state, scheduling, and an
+approval gate around it, not a competing content engine.
 
 ## Will Google penalize AI-written content?
 
@@ -150,10 +156,15 @@ revert it. See [Day to day](/docs/day-to-day).
 
 ## What model does it use? Can I change it?
 
-Whatever your own Claude Code is already configured to use. DispatchSEO
-doesn't pin a model - it runs your agent, on your plan, with whatever
-default or manually chosen model your Claude Code session already has.
+On Claude Code: whatever your own Claude Code is already configured to
+use. DispatchSEO doesn't pin a model - it runs your agent, on your plan,
+with whatever default or manually chosen model your session already has.
 Change it the same way you'd change it for any other Claude Code work.
+
+On Codex: scheduled builds default to `gpt-5`. Model availability is
+per-account (some keys 404 on models they can list), so there's an
+override: set the `SEO_CODEX_MODEL` variable in your repo's Actions
+variables, or `CODEX_MODEL` in your `.env` on a Docker install.
 
 ## Where does my data live?
 

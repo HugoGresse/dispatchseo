@@ -219,7 +219,12 @@ const codex: AgentDefinition = {
     // (sk-proj-, sk-svcacct-, plain sk-) and adds more. Rejecting a real key
     // because the prefix list went stale is worse than letting the real network
     // check downstream be the one that says no.
-    looksValid: (v) => v.startsWith("sk-") && v.length > 20,
+    // The sk-ant- exclusion is load-bearing: a Claude OAuth token starts
+    // sk-ant-oat, which also matches a bare sk- prefix - so without it, the
+    // most likely wrong paste on the Codex tab (the OTHER agent's credential)
+    // sails through the shape gate, gets sent to OpenAI, and comes back as a
+    // technically-true-but-useless "OpenAI rejected that key".
+    looksValid: (v) => v.startsWith("sk-") && !v.startsWith("sk-ant-") && v.length > 20,
     howToMint:
       "Create a key at platform.openai.com/api-keys. A project key is fine; it must belong to an account with credit on it.",
     mintUrl: "https://platform.openai.com/api-keys",

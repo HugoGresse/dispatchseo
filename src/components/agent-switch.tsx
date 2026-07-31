@@ -84,7 +84,10 @@ export function AgentSwitch({ current, slug }: { current: string; slug: string }
         <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2.5 text-sm text-amber-200/90">
           <p>
             <b className="font-semibold text-amber-200">
-              Set your {selectedAgent.displayName} API key so builds actually run.
+              {/* "credential", not "API key": Claude's is an OAuth token from
+                  `claude setup-token`, and calling it an API key sends people
+                  hunting for one at console.anthropic.com. */}
+              Set your {selectedAgent.displayName} credential so builds actually run.
             </b>{" "}
             {todo}
           </p>

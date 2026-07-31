@@ -121,7 +121,7 @@ recommendation above is purely about uptime, not reachability.
 | `postgrest` | REST layer between app and database, internal network only |
 | `migrate` | One-shot schema apply on every boot (idempotent, exits when done) |
 | `cron` | Triggers rank checks, GSC snapshots, and weekly research on schedule |
-| `builder` | Headless Claude Code - builds guides and tools, runs research (below) |
+| `builder` | Your coding agent, headless (Claude Code or Codex) - builds guides and tools, runs research (below) |
 
 Check on it any time - these (and every command below) run inside the
 `dispatchseo` folder the install created:
@@ -134,14 +134,18 @@ docker compose logs builder
 
 ## The builder: automatic content, no public URL
 
-The `builder` container is your own Claude Code running headlessly inside
-the stack. Every 10 minutes it asks the backend what's due and runs it: the
-daily guide build, weekly keyword research, approved tool builds, the weekly
-AI-visibility scan - and on auto-mode projects it merges green guide PRs. It
-only makes outbound connections (to GitHub and Anthropic), which is why a
-localhost install is fully automatic with no tunnel or domain.
+The `builder` container is your own coding agent running headlessly inside
+the stack - Claude Code or Codex, per project, whichever each site's
+Settings names. Every 10 minutes it asks the backend what's due and runs it:
+the daily guide build, weekly keyword research, approved tool builds, the
+weekly AI-visibility scan - and on auto-mode projects it merges green guide
+PRs. It only makes outbound connections (to GitHub and its agent's API -
+Anthropic or OpenAI), which is why a localhost install is fully automatic
+with no tunnel or domain.
 
-Turning it on is one token, and there are two ways to hand it over.
+Turning it on is one credential, and there are two ways to hand it over.
+Both agents work the same way; the examples below show Claude Code, and the
+Codex differences are one block further down.
 
 **Easiest - paste it on the dashboard.** On the wizard's final screen (or the
 Home "Turn on automatic builds" card any time later), run `claude setup-token`
@@ -178,6 +182,29 @@ docker compose up -d builder && docker compose logs builder --tail 5
 Either way, the builder either starts polling for work or tells you exactly
 what it's still waiting for, and GitHub access reuses the token from the
 wizard's Connect GitHub step - nothing to configure twice.
+
+### Running Codex instead
+
+Same two paths, different credential. On the dashboard, the paste box has a
+Codex tab - create a key at
+[platform.openai.com/api-keys](https://platform.openai.com/api-keys) (the
+account needs credit on it; OpenAI meters each build) and paste it there.
+It's verified with a live call before it's stored, which `gh secret set`
+and a `.env` edit can never do.
+
+The terminal alternative is one line in the same `.env`:
+
+```bash
+[ -f start.sh ] &&
+  echo "OPENAI_API_KEY=sk-PASTE-YOUR-KEY-HERE" >> .env ||
+  echo "Wrong folder - run this inside the dispatchseo folder"
+```
+
+Then switch the project to Codex on the dashboard's Settings page. The
+agent is per-project, so one stack can run a Claude site and a Codex site
+side by side - the builder is handed the right credential per job. Builds
+default to `gpt-5`; if your account can't serve it, set `CODEX_MODEL=` in
+the same `.env`.
 
 ## Configuration
 

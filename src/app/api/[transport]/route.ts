@@ -13,7 +13,7 @@ import { getWeeklyProgress } from "@/lib/progress";
 import { AUTOMATIONS, gatherEvidence } from "@/lib/automations";
 import { credsForProject, keywordSuggestions, relatedKeywords, type KeywordIdea } from "@/lib/dataforseo";
 import { isCloudMode } from "@/lib/cloud";
-import { canMerge, dispatchToolBuild, mergePr, openSeoPrs, verifyPipelinePrereqs } from "@/lib/github";
+import { builderAgentToken, canMerge, dispatchToolBuild, mergePr, openSeoPrs, verifyPipelinePrereqs } from "@/lib/github";
 import {
   indexingBrowserCommand,
   indexingQueue,
@@ -1672,8 +1672,8 @@ const mcpHandler = createMcpHandler(
         title: "Get site profile",
         description:
           "Read the site profile the backlink playbook personalizes from (name, " +
-          "tagline, descriptions, categories, tags). Returns null if /seo-setup " +
-          "has not written it yet.",
+          "tagline, descriptions, categories, tags). Returns null if the setup " +
+          "workflow (get_instructions workflow=setup) has not written it yet.",
         inputSchema: {},
       },
       async () => {
@@ -1694,8 +1694,8 @@ const mcpHandler = createMcpHandler(
         title: "Set site profile",
         description:
           "Write the site profile the backlink playbook prefills every directory " +
-          "submission and @browser command from. Called by the /seo-setup command " +
-          "after researching the product. Length contracts: tagline <= 60 chars, " +
+          "submission from. Called by the setup workflow (get_instructions " +
+          "workflow=setup) after researching the product. Length contracts: tagline <= 60 chars, " +
           "short_description <= 160 chars, long_description 300-600 chars - " +
           "directories enforce these limits, so keep to them.",
         inputSchema: {
@@ -2112,8 +2112,14 @@ const mcpHandler = createMcpHandler(
               // builder will run research, or it falsely falls back to running
               // it inline (2026-07-24: the owner pasted the token and the agent
               // couldn't tell).
+              // Per-PROJECT-agent, never hardcoded to Claude: this field is
+              // load-bearing (the install playbook branches on it - false
+              // sends the agent off to run research inline and tell the owner
+              // to finish a step they finished), and a Codex self-host with
+              // OPENAI_API_KEY set used to read back false here, re-creating
+              // the exact 2026-07-24 regression along the Codex axis.
               builder_token_configured: Boolean(
-                process.env.CLAUDE_CODE_OAUTH_TOKEN || inst?.builder_claude_token,
+                await builderAgentToken(projectAgent(currentProject()).id),
               ),
               // Parity with Home's builder card and the wizard finale row:
               // true when EITHER build path shows recent life (in-stack
@@ -2548,6 +2554,8 @@ const mcpHandler = createMcpHandler(
         description:
           "The project this token belongs to and how it's set up: domain, mode " +
           "(semi/auto) with the effective auto_approve / auto_approve_tools flags, " +
+          "which coding agent runs the builders (agent: claude|codex - read it " +
+          "before calling set_agent), " +
           "keyword source (dataforseo/serpapi/gsc), whether a SERP " +
           "provider and Search Console are connected, whether THIS repo has its own " +
           "DataForSEO MCP server (dataforseo_repo_mcp - false on the cloud bundled " +

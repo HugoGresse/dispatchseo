@@ -10,6 +10,7 @@ import { credsForProject } from "@/lib/dataforseo";
 import { DEFAULT_PROJECT_ID, fetchProjectToken } from "@/lib/projects";
 import { isCloudMode } from "@/lib/cloud";
 import { ClaudeTokenConnect } from "@/components/claude-token-connect";
+import { BuilderTokenConnect } from "@/components/builder-token-connect";
 import { hasRepoSecret } from "@/lib/github-app-secrets";
 import { DeleteProjectForm } from "@/components/delete-project";
 import { DisconnectRepoForm } from "@/components/disconnect-repo";
@@ -235,7 +236,17 @@ export default async function SettingsPage() {
 
       {/* Anchored: the agent switch below links here the moment a switch leaves
           the builders without a credential, so "set your key" is one click and
-          not a hunt. scroll-mt keeps the heading clear of the sticky header. */}
+          not a hunt. scroll-mt keeps the heading clear of the sticky header.
+
+          BOTH runners get a box, because the anchor is only honest if it
+          exists everywhere the switch renders. Cloud (App-connected) stores a
+          repo secret; everything else stores the instance credential the
+          in-stack builder reads. Before the self-host branch existed, the only
+          paste surface was Home's "Turn on automatic builds" card - which
+          disappears forever once ANY project's builds are active, so an owner
+          adding a Codex site to a working Claude stack had a switch banner
+          pointing at a box that no longer rendered anywhere, and a project
+          that silently built nothing. */}
       {isCloudMode() && project.github_installation_id ? (
         <section id="agent-credential" className="scroll-mt-24 space-y-3">
           <SectionTitle sub="the credential builds run on - rotate it here whenever it expires or gets revoked">
@@ -247,7 +258,14 @@ export default async function SettingsPage() {
             slug={project.slug}
           />
         </section>
-      ) : null}
+      ) : (
+        <section id="agent-credential" className="scroll-mt-24 space-y-3">
+          <SectionTitle sub="the credential the in-stack builder runs on - stored once per instance, shared by every project on the same agent">
+            Builder credential
+          </SectionTitle>
+          <BuilderTokenConnect current={agent.id} />
+        </section>
+      )}
 
       <section className="space-y-3">
         <SectionTitle sub="which agent your scheduled builders run - not which agent you use day to day">

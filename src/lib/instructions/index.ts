@@ -22,7 +22,17 @@ import {
 } from "@/lib/content-prefs";
 import { CORE, CORE_TAIL, RESEARCH_QUALITY_BAR } from "./core";
 import { internalLinkingEnabled } from "@/lib/projects";
-import { INSTALL, INSTALL_STEPS } from "./install";
+import {
+  INSTALL,
+  INSTALL_STEPS,
+  CLAUDE_CREDENTIAL_STEP,
+  CODEX_CREDENTIAL_STEP,
+  CLAUDE_CREDENTIAL_BRIEF,
+  CODEX_CREDENTIAL_BRIEF,
+  CLAUDE_SMOKE_NOTE,
+  CODEX_SMOKE_NOTE,
+} from "./install";
+import { projectAgent } from "@/lib/agents";
 import { SETUP, SETUP_STEPS } from "./setup";
 import { RESEARCH, RESEARCH_STEPS } from "./research";
 import {
@@ -38,7 +48,7 @@ import { TREND_SCAN, TREND_SCAN_STEPS } from "./trend-scan";
 import { TREND_EXPAND, TREND_EXPAND_STEPS } from "./trend-expand";
 import { GEO_SCAN, GEO_SCAN_STEPS } from "./geo-scan";
 
-export const INSTRUCTIONS_VERSION = "2026-07-31.2";
+export const INSTRUCTIONS_VERSION = "2026-07-31.3";
 
 export const WORKFLOWS = [
   "install",
@@ -229,6 +239,29 @@ export async function renderInstructions(workflow: WorkflowName, project: Projec
     .replaceAll("{{OWNER_PREFS_GUIDE}}", renderGuidePrefsNote(prefs))
     .replaceAll("{{OWNER_PREFS_TOOL}}", renderToolPrefsNote(prefs))
     .replaceAll("{{RESEARCH_SOURCE_NOTE}}", researchSourceNote);
+  // Agent-conditional pieces, resolved from the PROJECT - the same run-time
+  // resolution the workflows use. Before this, the install playbook had one
+  // credential branch and it was Claude's: a Codex install (setup.sh codex is
+  // a shipped invocation) was walked through minting a Claude token the
+  // pipeline would never read. The rest of every playbook is agent-neutral by
+  // design; keep it that way and route any new agent-specific instruction
+  // through a placeholder here.
+  {
+    const agent = projectAgent(project);
+    const codex = agent.id === "codex";
+    markdown = markdown
+      .replaceAll("{{AGENT_NAME}}", agent.displayName)
+      .replaceAll("{{AGENT_CLI}}", codex ? "codex" : "claude")
+      .replaceAll("{{AGENT_SECRET_NAME}}", agent.credential.repoSecretName)
+      .replaceAll("{{AGENT_CREDENTIAL_STEP}}", codex ? CODEX_CREDENTIAL_STEP : CLAUDE_CREDENTIAL_STEP)
+      .replaceAll("{{AGENT_CREDENTIAL_BRIEF}}", codex ? CODEX_CREDENTIAL_BRIEF : CLAUDE_CREDENTIAL_BRIEF)
+      .replaceAll("{{AGENT_SMOKE_NOTE}}", codex ? CODEX_SMOKE_NOTE : CLAUDE_SMOKE_NOTE)
+      // geo-scan attribution: "chatgpt" is AGENT_ENGINES' name for the GPT
+      // family, which is what a Codex run's answers actually are. Hardcoding
+      // `claude` here silently attributed GPT answers to Claude in the
+      // AI-visibility chart, with no backfill path.
+      .replaceAll("{{AGENT_ENGINE}}", codex ? "chatgpt" : "claude");
+  }
   if (pacing) {
     markdown = markdown.replaceAll("{{PACING_NOTE}}", pacing.note);
   }

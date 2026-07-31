@@ -135,6 +135,48 @@ export async function canMerge(ref?: RepoRef): Promise<boolean> {
   return Boolean(await tokenForRef(ref));
 }
 
+// Repo Actions VARIABLES (not secrets): readable by workflows as vars.*, which
+// is what makes one usable by seo-tool-validate - the one workflow that must
+// never hold the project's MCP key and so cannot ask the backend which agent
+// to run. The backend writes SEO_AGENT here on every agent switch and install,
+// so that workflow agrees with the dashboard by reading a variable instead of
+// inferring from which secrets exist - the inference breaks when a switch
+// leaves the old agent's secret behind (a Claude->Codex switch would validate
+// with the lapsed Claude token and strand every tool PR unmerged).
+//
+// Best-effort by design: no repo, no token, or a GitHub hiccup must never fail
+// the switch itself - the workflow's inference fallback still runs, exactly as
+// it does for repos whose backend predates this variable.
+export async function setRepoActionsVariable(
+  ref: RepoRef,
+  name: string,
+  value: string,
+): Promise<boolean> {
+  const repo = refRepo(ref);
+  if (!repo) return false;
+  try {
+    const h = await headers(ref);
+    if (!h.Authorization) return false;
+    const patch = await fetch(`${API}/repos/${repo}/actions/variables/${name}`, {
+      method: "PATCH",
+      headers: { ...h, "Content-Type": "application/json" },
+      body: JSON.stringify({ name, value }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (patch.ok) return true;
+    if (patch.status !== 404) return false;
+    const post = await fetch(`${API}/repos/${repo}/actions/variables`, {
+      method: "POST",
+      headers: { ...h, "Content-Type": "application/json" },
+      body: JSON.stringify({ name, value }),
+      signal: AbortSignal.timeout(10000),
+    });
+    return post.ok;
+  } catch {
+    return false;
+  }
+}
+
 export type SeoPr = {
   number: number;
   title: string;

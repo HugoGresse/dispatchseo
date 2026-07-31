@@ -130,9 +130,12 @@ a timer to check for itself. It already knows whether anything is approved,
 whether a PR is still open and whether today's guide is built, so it can
 answer all of that without starting a GitHub runner - and GitHub charges
 your account a full minute for every run that starts, even one that exits
-immediately. A Claude usage-limit hit is still a quiet deferral rather than
-a lost day: the job simply stays due and gets woken again a few hours
-later.
+immediately. An agent usage limit is still a quiet deferral rather than a
+lost day - a Claude subscription limit, or a transient OpenAI rate limit on
+Codex - the job simply stays due and gets woken again a few hours later. A
+Codex account that genuinely can't run builds (out of credit, spend cap) is
+the opposite on purpose: that's a loud failure naming the billing fix,
+because retrying can't help it.
 
 <Meta>
 <MetaItem label="Runs">Event-driven - the moment any check reports, plus an hourly backstop sweep.</MetaItem>
@@ -197,12 +200,15 @@ that auto-merge requires.
 <Meta>
 <MetaItem label="Runs">Daily at 04:18 UTC, ahead of the day's build.</MetaItem>
 <MetaItem label="Needs">Nothing you have to enable.</MetaItem>
-<MetaItem label="If it fails">Reports two job names: `seo-token-check` (a dead Claude token) and `seo-pipeline-version` (an outdated pipeline pack - shown as an update notice, not a failure).</MetaItem>
+<MetaItem label="If it fails">Reports two job names: `seo-token-check` (a dead agent credential) and `seo-pipeline-version` (an outdated pipeline pack - shown as an update notice, not a failure).</MetaItem>
 </Meta>
 
-**SEO health check** (`seo-token-check.yml`) proves your Claude token still
-works with one minimal model call, before the day's build attempts depend
-on it, and checks whether your installed pipeline is a version behind.
+**SEO health check** (`seo-token-check.yml`) proves your agent credential
+still works before the day's build attempts depend on it - one minimal
+model call on Claude Code, or a direct API probe on Codex (cheaper and more
+precise there: OpenAI's own error code says whether a key is throttled,
+broke, or revoked) - and checks whether your installed pipeline is a
+version behind.
 Because it runs every day without fail, its own silence over time is a
 useful signal too - see the pipeline heartbeat note below.
 
@@ -276,7 +282,7 @@ hand; it just no longer runs behind your back.
 
 <Meta>
 <MetaItem label="Runs">Polls `/api/builder/jobs` every `BUILDER_POLL_SECONDS` (default 600s / 10 minutes) and executes whatever comes back.</MetaItem>
-<MetaItem label="Needs">A Claude Code OAuth token (dashboard "Turn on automatic builds" step, or `CLAUDE_CODE_OAUTH_TOKEN` in `.env`) - without one it idles and says exactly what it's waiting for.</MetaItem>
+<MetaItem label="Needs">Your project's agent credential - a Claude Code OAuth token or an OpenAI key (the credential box on Settings, or `CLAUDE_CODE_OAUTH_TOKEN` / `OPENAI_API_KEY` in `.env`) - without one it idles and says exactly what it's waiting for.</MetaItem>
 <MetaItem label="If it fails">Each job reports under `builder-<job>--<slug>`, same rails as everything above.</MetaItem>
 </Meta>
 
@@ -284,7 +290,8 @@ The **builder** container is the in-stack replacement for the four
 schedule-driven workflows above (research, build-guide, build-tool,
 geo-scan) - the scheduling logic lives entirely on the backend, so cadence
 fixes ship as ordinary backend deploys, never as "rebuild your builder
-image." It runs each job with headless Claude Code inside a clone of your
+image." It runs each job with your project's own agent - headless Claude
+Code or Codex, taken per job off its poll feed - inside a clone of your
 site's repo: research and geo-scan roughly every 6.5 days, build-guide and
 build-tool roughly daily (20-hour windows, so a run that fired a bit early
 yesterday is still due today). If the builder claims a job and then dies

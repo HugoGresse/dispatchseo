@@ -370,7 +370,7 @@ export function CloudOnboardingWizard(props: {
                 onClick={() => setScreen("c2")}
                 className="cursor-pointer rounded-lg bg-violet-500 px-4 py-2 text-sm font-semibold text-neutral-950 transition-colors hover:bg-violet-400"
               >
-                Back to the Claude Code step
+                Back to the {installResult?.agent_name ?? "agent"} step
               </button>
             ) : null}
             <button

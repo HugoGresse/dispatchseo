@@ -174,7 +174,18 @@ run_job() { # run_job <base64 job json>
   # describe.
   agent=$(echo "$j" | jq -r '.agent // "claude"')
   agent_token=$(echo "$j" | jq -r '.agent_token // empty')
-  [ -n "$agent_token" ] || agent_token="$RESOLVED_CLAUDE_TOKEN"
+  # Claude-only fallback, agent-gated on purpose: the feed never emits a
+  # tokenless job today (jobs/route.ts returns early), so this is defence in
+  # depth for older backends - which are all-Claude by definition. Without the
+  # gate, a future tokenless codex job would silently POST a Claude OAuth
+  # token to api.openai.com.
+  if [ -z "$agent_token" ] && [ "$agent" = "claude" ]; then
+    agent_token="$RESOLVED_CLAUDE_TOKEN"
+  fi
+  if [ -z "$agent_token" ]; then
+    report "$key" fail "the feed handed out a $agent job with no credential - paste the $agent key on the dashboard's Settings page"
+    return
+  fi
 
   log "job $key starting (repo $repo, agent $agent)"
   dir="/data/repos/$slug"
@@ -200,12 +211,26 @@ run_job() { # run_job <base64 job json>
       # There is nobody in a container to approve one, and it is an approval
       # rather than a permission, so no sandbox setting substitutes for it.
       echo 'default_tools_approval_mode = "approve"'
+      # Codex ships with web search off; the playbooks assume it exists
+      # (geo-scan REQUIRES real searches and forbids answering from memory).
+      # Claude has WebSearch built in - this line is the parity.
+      echo ''
+      echo '[tools]'
+      echo 'web_search = true'
       if [ -n "$DATAFORSEO_LOGIN" ]; then
+        # LITERAL values, expanded and TOML-escaped at write time: Codex's
+        # TOML `env` map does no ${VAR} expansion (unlike Claude's JSON
+        # config, which is where this pattern was copied from), so the old
+        # '${DATAFORSEO_LOGIN}' string authenticated as itself and every
+        # keyword call 401'd. The file now holds real creds, so it is
+        # deleted right after the run alongside auth.json.
+        dfl=$(printf '%s' "$DATAFORSEO_LOGIN" | sed 's/\\/\\\\/g; s/"/\\"/g')
+        dfp=$(printf '%s' "$DATAFORSEO_PASSWORD" | sed 's/\\/\\\\/g; s/"/\\"/g')
         echo ''
         echo '[mcp_servers.dataforseo]'
         echo 'command = "npx"'
         echo 'args = ["-y", "dataforseo-mcp-server@latest"]'
-        echo 'env = { DATAFORSEO_USERNAME = "${DATAFORSEO_LOGIN}", DATAFORSEO_PASSWORD = "${DATAFORSEO_PASSWORD}", ENABLED_MODULES = "SERP,DATAFORSEO_LABS,BACKLINKS" }'
+        echo "env = { DATAFORSEO_USERNAME = \"$dfl\", DATAFORSEO_PASSWORD = \"$dfp\", ENABLED_MODULES = \"SERP,DATAFORSEO_LABS,BACKLINKS\" }"
         echo 'default_tools_approval_mode = "approve"'
       fi
     } > "$cfg"
@@ -291,8 +316,11 @@ RULEEOF
           --model "${CODEX_MODEL:-gpt-5}" \
           -o "$out.msg" > "$out" 2>"$out.err" )
     rc=$?
-    # Before any classification branch, all of which can `return`.
-    rm -f "$codex_home/auth.json"
+    # Before any classification branch, all of which can `return`. The config
+    # goes with the key: since the DataForSEO fix it holds real credentials
+    # (Codex's TOML env is literal, so they cannot ride in as env-var names),
+    # and it is regenerated from the feed on every job anyway.
+    rm -f "$codex_home/auth.json" "$cfg"
     msg=$(tail -c 400 "$out.msg" 2>/dev/null)
     [ -n "$msg" ] || msg=$(tail -c 400 "$out.err" 2>/dev/null)
   else
@@ -328,8 +356,16 @@ RULEEOF
         # is the secondary guard, and deliberately cannot rescue a run on its
         # own: "?" means gh could not answer, not that a PR appeared.
         if [ "$head_now" = "$head_before" ] && [ "$prs_now" = "$prs_before" ]; then
-          log "job $key produced nothing - failing"
-          report "$key" fail "the $agent run finished without building anything: no commit, no new PR, and a suggestion was waiting. Its own last words: $(echo "$msg" | tr '\n' ' ' | tail -c 220)"
+          # DEFERRED, not failed - aligned with the GitHub runner's identical
+          # check on 2026-07-31, and for its reason: a clean no-PR exit is
+          # also what the thin-content and sameness gates produce when they
+          # correctly reject an idea, and emailing the owner a red alert for
+          # correct behaviour teaches them to ignore the alerts. Deferred
+          # keeps the job due (3h claim grace, not the 20h cadence), the
+          # stuck-build sweep reverts the in_progress row, and chronic
+          # nothing-runs go stale and alarm through the deferral rails.
+          log "job $key produced nothing - deferring"
+          report "$key" deferred "the $agent run finished without building anything: no commit, no new PR, and a suggestion was waiting. The job stays due and is retried. Its own last words: $(echo "$msg" | tr '\n' ' ' | tail -c 220)"
           return
         fi
         ;;

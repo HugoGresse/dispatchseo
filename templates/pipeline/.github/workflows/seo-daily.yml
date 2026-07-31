@@ -282,6 +282,9 @@ jobs:
       #    posture usable at all.
       - name: Write Codex's MCP config
         if: steps.guard.outputs.open == '0' && steps.agent.outputs.agent == 'codex'
+        env:
+          DATAFORSEO_LOGIN: ${{ secrets.DATAFORSEO_LOGIN }}
+          DATAFORSEO_PASSWORD: ${{ secrets.DATAFORSEO_PASSWORD }}
         run: |
           mkdir -p "$RUNNER_TEMP/codex-home"
           cp .github/mcp-codex.toml "$RUNNER_TEMP/codex-home/config.toml"
@@ -290,6 +293,24 @@ jobs:
           [sandbox_workspace_write]
           network_access = true
           TOML
+          # Render the DataForSEO credential tokens. Codex's TOML `env` map is
+          # LITERAL - it does not expand ${VAR} the way Claude expands its JSON
+          # config - so left alone the dataforseo server would authenticate as
+          # the literal string "${DATAFORSEO_LOGIN}" and every keyword call
+          # would 401 mid-build. python3 rather than sed so no credential
+          # character can break the substitution; values are TOML-escaped. A
+          # truncated config (free-mode project, no dataforseo section) makes
+          # this a no-op.
+          python3 - "$RUNNER_TEMP/codex-home/config.toml" <<'PY'
+          import os, sys
+          path = sys.argv[1]
+          text = open(path).read()
+          for token, var in (("${DATAFORSEO_LOGIN}", "DATAFORSEO_LOGIN"),
+                             ("${DATAFORSEO_PASSWORD}", "DATAFORSEO_PASSWORD")):
+              val = os.environ.get(var, "").replace("\\", "\\\\").replace('"', '\\"')
+              text = text.replace(token, val)
+          open(path, "w").write(text)
+          PY
           echo "Codex home prepared. Servers configured:"
           grep -E '^\[mcp_servers\.' "$RUNNER_TEMP/codex-home/config.toml"
 
@@ -344,6 +365,16 @@ jobs:
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          # Same rule as the Claude twin's allowed_bots above: cloud fires this
+          # as the DispatchSEO GitHub App (a Bot actor) and scheduled runs are
+          # bot-actored too, because the App authored the workflow commits.
+          # codex-action's actor gate rejects EVERY bot by default (a bot 404s
+          # the collaborator-permission lookup), so without this line each
+          # unattended Codex run dies before Codex is even installed - while a
+          # manual workflow_dispatch passes, which is what hides the failure.
+          # Every trigger that can reach this step already required repo write
+          # access, so allowing all actors adds nothing an attacker can use.
+          allow-users: "*"
           model: ${{ vars.SEO_CODEX_MODEL || 'gpt-5' }}
           codex-home: ${{ runner.temp }}/codex-home
           sandbox: workspace-write
@@ -436,6 +467,13 @@ jobs:
           # hours.
           defer() {
             echo "::notice::$1"
+            # Marks the outcome as already-reported. The defer exits 0, so
+            # without this flag the report step two steps down sees every
+            # outcome green and posts ok=1 seconds after this deferred row -
+            # and the LATEST row is what the dashboard's due-ness math reads,
+            # so the ok would reset the full cadence window and suppress the
+            # very retry this deferral exists to preserve.
+            echo "reported=1" >> "$GITHUB_OUTPUT"
             curl -sG --max-time 30 -H "Authorization: Bearer $SEO_MCP_API_KEY" \
               --data-urlencode "job=seo-daily" --data-urlencode "deferred=$1" \
               "{{BACKEND_URL}}/api/cron/deploy-check" || true
@@ -535,9 +573,11 @@ jobs:
       # Classify deliberately leaves unreported.
       - name: Report outcome to the dashboard
         # Owns reporting ONLY for the plain-success path: the classify step
-        # already reports the usage-limit deferral (ok) and real failures
-        # (fail) itself, so both are excluded here to avoid double rows.
-        if: always() && steps.classify.outcome != 'failure' && steps.claude.outcome != 'failure' && steps.codex.outcome != 'failure'
+        # already reports real failures (its own step fails, excluded by
+        # outcome) and deferrals (which exit 0 - the reported flag is the only
+        # trace, and without checking it this step would overwrite the
+        # deferred row with ok=1 and silently cost the day).
+        if: always() && steps.classify.outputs.reported != '1' && steps.classify.outcome != 'failure' && steps.claude.outcome != 'failure' && steps.codex.outcome != 'failure'
         env:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

@@ -21,6 +21,11 @@ import { DISCORD_URL, DiscordMark } from "@/components/discord-mark";
 import { PixelDispatcher } from "@/components/pixel-dispatcher";
 
 export const dynamic = "force-dynamic";
+// The c2 credential step live-verifies an OpenAI key against api.openai.com
+// with a 20s probe timeout; the platform's default action budget is what a
+// slow provider response would otherwise blow through. Settings sets the
+// same limit for the same reason.
+export const maxDuration = 60;
 
 // The add-a-site wizard: site -> Search Console -> keyword data source ->
 // publish mode -> one-tap merge -> timeline -> live finale. /new redirects

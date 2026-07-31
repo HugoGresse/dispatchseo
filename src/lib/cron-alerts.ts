@@ -528,6 +528,16 @@ export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]>
     if (c) projectSince = new Date(c).getTime();
   }
   const latest = new Map<string, (typeof data)[number]>();
+  // The staleness clock's anchors, per job. A claimed/deferred row means
+  // "handed out (or ran and produced nothing), not finished" - so when the
+  // LATEST row is one of those, staleness must run from the last REAL outcome
+  // instead. Without this a builder deferring every ~3 hours refreshed
+  // created_at forever: "goes stale and alarms if deferrals never stop" was
+  // documented on the deferred path but implemented nowhere, and a chronically
+  // rate-limited Codex account deferred quietly for weeks behind a green
+  // dashboard. oldestClaim covers the never-completed-even-once case.
+  const lastRealAt = new Map<string, string>();
+  const oldestClaimAt = new Map<string, string>();
   for (const row of data) {
     const owner = jobProjectSlug(row.job as string);
     if (
@@ -537,7 +547,13 @@ export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]>
     ) {
       continue;
     }
-    if (!latest.has(row.job as string)) latest.set(row.job as string, row);
+    const job = row.job as string;
+    if (!latest.has(job)) latest.set(job, row);
+    if (row.claimed_only) {
+      oldestClaimAt.set(job, row.created_at as string); // desc order: last write wins = oldest
+    } else if (!lastRealAt.has(job)) {
+      lastRealAt.set(job, row.created_at as string);
+    }
   }
   const health = [...latest.values()]
     .filter((row) => !RETIRED_JOBS.has(baseJobName(row.job as string)))
@@ -578,16 +594,29 @@ export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]>
     .map((row) => {
       const job = row.job as string;
       const errors = (row.errors as string[]) ?? [];
-      const ageHours = staleAgeHours(new Date(row.created_at as string).getTime());
+      const claimed = Boolean(row.claimed_only);
+      // Claimed latest row -> clock from the last real outcome (or the oldest
+      // claim in the window when nothing real ever landed); real latest row ->
+      // exactly the old behavior. And a job stuck claimed/deferred gets a
+      // 36h backstop even without a STALE_HOURS entry - jobs like the tool
+      // builder legitimately go quiet for weeks when nothing is approved, so
+      // they cannot carry a blanket schedule, but "work was handed out and
+      // never once finished for a day and a half" is overdue for any of them.
+      const clockFrom = claimed
+        ? (lastRealAt.get(job) ?? oldestClaimAt.get(job) ?? (row.created_at as string))
+        : (row.created_at as string);
+      const ageHours = staleAgeHours(new Date(clockFrom).getTime());
+      const staleLimit = STALE_HOURS[baseJobName(job)] ?? (claimed ? 36 : Infinity);
       return {
         job,
         ok: Boolean(row.ok),
-        // Unlisted jobs run per push/dispatch - no schedule, never stale.
-        stale: ageHours > (STALE_HOURS[baseJobName(job)] ?? Infinity),
+        // Unlisted jobs run per push/dispatch - no schedule, never stale
+        // (unless stuck claimed, per above).
+        stale: ageHours > staleLimit,
         last_run_at: row.created_at as string,
         errors,
         update_available: !row.ok && isPipelineUpdateNotice(job, errors),
-        claimed_only: Boolean(row.claimed_only),
+        claimed_only: claimed,
       };
     });
   // Independent of each other - both only read the reported-job set - so they

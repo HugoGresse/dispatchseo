@@ -134,14 +134,36 @@ docker compose down -v && sh start.sh
 
 **Fixes:**
 
-1. **No Claude token.** The builder needs `CLAUDE_CODE_OAUTH_TOKEN` in `.env`.
-   Generate one with `claude setup-token`.
-2. **The token got line-wrapped on paste.** This one is nasty because it looks
-   fine. Terminals wrap long tokens, and copying can bring a real newline with
-   it, which silently invalidates the value. Re-copy it in one piece and check
+1. **No agent credential.** The builder needs your project's agent credential -
+   `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`) for Claude Code
+   projects, `OPENAI_API_KEY` (from platform.openai.com/api-keys) for Codex
+   projects. Easiest is pasting it in the credential box on Settings, which
+   verifies it before storing; `.env` works too.
+2. **The credential got line-wrapped on paste.** This one is nasty because it
+   looks fine. Terminals wrap long values, and copying can bring a real newline
+   with it, which silently invalidates them. Re-copy it in one piece and check
    there's no line break in `.env`.
 3. **Setup isn't finished.** A project whose wizard never completed is skipped
    on purpose. The Home page's setup cards say what's missing.
+4. **Codex only - the account can't run builds.** A real key on an account
+   with no credit fails every build; the dashboard banner names it when this
+   happens. Add credit at platform.openai.com/settings/organization/billing.
+   A model 404 is the same family: builds default to `gpt-5`, and some
+   accounts can't serve it - set `CODEX_MODEL=` in `.env` (or the
+   `SEO_CODEX_MODEL` repo variable on GitHub-Actions installs).
+</Symptom>
+
+<Symptom error="user cancelled MCP tool call (Codex)">
+**What it means.** Codex asks for per-call approval on MCP tools by default,
+and on a scheduled run there is nobody to approve - so every call comes back
+"cancelled". It's an approval setting, not a sandbox or permission problem, so
+no amount of sandbox widening fixes it.
+
+**Fix.** The config entry needs `default_tools_approval_mode = "approve"` on
+each MCP server. The shipped `.github/mcp-codex.toml` and the builder
+container both set it already - this bites when a hand-written
+`~/.codex/config.toml` entry is missing the line. See
+[Use Codex instead](/docs/install-codex).
 </Symptom>
 
 <Symptom error="The queue is empty and stays empty">

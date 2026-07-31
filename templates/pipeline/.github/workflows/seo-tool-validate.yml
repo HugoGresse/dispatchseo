@@ -112,19 +112,29 @@ jobs:
       # secret is only visible to the step that names it, so the leak would not
       # be direct - but the invariant is worth more than the consistency.
       #
-      # Inferring from secret presence is sound because setup.sh puts exactly
-      # one agent's credential on a repo. If BOTH are present - someone switched
-      # agents and left the old secret behind - this tie-breaks to Claude and
-      # can disagree with the dashboard for one run. That is a cosmetic mismatch
-      # on a validation job, not a wrong build; the fix is to delete the stale
-      # secret.
+      # The SEO_AGENT repo VARIABLE is the primary answer. Variables (unlike
+      # secrets) are readable without holding anything sensitive, and the
+      # backend best-effort writes this one on every agent switch and install,
+      # so this workflow can agree with the dashboard without asking it.
+      # Inference from secret presence remains the fallback for repos whose
+      # backend predates the variable - but on its own it was NOT just
+      # cosmetic: switching Claude -> Codex leaves the old Claude secret
+      # behind (the switch is deliberately a single column write), the
+      # tie-break below then picks Claude, and if the owner switched because
+      # the Claude subscription lapsed, validation goes red, the
+      # tool-validated label never lands, and every tool PR on the project
+      # strands unmerged.
       - name: Resolve the coding agent
         id: agent
         env:
           CLAUDE_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AGENT_VAR: ${{ vars.SEO_AGENT }}
         run: |
-          if [ -n "$OPENAI_API_KEY" ] && [ -z "$CLAUDE_TOKEN" ]; then agent=codex; else agent=claude; fi
+          case "$AGENT_VAR" in
+            claude|codex) agent="$AGENT_VAR" ;;
+            *) if [ -n "$OPENAI_API_KEY" ] && [ -z "$CLAUDE_TOKEN" ]; then agent=codex; else agent=claude; fi ;;
+          esac
           case "$agent" in
             claude)
               if [ -z "$CLAUDE_TOKEN" ]; then
@@ -290,6 +300,15 @@ jobs:
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          # Same rule as the Claude twin's allowed_bots above: this workflow is
+          # reached by a pull_request opened by github-actions[bot], or by
+          # seo-auto-merge's GITHUB_TOKEN dispatch - a bot actor either way.
+          # codex-action's actor gate rejects EVERY bot by default (a bot 404s
+          # the collaborator-permission lookup), so without this line Codex
+          # tool validation never runs at all and tool PRs strand unvalidated.
+          # Every trigger that can reach this step already required repo write
+          # access, so allowing all actors adds nothing an attacker can use.
+          allow-users: "*"
           model: ${{ vars.SEO_CODEX_MODEL || 'gpt-5' }}
           codex-home: ${{ runner.temp }}/codex-home
           sandbox: workspace-write

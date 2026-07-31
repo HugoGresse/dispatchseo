@@ -272,9 +272,31 @@ export async function uninstallPipelineFromRepo(
         `The SEO_MCP_API_KEY secret could not be removed (HTTP ${secret.status}). It no longer grants access to anything.`,
       );
     }
+    // The agent credentials too - "take back everything the install put into
+    // the customer's repo" includes what the credential step stored, and the
+    // asymmetry between the two matters: a leftover Claude OAuth token is
+    // subscription-scoped and revocable from claude.ai, while a leftover
+    // OPENAI_API_KEY is a live METERED credential sitting in a repo the owner
+    // has been told is clean - the finding most likely to become somebody's
+    // surprise bill. 404 is the normal case for whichever agent this project
+    // never used.
+    for (const name of ["OPENAI_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"]) {
+      const res = await gh(token, "DELETE", `/repos/${repo}/actions/secrets/${name}`);
+      if (res.status !== 204 && res.status !== 404) {
+        result.warnings.push(
+          `The ${name} secret could not be removed (HTTP ${res.status}). It is your agent ` +
+            `credential, not ours - if you're done with it, revoke it at the provider too.`,
+        );
+      }
+    }
   } else {
     result.warnings.push(
       "The SEO_MCP_API_KEY secret was left in place, since removing it while a workflow might still run would only add failed runs.",
+    );
+    result.warnings.push(
+      "Your agent credential secrets (CLAUDE_CODE_OAUTH_TOKEN / OPENAI_API_KEY) were also left " +
+        "in place for the same reason - delete them once the workflows are off, and note the " +
+        "OpenAI key is a live billing credential until you do.",
     );
   }
 

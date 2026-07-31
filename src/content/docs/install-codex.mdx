@@ -170,32 +170,41 @@ works in every shell - Codex's only header-free alternative takes the *name* of
 an environment variable, which then has to exist in every terminal you ever
 launch Codex from. If you'd rather the key travelled as a header, that works
 too; it just can't be done from `codex mcp add`, so edit
-`~/.codex/config.toml` by hand:
+`~/.codex/config.toml` by hand.
+
+**Codex asks before every tool call.** That's its normal behaviour and it's a
+reasonable default, but it gets old fast when a research run makes twenty
+calls. Adding `default_tools_approval_mode = "approve"` under the server's
+entry stops the prompts for this server only - every other server, and every
+shell command Codex wants to run, still asks. There's no flag for it on
+`codex mcp add`; the line has to be added by hand.
+
+Both edits land on the same entry, so here it is once, complete - the
+header form of the key AND the approval line (if you keep the `?key=` URL
+the connect command wrote, just drop the `http_headers` line and add the
+approval one; **don't paste this as a second `[mcp_servers...]` block next
+to an existing one** - TOML rejects a duplicate table and Codex won't
+start):
 
 ```toml
 [mcp_servers.dispatchseo-yoursite]
 url = "https://dispatchseo.com/api/mcp"
 http_headers = { Authorization = "Bearer YOUR-PROJECT-KEY" }
-```
-
-Both forms hit the same gate and see exactly the same data. Either way the key
-ends up on your disk in Codex's config, the same as Claude Code stores its own.
-
-**Codex asks before every tool call.** That's its normal behaviour and it's a
-reasonable default, but it gets old fast when a research run makes twenty
-calls. To stop the prompts for this server only, open your Codex config
-(`~/.codex/config.toml`) and add one line under the entry the connect command
-created:
-
-```toml
-[mcp_servers.dispatchseo-yoursite]
-url = "https://dispatchseo.com/api/mcp?key=YOUR-PROJECT-KEY"
 default_tools_approval_mode = "approve"
 ```
 
-That auto-approves DispatchSEO's tools and nothing else - every other server,
-and every shell command Codex wants to run, still asks. There's no flag for it
-on `codex mcp add`; the line has to be added by hand.
+Both key forms hit the same gate and see exactly the same data. Either way
+the key ends up on your disk in Codex's config, the same as Claude Code
+stores its own.
+
+**Which model builds run on.** Scheduled Codex builds default to `gpt-5`.
+Model access is per-account, not universal - some keys 404 on models they
+can happily list - so if your builds die at model resolution, set the
+`SEO_CODEX_MODEL` variable in your repo (Settings → Secrets and variables →
+Actions → Variables, or `gh variable set SEO_CODEX_MODEL --repo you/site`)
+to a model your account can serve. On a Docker install the same knob is
+`CODEX_MODEL=` in the stack's `.env`. Your interactive Codex sessions are
+unaffected either way - this only picks the model for unattended builds.
 
 **Codex won't pick up a skill on its own.** Name the tool in your prompt.
 This works:

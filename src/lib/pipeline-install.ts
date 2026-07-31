@@ -221,6 +221,16 @@ export async function installPipelineToRepo(
   // agent: hardcoding Claude's name here meant every Codex project failed this
   // check, never dispatched setup, and was told its Claude token was missing.
   const agentTokenPresent = await hasRepoSecret(project, agent.credential.repoSecretName);
+
+  // Stamp the agent into the repo's SEO_AGENT Actions variable, best-effort.
+  // seo-tool-validate reads vars.SEO_AGENT because it deliberately holds no
+  // MCP key and cannot ask the backend; without the stamp it infers from
+  // which secrets exist, which goes wrong the day an owner switches agents
+  // and the old secret is still lying around. setProjectAgent re-stamps on
+  // every switch; this is the fresh-install half of the same contract.
+  const { setRepoActionsVariable } = await import("./github");
+  await setRepoActionsVariable(project, "SEO_AGENT", agent.id);
+
   let setupDispatched = false;
   if (opts.dispatchSetup !== false && agentTokenPresent && mode !== "pr") {
     // Don't stack a second setup on top of one already running. The wizard

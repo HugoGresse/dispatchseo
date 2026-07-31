@@ -10,7 +10,8 @@
 import { db } from "@/lib/db";
 import { agentById, isSupportedAgent, type AgentDefinition } from "@/lib/agents";
 import { hasRepoSecret } from "@/lib/github-app-secrets";
-import { builderAgentToken } from "@/lib/github";
+import { builderAgentToken, setRepoActionsVariable } from "@/lib/github";
+import { buildsActive } from "@/lib/builder-status";
 import type { Project } from "@/lib/projects";
 
 export type AgentSwitchResult = {
@@ -66,6 +67,14 @@ export async function setProjectAgent(
     }
     throw new Error(error.message);
   }
+
+  // Mirror the choice into the repo's SEO_AGENT Actions variable, so
+  // seo-tool-validate - which deliberately holds no MCP key and cannot ask the
+  // backend - reads the same answer the dashboard shows instead of inferring
+  // it from which secrets happen to exist. Best-effort: a repo-less project,
+  // a missing token or a GitHub hiccup must never fail the switch, because
+  // the workflow's inference fallback still covers those repos.
+  await setRepoActionsVariable(project, "SEO_AGENT", agent.id);
 
   const todo = await agentTodo(project, agent);
   return { agent, todo, needsCredential: todo != null };
@@ -127,7 +136,23 @@ export async function verifyAgentCredential(
         error: `That key is real, but the account can't run anything right now (OpenAI said: ${code || "quota exceeded"}). Add credit at platform.openai.com/settings/organization/billing, then paste it again.`,
       };
     }
-    return { error: `OpenAI couldn't verify that key (HTTP ${res.status}). Try again in a moment.` };
+    if (res.status === 404) {
+      // Model access is per-account: a restricted project key whose allowlist
+      // excludes the probe model 404s here forever, and "try again" would be
+      // exactly wrong. Name the real fix.
+      return {
+        error:
+          "That key is real, but its account or project can't use the model we verify with " +
+          "(gpt-5-mini). Check the project's model allowlist at platform.openai.com/settings, " +
+          "or paste a key from a project without model restrictions.",
+      };
+    }
+    return {
+      error:
+        `OpenAI couldn't verify that key (HTTP ${res.status}). A 5xx is usually transient - try ` +
+        `again in a moment. Anything else is worth checking on the account itself at ` +
+        `platform.openai.com/settings/organization/billing.`,
+    };
   } catch {
     return {
       error: "Couldn't reach OpenAI to verify that key. Check your connection and try again.",
@@ -165,11 +190,29 @@ async function agentTodo(project: Project, agent: AgentDefinition): Promise<stri
         `Settings and it gets verified before it is saved.`
       );
     }
+    // No GitHub App. WHICH runner builds this project decides where the
+    // credential lives, and github_installation_id alone cannot answer that:
+    // a setup.sh install has a repo with live Actions workflows and no App.
+    // The in-stack builder heartbeats when it is the runner - so an alive
+    // builder means "instance credential", and a repo-with-pipeline without
+    // one means "repo secret", where nothing server-side can verify presence
+    // (secrets are write-only and we hold no App token) and the advice has to
+    // say so honestly instead of guessing.
+    if (project.github_repo && project.pipeline_installed_at && !(await buildsActive())) {
+      return (
+        `Your builders now run ${agent.displayName}, and they run in GitHub Actions on ` +
+        `${project.github_repo} - so the ${agent.credential.repoSecretName} repo secret is what ` +
+        `the next scheduled build will read. ${agent.credential.howToMint} Then store it with: ` +
+        `gh secret set ${agent.credential.repoSecretName} --repo ${project.github_repo} ` +
+        `(paste the key alone, no whitespace). If you already have, you're done - repo secrets ` +
+        `are write-only, so this dashboard can't check for you.`
+      );
+    }
     if (await builderAgentToken(agent.id)) return null;
     return (
       `Your builders now run ${agent.displayName}, but this instance has no ${agent.displayName} ` +
       `credential yet - builds will wait until it does. ${agent.credential.howToMint} ` +
-      `Then paste it on Home's "Turn on automatic builds" card, or set ` +
+      `Then paste it in the "${agent.displayName} credential" box on Settings, or set ` +
       `${agent.credential.envVar} in your .env.`
     );
   } catch {

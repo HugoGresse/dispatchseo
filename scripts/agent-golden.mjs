@@ -128,6 +128,32 @@ const snapshot = {
   // but the URL shape and the header spelling are still things a client will
   // reject character-for-character.
   generic: mcp.genericMcpConfig(SLUG, ORIGIN, TOKEN),
+  // The REGISTRY WIRING, not just the string builders above. Every user-facing
+  // surface (the wizards, Settings, pipeline-install, agent-settings) reads
+  // the registry - so a swap the string builders can't see, like pointing
+  // codex.credential.repoSecretName at Claude's, would silently store an
+  // OpenAI key in CLAUDE_CODE_OAUTH_TOKEN and pass every other gate in the
+  // repo. Snapshotting the credential metadata and capability flags makes
+  // that a visible diff.
+  registry: Object.fromEntries(
+    agents.availableAgents().map((a) => [
+      a.id,
+      {
+        displayName: a.displayName,
+        credential: {
+          repoSecretName: a.credential.repoSecretName,
+          envVar: a.credential.envVar,
+          instanceSettingsColumn: a.credential.instanceSettingsColumn,
+          placeholder: a.credential.placeholder,
+          mintUrl: a.credential.mintUrl,
+        },
+        capabilities: a.capabilities,
+        connectServerName: a.connect.serverName(SLUG),
+        connectBash: a.connect.bash(SLUG, ORIGIN, TOKEN),
+        mcpAddBash: a.connect.mcpAddBash(SLUG, ORIGIN, TOKEN),
+      },
+    ]),
+  ),
 };
 
 const rendered = JSON.stringify(snapshot, null, 2) + "\n";

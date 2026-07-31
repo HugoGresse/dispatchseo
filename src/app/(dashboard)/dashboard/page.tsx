@@ -37,6 +37,7 @@ import { getWeeklyProgress } from "@/lib/progress";
 import { JourneyCard } from "@/components/journey-card";
 import { NextUpdate } from "@/components/next-update";
 import { getActiveProject } from "@/lib/active-project";
+import { projectAgent } from "@/lib/agents";
 import { effectiveAutomations, fetchProjectToken } from "@/lib/projects";
 import { credsForProject } from "@/lib/dataforseo";
 import {
@@ -974,15 +975,19 @@ export default async function Home() {
           {needsBuilder ? (
             <SetupStep
               title="Turn on automatic builds"
-              why="This install runs its own builder - your Claude Code inside Docker, building approved ideas on schedule, no public URL needed. It hasn't checked in yet, so nothing builds automatically until this is done. One paste."
+              why={`This install runs its own builder - your coding agent inside Docker, building approved ideas on schedule, no public URL needed. It hasn't checked in yet, so nothing builds automatically until this is done. One paste.`}
               steps={[
-                "On your own computer, run claude setup-token in a terminal and copy the sk-ant-oat... token it prints (it opens a browser login).",
-                "Paste it in the box below - stored encrypted, no files to touch.",
+                // Agent-specific minting lives inside the box below (it names
+                // the exact command or key page per agent) - the card's own
+                // steps stay agent-neutral so the prose can never contradict
+                // the tab the owner actually has selected.
+                "Mint your agent's credential - the box below tells you exactly how for whichever agent you pick.",
+                "Paste it in the box - stored encrypted, no files to touch.",
                 "Within ~10 minutes the builder checks in and this card disappears by itself.",
               ]}
-              closing="Until then everything else still works - research, approvals, rankings - only automatic building waits. Prefer the terminal? Add CLAUDE_CODE_OAUTH_TOKEN to the install folder's .env instead - env always wins."
+              closing="Until then everything else still works - research, approvals, rankings - only automatic building waits. Prefer the terminal? Add CLAUDE_CODE_OAUTH_TOKEN or OPENAI_API_KEY to the install folder's .env instead - env always wins."
             >
-              <BuilderTokenConnect />
+              <BuilderTokenConnect current={projectAgent(project).id} />
             </SetupStep>
           ) : null}
           {needsAlertEmail ? (
