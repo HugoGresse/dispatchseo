@@ -10,7 +10,7 @@ export const INSTALL_STEPS = [
   { title: "Preflight", plain: "Confirms it is standing in YOUR site's repo (not the DispatchSEO backend) with gh access." },
   { title: "Fetch", plain: "Pulls the pipeline pack - GitHub workflows, MCP configs, slash commands - from this backend." },
   { title: "Adapt", plain: "Adjusts the stack-specific spots (package manager, build command, content paths) to your repo." },
-  { title: "Secrets", plain: "Sets the Actions secrets with you - and verifies each value actually works BEFORE storing it (MCP key, Claude Code token, optional DataForSEO)." },
+  { title: "Secrets", plain: "Sets the Actions secrets with you - and verifies each value actually works BEFORE storing it (MCP key, your coding agent's credential, optional DataForSEO)." },
   { title: "Ship", plain: "Opens the install PR, runs the setup workflow so the site facts get written too, and marks the dashboard's install card done." },
   { title: "First runs", plain: "Kicks off the first research run AND the first AI-visibility scan the moment the PR merges - your queue and your AI-visibility baseline both land today, not next week." },
 ];
@@ -34,10 +34,10 @@ and slash commands.
    this instead - never install the shim into a repo the project does not
    point at. **One diagnosis to offer before anything else:** if the owner
    says they JUST connected this repo from the wizard, the near-certain
-   cause is that this Claude Code session started BEFORE their
-   \`claude mcp add\` ran - connections load once, at startup, so the session
+   cause is that this {{AGENT_NAME}} session started BEFORE their
+   \`{{AGENT_CLI}} mcp add\` ran - connections load once, at startup, so the session
    is still holding an older project's key. Tell them to close and reopen
-   Claude Code in this folder and paste the install command again; that is
+   {{AGENT_NAME}} in this folder and paste the install command again; that is
    a restart, not an error (2026-07-23: this exact case cost an owner three
    confused round-trips).
 2. Confirm \`gh auth status\` works and the account can push branches and set
@@ -48,12 +48,7 @@ and slash commands.
    - "I already have your project's MCP key (it is how I am connected) -
      you do nothing for that one."
    - Only on a HOSTED backend (public URL - the local-backend fast path at
-     the top of Part 3 decides): "You will create a Claude Code token when
-     we get to secrets - two commands in your terminal, about a minute, and
-     we will VERIFY it works before it goes anywhere." (The builders run on
-     their subscription.) On a LOCAL backend say instead: "No token step
-     here - your builds run in the builder container, which gets its token
-     in the wizard's automatic-builds step."
+     the top of Part 3 decides): {{AGENT_CREDENTIAL_BRIEF}}
    - Only if this project will wire its OWN DataForSEO account into this repo
      (check \`get_project\`'s \`dataforseo_repo_mcp\` - NOT keyword_source: a
      cloud project can be DataForSEO-backed through the platform's bundled
@@ -183,18 +178,18 @@ conversation.
 
 **Check what already exists first:** \`gh secret list --repo {{REPO}}\`. The
 owner's one-command setup script (\`setup.sh\` from the dashboard) normally
-already set SEO_MCP_API_KEY, CLAUDE_CODE_OAUTH_TOKEN, and (when applicable)
+already set SEO_MCP_API_KEY, {{AGENT_SECRET_NAME}}, and (when applicable)
 the DataForSEO pair - all verified at set time. Skip whatever exists and
-only fill gaps using the steps below; do not re-mint a Claude token that is
+only fill gaps using the steps below; do not re-mint a credential that is
 already stored.
 
 **Local-backend fast path (backend URL is localhost / 127.x / a private
 address):** GitHub-hosted workflows cannot reach this backend, and Part 4
-disables the phone-home schedules accordingly - so GitHub never runs Claude
-for this project. Therefore SKIP step 2 (CLAUDE_CODE_OAUTH_TOKEN - the
-builder container already holds the token from the wizard's automatic-builds
-step) and SKIP step 4 (the trend-scan smoke test - it exercises a workflow
-Part 4 disables two steps later). Steps 1 and 3, the Actions PR permission,
+disables the phone-home schedules accordingly - so GitHub never runs the
+coding agent for this project. Therefore SKIP step 2 ({{AGENT_SECRET_NAME}}
+- the builder container already holds the credential from the wizard's
+automatic-builds step) and SKIP step 4 (the trend-scan smoke test - it
+exercises a workflow Part 4 disables two steps later). Steps 1 and 3, the Actions PR permission,
 and the labels still apply everywhere: the canary and tool-validate
 workflows stay live on every install and depend on them. This fast path
 plus Part 4's builder-first research cuts a local install from ~40 minutes
@@ -205,52 +200,7 @@ to ~10-15.
    are connected); the owner can also read it on the dashboard's pipeline
    card. This key IS the project: every call made with it lands in this
    project's data, which is how one backend serves many sites.
-2. \`CLAUDE_CODE_OAUTH_TOKEN\` - the token that fails in more ways than any
-   other value. Three field-proven traps:
-   - terminals (VS Code's, tmux) copy the line-wrapped token with a REAL
-     newline inside - GitHub then stores a broken token;
-   - the owner copying YOUR suggested commands overwrites the token in
-     their clipboard, so "paste from clipboard" flows save command text;
-   - a plain local test (\`CLAUDE_CODE_OAUTH_TOKEN=... claude -p\`) is a
-     FALSE POSITIVE: when a keychain login exists the CLI silently ignores
-     the env var and answers from the owner's login. Only a no-keychain
-     environment (fake HOME) tests the actual token - that is the same
-     auth path CI uses.
-   So never hand the owner loose commands to juggle. Write this guided
-   script to a temp file and have them run \`bash <path>\` - it prompts at
-   each step, validates the clipboard itself, retries on mistakes, and
-   only stores a token it has genuinely verified:
-
-   \`\`\`bash
-   #!/bin/bash
-   echo "STEP 1: Press Enter; a browser opens - click Approve with your"
-   echo "normal Claude account (the one with your subscription)."
-   read -r
-   claude setup-token
-   echo ""
-   echo "STEP 2: Select the long token above (sk-ant-oat..., two lines is"
-   echo "fine), copy it (Cmd+C), then press Enter here."
-   while true; do
-     read -r
-     TOKEN=$(pbpaste | tr -d '[:space:]')   # Linux: xclip -o instead of pbpaste
-     case "$TOKEN" in
-       sk-ant-oat*) [ \${#TOKEN} -gt 60 ] && break; echo "Too short - copy the WHOLE token, press Enter." ;;
-       *) echo "Clipboard doesn't hold a token - copy JUST the token, press Enter." ;;
-     esac
-   done
-   echo "STEP 3: verifying for real (no login fallback)..."
-   mkdir -p /tmp/claude-fakehome
-   if HOME=/tmp/claude-fakehome CLAUDE_CODE_OAUTH_TOKEN="$TOKEN" claude -p "reply with just: ok" </dev/null; then
-     printf '%s' "$TOKEN" | gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo {{REPO}}
-     echo "DONE - verified and saved."
-   else
-     echo "Token is bad AT THE SOURCE - the browser approved the wrong"
-     echo "account. Log into the subscription account on claude.ai, rerun."
-     exit 1
-   fi
-   \`\`\`
-
-   Never store a token that failed the fake-HOME verification.
+{{AGENT_CREDENTIAL_STEP}}
 3. \`DATAFORSEO_LOGIN\` + \`DATAFORSEO_PASSWORD\` - only if \`get_project\`'s
    \`dataforseo_repo_mcp\` is true (this repo gets its own DataForSEO MCP
    server); skip cleanly otherwise - including a cloud project on the
@@ -272,8 +222,7 @@ to ~10-15.
    (Current packs also self-skip on local backends, but never rely on that
    alone - the repo may hold an older pack.) Then
    **smoke-test the secrets:** dispatch
-   \`gh workflow run seo-trend-scan.yml --repo {{REPO}}\` and watch it. A bad
-   Claude token fails within ~20 seconds with \`authentication_failed\`; a
+   \`gh workflow run seo-trend-scan.yml --repo {{REPO}}\` and watch it. {{AGENT_SMOKE_NOTE}} a
    healthy run takes 3-6 minutes and puts real topics on the Trends radar.
    Do not call the install verified until this run is green.
 
@@ -390,7 +339,7 @@ with step=\`repo_settings\`.
      GitHub-hosted runs cannot phone home to it, so skip every dispatch
      below. But do NOT run research inline either: check
      \`get_cron_health\` - if \`builder_token_configured\` is true (the owner
-     pasted their Claude token on the wizard's automatic-builds step), the
+     pasted their agent credential on the wizard's automatic-builds step), the
      in-stack builder claims the research job on its next poll and runs it
      in the background within ~10 minutes. Use \`builder_token_configured\`,
      NOT \`builder_last_seen_at\`: the heartbeat lags a full poll (up to ~10
@@ -446,7 +395,7 @@ with step=\`repo_settings\`.
    plainly that nothing runs until it merges, and give them the two dispatch
    commands above to fire right after they do. On a LOCAL backend there are no
    dispatch commands to hand over: the in-stack builder runs research on its
-   own once the PR is merged and the Claude token is set - point the owner at
+   own once the PR is merged and the agent credential is set - point the owner at
    the wizard finale's "Turn on automatic builds" step (or \`/seo-research\`
    locally) instead.
 6. Report: the PR URL, every adaptation made, which secrets were set (names
@@ -455,3 +404,127 @@ with step=\`repo_settings\`.
 
 If get_pipeline_pack or get_instructions is unavailable, fail loudly and
 change nothing.`;
+
+// The per-agent halves of Part 3. Which one renders is decided by the
+// PROJECT's agent at get_instructions time - the same run-time resolution the
+// workflows use - because this playbook is fetched by whichever CLI setup.sh
+// launched, and telling a Codex install to mint a Claude token stalls it on a
+// prerequisite that does not apply (or worse, makes the owner buy one).
+export const CLAUDE_CREDENTIAL_STEP = `2. \`CLAUDE_CODE_OAUTH_TOKEN\` - the token that fails in more ways than any
+   other value. Three field-proven traps:
+   - terminals (VS Code's, tmux) copy the line-wrapped token with a REAL
+     newline inside - GitHub then stores a broken token;
+   - the owner copying YOUR suggested commands overwrites the token in
+     their clipboard, so "paste from clipboard" flows save command text;
+   - a plain local test (\`CLAUDE_CODE_OAUTH_TOKEN=... claude -p\`) is a
+     FALSE POSITIVE: when a keychain login exists the CLI silently ignores
+     the env var and answers from the owner's login. Only a no-keychain
+     environment (fake HOME) tests the actual token - that is the same
+     auth path CI uses.
+   So never hand the owner loose commands to juggle. Write this guided
+   script to a temp file and have them run \`bash <path>\` - it prompts at
+   each step, validates the clipboard itself, retries on mistakes, and
+   only stores a token it has genuinely verified:
+
+   \`\`\`bash
+   #!/bin/bash
+   echo "STEP 1: Press Enter; a browser opens - click Approve with your"
+   echo "normal Claude account (the one with your subscription)."
+   read -r
+   claude setup-token
+   echo ""
+   echo "STEP 2: Select the long token above (sk-ant-oat..., two lines is"
+   echo "fine), copy it (Cmd+C), then press Enter here."
+   while true; do
+     read -r
+     TOKEN=$(pbpaste | tr -d '[:space:]')   # Linux: xclip -o instead of pbpaste
+     case "$TOKEN" in
+       sk-ant-oat*) [ \${#TOKEN} -gt 60 ] && break; echo "Too short - copy the WHOLE token, press Enter." ;;
+       *) echo "Clipboard doesn't hold a token - copy JUST the token, press Enter." ;;
+     esac
+   done
+   echo "STEP 3: verifying for real (no login fallback)..."
+   mkdir -p /tmp/claude-fakehome
+   if HOME=/tmp/claude-fakehome CLAUDE_CODE_OAUTH_TOKEN="$TOKEN" claude -p "reply with just: ok" </dev/null; then
+     printf '%s' "$TOKEN" | gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo {{REPO}}
+     echo "DONE - verified and saved."
+   else
+     echo "Token is bad AT THE SOURCE - the browser approved the wrong"
+     echo "account. Log into the subscription account on claude.ai, rerun."
+     exit 1
+   fi
+   \`\`\`
+
+   Never store a token that failed the fake-HOME verification.`;
+
+export const CODEX_CREDENTIAL_STEP = `2. \`OPENAI_API_KEY\` - what the builders bill their runs to. Two
+   field-proven traps:
+   - a key is shown ONCE at creation, so a half-copied key is the most
+     common bad paste - and GitHub secrets are write-only, so a broken one
+     is invisible until a real run dies on it;
+   - a key can be real and still useless: an account with no credit passes
+     every shape check ever written and fails on the first build. Only a
+     live API call proves a key.
+   So never hand the owner loose commands to juggle. Write this guided
+   script to a temp file and have them run \`bash <path>\` - it prompts,
+   validates the clipboard itself, makes one metered verification call
+   (fractions of a cent), and only stores a key it has genuinely proven:
+
+   \`\`\`bash
+   #!/bin/bash
+   echo "STEP 1: Open platform.openai.com/api-keys in a browser and create"
+   echo "a key (a project key is fine - the ACCOUNT needs credit on it)."
+   echo "Copy the key, then press Enter here."
+   while true; do
+     read -r
+     KEY=$(pbpaste | tr -d '[:space:]')   # Linux: xclip -o instead of pbpaste
+     case "$KEY" in
+       sk-ant-*) echo "That's a Claude token, not an OpenAI key - copy the key from platform.openai.com, press Enter." ;;
+       sk-*) [ \${#KEY} -gt 20 ] && break; echo "Too short - copy the WHOLE key, press Enter." ;;
+       *) echo "Clipboard doesn't hold an OpenAI key - copy JUST the key, press Enter." ;;
+     esac
+   done
+   echo "STEP 2: verifying for real (one live API call)..."
+   code=$(curl -s -o /tmp/openai-verify.json -w "%{http_code}" https://api.openai.com/v1/responses \
+     -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+     -d '{"model":"gpt-5-mini","input":"ok","max_output_tokens":16}')
+   err=$(jq -r '.error.code // empty' /tmp/openai-verify.json 2>/dev/null)
+   case "$code:$err" in
+     2*:*|429:rate_limit_exceeded)
+       printf '%s' "$KEY" | gh secret set OPENAI_API_KEY --repo {{REPO}}
+       echo "DONE - verified and saved." ;;
+     429:*|402:*)
+       echo "The key is real but the account can't run builds (OpenAI said:"
+       echo "\${err:-quota exceeded}). Add credit at platform.openai.com/settings"
+       echo "/organization/billing, then rerun this script."
+       exit 1 ;;
+     *)
+       echo "OpenAI rejected the key (HTTP $code, \${err:-no code}) - create a"
+       echo "fresh one at platform.openai.com/api-keys and rerun this script."
+       exit 1 ;;
+   esac
+   \`\`\`
+
+   Never store a key that failed the live verification.`;
+
+export const CLAUDE_CREDENTIAL_BRIEF =
+  '"You will create a Claude Code token when we get to secrets - two ' +
+  'commands in your terminal, about a minute, and we will VERIFY it works ' +
+  'before it goes anywhere." (The builders run on their subscription.) On a ' +
+  'LOCAL backend say instead: "No token step here - your builds run in the ' +
+  'builder container, which gets its token in the wizard\'s automatic-builds ' +
+  'step."';
+
+export const CODEX_CREDENTIAL_BRIEF =
+  '"You will create an OpenAI API key when we get to secrets - one browser ' +
+  'page, about a minute, and we will VERIFY it works with a live call before ' +
+  'it goes anywhere." (Codex builds are metered to their OpenAI account, so ' +
+  'the account needs credit on it.) On a LOCAL backend say instead: "No key ' +
+  'step here - your builds run in the builder container, which gets its key ' +
+  'in the wizard\'s automatic-builds step."';
+
+export const CLAUDE_SMOKE_NOTE =
+  "A bad\n   Claude token fails within ~20 seconds with \\`authentication_failed\\`;";
+
+export const CODEX_SMOKE_NOTE =
+  "A bad\n   OpenAI key fails within ~20 seconds at the resolve-the-agent step,\n   which names the broken secret outright;";

@@ -38,6 +38,13 @@ export type CronJob =
 // no entry here on purpose - see RETIRED_JOBS below.)
 const STALE_HOURS: Record<string, number> = {
   "daily-ranks": 36,
+  // The backend's own SEO scheduler (api/cron/seo-dispatch), every 3h. It is
+  // now the thing that WAKES every connected repo's builders, so its silence is
+  // the highest-leverage failure in the pipeline: no dispatcher, no builds
+  // anywhere, on any project. 10h is ~3x its cadence, the same margin
+  // hourly-gsc gets. The per-project claim rows catch the narrower case of a
+  // dispatch that went out and woke nothing.
+  "seo-dispatch": 10,
   // Named "hourly" but scheduled every 3 HOURS (`7 */3 * * *` in both
   // .github/workflows/hourly-gsc.yml and docker/cron/crontab). At 6h that was
   // only 2x the cadence, and GitHub Actions routinely defers scheduled runs and
@@ -528,6 +535,16 @@ export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]>
     if (c) projectSince = new Date(c).getTime();
   }
   const latest = new Map<string, (typeof data)[number]>();
+  // The staleness clock's anchors, per job. A claimed/deferred row means
+  // "handed out (or ran and produced nothing), not finished" - so when the
+  // LATEST row is one of those, staleness must run from the last REAL outcome
+  // instead. Without this a builder deferring every ~3 hours refreshed
+  // created_at forever: "goes stale and alarms if deferrals never stop" was
+  // documented on the deferred path but implemented nowhere, and a chronically
+  // rate-limited Codex account deferred quietly for weeks behind a green
+  // dashboard. oldestClaim covers the never-completed-even-once case.
+  const lastRealAt = new Map<string, string>();
+  const oldestClaimAt = new Map<string, string>();
   for (const row of data) {
     const owner = jobProjectSlug(row.job as string);
     if (
@@ -537,7 +554,13 @@ export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]>
     ) {
       continue;
     }
-    if (!latest.has(row.job as string)) latest.set(row.job as string, row);
+    const job = row.job as string;
+    if (!latest.has(job)) latest.set(job, row);
+    if (row.claimed_only) {
+      oldestClaimAt.set(job, row.created_at as string); // desc order: last write wins = oldest
+    } else if (!lastRealAt.has(job)) {
+      lastRealAt.set(job, row.created_at as string);
+    }
   }
   const health = [...latest.values()]
     .filter((row) => !RETIRED_JOBS.has(baseJobName(row.job as string)))
@@ -578,16 +601,29 @@ export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]>
     .map((row) => {
       const job = row.job as string;
       const errors = (row.errors as string[]) ?? [];
-      const ageHours = staleAgeHours(new Date(row.created_at as string).getTime());
+      const claimed = Boolean(row.claimed_only);
+      // Claimed latest row -> clock from the last real outcome (or the oldest
+      // claim in the window when nothing real ever landed); real latest row ->
+      // exactly the old behavior. And a job stuck claimed/deferred gets a
+      // 36h backstop even without a STALE_HOURS entry - jobs like the tool
+      // builder legitimately go quiet for weeks when nothing is approved, so
+      // they cannot carry a blanket schedule, but "work was handed out and
+      // never once finished for a day and a half" is overdue for any of them.
+      const clockFrom = claimed
+        ? (lastRealAt.get(job) ?? oldestClaimAt.get(job) ?? (row.created_at as string))
+        : (row.created_at as string);
+      const ageHours = staleAgeHours(new Date(clockFrom).getTime());
+      const staleLimit = STALE_HOURS[baseJobName(job)] ?? (claimed ? 36 : Infinity);
       return {
         job,
         ok: Boolean(row.ok),
-        // Unlisted jobs run per push/dispatch - no schedule, never stale.
-        stale: ageHours > (STALE_HOURS[baseJobName(job)] ?? Infinity),
+        // Unlisted jobs run per push/dispatch - no schedule, never stale
+        // (unless stuck claimed, per above).
+        stale: ageHours > staleLimit,
         last_run_at: row.created_at as string,
         errors,
         update_available: !row.ok && isPipelineUpdateNotice(job, errors),
-        claimed_only: Boolean(row.claimed_only),
+        claimed_only: claimed,
       };
     });
   // Independent of each other - both only read the reported-job set - so they
@@ -597,7 +633,124 @@ export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]>
     pipelineHeartbeatAlerts(projectSlug, reported),
     builderJobHeartbeatAlerts(projectSlug, reported),
   ]);
-  return [...health, ...heartbeat, ...builderHeartbeat];
+  const all = [...health, ...heartbeat, ...builderHeartbeat];
+  return [...all, ...(await githubQuotaAlert(projectSlug, all))];
+}
+
+// The GitHub Actions workflows a connected repo runs on a schedule. Used to
+// recognise "all of this project's automation stopped at once", which is what
+// an exhausted Actions quota looks like from here.
+const GH_SCHEDULED_JOBS: string[] = [
+  "seo-daily",
+  "seo-tools",
+  "seo-geo-scan",
+  "seo-weekly-research",
+  "seo-token-check",
+];
+
+// How many of them must be silent before we name the quota. Two is enough to
+// separate "one workflow is broken" from "nothing is running any more", and
+// low enough to fire before a whole week of publishing is lost.
+const QUOTA_SILENT_JOBS = 2;
+
+/**
+ * NAMES THE MOST CONFUSING FAILURE IN THE PRODUCT.
+ *
+ * A customer's automations run as GitHub Actions billed to the customer's own
+ * GitHub account. When that account's free minutes run out and its spending
+ * limit is still $0 - which is GitHub's default - GitHub does not bill them and
+ * does not email them. It stops running workflows. Every scheduled job simply
+ * goes quiet, mid-month, and the repo looks fine.
+ *
+ * Without this, that arrives as several unrelated "job hasn't run since..."
+ * rows and the owner goes hunting through workflow logs for a bug that does not
+ * exist. The fix is a billing setting, so the alert has to say so - the
+ * no-silent-failures rule: name what happened and link the way out.
+ *
+ * Deliberately a HINT, not a diagnosis: we cannot see another account's billing
+ * page, so this fires on the signature (several scheduled jobs silent at once
+ * on an account that plausibly exceeds the free tier) and says "likely". It is
+ * additive - the individual stale rows still stand on their own - so being
+ * wrong costs a sentence of explanation, never a hidden failure.
+ */
+async function githubQuotaAlert(
+  projectSlug: string | undefined,
+  health: CronHealth[],
+): Promise<CronHealth[]> {
+  try {
+    // CHEAP EXIT FIRST, from rows already in memory. getCronHealth is a hot
+    // path - it runs on every dashboard Home render, every get_cron_health
+    // call, and once per project inside the schedulers - so this helper must
+    // cost nothing in the overwhelmingly common case where nothing is stale.
+    // Without this gate the listProjects() below fired on every one of those,
+    // turning the scheduler loop into an N+1.
+    //
+    // Safe as a necessary condition: the alert needs QUOTA_SILENT_JOBS stale
+    // jobs on ONE project, so fewer than that across ALL projects can never
+    // produce one.
+    const staleScheduled = health.filter(
+      (h) => h.stale && GH_SCHEDULED_JOBS.includes(baseJobName(h.job)),
+    );
+    if (staleScheduled.length < QUOTA_SILENT_JOBS) return [];
+
+    // If the dispatcher itself is down, THAT is the story - every project's
+    // jobs would be silent for a reason we already know and already alarm on.
+    // Blaming the customer's GitHub bill for our own outage would be worse
+    // than saying nothing.
+    if (health.some((h) => baseJobName(h.job) === "seo-dispatch" && (h.stale || !h.ok))) {
+      return [];
+    }
+
+    const projects = await listProjects();
+    const connected = projects.filter((p) => p.github_repo && p.pipeline_installed_at);
+    if (connected.length === 0) return [];
+
+    const out: CronHealth[] = [];
+    for (const p of connected) {
+      if (projectSlug && p.slug !== projectSlug) continue;
+
+      // Quota is per GITHUB ACCOUNT, so that is the unit to count - every
+      // project installed under the same App installation shares one pool of
+      // minutes. Self-host installs have no installation id; there, every
+      // connected repo is the same owner's by definition.
+      const sameAccount = p.github_installation_id
+        ? connected.filter((c) => c.github_installation_id === p.github_installation_id)
+        : connected;
+      // One site fits inside GitHub Free with room to spare, so silence there
+      // is a real fault and naming the quota would send the owner to the wrong
+      // page. From two sites up it is a live possibility in a heavy month.
+      if (sameAccount.length < 2) continue;
+
+      const silent = GH_SCHEDULED_JOBS.filter((job) => {
+        const row = health.find((h) => h.job === `${job}--${p.slug}`);
+        // No row at all is not evidence: a workflow that has never reported may
+        // simply be disabled or newly installed, which the heartbeat sweeps
+        // above already handle on their own terms.
+        return row?.stale === true;
+      });
+      if (silent.length < QUOTA_SILENT_JOBS) continue;
+
+      out.push({
+        job: `github-actions-quota--${p.slug}`,
+        ok: false,
+        stale: false,
+        last_run_at: new Date().toISOString(),
+        errors: [
+          `${silent.length} of this repo's scheduled automations stopped reporting at the same time (${silent.join(", ")}). ` +
+            `With ${sameAccount.length} sites on one GitHub account, the likeliest cause is that account's monthly GitHub Actions minutes running out. ` +
+            `GitHub does not bill you for this or email you about it - it just pauses workflows until you add a payment method and raise the spending limit above $0 at https://github.com/settings/billing. ` +
+            `Builds resume on their own once you do, and the allowance resets on your GitHub billing date.`,
+        ],
+        update_available: false,
+        claimed_only: false,
+      });
+    }
+    return out;
+  } catch {
+    // Best-effort, like every other alert helper here: a hint that fails to
+    // compute must never take the real health rows down with it.
+    return [];
+  }
 }
 
 // builder-build-guide/builder-build-tool never get a flat STALE_HOURS entry

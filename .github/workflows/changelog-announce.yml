@@ -1,0 +1,141 @@
+name: Announce changelog to Discord
+
+# Posts every new release to the Discord server, automatically, the moment it
+# goes live. The source is src/lib/changelog.ts - the same list the dashboard
+# banner, /changelog and the get_changelog MCP tool read - so shipping a
+# release is still one edit to one file, and Discord follows.
+#
+# Only a NEW version announces. The path filter decides whether this workflow
+# runs at all; scripts/announce-changelog.mjs then diffs versions against the
+# state of the file before this push, so typo fixes, rewordings and edits to
+# the helpers below the array all run and post nothing. It waits for the
+# release to actually be serving on /changelog before posting, because the
+# embed deep-links to it.
+#
+# Setup (once): create a webhook in Discord (Server Settings -> Integrations
+# -> Webhooks -> New Webhook, pick the channel, Copy Webhook URL) and save it
+# as the repository secret DISCORD_WEBHOOK_URL. The webhook's own name and
+# avatar in Discord are what the posts appear as. Optional repository variable
+# DISCORD_MENTION (e.g. `<@&123456789>`) pings a role above each embed.
+#
+# Test it without shipping anything: run this workflow manually with a version
+# input and dry run left on - it prints the exact payload to the run log.
+#
+# Known edge: re-running this workflow after a partial failure re-posts what it
+# already posted. Deleting a duplicate in Discord is a two-second fix; the
+# alternative (a bot token to read channel history) is not worth it here.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/lib/changelog.ts"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Announce this exact version (e.g. 1.2.0), instead of diffing for new ones"
+        required: false
+      dry_run:
+        description: "Print the Discord payload instead of posting it"
+        type: boolean
+        default: true
+
+concurrency:
+  group: changelog-announce
+  cancel-in-progress: false # never cancel mid-post - a half-posted release is worse than a slow one
+
+jobs:
+  announce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need the pre-push commit to diff versions against
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Fail early if the webhook secret is missing
+        id: guard
+        if: ${{ !inputs.dry_run }}
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          URL: ${{ vars.BACKEND_URL || 'https://dispatchseo.com' }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            msg="DISCORD_WEBHOOK_URL is not set - releases are shipping but nothing is reaching Discord. Add it under repo Settings -> Secrets -> Actions (get the URL from Discord: Server Settings -> Integrations -> Webhooks)"
+            echo "::error::$msg"
+            curl -sG --max-time 30 -H "Authorization: Bearer $CRON_SECRET" \
+              --data-urlencode "job=changelog-announce" \
+              --data-urlencode "fail=$msg" \
+              "$URL/api/cron/deploy-check" || true
+            exit 1
+          fi
+
+      - name: Take the pre-push copy of the changelog
+        id: baseline
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          # github.event.before is the tip of main BEFORE this push, so a push
+          # carrying several commits is still diffed against the right state
+          # (HEAD^ would only look one commit back). Empty on manual runs, and
+          # all-zeros on a brand new branch - both fall back to HEAD^.
+          prev="$BEFORE"
+          case "$prev" in "" | 0000000000000000000000000000000000000000) prev="HEAD^" ;; esac
+          out="$RUNNER_TEMP/prev-changelog.ts"
+          if git show "$prev:src/lib/changelog.ts" > "$out" 2>/dev/null; then
+            echo "Diffing against $prev"
+            echo "path=$out" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::No pre-push copy of the changelog available - only the newest entry is eligible."
+          fi
+
+      - name: Announce
+        id: announce
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_MENTION: ${{ vars.DISCORD_MENTION }}
+          SITE_URL: ${{ vars.BACKEND_URL || 'https://dispatchseo.com' }}
+          # Through env, never interpolated into the shell: `version` is
+          # attacker-controlled in the general case (anyone who can dispatch a
+          # workflow), and a quoted expansion can't become part of the command.
+          BASELINE: ${{ steps.baseline.outputs.path }}
+          FORCED_VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=()
+          if [ -n "$BASELINE" ]; then args+=(--previous "$BASELINE"); fi
+          if [ -n "$FORCED_VERSION" ]; then args+=(--version "$FORCED_VERSION"); fi
+          if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          node --experimental-strip-types scripts/announce-changelog.mjs "${args[@]}"
+
+      # Same rails as the crons: a failure here lands on the dashboard Home
+      # banner and the alert email, so a webhook that quietly stopped working
+      # is noticed at the next release instead of never. No STALE_HOURS entry
+      # in cron-alerts.ts on purpose - this is release-driven, not scheduled,
+      # and a quiet fortnight is a normal state, not an alarm.
+      # Excluded only when the guard step already reported the missing-secret
+      # failure itself - anything else that goes wrong, including a step that
+      # dies before Announce ever runs, still has to phone home.
+      - name: Report outcome to the dashboard
+        if: always() && steps.guard.outcome != 'failure' && !inputs.dry_run
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          URL: ${{ vars.BACKEND_URL || 'https://dispatchseo.com' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OUTCOME: ${{ job.status }}
+        run: |
+          if [ "$OUTCOME" = "success" ]; then
+            curl -sG --max-time 30 -H "Authorization: Bearer $CRON_SECRET" \
+              --data-urlencode "job=changelog-announce" --data-urlencode "ok=1" \
+              "$URL/api/cron/deploy-check" || true
+          else
+            curl -sG --max-time 30 -H "Authorization: Bearer $CRON_SECRET" \
+              --data-urlencode "job=changelog-announce" \
+              --data-urlencode "fail=the release did not reach Discord - $RUN_URL" \
+              "$URL/api/cron/deploy-check" || true
+          fi

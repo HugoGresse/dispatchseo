@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState, useTransition } from "react";
+import { SelectWrap } from "@/components/ui";
 import {
   addManualSuggestion,
   buildToolNow,
@@ -550,30 +551,32 @@ export function ProspectStatus({ id, status }: { id: string; status: string }) {
 
   return (
     <span className="inline-flex items-center gap-1.5">
-      <select
-        value={value}
-        onChange={(e) => {
-          const next = e.target.value;
-          const prev = value;
-          setValue(next); // instant
-          setFailed(false);
-          start(async () => {
-            try {
-              await setProspectStatus(id, next);
-            } catch {
-              setValue(prev);
-              setFailed(true);
-            }
-          });
-        }}
-        className="rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400"
-      >
-        {["new", "contacted", "acquired", "rejected"].map((s) => (
-          <option key={s} value={s}>
-            {s}
-          </option>
-        ))}
-      </select>
+      <SelectWrap>
+        <select
+          value={value}
+          onChange={(e) => {
+            const next = e.target.value;
+            const prev = value;
+            setValue(next); // instant
+            setFailed(false);
+            start(async () => {
+              try {
+                await setProspectStatus(id, next);
+              } catch {
+                setValue(prev);
+                setFailed(true);
+              }
+            });
+          }}
+          className="appearance-none rounded-md border border-neutral-700 bg-neutral-900 py-1.5 pl-2 pr-7 text-xs text-neutral-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400"
+        >
+          {["new", "contacted", "acquired", "rejected"].map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+      </SelectWrap>
       {failed ? <span className="text-[11px] text-red-400">{ERR}</span> : null}
     </span>
   );

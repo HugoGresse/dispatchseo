@@ -83,10 +83,8 @@ export function SignupRequirements() {
           <Tail />
           <Eyebrow />
           <p className="mt-1 text-[13px] leading-relaxed text-amber-200/90">
-            DispatchSEO publishes by opening pull requests on your site&apos;s code, so your site
-            needs to live in a GitHub repo. If it runs on WordPress, Wix, Squarespace, or Shopify,
-            this will not work for you yet. You will also need a coding agent subscription - Claude
-            Code or Codex.
+            Your site needs to live in a GitHub repo, and you&apos;ll need a Claude subscription.
+            WordPress, Wix, Squarespace and Shopify don&apos;t work yet.
           </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
             <Link

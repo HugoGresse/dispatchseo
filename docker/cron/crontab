@@ -20,3 +20,12 @@
 # posts (see dataforseo-tasks.ts) - without this, self-host rank tracking
 # would queue tasks that never land. Mirrors .github/workflows/serp-collect.yml.
 37 * * * * /bin/sh /usr/local/bin/hit.sh serp-collect >> /proc/1/fd/1 2>&1
+# Wakes the SEO workflows in each connected repo when there is work for them,
+# replacing the cron chains those workflows used to carry (see
+# .github/workflows/seo-dispatch.yml for the full reasoning). On a docker
+# install running the in-stack builder this is a no-op by design: the route
+# stands down when the builder's heartbeat is fresh, so the two runners can
+# never both claim the same job. It matters for the self-host that connected a
+# repo but does NOT run the builder container - before this, that install's
+# only scheduler was GitHub's own, which is what we are moving away from.
+41 */3 * * * /bin/sh /usr/local/bin/hit.sh seo-dispatch >> /proc/1/fd/1 2>&1

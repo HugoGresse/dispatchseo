@@ -3,10 +3,11 @@ import { projectAgent } from "@/lib/agents";
 import { db } from "@/lib/db";
 import pack from "@/lib/pipeline-pack.json";
 
-// Whether a guide/tool build already completed today (UTC). The build
-// workflows now run several scheduled attempts per day (05:00/12:00/19:00)
-// so a failed morning self-heals by lunch; each attempt asks this flag and
-// exits cleanly when the day's build is already done. Tolerant: any query
+// Whether a guide/tool build already completed today (UTC). The backend's
+// scheduler decides when a build is due (api/cron/seo-dispatch); this flag is
+// the workflows' own second gate, for the triggers the scheduler does not
+// control - each builder's dead-man's cron, a manual workflow_dispatch, and a
+// re-dispatch after a run that never reported. Tolerant: any query
 // error reads as "not built" - the workflows' own PR-open guard still
 // prevents double-building, so a wrong "false" costs one no-op run, while a
 // wrong "true" would silently skip a day.
@@ -30,11 +31,11 @@ async function builtToday(projectId: string): Promise<{ guide: boolean; tool: bo
 }
 
 // The three weekly-cadence GitHub workflows (seo-weekly-research, seo-tools,
-// seo-geo-scan) each now retry later the same day if an earlier attempt was
-// dropped or delayed by GitHub's scheduler, mirroring seo-daily's built_today
-// pattern - a retry must not re-run once today's earlier attempt already
-// succeeded. Tolerant like builtToday: any query error reads as "not run
-// yet" so this check can never itself block a run.
+// seo-geo-scan) each keep one cron as a dead-man's switch behind the backend's
+// dispatch, mirroring seo-daily's built_today pattern - that fallback must not
+// redo work an earlier dispatch already did the same day. Tolerant like
+// builtToday: any query error reads as "not run yet" so this check can never
+// itself block a run.
 const RETRY_GUARDED_JOBS = ["seo-weekly-research", "seo-tools", "seo-geo-scan"] as const;
 
 async function ranToday(projectSlug: string): Promise<Record<string, boolean>> {
@@ -61,6 +62,27 @@ async function ranToday(projectSlug: string): Promise<Record<string, boolean>> {
     return result;
   } catch {
     return result;
+  }
+}
+
+// Guides and tools waiting in the approved queue. Best-effort in the same
+// direction as builtToday above: a failed count reads as "work is waiting", so
+// a database blip can only ever cost one unnecessary run, never silently
+// suppress a real build.
+async function approvedWaiting(projectId: string): Promise<{ guide: boolean; tool: boolean }> {
+  try {
+    const { data, error } = await db()
+      .from("suggestions")
+      .select("type")
+      .eq("project_id", projectId)
+      .eq("status", "approved");
+    if (error || !data) return { guide: true, tool: true };
+    return {
+      guide: data.some((r) => r.type === "guide"),
+      tool: data.some((r) => r.type === "tool"),
+    };
+  } catch {
+    return { guide: true, tool: true };
   }
 }
 
@@ -103,5 +125,13 @@ export async function GET(req: Request) {
     pipeline_version: (pack as { version?: string }).version ?? null,
     built_today: await builtToday(project.id),
     ran_today: await ranToday(project.slug),
+    // How much work is actually waiting. The backend's scheduler already
+    // checks this before it wakes a builder (api/cron/seo-dispatch), so on the
+    // normal path a runner only ever starts when there is something to build.
+    // The dead-man's cron in each builder workflow has no such knowledge: left
+    // to itself it starts a whole coding-agent session to discover an empty
+    // queue, which is the expensive version of the no-op this change exists to
+    // remove. Serving the counts lets that fallback exit in seconds instead.
+    approved_waiting: await approvedWaiting(project.id),
   });
 }

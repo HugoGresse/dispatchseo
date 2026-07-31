@@ -11,7 +11,9 @@ import {
 } from "@/lib/billing";
 import { getActiveProjectOrNull } from "@/lib/active-project";
 import { platformUsageStatus } from "@/lib/dataforseo-usage";
+import { db } from "@/lib/db";
 import { PageHeader } from "@/components/ui";
+import { CancelPlan } from "@/components/cancel-plan";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +50,24 @@ export default async function BillingPage({
   // doesn't see the section; getActiveProjectOrNull never redirects.
   const activeProject = active && polarConfigured() ? await getActiveProjectOrNull() : null;
   const usage = activeProject ? await platformUsageStatus(activeProject.id) : null;
+  // Only for the sentence the cancel box writes ("your 3 sites stop being
+  // managed"). A failed count is not worth failing the page over - it reads as
+  // one site, which is what the overwhelming majority have.
+  const siteCount = hasUpstreamSub
+    ? ((
+        await db()
+          .from("projects")
+          .select("id", { count: "exact", head: true })
+          .eq("owner_user_id", auth.user.id)
+      ).count ?? 1)
+    : 0;
+  // Same format the cancel panel uses, so the header and the panel can never
+  // disagree about the date.
+  const periodEnd = sub?.current_period_end ? new Date(sub.current_period_end) : null;
+  const periodEndLabel =
+    periodEnd && !Number.isNaN(periodEnd.getTime())
+      ? periodEnd.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+      : null;
 
   return (
     <div className="mx-auto max-w-3xl space-y-8">
@@ -55,7 +75,15 @@ export default async function BillingPage({
         title="Billing"
         hint={
           active
-            ? `You're on ${TIER_COPY[sub!.tier].name} - ${sub!.sites_limit} site${sub!.sites_limit === 1 ? "" : "s"}, ${sub!.keywords_limit} tracked keywords.`
+            ? `You're on ${TIER_COPY[sub!.tier].name} - ${sub!.sites_limit} site${sub!.sites_limit === 1 ? "" : "s"}, ${sub!.keywords_limit} tracked keywords.${
+                // A cancelled-but-still-running plan says so in the FIRST line
+                // on the page, not only in the panel further down. The whole
+                // question someone has after cancelling is "do I still have it
+                // until the date?", and the answer is yes.
+                sub!.cancel_at_period_end && periodEndLabel
+                  ? ` Active until ${periodEndLabel}.`
+                  : ""
+              }`
             : "Pick a plan to unlock your sites - Starter comes with a 7-day free trial; Growth and Scale start today."
         }
       />
@@ -119,23 +147,51 @@ export default async function BillingPage({
               ) : null}
               <ul className="mt-3 space-y-1 text-sm text-neutral-400">
                 <li>
-                  {limits.sites} site{limits.sites === 1 ? "" : "s"}
+                  Up to {limits.sites} site{limits.sites === 1 ? "" : "s"}
                 </li>
                 <li>{limits.keywords} tracked keywords</li>
               </ul>
+              {/* The SECOND door to checkout, and the one that was missing this.
+                  /plans is where a new customer picks a tier; this page is where
+                  an existing one upgrades - and an upgrade from Starter is
+                  exactly the moment a GitHub bill becomes possible for someone
+                  it never applied to before. Finding out afterwards would be
+                  the "oh, by the way" this note exists to prevent, so it has to
+                  sit above the button, not behind it.
+                  Multi-site tiers only: one site cannot leave GitHub's free
+                  tier, so on Starter this would warn about the impossible. */}
+              {tier !== "starter" ? (
+                <p className="mt-3 text-xs leading-relaxed text-neutral-500">
+                  Your first two sites are free on your own GitHub account. After that it&apos;s
+                  about $5 per site a month, paid to GitHub, not to us.{" "}
+                  <a
+                    href="/docs/publishing#github-actions-costs"
+                    className="underline underline-offset-2 hover:text-neutral-300"
+                  >
+                    See the cost table
+                  </a>
+                </p>
+              ) : null}
               {isCurrent ? (
                 <p className="mt-4 text-center text-sm font-medium text-neutral-300">
                   Current plan
                 </p>
               ) : (
                 <a
-                  // Active subscribers change plans in Polar's portal (it
+                  // Existing subscribers change plans in Polar's portal (it
                   // prorates and REPLACES the subscription); a fresh checkout
                   // would stack a second parallel subscription.
-                  href={active ? "/api/polar/portal" : `/api/polar/checkout?tier=${tier}`}
+                  //
+                  // Gated on hasUpstreamSub, NOT on active. This read `active`
+                  // until 2026-07-30, which meant a past_due subscriber - the
+                  // one person most likely to come here and click something -
+                  // got a checkout link and a SECOND subscription billed
+                  // alongside the unpaid one. hasUpstreamSub was written for
+                  // this line (see its comment above) and never wired to it.
+                  href={hasUpstreamSub ? "/api/polar/portal" : `/api/polar/checkout?tier=${tier}`}
                   className="mt-4 block rounded-lg bg-white px-4 py-2 text-center text-sm font-medium text-neutral-950"
                 >
-                  {active
+                  {hasUpstreamSub
                     ? `Switch ${TIER_COPY[tier].name}`
                     : tier === "starter"
                       ? "Start free trial"
@@ -205,8 +261,17 @@ export default async function BillingPage({
         </div>
       ) : null}
 
+      {hasUpstreamSub ? (
+        <CancelPlan
+          pending={sub!.cancel_at_period_end}
+          endsAt={sub!.current_period_end}
+          tierName={TIER_COPY[sub!.tier].name}
+          siteCount={siteCount}
+        />
+      ) : null}
+
       <p className="text-sm text-neutral-500">
-        Invoices, payment method, plan changes, cancellation:{" "}
+        Invoices, payment method, plan changes:{" "}
         <a className="text-neutral-300 underline" href="/api/polar/portal">
           open the billing portal
         </a>

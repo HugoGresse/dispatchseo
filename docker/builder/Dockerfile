@@ -13,8 +13,14 @@
 # image and reading a migration note to find out why builds stopped.
 FROM node:22-bookworm-slim
 
+# python3: not in node:*-slim, and its absence is not cosmetic. Codex writes
+# files by shelling out, and a guide is MDX - full of backticks, which bash
+# expands as command substitution inside a heredoc. Without python3 the agent
+# has no quoting-proof way to write a multi-line file at all, so a build run
+# produced nothing and still exited 0 (2026-07-31). Claude Code never hit this
+# because it has built-in file tools and never shells out to write.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      git curl ca-certificates jq gnupg \
+      git curl ca-certificates jq gnupg python3 \
     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
        -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
@@ -27,6 +33,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN npm install -g @anthropic-ai/claude-code @openai/codex && corepack enable
 
 COPY run.sh /usr/local/bin/run.sh
+# The command Codex reaches for BY NAME when it wants to write a file. It is
+# not shipped by @openai/codex (that package installs only codex.js), so
+# without this the model's first choice fails and it falls back to the shell
+# quoting it cannot survive. python3 above is the belt to this pair of braces.
+COPY apply_patch /usr/local/bin/apply_patch
+RUN chmod +x /usr/local/bin/apply_patch
 
 # Claude Code refuses permission-bypass as root, same as on CI runners -
 # run as the image's unprivileged user, with all state on the /data volume.

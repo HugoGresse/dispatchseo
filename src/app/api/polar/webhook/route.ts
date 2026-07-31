@@ -24,6 +24,11 @@ type PolarSubscription = {
   productId: string;
   customerId?: string | null;
   currentPeriodEnd?: string | null;
+  // Set the moment a cancellation is scheduled, and back to false on
+  // subscription.uncanceled. Note that `status` does NOT change with it - a
+  // subscription cancelled at period end stays active/trialing until the period
+  // ends - so this is the only field that carries the news.
+  cancelAtPeriodEnd?: boolean;
   customer?: { externalId?: string | null } | null;
 };
 
@@ -100,6 +105,7 @@ export async function POST(req: Request): Promise<Response> {
           currentPeriodEnd: sub.currentPeriodEnd
             ? new Date(sub.currentPeriodEnd).toISOString()
             : null,
+          cancelAtPeriodEnd: Boolean(sub.cancelAtPeriodEnd),
         });
       } catch (e) {
         return await webhookWriteFailed(e, event.type, userId, sub.status);

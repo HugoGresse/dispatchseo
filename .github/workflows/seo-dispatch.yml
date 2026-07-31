@@ -1,0 +1,45 @@
+name: SEO build dispatcher
+
+# Wakes each connected repo's SEO workflows when the backend decides there is
+# actually work for them - replacing the three-times-a-day cron chains those
+# workflows used to carry themselves.
+#
+# The chains existed because GitHub's scheduler defers and sometimes drops
+# triggers, so a once-a-day workflow had no way to recover a missed tick. The
+# cost of that insurance was paid by the customer: every attempt claimed a
+# runner, GitHub bills a full minute minimum, and two of the three attempts
+# existed only to re-discover in a bash guard that the queue was empty. Roughly
+# 300 minutes a month per installed site - about a quarter of a GitHub Free
+# account's entire Actions allowance - spent finding nothing to do.
+#
+# Now the backend answers that question from its own database and dispatches
+# only real work (see src/app/api/cron/seo-dispatch/route.ts). The customer's
+# runner starts when there is something to build, and not otherwise.
+#
+# This job runs on OUR repo, so its minutes are our cost, not a customer's -
+# every 3 hours mirrors hourly-gsc's frugality (~240 min/month). Jobs use a 20h
+# cadence, so a tick every 3h always catches a window the same day it opens;
+# the exact minute a build starts can drift within that band, which is already
+# how the in-stack builder behaves.
+
+on:
+  schedule:
+    - cron: "41 */3 * * *" # every 3 hours at :41 - offset off the top-of-the-hour rush
+  workflow_dispatch:
+
+concurrency:
+  group: seo-dispatch
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger the seo-dispatch cron endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl --fail-with-body -sS --max-time 300 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            ${{ vars.BACKEND_URL || 'https://dispatchseo.com' }}/api/cron/seo-dispatch

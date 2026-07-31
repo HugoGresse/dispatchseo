@@ -35,10 +35,22 @@ log() { echo "[builder] $(date -u '+%Y-%m-%dT%H:%M:%SZ') $*"; }
 # 40-char job-name cap that every long slug tripped) looked identical to a
 # successful one. Still non-fatal by design - a logging failure must never kill
 # the builder - but now it SAYS so in the container logs.
-report() { # report <job-key> <ok|fail> [message]
+report() { # report <job-key> <ok|fail|deferred> [message]
   if [ "$2" = "ok" ]; then
     resp=$(curl -sG --max-time 30 -w '\n%{http_code}' -H "Authorization: Bearer ${CRON_SECRET}" \
       --data-urlencode "job=$1" --data-urlencode "ok=1" \
+      "${APP}/api/cron/deploy-check" 2>&1) || resp="${resp}
+000"
+  elif [ "$2" = "deferred" ]; then
+    # Ran, hit a usage limit, built nothing. NOT ok: the backend works out what
+    # is due by reading these rows (build-schedule.ts), and an ok row is a
+    # completed run - it would restart the full cadence window and hold the job
+    # back for up to 20h, so an evening deferral silently costs a day while the
+    # dashboard shows green. `deferred` lands as a claim instead, which the
+    # short grace window re-offers on the next poll, and which goes stale and
+    # alarms if the deferrals never stop.
+    resp=$(curl -sG --max-time 30 -w '\n%{http_code}' -H "Authorization: Bearer ${CRON_SECRET}" \
+      --data-urlencode "job=$1" --data-urlencode "deferred=$3" \
       "${APP}/api/cron/deploy-check" 2>&1) || resp="${resp}
 000"
   else
@@ -162,7 +174,18 @@ run_job() { # run_job <base64 job json>
   # describe.
   agent=$(echo "$j" | jq -r '.agent // "claude"')
   agent_token=$(echo "$j" | jq -r '.agent_token // empty')
-  [ -n "$agent_token" ] || agent_token="$RESOLVED_CLAUDE_TOKEN"
+  # Claude-only fallback, agent-gated on purpose: the feed never emits a
+  # tokenless job today (jobs/route.ts returns early), so this is defence in
+  # depth for older backends - which are all-Claude by definition. Without the
+  # gate, a future tokenless codex job would silently POST a Claude OAuth
+  # token to api.openai.com.
+  if [ -z "$agent_token" ] && [ "$agent" = "claude" ]; then
+    agent_token="$RESOLVED_CLAUDE_TOKEN"
+  fi
+  if [ -z "$agent_token" ]; then
+    report "$key" fail "the feed handed out a $agent job with no credential - paste the $agent key on the dashboard's Settings page"
+    return
+  fi
 
   log "job $key starting (repo $repo, agent $agent)"
   dir="/data/repos/$slug"
@@ -188,12 +211,26 @@ run_job() { # run_job <base64 job json>
       # There is nobody in a container to approve one, and it is an approval
       # rather than a permission, so no sandbox setting substitutes for it.
       echo 'default_tools_approval_mode = "approve"'
+      # Codex ships with web search off; the playbooks assume it exists
+      # (geo-scan REQUIRES real searches and forbids answering from memory).
+      # Claude has WebSearch built in - this line is the parity.
+      echo ''
+      echo '[tools]'
+      echo 'web_search = true'
       if [ -n "$DATAFORSEO_LOGIN" ]; then
+        # LITERAL values, expanded and TOML-escaped at write time: Codex's
+        # TOML `env` map does no ${VAR} expansion (unlike Claude's JSON
+        # config, which is where this pattern was copied from), so the old
+        # '${DATAFORSEO_LOGIN}' string authenticated as itself and every
+        # keyword call 401'd. The file now holds real creds, so it is
+        # deleted right after the run alongside auth.json.
+        dfl=$(printf '%s' "$DATAFORSEO_LOGIN" | sed 's/\\/\\\\/g; s/"/\\"/g')
+        dfp=$(printf '%s' "$DATAFORSEO_PASSWORD" | sed 's/\\/\\\\/g; s/"/\\"/g')
         echo ''
         echo '[mcp_servers.dataforseo]'
         echo 'command = "npx"'
         echo 'args = ["-y", "dataforseo-mcp-server@latest"]'
-        echo 'env = { DATAFORSEO_USERNAME = "${DATAFORSEO_LOGIN}", DATAFORSEO_PASSWORD = "${DATAFORSEO_PASSWORD}", ENABLED_MODULES = "SERP,DATAFORSEO_LABS,BACKLINKS" }'
+        echo "env = { DATAFORSEO_USERNAME = \"$dfl\", DATAFORSEO_PASSWORD = \"$dfp\", ENABLED_MODULES = \"SERP,DATAFORSEO_LABS,BACKLINKS\" }"
         echo 'default_tools_approval_mode = "approve"'
       fi
     } > "$cfg"
@@ -218,7 +255,42 @@ run_job() { # run_job <base64 job json>
     return
   fi
 
+  # Snapshot the repo BEFORE the agent touches it, so "did this run actually
+  # build anything" is answerable afterwards rather than assumed from an exit
+  # code. See the rc=0 branch below for why that question has to be asked.
+  head_before=$(git -C "$dir" rev-parse HEAD 2>/dev/null || echo "?")
+  prs_before=$(timeout 60 gh pr list --repo "$repo" --label seo --state open --json number --jq 'length' 2>/dev/null || echo "?")
+
   out="/data/logs/$key.$(date -u +%Y%m%d%H%M%S).json"
+  # How Codex must write files here, prepended to every Codex prompt.
+  #
+  # Claude Code has built-in file tools. Codex, in `codex exec`, has the shell
+  # and nothing else - `codex features list` reports apply_patch_freeform as
+  # REMOVED, so there is no file-write tool to turn on. Left to itself the
+  # model reaches for an UNQUOTED heredoc, and the content this pipeline writes
+  # is MDX: backticks everywhere, which bash expands as command substitution
+  # inside one. On 2026-07-31 that failed every write for a whole run - it tried
+  # heredocs, printf, base64 and reformatting the code fences, then gave up and
+  # exited 0 with nothing built.
+  #
+  # The first fix for that banned heredocs outright, and that over-corrected:
+  # a SINGLE-QUOTED delimiter (<<'DSEOF') makes bash expand nothing at all, so
+  # it is the one quoting-proof method available everywhere. Banning it left
+  # only awkward python -c invocations, and later the same day Codex hit the
+  # escaping wall on a .tsx file, stopped mid-run to ask permission to use a
+  # quoted heredoc, and exited 0 having built nothing. It was right; the rule
+  # was wrong. Hence the explicit allow, and the explicit "never ask" - an
+  # unattended run has nobody to answer, so a question is just a dead run.
+  #
+  # Kept here rather than in the shared playbook because it is not a content
+  # rule - it is a fact about this container, and Claude must never be handed
+  # it.
+  CODEX_FILE_RULE=$(cat <<'RULEEOF'
+ENVIRONMENT RULE (read first, it overrides habit): you have no apply_patch tool registered here - only the shell, and you are running UNATTENDED, so there is nobody to answer a question. Write every file exactly one of three ways: (1) a SINGLE-QUOTED heredoc, `cat > path <<'DSEOF'` ... `DSEOF` - the quoted delimiter is the whole point, bash expands NOTHING inside it so the backticks and $ in MDX and TSX survive verbatim; (2) pipe an OpenAI-format patch envelope into the `apply_patch` command on PATH; (3) python3 with the content read from stdin, never interpolated into the command string. NEVER use an unquoted heredoc, printf or echo to write file content - an unquoted heredoc is what expands backticks and corrupts the file. Pick a delimiter that cannot appear in the content. Verify every write with `ls -l` and `head` before moving on, and never let a filename come from an unset shell variable. If you ever find yourself about to ask for approval or a go/no-go, do not: pick the safest option that still completes the task, do it, and say what you chose in the final report. A run that stops to ask a question builds nothing and is a failed run.
+RULEEOF
+)
+  CODEX_FILE_RULE="$CODEX_FILE_RULE "
+
   if [ "$agent" = "codex" ]; then
     # `codex exec` needs an explicit login: OPENAI_API_KEY in the environment
     # alone is NOT enough - it 401s against /v1/responses until auth.json
@@ -238,14 +310,17 @@ run_job() { # run_job <base64 job json>
     # not-planned), so the timeout below is the only ceiling - same 90 minutes
     # the Claude branch gets.
     ( cd "$dir" && OPENAI_API_KEY="$agent_token" CODEX_HOME="$codex_home" timeout 5400 \
-        codex exec "$prompt" \
+        codex exec "$CODEX_FILE_RULE$prompt" \
           --sandbox danger-full-access \
           --skip-git-repo-check \
           --model "${CODEX_MODEL:-gpt-5}" \
           -o "$out.msg" > "$out" 2>"$out.err" )
     rc=$?
-    # Before any classification branch, all of which can `return`.
-    rm -f "$codex_home/auth.json"
+    # Before any classification branch, all of which can `return`. The config
+    # goes with the key: since the DataForSEO fix it holds real credentials
+    # (Codex's TOML env is literal, so they cannot ride in as env-var names),
+    # and it is regenerated from the feed on every job anyway.
+    rm -f "$codex_home/auth.json" "$cfg"
     msg=$(tail -c 400 "$out.msg" 2>/dev/null)
     [ -n "$msg" ] || msg=$(tail -c 400 "$out.err" 2>/dev/null)
   else
@@ -261,6 +336,40 @@ run_job() { # run_job <base64 job json>
   fi
 
   if [ "$rc" = "0" ]; then
+    # Exit 0 is not the same as "it built something". An agent that cannot
+    # write a file, hits a tool it does not have, or talks itself out of the
+    # task will finish tidily, explain itself, and exit 0 - and this branch
+    # used to call that a success. It is the worst outcome the builder has:
+    # green every night, nothing published, nobody told. It happened for real
+    # on 2026-07-31, when Codex could not write MDX and reported done.
+    #
+    # Only build-* jobs are checked, and only because the backend now hands
+    # them out ONLY when an approved suggestion exists (jobs/route.ts). So for
+    # these two, "the repo is exactly as we found it" has one meaning: the
+    # build did not happen. research and geo-scan legitimately touch no files.
+    case "$wf" in
+      build-guide|build-tool)
+        head_now=$(git -C "$dir" rev-parse HEAD 2>/dev/null || echo "?")
+        prs_now=$(timeout 60 gh pr list --repo "$repo" --label seo --state open --json number --jq 'length' 2>/dev/null || echo "?")
+        # HEAD is the definitive half - the agent commits on a branch in this
+        # same clone, so an unmoved HEAD means it never committed. The PR count
+        # is the secondary guard, and deliberately cannot rescue a run on its
+        # own: "?" means gh could not answer, not that a PR appeared.
+        if [ "$head_now" = "$head_before" ] && [ "$prs_now" = "$prs_before" ]; then
+          # DEFERRED, not failed - aligned with the GitHub runner's identical
+          # check on 2026-07-31, and for its reason: a clean no-PR exit is
+          # also what the thin-content and sameness gates produce when they
+          # correctly reject an idea, and emailing the owner a red alert for
+          # correct behaviour teaches them to ignore the alerts. Deferred
+          # keeps the job due (3h claim grace, not the 20h cadence), the
+          # stuck-build sweep reverts the in_progress row, and chronic
+          # nothing-runs go stale and alarm through the deferral rails.
+          log "job $key produced nothing - deferring"
+          report "$key" deferred "the $agent run finished without building anything: no commit, no new PR, and a suggestion was waiting. The job stays due and is retried. Its own last words: $(echo "$msg" | tr '\n' ' ' | tail -c 220)"
+          return
+        fi
+        ;;
+    esac
     log "job $key done"
     report "$key" ok
   elif [ "$agent" = "codex" ]; then
@@ -276,7 +385,7 @@ run_job() { # run_job <base64 job json>
       case "$pcode:$perr" in
         2*:*|429:rate_limit_exceeded)
           log "job $key deferred - Codex rate limit (clears by itself)"
-          report "$key" ok
+          report "$key" deferred "Codex was rate-limited this run - retried automatically."
           return ;;
         429:*|402:*)
           log "job $key FAILED - OpenAI account out of credit ($perr)"
@@ -292,10 +401,11 @@ run_job() { # run_job <base64 job json>
     log "job $key FAILED: $msg"
     report "$key" fail "$msg"
   elif echo "$msg" | grep -qiE 'usage limit|limit reached|rate.?limit'; then
-    # A usage-limit hit is a deferral, not a failure - the next due window
-    # retries, exactly like the cloud workflow's 12:00/19:00 reruns.
+    # A usage-limit hit is a deferral, not a failure - the job stays due and
+    # the next poll picks it back up, the same contract the GitHub Actions
+    # builder gets from its own defer path.
     log "job $key deferred - Claude usage limit"
-    report "$key" ok
+    report "$key" deferred "Claude hit a usage limit this run - retried automatically."
   else
     [ -n "$msg" ] || msg="claude exited $rc (see $out in the dispatch-builder volume)"
     log "job $key FAILED: $msg"

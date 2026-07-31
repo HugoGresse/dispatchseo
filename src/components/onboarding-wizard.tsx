@@ -12,6 +12,7 @@ import {
 import { ShellCommandTabs } from "./shell-command-tabs";
 import { PixelDispatcher } from "./pixel-dispatcher";
 import { FirstRunStatus } from "@/components/first-run-status";
+import { BuilderTokenConnect } from "@/components/builder-token-connect";
 import {
   chooseGscOnly,
   connectBuilderToken,
@@ -1311,14 +1312,16 @@ export function OnboardingWizard({
                 title="Two things on your computer first"
                 body={
                   <>
-                    This needs <b className="font-medium text-neutral-200">Claude Code</b> and the{" "}
+                    This needs a coding agent -{" "}
+                    <b className="font-medium text-neutral-200">Claude Code</b> or{" "}
+                    <b className="font-medium text-neutral-200">Codex</b> - and the{" "}
                     <b className="font-medium text-neutral-200">GitHub CLI</b> (
                     <code className="font-mono text-neutral-300">gh</code>). Don&apos;t have them
                     yet? The guide installs both, start to finish, in about 5 minutes.
                   </>
                 }
                 href="/docs/install-claude-code"
-                cta="Install Claude Code and gh"
+                cta="Install your agent and gh"
               />
 
               <div className="mt-5 space-y-2">
@@ -1431,48 +1434,23 @@ export function OnboardingWizard({
               <div className="mt-4 space-y-3">
                 <p className="text-[15px] text-neutral-300">
                   <b className="font-semibold text-neutral-100">3.</b>{" "}
-                  Turn on automatic builds. One time:
+                  Turn on automatic builds. One time - pick your agent, mint its credential,
+                  paste it here:
                 </p>
-                <p className="text-sm text-neutral-400">
-                  <b className="font-medium text-neutral-200">a.</b>{" "}
-                  On your own computer, run this and copy the{" "}
-                  <code className="font-mono text-neutral-300">sk-ant-oat...</code> token it
-                  prints (it opens a browser login):
-                </p>
-                <CopyBox text="claude setup-token" />
-                <p className="text-sm text-neutral-400">
-                  <b className="font-medium text-neutral-200">b.</b>{" "}
-                  Paste it here - that&apos;s it, no terminal or files to touch:
-                </p>
-                <form action={builderAction} className="space-y-2.5">
-                  {builderState && "error" in builderState ? (
-                    <ErrorLine msg={builderState.error} />
-                  ) : null}
-                  <input
-                    name="token"
-                    type="password"
-                    placeholder="sk-ant-oat..."
-                    autoComplete="off"
-                    className={inputClass}
-                  />
-                  <div className="flex items-center justify-between pt-1">
-                    <p className="text-sm text-neutral-500">
-                      Stored encrypted in your own database.
-                    </p>
-                    <button
-                      type="submit"
-                      disabled={builderPending}
-                      className="cursor-pointer rounded-lg bg-violet-500 px-5 py-2 text-sm font-semibold text-neutral-950 transition-colors hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      {builderPending ? "Saving..." : "Turn on builds"}
-                    </button>
-                  </div>
-                </form>
+                {/* The SAME component Home's card and Settings render, not a
+                    copy: the previous inline form here was Claude-hardcoded
+                    (sk-ant-oat placeholder, no agent field), so a Codex user
+                    pasting their OpenAI key got "that doesn't look like a
+                    Claude Code token" from the very screen whose disclosure
+                    above says Codex works identically. Reuse is the fix that
+                    stays fixed. */}
+                <BuilderTokenConnect />
                 <p className="text-sm text-neutral-500">
                   That&apos;s your coding agent running inside Docker, building on schedule, no
                   public URL needed. Until it&apos;s on, nothing builds automatically - everything
                   else still works. (Prefer the terminal? Add{" "}
-                  <code className="font-mono text-neutral-400">CLAUDE_CODE_OAUTH_TOKEN</code> to the
+                  <code className="font-mono text-neutral-400">CLAUDE_CODE_OAUTH_TOKEN</code> or{" "}
+                  <code className="font-mono text-neutral-400">OPENAI_API_KEY</code> to the
                   install folder&apos;s <code className="font-mono text-neutral-400">.env</code>{" "}
                   instead - env always wins.)
                 </p>

@@ -11,6 +11,7 @@ export const BUILD_GUIDE_STEPS = [
   { title: "Study", plain: "Reads your recent posts first to match your voice - and deliberately picks a different article shape than the last few, so your site never reads like one template." },
   { title: "Gate", plain: "Checks Google's current page 1. What those results cover becomes the guide's must-cover list - the searcher's job gets done start to finish - and if the draft can't beat page 1, it refuses to build." },
   { title: "Own it", plain: "Adds at least one thing no competitor page has - a command it actually ran, a real measurement, or your site's own numbers - before writing a word. This is what ranks and what AI answers cite." },
+  { title: "Shape check", plain: "Sketches the outline and checks it against your back catalogue before writing anything - so a post that would have read like a repeat gets reshaped now, instead of being written in full and thrown away." },
   { title: "Draft", plain: "Writes from current official docs - never from memory - and tests every command it includes. If the idea grew from a viral video or thread, it writes from that source too: credited, quoted, embedded - then goes beyond it." },
   { title: "Visuals", plain: "Builds 2-3 custom graphics about this exact topic, in your site's own colors and components - plus a cover it draws itself as vector art on your site's house style, so blog cards show the actual subject instead of generic AI imagery." },
   { title: "Humanize", plain: "Rewrites anything that reads AI-generated until it sounds like you wrote it." },
@@ -41,12 +42,26 @@ the build-tool workflow and must never be picked up here.
    edits in headless runs. No exceptions - a trend-sourced idea at the
    front of the queue waits for tomorrow's slot like everything else; at
    one day maximum, the wait never outlives a hype window.
-1. \`get_suggestions(status="approved", type="guide")\` - the list comes
-   back in BUILD ORDER: the owner's queue exactly as their dashboard shows
-   it (front-placed ideas first - trend approvals and the owner's own
-   "do this one next" adds land there - then oldest first). **Take the
-   FIRST item.** Never re-rank or second-guess the order; it is the owner's
-   explicit call.
+1. **\`get_build_brief\` FIRST - one call that replaces a dozen.** The backend
+   assembles what this run needs to start: the queue head (the item you are
+   about to build), the recent-guide fingerprints for the anti-sameness
+   checks (openings, heading skeletons, archetypes, recent cover hues), the
+   ranked internal-link candidates, and this site's own stats for step 5.
+   Take these as given - do NOT re-derive them by reading published posts.
+   Issue it together with reading \`.dispatchseo/conventions.md\` in the same
+   turn; they do not depend on each other.
+   **If the brief is unavailable or a section comes back empty**, it says so
+   in \`degraded\`. That is not a failure - fall back to the per-step method
+   named in each affected step (read recent posts yourself for the
+   fingerprints, \`get_pages\` for link candidates) and carry on. The brief is
+   an accelerator, never a dependency.
+   The brief's \`queue_head\` IS the item to build - it is the FIRST item of
+   \`get_suggestions(status="approved", type="guide")\`, which returns the
+   owner's queue in BUILD ORDER (front-placed ideas first - trend approvals
+   and the owner's own "do this one next" adds land there - then oldest
+   first). Never re-rank or second-guess that order; it is the owner's
+   explicit call. Call \`get_suggestions\` yourself only if the brief is
+   degraded.
    **None approved -> the LOW-TANK BACKSTOP, before giving up.** The daily
    cadence is a promise; a builder idling while vetted ideas sit pending is
    a starved queue, not an empty one. \`get_suggestions(status="pending",
@@ -79,6 +94,11 @@ the build-tool workflow and must never be picked up here.
    must not mirror an exemplar's section order, intro pattern, or
    transitions (see structural variation below). The generated article must
    be indistinguishable in structure and voice from a hand-written post.
+   Read ONE exemplar in full for voice and conventions (the brief's
+   \`recent_guides\` already carries the structural fingerprints - openings,
+   heading skeletons, archetypes - of the last few, so you do not need to
+   read them to know what to avoid). Read a second only if the first leaves a
+   genuine question about the site's contract.
    **Choose the article SHAPE (archetype) - and rotate it.** Guides come in
    distinct shapes, each with its own geometry: **tutorial** (ordered how-to
    steps), **comparison** (X vs Y / alternatives, table-led), **data-study**
@@ -129,13 +149,16 @@ the build-tool workflow and must never be picked up here.
    (d) an original worked example or end-to-end config no docs page shows;
    (e) a clear, defended stance where every page 1 result hedges.
    **Only what THIS run can honestly do.** You are a headless CI run holding
-   the repo, the current official docs, the MCP, and the coding agent running this itself - and
-   nothing else. NEVER install or run a third-party or competitor tool (a
-   rival CLI, a paid API you have no key for, anything needing a browser or a
-   login) to manufacture an asset: that is what breaks the morning build, and
-   faking the number instead of running it is worse. So (a) and (b) mean the
-   stack you ARE and the commands you CAN run here - this site's own repo,
-   the coding agent running this itself - never a competitor's tool. For an X-vs-Y guide where
+   the repo, the current official docs, the MCP, and the coding agent you
+   are actually running as - and nothing else. NEVER install or run a
+   third-party or competitor tool (a rival CLI, a paid API you have no key
+   for, anything needing a browser or a login) to manufacture an asset: that
+   is what breaks the morning build, and faking the number instead of
+   running it is worse. So (a) and (b) mean the stack you ARE and the
+   commands you CAN run here - this site's own repo, the agent CLI this run
+   is executing in - never a competitor's tool, and never the OTHER coding
+   agent either: if you are Codex, you cannot honestly benchmark Claude
+   Code, and vice versa, however well you know it from training. For an X-vs-Y guide where
    you cannot run Y, the honest asset is deep, SOURCED specifics pulled from
    BOTH tools' current official docs and changelogs that the thin page-1 posts
    get wrong or omit (cite them), plus the side you CAN run for real, plus a
@@ -163,6 +186,24 @@ the build-tool workflow and must never be picked up here.
    PR body ("information gain: measured cold-start of X vs Y, table in
    section 3"). For a source "manual" idea this is advisory like the gate
    above - build regardless - but still report what was or wasn't added.
+5b. **OUTLINE SAMENESS PROBE (cheap, and it saves the whole run).** You now
+   know the archetype, the intent contract, and your information-gain asset.
+   Before writing a word of prose, sketch the outline - the planned opening
+   sentence and the H2 headings in order - and call
+   \`check_sameness(stage="outline", markdown=<the outline>,
+   primary_keyword=<kw>)\`. Format it as plain markdown: the opening line as
+   a paragraph, then each planned H2 as \`## Heading\`. Nothing else; this
+   costs a few hundred tokens.
+   A fail here means the shape you are about to write collides with what this
+   site already published - change the opening and the heading skeleton NOW
+   and re-run the probe. Fixing it at this point costs a rewrite of the plan.
+   The same collision found at step 9, which is where it used to surface,
+   costs the draft, the visuals, and the humanizer pass as well - that is the
+   single most expensive way this run can fail.
+   **This probe never replaces the step-9 gate**, which sees the finished
+   prose and checks signals an outline cannot carry. Passing here is
+   permission to draft, not permission to ship. If the probe errors or the
+   corpus cannot be read it passes open - proceed, exactly as step 9 does.
 6. **DRAFT.** For any factual topic (a feature, API, version, command), FETCH
    THE CURRENT OFFICIAL DOCS FIRST and draft from that - never from memory,
    which may be stale. Respect the trusted-sources security rule. Test every
@@ -209,9 +250,11 @@ the build-tool workflow and must never be picked up here.
      N keywords, the scaled-content-abuse profile. Per post: let the SERP and
      topic set the geometry (section count, H2 wording, where tables and
      visuals fall, FAQ length 3-7, word count); run the ANTI-RHYME check
-     (read the 2-3 newest published guides and rewrite anything in this
-     draft that echoes them - intro sentence pattern, transitions, conclusion
-     shape); surface the step-5 information-gain asset where it does the most
+     against the brief's \`recent_guides\` fingerprints - already in hand from
+     step 1, so only go read the posts themselves if the brief came back
+     degraded - and rewrite anything in this draft that echoes them: intro
+     sentence pattern, transitions, conclusion
+     shape; surface the step-5 information-gain asset where it does the most
      work (never bury your one original thing in a footnote); and vary the
      visual TYPE from the previous few posts.
 7. **VISUALS (mandatory - 2 to 3 bespoke components).** Every guide ships
@@ -241,6 +284,15 @@ the build-tool workflow and must never be picked up here.
    - Named for the concept it shows (never Visual1/GuideChart), imported
      only by this guide, with a top-of-file comment explaining what it shows
      and why.
+   **"Mandatory" is a file count, not an aspiration.** A markdown table, a
+   blockquote callout, a code fence and an ASCII diagram are PROSE - they are
+   already allowed anywhere in the draft and NONE of them satisfies this step.
+   This step is done when two or three NEW component files exist on disk and
+   this guide imports each one. Before moving on, list the component directory
+   and grep your own MDX for the imports; if that count is under two, you have
+   not done this step - go back and build them. Reasoning yourself down to
+   "a figure of some kind should be acceptable" is the one failure mode this
+   paragraph exists to stop.
    **COVER IMAGE (when the repo supports it).** If the repo has
    \`scripts/generate-cover.mjs\`, every guide also ships with a cover YOU
    author as vector art - no image model is involved. You know exactly what
@@ -270,7 +322,8 @@ the build-tool workflow and must never be picked up here.
      by hand; if a needed mark is missing from the script's ICONS map, add
      its official SVG path in the same PR.
    VARIETY IS MANDATORY: look at the last 2 published posts' covers
-   (\`public/blog/covers/\`, newest by the posts' dates) and pick a \`--hue\`
+   (\`public/blog/covers/\` - a directory listing in the repo you already have
+   checked out, so this is one cheap local call) and pick a \`--hue\`
    (violet|cyan|magenta|amber) AND a composition (centered subject, left-to-
    right flow, grid, split) that differ from both - same anti-sameness rule
    as article shapes. Commit the generated file under
@@ -279,6 +332,12 @@ the build-tool workflow and must never be picked up here.
    WITHOUT failing the run and note "no cover - generator not configured"
    in the report; the card falls back to its generated plate. Never hotlink
    an external image or fabricate a cover path.
+   **The generator being absent is the ONLY excuse, and you test for it
+   rather than assume it** - \`ls scripts/generate-cover.mjs\`. A conventions
+   file that calls \`cover\` "optional" is documenting the CARD FALLBACK that
+   keeps older posts rendering; it is not permission to skip. If the script
+   is there, this guide ships a cover, and "the fallback plate will do" is
+   not a decision this step lets you make.
 8. **HUMANIZER (mandatory, not optional).** Apply the humanizer pass the
    conventions file points at (or its principles if the repo carries no
    skill copy): kill AI tells, tighten, match the first-person practitioner
@@ -287,7 +346,18 @@ the build-tool workflow and must never be picked up here.
    re-check the FAQ mirror after edits.
 9. **VERIFY.** The site's build/verify command (from the conventions file)
    must pass - this also compiles the visual components. Sanity-check
-   internal links resolve to real slugs and the FAQ mirror holds.
+   internal links resolve to real slugs and the FAQ mirror holds - resolve
+   them by listing the files they point at, never by trusting that a route
+   you wrote from memory exists.
+   **SHIP CHECK - answer these with commands, not from memory, and put the
+   numbers in the run report:** (a) how many NEW component files this guide
+   imports (must be 2 or 3), (b) whether the cover file exists and
+   frontmatter points at it, or the generator is genuinely absent. A run that
+   is short on either is NOT ready to ship: go back to step 7 and finish it.
+   Never open a PR that fails this check, and never write a report that
+   claims visuals were done without the filenames to back it up - a guide
+   that ships without them looks broken next to every post beside it, which
+   is a cost the owner pays long after this run's log is gone.
    **Then the SAMENESS GATE, mandatory:** call \`check_sameness\` with the
    FINAL guide markdown (after the humanizer pass) and its primary keyword.
    It compares this draft against the guides this site has already published -
@@ -308,15 +378,59 @@ the build-tool workflow and must never be picked up here.
    The owner can retarget or drop the idea. Never loop past three - burning
    the run's turns to force a duplicate through helps nobody.
    If it passes open with a note (corpus unreadable), say so in the report.
-10. **BACK-LINKS (only when the project opted in).** Read
-   \`get_project\`'s \`internal_linking\`. When it is not exactly \`true\`,
-   SKIP this step entirely and say nothing about it - that is the default and
-   it is not a failure. Never infer permission from Auto mode, from
-   \`auto_merge\`, or from the owner having been happy with previous PRs: this
-   is the only step that edits pages the owner ALREADY PUBLISHED, and it needs
-   its own yes.
+{{BACKLINKS_STEP}}
+11. **PR - never main.** Branch \`seo/<slug>\` -> commit -> push ->
+   \`gh pr create --label seo --title "..." --body "..."\` (create the
+   \`seo\` label if missing). Body includes: target keyword, volume/KD, the
+   suggestion rationale, gate verdict (what page 1 lacks that this draft
+   has), and a note that the deploy preview link is the review surface.
+   **If step 10 edited any already-published post, the body lists them** -
+   one bullet per edited file with the path, the anchor text used, and the
+   sentence it now sits in. This is disclosure, not a gate: back-link edits
+   ride in THIS PR and merge with it under the project's normal merge rules,
+   exactly like the new guide does. The owner should be able to see what was
+   touched by scrolling the PR body, without ever having to go looking - but
+   nothing about back-linking changes whether or when the PR merges.
+   **If \`gh pr create\` fails, that is a FAILED run - never exit green.**
+   The usual cause is the repo setting "Allow GitHub Actions to create and
+   approve pull requests" being off (the default on new repos). Revert the
+   suggestion with \`update_suggestion(id, status="approved")\` so the next
+   run retries it, print the exact error plus that setting name in the run
+   report, and exit non-zero (e.g. \`exit 1\` from bash) so the workflow
+   goes red and the owner gets GitHub's failure email. A pushed branch
+   with no PR and a green run is the worst outcome - it strands silently.
+12. \`update_suggestion(id, status="done", result_pr_url=<pr url>)\` and
+    \`log_page(url="https://{{DOMAIN}}/<path>", ...)\` - independent of each
+    other, so issue them together in one turn.
+13. Report: what was built, the PR link, the gate verdict, the archetype and
+    information-gain asset chosen, **the step-9 ship-check numbers with the
+    component filenames and the cover path**, which published posts (if any)
+    were edited to link back, and what to check on the preview. Naming the
+    files is the point: "visuals: done" is not a report, it is the shape a
+    skipped step hides in.
+`;
 
-   When it IS true: the new guide already links OUT to siblings (step 6). Now
+// Step 10 in the two states a project can be in. Only one is ever served.
+//
+// OFF is the default and the state of most projects, so shipping the full
+// ~60-line policy to every build was ~1.5K tokens per turn describing work
+// the run is forbidden to do. The note that remains is deliberately explicit
+// rather than silent: a run that knows the step exists and is off cannot
+// mistake its absence for an oversight and improvise.
+export const BACKLINKS_STEP_OFF = `10. **BACK-LINKS - OFF for this project.** \`internal_linking\` is not
+   enabled here, so there is no back-link step this run: do not edit any
+   already-published post, and say nothing about it in the report. This is
+   the default and it is not a failure. Never infer permission from Auto
+   mode, from \`auto_merge\`, or from the owner having been happy with
+   previous PRs - editing pages the owner already published needs its own
+   explicit yes, which this project has not given.`;
+
+export const BACKLINKS_STEP_ON = `10. **BACK-LINKS - ON for this project.** \`internal_linking\` is enabled,
+   so this run DOES add back-links, under every rule below. (Re-confirm with
+   \`get_project\` only if you have reason to think it changed mid-run; the
+   flag was read when these instructions were rendered.)
+
+   The new guide already links OUT to siblings (step 6). Now
    make the link flow both ways, so the corpus compounds instead of every post
    standing alone. In THIS SAME PR, edit **2-3 already-published posts** so
    they link TO the new guide.
@@ -372,30 +486,4 @@ the build-tool workflow and must never be picked up here.
      conflict in someone's published content is a far worse outcome than one
      fewer back-link.
    - **Verify again after editing.** Re-run the site's build/verify command:
-     the edited posts must still build and every link must resolve.
-11. **PR - never main.** Branch \`seo/<slug>\` -> commit -> push ->
-   \`gh pr create --label seo --title "..." --body "..."\` (create the
-   \`seo\` label if missing). Body includes: target keyword, volume/KD, the
-   suggestion rationale, gate verdict (what page 1 lacks that this draft
-   has), and a note that the deploy preview link is the review surface.
-   **If step 10 edited any already-published post, the body lists them** -
-   one bullet per edited file with the path, the anchor text used, and the
-   sentence it now sits in. This is disclosure, not a gate: back-link edits
-   ride in THIS PR and merge with it under the project's normal merge rules,
-   exactly like the new guide does. The owner should be able to see what was
-   touched by scrolling the PR body, without ever having to go looking - but
-   nothing about back-linking changes whether or when the PR merges.
-   **If \`gh pr create\` fails, that is a FAILED run - never exit green.**
-   The usual cause is the repo setting "Allow GitHub Actions to create and
-   approve pull requests" being off (the default on new repos). Revert the
-   suggestion with \`update_suggestion(id, status="approved")\` so the next
-   run retries it, print the exact error plus that setting name in the run
-   report, and exit non-zero (e.g. \`exit 1\` from bash) so the workflow
-   goes red and the owner gets GitHub's failure email. A pushed branch
-   with no PR and a green run is the worst outcome - it strands silently.
-12. \`update_suggestion(id, status="done", result_pr_url=<pr url>)\` and
-    \`log_page(url="https://{{DOMAIN}}/<path>", ...)\`.
-13. Report: what was built, the PR link, the gate verdict, the archetype and
-    information-gain asset chosen, which published posts (if any) were edited
-    to link back, and what to check on the preview.
-`;
+     the edited posts must still build and every link must resolve.`;

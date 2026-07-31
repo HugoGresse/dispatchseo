@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { JOURNEY_STAGES, STAGE_META } from "@/lib/journey-meta";
 import { FirstRunStatus } from "@/components/first-run-status";
 import { agentById, type AgentId } from "@/lib/agents";
+import { AgentMark } from "@/components/agent-mark";
 import {
   chooseGithubRepo,
   connectClaudeToken,
@@ -369,7 +370,7 @@ export function CloudOnboardingWizard(props: {
                 onClick={() => setScreen("c2")}
                 className="cursor-pointer rounded-lg bg-violet-500 px-4 py-2 text-sm font-semibold text-neutral-950 transition-colors hover:bg-violet-400"
               >
-                Back to the coding-agent step
+                Back to the {installResult?.agent_name ?? "agent"} step
               </button>
             ) : null}
             <button
@@ -668,6 +669,7 @@ export function CloudOnboardingWizard(props: {
                         disabled={agentSaving}
                         className="h-4 w-4 accent-violet-500"
                       />
+                      <AgentMark id={id} className="h-[18px] w-[18px] shrink-0" />
                       <span className="text-sm font-semibold text-neutral-100">
                         {agentById(id).displayName}
                       </span>

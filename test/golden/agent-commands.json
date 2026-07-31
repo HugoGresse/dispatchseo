@@ -33,5 +33,43 @@
     "transport": "http",
     "header": "Authorization: Bearer fixture-token-do-not-use",
     "urlWithKey": "https://backend.example.test/api/mcp?key=fixture-token-do-not-use"
+  },
+  "registry": {
+    "claude": {
+      "displayName": "Claude Code",
+      "credential": {
+        "repoSecretName": "CLAUDE_CODE_OAUTH_TOKEN",
+        "envVar": "CLAUDE_CODE_OAUTH_TOKEN",
+        "instanceSettingsColumn": "builder_claude_token",
+        "placeholder": "sk-ant-oat...",
+        "mintUrl": "/docs/install-claude-code"
+      },
+      "capabilities": {
+        "mcp": true,
+        "headlessBuilder": true,
+        "caveat": ""
+      },
+      "connectServerName": "dispatchseo-goldensite",
+      "connectBash": "claude mcp add dispatchseo-goldensite https://backend.example.test/api/mcp --transport http --scope local --header \"Authorization: Bearer fixture-token-do-not-use\" && mkdir -p .claude && test -f .claude/settings.local.json || printf '%s\\n' '{' '  \"permissions\": {' '    \"allow\": [\"Bash(gh *)\"]' '  }' '}' > .claude/settings.local.json",
+      "mcpAddBash": "claude mcp add dispatchseo-goldensite https://backend.example.test/api/mcp --transport http --scope local --header \"Authorization: Bearer fixture-token-do-not-use\""
+    },
+    "codex": {
+      "displayName": "Codex",
+      "credential": {
+        "repoSecretName": "OPENAI_API_KEY",
+        "envVar": "OPENAI_API_KEY",
+        "instanceSettingsColumn": "builder_openai_key",
+        "placeholder": "sk-...",
+        "mintUrl": "https://platform.openai.com/api-keys"
+      },
+      "capabilities": {
+        "mcp": true,
+        "headlessBuilder": true,
+        "caveat": ""
+      },
+      "connectServerName": "dispatchseo-goldensite",
+      "connectBash": "codex mcp add dispatchseo-goldensite --url \"https://backend.example.test/api/mcp?key=fixture-token-do-not-use\"",
+      "mcpAddBash": "codex mcp add dispatchseo-goldensite --url \"https://backend.example.test/api/mcp?key=fixture-token-do-not-use\""
+    }
   }
 }

@@ -210,11 +210,19 @@ re-snapshot.
   its uniqueness constraints scoped per-project — see `0004_projects.sql`.
 - Server-only modules (`db.ts`, anything touching the service role or secrets)
   must never end up in a client component bundle.
-- **User-visible releases get a changelog entry.** Prepend to `CHANGELOG` in
-  `src/lib/changelog.ts` (owner's language, not the commit subject) — that one
-  list feeds the dashboard's "DispatchSEO has been updated" banner, the
-  `/changelog` page, and the `get_changelog` MCP tool. Versions are anchor ids
-  and cookie values: never reuse or reorder one. Internal-only work ships
-  without an entry.
+- **User-visible work gets a changelog line; only a release cut announces it.**
+  Append the line to `UNRELEASED` in `src/lib/changelog.ts` (owner's language,
+  not the commit subject) and stop there — that list is invisible on purpose.
+  Cutting a release is a separate, deliberate act, and only ever on the
+  maintainer's say-so: the staged lines move into a new `CHANGELOG` entry with a
+  semver `version`, a title and a summary, and `UNRELEASED` empties. **Never cut
+  one unprompted** — that entry fires the dashboard banner for every owner, the
+  `/changelog` page, the `get_changelog` MCP tool and a permanent post in the
+  public Discord, all at once. Six releases went out on 2026-07-31 alone, which
+  is what versions exist to stop; a day of work is one release, and a quiet week
+  is fine. Bump minor for anything new, patch for fixes, major only for
+  something a self-hoster must act on. Versions are anchor ids, cookie values
+  and Discord deep links: never reuse, renumber or reorder one. Internal-only
+  work ships without a line at all.
 - Deferred/out-of-scope ideas go in `LATER.md`, not into code. The ethos is
   "working > pretty", single-user, no over-engineering.

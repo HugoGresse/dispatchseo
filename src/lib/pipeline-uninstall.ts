@@ -272,11 +272,98 @@ export async function uninstallPipelineFromRepo(
         `The SEO_MCP_API_KEY secret could not be removed (HTTP ${secret.status}). It no longer grants access to anything.`,
       );
     }
+    // The agent credentials too - "take back everything the install put into
+    // the customer's repo" includes what the credential step stored, and the
+    // asymmetry between the two matters: a leftover Claude OAuth token is
+    // subscription-scoped and revocable from claude.ai, while a leftover
+    // OPENAI_API_KEY is a live METERED credential sitting in a repo the owner
+    // has been told is clean - the finding most likely to become somebody's
+    // surprise bill. 404 is the normal case for whichever agent this project
+    // never used.
+    for (const name of ["OPENAI_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"]) {
+      const res = await gh(token, "DELETE", `/repos/${repo}/actions/secrets/${name}`);
+      if (res.status !== 204 && res.status !== 404) {
+        result.warnings.push(
+          `The ${name} secret could not be removed (HTTP ${res.status}). It is your agent ` +
+            `credential, not ours - if you're done with it, revoke it at the provider too.`,
+        );
+      }
+    }
   } else {
     result.warnings.push(
       "The SEO_MCP_API_KEY secret was left in place, since removing it while a workflow might still run would only add failed runs.",
     );
+    result.warnings.push(
+      "Your agent credential secrets (CLAUDE_CODE_OAUTH_TOKEN / OPENAI_API_KEY) were also left " +
+        "in place for the same reason - delete them once the workflows are off, and note the " +
+        "OpenAI key is a live billing credential until you do.",
+    );
   }
 
   return result;
+}
+
+// Disconnect WITHOUT deleting: take the pipeline back out of the repo and
+// forget which repo it was, while the project, its keywords, rank history and
+// published pages all stay exactly as they are.
+//
+// This exists because "stop using DispatchSEO for this site" had no path at
+// all on self-host. Deleting is refused for the home project (it anchors the
+// schema's column defaults), Settings renders the repo as read-only text, and
+// set_github_repo is cloud-only and rejects an empty value - so a self-hoster
+// whose one site was a trial had workflows running in their repo, spending
+// their own Actions minutes, with no button anywhere that stopped it. The only
+// way out was deleting the workflow files by hand through the GitHub API.
+//
+// ON FAILURE THE REPO STAYS CONNECTED, deliberately. Clearing github_repo
+// while the workflows are still live in the repo would strand them: they would
+// keep firing on their schedules against a project that no longer claims them,
+// failing every run, emailing the owner, burning Actions minutes - and there
+// would be nothing left to retry the disconnect FROM, because the repo we
+// needed to reach is the field we just cleared. That is the exact trap this
+// module's header describes; leaving the connection in place keeps the retry
+// possible and the state honest.
+export type DisconnectResult = {
+  ok: boolean;
+  repo: string | null;
+  /** Null when there was nothing connected to begin with. */
+  teardown: UninstallResult | null;
+  warnings: string[];
+};
+
+export async function disconnectRepoFromProject(project: {
+  id: string;
+  github_repo: string | null;
+  github_installation_id?: number | null;
+}): Promise<DisconnectResult> {
+  const repo = project.github_repo;
+  if (!repo) {
+    return { ok: true, repo: null, teardown: null, warnings: [] };
+  }
+
+  const teardown = await uninstallPipelineFromRepo(project);
+  if (!teardown.ok) {
+    return { ok: false, repo, teardown, warnings: teardown.warnings };
+  }
+
+  // pipeline_installed_at goes too: a project with no repo cannot have an
+  // installed pipeline, and leaving the stamp behind would make a later
+  // reconnect look already-finished to every readiness gate that reads it.
+  const { db } = await import("./db");
+  const { error } = await db()
+    .from("projects")
+    .update({ github_repo: null, pipeline_installed_at: null })
+    .eq("id", project.id);
+  if (error) {
+    return {
+      ok: false,
+      repo,
+      teardown,
+      warnings: [
+        `DispatchSEO was removed from ${repo}, but this project still lists it as connected (${error.message}). Try again - re-running is safe, since everything it removes is already gone.`,
+      ],
+    };
+  }
+
+  return { ok: true, repo, teardown, warnings: [] };
 }

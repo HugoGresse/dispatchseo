@@ -11,6 +11,8 @@ import { isCloudMode } from "@/lib/cloud";
 import { currentUser } from "@/lib/cloud-auth";
 import { SetupProgressBanner } from "@/components/setup-progress-banner";
 import { RepoCleanupBanner } from "@/components/repo-cleanup-banner";
+import { PlanLapsedBanner } from "@/components/plan-lapsed-banner";
+import { getSubscription, planNotice } from "@/lib/billing";
 import { REPO_NOTICE_COOKIE, decodeRepoNotice } from "@/lib/repo-notice";
 import { PostHogIdentify } from "@/components/posthog-identify";
 
@@ -39,6 +41,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
   ]);
 
   const billing = isCloudMode();
+  // One indexed single-row read, cloud only, and it can't join the Promise.all
+  // above because it needs the user id that call resolves. Worth the round trip:
+  // this is the only thing on the dashboard that can explain why a paused
+  // account's data stopped moving, and it has to be on every screen, not just
+  // the one the owner happens to open.
+  const notice = billing && user ? planNotice(await getSubscription(user.id)) : null;
   // Cloud unlocks the dashboard when the wizard reaches its finale
   // (onboarding-gate keys on the c5 stamp), so the owner can explore while
   // the background setup run personalizes their site. Show a top banner in
@@ -114,7 +122,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
             </div>
           </div>
         </header>
-        {repoNotice ? (
+        {/* Outranks every other banner. The rest report things that happened;
+            this reports that the product is not currently running, which makes
+            a release note or a setup-progress bar beside it noise. */}
+        {notice ? (
+          <PlanLapsedBanner notice={notice} />
+        ) : repoNotice ? (
           <RepoCleanupBanner repo={repoNotice.repo} warnings={repoNotice.warnings} />
         ) : setupInProgress && active ? (
           <SetupProgressBanner

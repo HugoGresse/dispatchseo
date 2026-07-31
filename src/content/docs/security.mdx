@@ -113,8 +113,9 @@ it to, and nothing else:
 
 - **GitHub** - to clone your repo, and to open and merge pull requests,
   using the token you provide.
-- **Anthropic or OpenAI** - the builder container runs your own coding agent
-  (Claude Code or Codex) headlessly, on your own subscription or key.
+- **Anthropic or OpenAI** - the builder container runs your own coding
+  agent headlessly: Claude Code on your subscription, or Codex metered
+  against your OpenAI key. Only your project's chosen agent is called.
 - **Google** - the Search Console API, read-only, using your service
   account.
 - **DataForSEO or SerpApi**, if you've connected either, for keyword
@@ -157,10 +158,13 @@ own OAuth reviewers.
 | MCP project key | Encrypted in your database; shown on **Settings -> Project key** | Everything MCP tools can do for that one project - nothing else | No self-service regenerate yet; recreating the project issues a fresh one (see [Troubleshooting](/docs/troubleshooting)) |
 | `CRON_SECRET` | Your `.env` (self-host) or the wizard-generated instance row; instance-wide, shown on **Settings -> Cron key** | Triggers this instance's own scheduled jobs | Edit the value in `.env` and restart the stack (`sh start.sh`) |
 | GitHub token | Encrypted in your database; connected from the dashboard Home's **Connect GitHub** card | Clones your repo, opens and merges pull requests | Generate a new one on GitHub, paste it into the same card |
-| Claude Code token (builder) | Encrypted in your database, or `CLAUDE_CODE_OAUTH_TOKEN` in `.env` (env always wins) | Runs your own Claude Code headlessly to build content | Run `claude setup-token` again and paste it into Home's **Turn on automatic builds** card |
+| Claude Code token (builder) | Encrypted in your database, or `CLAUDE_CODE_OAUTH_TOKEN` in `.env` (env always wins) | Runs your own Claude Code headlessly to build content | Run `claude setup-token` again and paste it into the credential box on Settings |
+| `OPENAI_API_KEY` (builder, Codex projects) | Encrypted in your database, or in `.env` (env always wins) | Runs Codex headlessly - and it is a **live metered billing credential**, the one on this list that spends money directly | Revoke it at platform.openai.com/api-keys, create a fresh one, paste it into the same box |
 
-Treat all four as equal-weight, full access to their surface - none of
-them is safe to paste into a chat, a screenshot, or a public issue.
+Treat all five as equal-weight, full access to their surface - none of
+them is safe to paste into a chat, a screenshot, or a public issue. The
+OpenAI key deserves one extra habit: when you stop using a project, revoke
+the key at the provider too, not just here.
 
 ## No telemetry on a self-hosted install
 

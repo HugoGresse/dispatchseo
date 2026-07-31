@@ -880,6 +880,111 @@ export async function deleteProject(
   redirect("/dashboard");
 }
 
+export type DisconnectRepoState = { error: string } | { done: string } | null;
+
+// "Stop using DispatchSEO for this site" as a button, which until now did not
+// exist anywhere on the self-hosted version.
+//
+// Deleting the project is refused for the home project, Settings shows the repo
+// as read-only text, and set_github_repo is cloud-only and will not take an
+// empty value - so a self-hoster who tried this on one site was left with
+// scheduled workflows in their own repo, spending their own GitHub Actions
+// minutes, and no supported way to stop them. The only exit was deleting the
+// workflow files by hand through the GitHub API.
+//
+// Available on the home project on purpose: that is precisely the project that
+// cannot be deleted, so if disconnect skipped it too, the gap would still be
+// open for exactly the person who hit it.
+export async function disconnectRepo(
+  _prev: DisconnectRepoState,
+  formData: FormData,
+): Promise<DisconnectRepoState> {
+  await assertAuthed();
+
+  const slug = String(formData.get("slug") ?? "");
+  const confirm = String(formData.get("confirm") ?? "").trim().toLowerCase();
+
+  const project = await getProjectBySlug(slug);
+  if (!project) return { error: "Unknown project." };
+  // Same ownership check the delete path uses: this writes to the project row
+  // AND reaches into a GitHub repo, so a swapped id must not get either.
+  try {
+    await assertProjectOwned(project.id);
+  } catch {
+    return { error: "Unknown project." };
+  }
+  if (!project.github_repo) return { error: "No repo is connected to this project." };
+  if (confirm !== project.github_repo.toLowerCase()) {
+    return { error: `Type ${project.github_repo} exactly to confirm.` };
+  }
+
+  const { disconnectRepoFromProject } = await import("@/lib/pipeline-uninstall");
+  const result = await disconnectRepoFromProject(project);
+  if (!result.ok) {
+    // Say what is still live rather than a bare failure. The repo is still
+    // connected in this case by design, so the retry is right where they are.
+    return {
+      error:
+        `DispatchSEO could not be fully removed from ${result.repo}: ${result.warnings.join(" ")} ` +
+        `The repo is still connected here so you can try again - or remove ` +
+        `.github/workflows/seo-*.yml and the .dispatchseo folder yourself.`,
+    };
+  }
+
+  revalidatePath("/", "layout");
+  return {
+    done:
+      `DispatchSEO has been removed from ${result.repo}. Its workflows are disabled and deleted, ` +
+      `and nothing is scheduled there anymore. Your published pages are untouched.`,
+  };
+}
+
+export type CancelPlanState =
+  | { error: string; portal?: boolean }
+  | { done: "cancelled" | "resumed" }
+  | null;
+
+// Cancelling (and un-cancelling) the plan from the dashboard, rather than
+// sending someone to the provider's site to hunt for the button.
+//
+// The whole point is that this is ONE form post. Everything hard - period-end
+// semantics, an already-cancelled subscription, a provider that won't answer -
+// is decided in setCancelAtPeriodEnd; this only proves who is asking and hands
+// back something the page can render.
+//
+// No MCP counterpart, deliberately: see the parity note at the top of
+// src/lib/billing.ts. The MCP token identifies a PROJECT, and letting one
+// project's token cancel the account plan that pays for all of them would be an
+// escalation, not parity.
+export async function cancelPlan(
+  _prev: CancelPlanState,
+  formData: FormData,
+): Promise<CancelPlanState> {
+  if (!isCloudMode()) return { error: "Plans only exist on the hosted version." };
+  const auth = await dashboardAuth();
+  const user = auth?.user;
+  if (!user) return { error: "Not signed in." };
+
+  const resume = String(formData.get("intent") ?? "") === "resume";
+  const raw = String(formData.get("reason") ?? "");
+  const { setCancelAtPeriodEnd } = await import("@/lib/billing");
+  const { CANCELLATION_REASONS } = await import("@/lib/cancellation-reasons");
+  // Only a reason from our own list is forwarded - Polar shows it back to the
+  // customer, so an arbitrary string from the form has no business reaching it.
+  const reason = (CANCELLATION_REASONS as readonly string[]).includes(raw)
+    ? (raw as (typeof CANCELLATION_REASONS)[number])
+    : null;
+
+  const result = await setCancelAtPeriodEnd(user.id, !resume, {
+    reason,
+    comment: String(formData.get("comment") ?? ""),
+    email: user.email ?? null,
+  });
+  if (!result.ok) return { error: result.error, portal: result.portal };
+  revalidatePath("/billing");
+  return { done: resume ? "resumed" : "cancelled" };
+}
+
 export type DeleteAccountState = { error: string } | null;
 
 // Closing the account for real: cancel the money, remove the data, remove the
@@ -1406,14 +1511,17 @@ export async function setAutomationToggle(
 // cannot drift. Returns the follow-up task (usually "add the new agent's key")
 // rather than swallowing it - a switch that quietly leaves the builders unable
 // to run is the failure this whole feature is built to avoid.
-export async function setAgent(agentId: string, slug: string): Promise<{ todo: string | null }> {
+export async function setAgent(
+  agentId: string,
+  slug: string,
+): Promise<{ todo: string | null; needsCredential: boolean }> {
   await assertAuthed();
   const project = await getProjectBySlug(slug);
   if (!project) throw new Error("Unknown project.");
   if (isCloudMode()) await assertProjectOwned(project.id);
   const res = await setProjectAgent(project, agentId);
   revalidatePath("/", "layout");
-  return { todo: res.todo };
+  return { todo: res.todo, needsCredential: res.needsCredential };
 }
 
 // Internal back-linking: may the guide builder EDIT already-published posts so

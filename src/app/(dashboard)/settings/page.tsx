@@ -10,8 +10,10 @@ import { credsForProject } from "@/lib/dataforseo";
 import { DEFAULT_PROJECT_ID, fetchProjectToken } from "@/lib/projects";
 import { isCloudMode } from "@/lib/cloud";
 import { ClaudeTokenConnect } from "@/components/claude-token-connect";
+import { BuilderTokenConnect } from "@/components/builder-token-connect";
 import { hasRepoSecret } from "@/lib/github-app-secrets";
 import { DeleteProjectForm } from "@/components/delete-project";
+import { DisconnectRepoForm } from "@/components/disconnect-repo";
 import { DeleteAccountForm } from "@/components/delete-account";
 import { KeywordSourceSettings } from "@/components/keyword-source-settings";
 import { SiteLaunchedRow } from "@/components/site-launched";
@@ -232,8 +234,21 @@ export default async function SettingsPage() {
         />
       </section>
 
+      {/* Anchored: the agent switch below links here the moment a switch leaves
+          the builders without a credential, so "set your key" is one click and
+          not a hunt. scroll-mt keeps the heading clear of the sticky header.
+
+          BOTH runners get a box, because the anchor is only honest if it
+          exists everywhere the switch renders. Cloud (App-connected) stores a
+          repo secret; everything else stores the instance credential the
+          in-stack builder reads. Before the self-host branch existed, the only
+          paste surface was Home's "Turn on automatic builds" card - which
+          disappears forever once ANY project's builds are active, so an owner
+          adding a Codex site to a working Claude stack had a switch banner
+          pointing at a box that no longer rendered anywhere, and a project
+          that silently built nothing. */}
       {isCloudMode() && project.github_installation_id ? (
-        <section className="space-y-3">
+        <section id="agent-credential" className="scroll-mt-24 space-y-3">
           <SectionTitle sub="the credential builds run on - rotate it here whenever it expires or gets revoked">
             {agent.displayName} credential
           </SectionTitle>
@@ -243,7 +258,14 @@ export default async function SettingsPage() {
             slug={project.slug}
           />
         </section>
-      ) : null}
+      ) : (
+        <section id="agent-credential" className="scroll-mt-24 space-y-3">
+          <SectionTitle sub="the credential the in-stack builder runs on - stored once per instance, shared by every project on the same agent">
+            Builder credential
+          </SectionTitle>
+          <BuilderTokenConnect current={agent.id} />
+        </section>
+      )}
 
       <section className="space-y-3">
         <SectionTitle sub="which agent your scheduled builders run - not which agent you use day to day">
@@ -316,9 +338,22 @@ export default async function SettingsPage() {
       <section className="space-y-3">
         <SectionTitle sub="irreversible - read before you click">Danger zone</SectionTitle>
         <div className="space-y-3 rounded-xl border border-red-500/25 bg-neutral-900 p-4 sm:p-5">
+          {/* Disconnect sits ABOVE delete and outside the isDefault branch,
+              because the home project is the one that cannot be deleted - if
+              this were inside the else, the only project a self-hoster can
+              have would still have no way to stop. */}
+          {project.github_repo ? (
+            <div className={isDefault ? "" : "border-b border-neutral-800 pb-4"}>
+              <p className="mb-2 text-sm font-medium text-neutral-200">Disconnect the repo</p>
+              <DisconnectRepoForm slug={project.slug} repo={project.github_repo} />
+            </div>
+          ) : null}
           {isDefault ? (
             <p className="text-sm text-neutral-400">
               This is the home project - it can&apos;t be deleted.
+              {project.github_repo
+                ? " Disconnecting the repo above is how you stop it running."
+                : ""}
             </p>
           ) : (
             <>

@@ -290,6 +290,37 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .plan ul { list-style: none; margin-bottom: 26px; flex: 1; }
 .ld .plan li { font-size: 15.5px; color: var(--txt); padding: 7px 0 7px 28px; position: relative; white-space: nowrap; }
 .ld .plan li::before { content: "✓"; position: absolute; left: 2px; font-size: 17px; font-weight: 700; color: var(--vio2); }
+
+/* Pass-through-cost hint on the multi-site plans. Deliberately a quiet dotted
+   marker rather than a warning icon: the cost is real and has to be findable
+   before anyone pays, but it is a few dollars to GitHub on plans that start at
+   $49, so shouting it would misrepresent the size of it as badly as hiding it
+   would misrepresent its existence.
+   Opens on :focus-within as well as :hover - hover does not exist on a phone,
+   and a disclosure only sighted mouse users can reach is not a disclosure. */
+.ld .plan li .li-hint { position: relative; display: inline-block; margin-left: 6px; vertical-align: baseline; }
+/* A LABELLED pill, not a bare dot. The first version was a 15px circle in
+   --dim (#6e6e78) on --card (#121215) with a --line2 border - technically
+   present, visually absent, which is the same as not disclosing it. This
+   says what it is in words and carries enough contrast to be noticed while
+   scanning, without turning a few dollars into a red warning. */
+.ld .plan li .li-hint > button { font: inherit; font-size: 11.5px; font-weight: 600; line-height: 1; padding: 4px 9px 4px 7px; border-radius: 999px; border: 1px solid rgba(167,139,250,0.35); background: rgba(167,139,250,0.10); color: var(--vio2); cursor: help; display: inline-flex; align-items: center; gap: 4px; letter-spacing: 0.01em; }
+.ld .plan li .li-hint > button:hover, .ld .plan li .li-hint > button:focus-visible { border-color: var(--vio2); background: rgba(167,139,250,0.20); outline: none; }
+/* pointer-events stays ON: the bubble holds a link to the full cost table,
+   and an unclickable link is worse than no link. */
+.ld .plan li .li-pop { position: absolute; bottom: calc(100% + 9px); left: 50%; transform: translateX(-50%); width: 250px; white-space: normal; background: #1b1b21; border: 1px solid var(--line2); border-radius: 10px; padding: 11px 13px; font-size: 12.5px; line-height: 1.5; color: var(--mut); box-shadow: 0 12px 28px rgba(0,0,0,0.5); opacity: 0; visibility: hidden; transition: opacity 0.12s ease; z-index: 20; }
+/* Bridges the 9px gap between pill and bubble. Without it the pointer
+   leaves :hover crossing that gap and the bubble closes before it can be
+   reached, which makes the link inside unusable in practice. */
+.ld .plan li .li-pop::after { content: ""; position: absolute; top: 100%; left: 0; right: 0; height: 10px; }
+.ld .plan li .li-pop a { color: var(--vio2); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; display: inline-block; margin-top: 7px; }
+.ld .plan li .li-pop a:hover { color: #fff; }
+.ld .plan li .li-hint:hover .li-pop, .ld .plan li .li-hint:focus-within .li-pop { opacity: 1; visibility: visible; }
+/* The card is only ~300px wide, so an edge-anchored bubble would overflow it.
+   Pin the outer plans to their own side instead of centring. */
+.ld .plans > .plan:first-child li .li-pop { left: 0; transform: none; }
+.ld .plans > .plan:last-child li .li-pop { left: auto; right: 0; transform: none; }
+@media (max-width: 900px) { .ld .plan li .li-pop { width: 210px; } }
 .ld .plan .btn { width: 100%; }
 .ld .cloud-adds { display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 auto 46px; }
 .ld .cloud-adds .ca-label { font-size: 11.5px; font-weight: 700; letter-spacing: 0.11em; text-transform: uppercase; color: var(--dim); margin-right: 4px; }

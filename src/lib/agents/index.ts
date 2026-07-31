@@ -109,6 +109,16 @@ export type AgentDefinition = {
     looksValid: (value: string) => boolean;
     /** How the owner obtains one, in their words. */
     howToMint: string;
+    /**
+     * Where they go to get one. Rendered as "grab your key" so nobody has to
+     * hunt for the page - the single most common reason a credential step
+     * stalls is not understanding the instruction, it is not knowing where to
+     * go. Claude Code has no mint page (its token comes from a terminal
+     * command), so that one points at the doc explaining the command.
+     */
+    mintUrl: string;
+    /** Link text, since the two destinations are not the same kind of thing. */
+    mintLinkLabel: string;
   };
 
   cost: {
@@ -152,6 +162,8 @@ const claude: AgentDefinition = {
     // both are visible here before anything is stored.
     looksValid: (v) => v.startsWith("sk-ant-oat") && v.length > 60,
     howToMint: "Run `claude setup-token` in a terminal and copy what it prints.",
+    mintUrl: "/docs/install-claude-code",
+    mintLinkLabel: "how to get your token",
   },
   cost: {
     model: "subscription",
@@ -207,9 +219,16 @@ const codex: AgentDefinition = {
     // (sk-proj-, sk-svcacct-, plain sk-) and adds more. Rejecting a real key
     // because the prefix list went stale is worse than letting the real network
     // check downstream be the one that says no.
-    looksValid: (v) => v.startsWith("sk-") && v.length > 20,
+    // The sk-ant- exclusion is load-bearing: a Claude OAuth token starts
+    // sk-ant-oat, which also matches a bare sk- prefix - so without it, the
+    // most likely wrong paste on the Codex tab (the OTHER agent's credential)
+    // sails through the shape gate, gets sent to OpenAI, and comes back as a
+    // technically-true-but-useless "OpenAI rejected that key".
+    looksValid: (v) => v.startsWith("sk-") && !v.startsWith("sk-ant-") && v.length > 20,
     howToMint:
       "Create a key at platform.openai.com/api-keys. A project key is fine; it must belong to an account with credit on it.",
+    mintUrl: "https://platform.openai.com/api-keys",
+    mintLinkLabel: "grab your key",
   },
   cost: {
     model: "metered",

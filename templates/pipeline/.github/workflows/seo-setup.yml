@@ -124,6 +124,9 @@ jobs:
       #    posture usable at all.
       - name: Write Codex's MCP config
         if: steps.agent.outputs.agent == 'codex'
+        env:
+          DATAFORSEO_LOGIN: ${{ secrets.DATAFORSEO_LOGIN }}
+          DATAFORSEO_PASSWORD: ${{ secrets.DATAFORSEO_PASSWORD }}
         run: |
           mkdir -p "$RUNNER_TEMP/codex-home"
           cp .github/mcp-codex.toml "$RUNNER_TEMP/codex-home/config.toml"
@@ -132,12 +135,34 @@ jobs:
           [sandbox_workspace_write]
           network_access = true
           TOML
+          # Render the DataForSEO credential tokens. Codex's TOML `env` map is
+          # LITERAL - it does not expand ${VAR} the way Claude expands its JSON
+          # config - so left alone the dataforseo server would authenticate as
+          # the literal string "${DATAFORSEO_LOGIN}" and every keyword call
+          # would 401 mid-build. python3 rather than sed so no credential
+          # character can break the substitution; values are TOML-escaped. A
+          # truncated config (free-mode project, no dataforseo section) makes
+          # this a no-op.
+          python3 - "$RUNNER_TEMP/codex-home/config.toml" <<'PY'
+          import os, sys
+          path = sys.argv[1]
+          text = open(path).read()
+          for token, var in (("${DATAFORSEO_LOGIN}", "DATAFORSEO_LOGIN"),
+                             ("${DATAFORSEO_PASSWORD}", "DATAFORSEO_PASSWORD")):
+              val = os.environ.get(var, "").replace("\\", "\\\\").replace('"', '\\"')
+              text = text.replace(token, val)
+          open(path, "w").write(text)
+          PY
           echo "Codex home prepared. Servers configured:"
           grep -E '^\[mcp_servers\.' "$RUNNER_TEMP/codex-home/config.toml"
 
       - name: Run setup
         if: steps.agent.outputs.agent == 'claude'
         id: claude
+        # Never fail the job at this step: the classify step below reads the
+        # outcome and decides what the run MEANS (transient rate limit vs dead
+        # account), which it can only do if it is reachable.
+        continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
           # Cloud fires this as the DispatchSEO GitHub App (a Bot actor), and the App also authored the workflow commits, so scheduled runs are bot-actored too. Every trigger here needs repo write access, so allowing bots is safe; without this claude-code-action aborts with "non-human actor".
@@ -175,9 +200,23 @@ jobs:
       - name: Run setup (Codex)
         if: steps.agent.outputs.agent == 'codex'
         id: codex
+        # Never fail the job at this step: the classify step below reads the
+        # outcome and decides what the run MEANS (transient rate limit vs dead
+        # account), which it can only do if it is reachable.
+        continue-on-error: true
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          # Same rule as the Claude twin's allowed_bots above: cloud fires this
+          # as the DispatchSEO GitHub App (a Bot actor) and scheduled runs are
+          # bot-actored too, because the App authored the workflow commits.
+          # codex-action's actor gate rejects EVERY bot by default (a bot 404s
+          # the collaborator-permission lookup), so without this line each
+          # unattended Codex run dies before Codex is even installed - while a
+          # manual workflow_dispatch passes, which is what hides the failure.
+          # Every trigger that can reach this step already required repo write
+          # access, so allowing all actors adds nothing an attacker can use.
+          allow-users: "*"
           model: ${{ vars.SEO_CODEX_MODEL || 'gpt-5' }}
           codex-home: ${{ runner.temp }}/codex-home
           sandbox: workspace-write
@@ -187,7 +226,7 @@ jobs:
           # sandbox at all.
           safety-strategy: drop-sudo
           output-file: ${{ runner.temp }}/codex-out.txt
-          prompt: "FIRST call the seo-manager MCP tool get_instructions with workflow setup, then follow the returned markdown exactly - it is the current playbook and overrides any cached knowledge of this pipeline. In brief: study this repo and the live site, find or scaffold the content home, write .dispatchseo/conventions.md, fill the site profile via the seo-manager MCP, verify the pipeline prerequisites, and finish by calling mark_pipeline_installed. Commit any repo changes with git using the provided GITHUB_TOKEN, exactly as the instructions direct. Setup is idempotent - reconcile what exists, never duplicate. If get_instructions is unavailable, fail loudly and exit without changes."
+          prompt: "ENVIRONMENT RULE (read first, it overrides habit): you have no apply_patch tool here - only the shell, and you are running UNATTENDED, so there is nobody to answer a question. Write every file with a SINGLE-QUOTED heredoc (cat > path <<'DSEOF' ... DSEOF) or with python3 reading the content from stdin. The quoted delimiter is the whole point: bash expands NOTHING inside it, so the backticks and $ in MDX and TSX survive verbatim. NEVER use an unquoted heredoc, printf or echo to write file content - an unquoted heredoc is what expands backticks and corrupts the file. Pick a delimiter that cannot appear in the content. Verify every write with ls -l and head before moving on, and never let a filename come from an unset shell variable. If you ever find yourself about to ask for approval or a go/no-go, do not: pick the safest option that still completes the task, do it, and say what you chose in the final report. A run that stops to ask a question builds nothing and is a failed run. FIRST call the seo-manager MCP tool get_instructions with workflow setup, then follow the returned markdown exactly - it is the current playbook and overrides any cached knowledge of this pipeline. In brief: study this repo and the live site, find or scaffold the content home, write .dispatchseo/conventions.md, fill the site profile via the seo-manager MCP, verify the pipeline prerequisites, and finish by calling mark_pipeline_installed. Commit any repo changes with git using the provided GITHUB_TOKEN, exactly as the instructions direct. Setup is idempotent - reconcile what exists, never duplicate. If get_instructions is unavailable, fail loudly and exit without changes."
         env:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
           DATAFORSEO_LOGIN: ${{ secrets.DATAFORSEO_LOGIN }}
@@ -202,8 +241,63 @@ jobs:
       # Phone the outcome home: failures land on the DispatchSEO dashboard
       # banner + alert email (same rails as the crons); successes clear any
       # earlier red banner row for this job.
+      # A Codex failure is classified before it is reported. OpenAI's own
+      # error.code distinguishes a transient per-minute rate limit (deferred -
+      # the job stays due and the backend re-dispatches within hours) from an
+      # account that cannot build (loud failure naming the billing fix). The
+      # CLI's text cannot make that distinction - it collapses every 429 into
+      # one message - so the probe asks the API directly. Without this step a
+      # routine OpenAI rate limit was a red banner plus an alert email AND a
+      # full cadence window lost, which on a weekly workflow is the week.
+      # Claude failures keep their existing loud path.
+      - name: Classify the outcome
+        id: classify
+        env:
+          SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AGENT: ${{ steps.agent.outputs.agent }}
+          AGENT_OUTCOME: ${{ steps.agent.outputs.agent == 'codex' && steps.codex.outcome || steps.claude.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          [ "$AGENT_OUTCOME" = "failure" ] || exit 0
+          # From here this step owns the report; the flag stops the step below
+          # writing a second (ok or generic-fail) row on top of this one.
+          echo "reported=1" >> "$GITHUB_OUTPUT"
+          defer() {
+            echo "::notice::$1"
+            curl -sG --max-time 30 -H "Authorization: Bearer $SEO_MCP_API_KEY" \
+              --data-urlencode "job=seo-setup" --data-urlencode "deferred=$1" \
+              "{{BACKEND_URL}}/api/cron/deploy-check" || true
+            exit 0
+          }
+          fail() {
+            echo "::error::$1"
+            curl -sG --max-time 30 -H "Authorization: Bearer $SEO_MCP_API_KEY" \
+              --data-urlencode "job=seo-setup" \
+              --data-urlencode "fail=$1" \
+              "{{BACKEND_URL}}/api/cron/deploy-check" || true
+            exit 1
+          }
+          if [ "$AGENT" = "codex" ]; then
+            probe=$(curl -s --max-time 30 -o /tmp/probe.json -w "%{http_code}" https://api.openai.com/v1/responses \
+              -H "Authorization: Bearer $OPENAI_API_KEY" -H "Content-Type: application/json" \
+              -d '{"model":"gpt-5-mini","input":"ok","max_output_tokens":16}') || probe=000
+            err=$(jq -r '.error.code // empty' /tmp/probe.json 2>/dev/null)
+            case "$probe:$err" in
+              2*:*|429:rate_limit_exceeded)
+                defer "Codex hit a rate limit this run - it clears by itself, so the job stays due and is retried automatically. Not a failure." ;;
+              429:*|402:*)
+                fail "your OpenAI account cannot run builds right now (OpenAI said: ${err:-quota exceeded}). This does not fix itself by retrying - add credit or raise the limit at platform.openai.com/settings/organization/billing." ;;
+              401:*|403:*)
+                fail "OpenAI rejected the OPENAI_API_KEY secret on this repo (HTTP $probe). The key was probably revoked or rotated - create a new one at platform.openai.com/api-keys and set it again with 'gh secret set OPENAI_API_KEY'." ;;
+              *)
+                fail "workflow failed - $RUN_URL" ;;
+            esac
+          fi
+          fail "workflow failed - $RUN_URL"
+
       - name: Report outcome to the dashboard
-        if: always()
+        if: always() && steps.classify.outputs.reported != '1'
         env:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

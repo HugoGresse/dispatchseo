@@ -75,6 +75,30 @@ success or failure back through this same endpoint under its own job name,
 which is how a broken workflow in your site's repo shows up on your
 dashboard instead of dying quietly in the GitHub Actions tab.
 
+<Meta>
+<MetaItem label="Runs">Cloud: GitHub Actions every 3 hours at :41. Docker: the `cron` container, same cadence - and it stands down entirely when the in-stack builder is running, so the two never both claim the same job.</MetaItem>
+<MetaItem label="Needs">A connected repo with the pipeline installed. Mid-setup projects are skipped quietly.</MetaItem>
+<MetaItem label="If it fails">Same rails, job name `seo-dispatch`. This is the one to watch: it wakes every connected repo, so if it stops, nothing builds anywhere.</MetaItem>
+</Meta>
+
+**seo-dispatch** is the scheduler for the content pipeline. Every few hours
+it asks, per project, whether any of the four scheduled jobs below are due -
+and only then wakes the matching workflow in your repo.
+
+It exists because of how GitHub bills. Those workflows used to carry their
+own timers and fire three times a day, twice as insurance against GitHub's
+scheduler dropping a run. GitHub charges the repo owner a full minute
+minimum for every run that starts, so those extra attempts cost you real
+money to discover something your dashboard already knew - that the queue was
+empty, or a PR was still open. Roughly a quarter of a GitHub Free account's
+monthly allowance, per site, spent finding nothing to do.
+
+Waking a workflow does not prove it ran: GitHub accepts the call even for a
+repo with Actions switched off or one that's out of minutes. So each wake-up
+is logged as a claim and stays open until the workflow reports its own
+outcome. One that never reports shows up on your dashboard rather than
+disappearing.
+
 `weekly-opportunities` is retired - it's not on any schedule anymore (the
 Monday research workflow described below replaced it), but the route still
 answers if you call it by hand. It only ever covered the instance's default
@@ -92,16 +116,26 @@ the constraint the self-hosted Docker builder (below) exists to route
 around when you don't have one.
 
 <Meta>
-<MetaItem label="Runs">Up to three times a day (05:13, 12:13, 19:13 UTC) - later attempts are a no-op once one has already built today.</MetaItem>
+<MetaItem label="Runs">When your dashboard says there's a guide to build - it checks every few hours. A daily 19:13 UTC run is a fallback in case your dashboard can't reach the repo.</MetaItem>
 <MetaItem label="Needs">An approved guide or tool suggestion waiting, and no SEO PR already open.</MetaItem>
 <MetaItem label="If it fails">Reports `job=seo-daily` to your dashboard - banner, email, and `get_cron_health`.</MetaItem>
 </Meta>
 
 **SEO daily builder** (`seo-daily.yml`) builds the oldest approved
 suggestion into a PR: `get_instructions` → template → live SERP gate →
-humanizer voice pass → PR. Ships at most one guide a day, and the three
-same-day attempts exist so a Claude usage-limit hit is a quiet deferral
-instead of a lost day.
+humanizer voice pass → PR. Ships at most one guide a day.
+
+Your dashboard decides when it runs, rather than the workflow waking up on
+a timer to check for itself. It already knows whether anything is approved,
+whether a PR is still open and whether today's guide is built, so it can
+answer all of that without starting a GitHub runner - and GitHub charges
+your account a full minute for every run that starts, even one that exits
+immediately. An agent usage limit is still a quiet deferral rather than a
+lost day - a Claude subscription limit, or a transient OpenAI rate limit on
+Codex - the job simply stays due and gets woken again a few hours later. A
+Codex account that genuinely can't run builds (out of credit, spend cap) is
+the opposite on purpose: that's a loud failure naming the billing fix,
+because retrying can't help it.
 
 <Meta>
 <MetaItem label="Runs">Event-driven - the moment any check reports, plus an hourly backstop sweep.</MetaItem>
@@ -116,7 +150,7 @@ outside the publish paths are never auto-merged, regardless of this
 setting.
 
 <Meta>
-<MetaItem label="Runs">Mondays, up to three attempts (06:23, 13:23, 20:23 UTC) so a dropped run self-heals the same day instead of losing the week.</MetaItem>
+<MetaItem label="Runs">Weekly, when your dashboard says it's due. A Monday 20:23 UTC run is a fallback in case your dashboard can't reach the repo.</MetaItem>
 <MetaItem label="Needs">Nothing you have to enable - this is what fills the queue in the first place.</MetaItem>
 <MetaItem label="If it fails">Reports `job=seo-weekly-research`.</MetaItem>
 </Meta>
@@ -129,7 +163,7 @@ moment your guide queue runs completely dry, so a missed Monday run never
 leaves the daily builder with nothing to publish.
 
 <Meta>
-<MetaItem label="Runs">Wednesdays, up to three attempts (06:27, 13:27, 20:27 UTC).</MetaItem>
+<MetaItem label="Runs">Weekly, when your dashboard says it's due. A Wednesday 20:27 UTC run is a fallback in case your dashboard can't reach the repo.</MetaItem>
 <MetaItem label="Needs">Nothing you have to enable.</MetaItem>
 <MetaItem label="If it fails">Reports `job=seo-geo-scan`.</MetaItem>
 </Meta>
@@ -141,7 +175,7 @@ cite your site. No PR - results land directly on the dashboard's
 AI-visibility section.
 
 <Meta>
-<MetaItem label="Runs">Instantly when you approve a tool suggestion, plus a Wednesday weekly sweep (05:42, 12:42, 19:42 UTC) as a backstop.</MetaItem>
+<MetaItem label="Runs">Instantly when you approve a tool suggestion, and weekly when your dashboard says it's due. A Wednesday 19:42 UTC run is a fallback in case your dashboard can't reach the repo.</MetaItem>
 <MetaItem label="Needs">An approved tool suggestion waiting.</MetaItem>
 <MetaItem label="If it fails">Reports `job=seo-tools`.</MetaItem>
 </Meta>
@@ -164,14 +198,17 @@ tool in a real browser, and only a pass earns the `tool-validated` label
 that auto-merge requires.
 
 <Meta>
-<MetaItem label="Runs">Daily at 04:18 UTC, ahead of the 05:13 builder.</MetaItem>
+<MetaItem label="Runs">Daily at 04:18 UTC, ahead of the day's build.</MetaItem>
 <MetaItem label="Needs">Nothing you have to enable.</MetaItem>
-<MetaItem label="If it fails">Reports two job names: `seo-token-check` (a dead Claude token) and `seo-pipeline-version` (an outdated pipeline pack - shown as an update notice, not a failure).</MetaItem>
+<MetaItem label="If it fails">Reports two job names: `seo-token-check` (a dead agent credential) and `seo-pipeline-version` (an outdated pipeline pack - shown as an update notice, not a failure).</MetaItem>
 </Meta>
 
-**SEO health check** (`seo-token-check.yml`) proves your Claude token still
-works with one minimal model call, before the day's build attempts depend
-on it, and checks whether your installed pipeline is a version behind.
+**SEO health check** (`seo-token-check.yml`) proves your agent credential
+still works before the day's build attempts depend on it - one minimal
+model call on Claude Code, or a direct API probe on Codex (cheaper and more
+precise there: OpenAI's own error code says whether a key is throttled,
+broke, or revoked) - and checks whether your installed pipeline is a
+version behind.
 Because it runs every day without fail, its own silence over time is a
 useful signal too - see the pipeline heartbeat note below.
 
@@ -245,7 +282,7 @@ hand; it just no longer runs behind your back.
 
 <Meta>
 <MetaItem label="Runs">Polls `/api/builder/jobs` every `BUILDER_POLL_SECONDS` (default 600s / 10 minutes) and executes whatever comes back.</MetaItem>
-<MetaItem label="Needs">A coding agent credential - a Claude Code OAuth token or a Codex API key (dashboard "Turn on automatic builds" step, or `CLAUDE_CODE_OAUTH_TOKEN` / `OPENAI_API_KEY` in `.env`) - without one it idles and says exactly what it's waiting for.</MetaItem>
+<MetaItem label="Needs">Your project's agent credential - a Claude Code OAuth token or an OpenAI key (the credential box on Settings, or `CLAUDE_CODE_OAUTH_TOKEN` / `OPENAI_API_KEY` in `.env`) - without one it idles and says exactly what it's waiting for.</MetaItem>
 <MetaItem label="If it fails">Each job reports under `builder-<job>--<slug>`, same rails as everything above.</MetaItem>
 </Meta>
 
@@ -253,7 +290,8 @@ The **builder** container is the in-stack replacement for the four
 schedule-driven workflows above (research, build-guide, build-tool,
 geo-scan) - the scheduling logic lives entirely on the backend, so cadence
 fixes ship as ordinary backend deploys, never as "rebuild your builder
-image." It runs each job with your headless coding agent inside a clone of your
+image." It runs each job with your project's own agent - headless Claude
+Code or Codex, taken per job off its poll feed - inside a clone of your
 site's repo: research and geo-scan roughly every 6.5 days, build-guide and
 build-tool roughly daily (20-hour windows, so a run that fired a bit early
 yesterday is still due today). If the builder claims a job and then dies

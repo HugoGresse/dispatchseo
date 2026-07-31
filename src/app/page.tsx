@@ -380,7 +380,7 @@ export default async function LandingPage({
               <PlanPrice tier="starter" founding={founding} />
               <div className="p-sub">One site on autopilot</div>
               <ul>
-                <li>1 site</li>
+                <li>Up to 1 site</li>
                 <li>100 tracked keywords</li>
                 <li>Unlimited articles</li>
                 <li>Unlimited AI-built tools</li>
@@ -409,7 +409,7 @@ export default async function LandingPage({
               <PlanPrice tier="growth" founding={founding} />
               <div className="p-sub">For a small portfolio</div>
               <ul>
-                <li>3 sites</li>
+                <li>Up to 3 sites<span className="li-hint"><button type="button" aria-label="What this costs on GitHub">ⓘ GitHub cost</button><span className="li-pop" role="tooltip">Your first two sites are free on your own GitHub account. After that it&apos;s about $5 per site a month, paid to GitHub, not to us.<a href="/docs/publishing#github-actions-costs">See the cost table</a></span></span></li>
                 <li>300 tracked keywords</li>
                 <li>Unlimited articles</li>
                 <li>Unlimited AI-built tools</li>
@@ -437,7 +437,7 @@ export default async function LandingPage({
               <PlanPrice tier="scale" founding={founding} />
               <div className="p-sub">Portfolios and agencies</div>
               <ul>
-                <li>10 sites</li>
+                <li>Up to 10 sites<span className="li-hint"><button type="button" aria-label="What this costs on GitHub">ⓘ GitHub cost</button><span className="li-pop" role="tooltip">Your first two sites are free on your own GitHub account. After that it&apos;s about $5 per site a month, paid to GitHub, not to us.<a href="/docs/publishing#github-actions-costs">See the cost table</a></span></span></li>
                 <li>1,000 tracked keywords</li>
                 <li>Unlimited articles</li>
                 <li>Unlimited AI-built tools</li>
@@ -553,7 +553,7 @@ export default async function LandingPage({
             </details>
             <details>
               <summary>What do I need to run the free version?</summary>
-              <div className="a">A website that lives in a GitHub repo, a coding agent (a Claude subscription with Claude Code, or a ChatGPT subscription with Codex), free Google Search Console access, and a machine with Docker. Your laptop works for a test drive, but we highly recommend a machine that stays awake for real use - a $5 VPS or a Raspberry Pi - since schedules only run while it&apos;s on. Rank tracking works with a free SerpApi key; search volume data needs a DataForSEO account, which is the main gap the cloud version fills. The <a href={DOCS_URL}>docs</a> walk you through it.</div>
+              <div className="a">A website that lives in a GitHub repo, a coding agent (Claude Code on your Claude subscription, or Codex on an OpenAI key), free Google Search Console access, and a machine with Docker. Your laptop works for a test drive, but we highly recommend a machine that stays awake for real use - a $5 VPS or a Raspberry Pi - since schedules only run while it&apos;s on. Rank tracking works with a free SerpApi key; search volume data needs a DataForSEO account, which is the main gap the cloud version fills. The <a href={DOCS_URL}>docs</a> walk you through it.</div>
             </details>
             <details>
               <summary>Is this another AI content spammer?</summary>
@@ -564,8 +564,8 @@ export default async function LandingPage({
               <div className="a">No. The agent does the research and explains each idea in plain language: what the keyword is, why it looks winnable, and what the article should cover. You judge whether it sounds right for your business, which is the part no tool should take from you.</div>
             </details>
             <details>
-              <summary>Which coding agents does it work with?</summary>
-              <div className="a">Claude Code and Codex are both first-class: same tools, same schedules, same overnight builder, and you pick which one a site uses at setup or switch later in one setting. The server also speaks standard MCP, so other MCP clients can connect to the same tools. Adapters for more agents will come when people ask for them.</div>
+              <summary>Does it only work with Claude Code?</summary>
+              <div className="a">No - Codex is fully supported too, including the overnight builders. Every scheduled workflow carries both agents and asks the dashboard which one to run, so you can switch on Settings and it takes effect on the next build, no reinstall. The honest difference is billing: Claude Code runs on the subscription you already have, Codex is metered by OpenAI per run. Beyond those two, the server speaks standard MCP, so other MCP clients (Cursor, Gemini CLI) can connect to the same tools interactively - they just can&apos;t run the unattended builders yet.</div>
             </details>
             <details>
               <summary>What does DispatchSEO do with my Google data?</summary>
@@ -574,6 +574,10 @@ export default async function LandingPage({
             <details>
               <summary>How do I get started on cloud?</summary>
               <div className="a">Sign up and start your 7-day free trial on Starter - you enter a card at checkout, nothing is charged until the trial ends, and you can cancel in one click before then. The setup wizard walks you through connecting your site, about ten minutes end to end. Need more sites right away? Pick Growth or Scale at checkout (billed today), or upgrade anytime.{founding ? <> Right now the first {founding.cap} sites get the founding price: {founding.discountPct}% off, locked for life, so Starter is {foundingPriceLabel("starter")}/mo instead of {listPriceLabel("starter")}. It ends {founding.endsAtLabel}. I&apos;m capping it at {founding.cap} because that&apos;s how many sites I can personally onboard and support while still building. When it&apos;s full, it&apos;s full.</> : null}</div>
+            </details>
+            <details>
+              <summary>Are there any costs besides the subscription?</summary>
+              <div className="a">One, and it&apos;s not to us: your automations run as GitHub Actions in your own repo, billed to your own GitHub account. Your first two sites or so are covered by GitHub&apos;s free tier at $0. Beyond that it&apos;s roughly $5/site/month, paid straight to GitHub with nothing added by us - GitHub Pro at $4/month is the simplest way to cover a third site.</div>
             </details>
           </div>
         </div>

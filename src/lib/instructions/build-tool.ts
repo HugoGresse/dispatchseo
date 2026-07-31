@@ -34,6 +34,12 @@ swapping words and buttons is a build failure, not a shortcut.
 
 1. \`get_suggestions(status="approved", type="tool")\` - the list comes back
    in BUILD ORDER (the owner's dashboard queue), so **take the FIRST item**.
+   Issue it in the same turn as reading \`.dispatchseo/conventions.md\`; they
+   are independent, and the execution budget in the core instructions applies
+   to this workflow in full - especially "write whole files in one call"
+   (a widget is one Write, not twenty edits) and "keep command output small"
+   (pipe the build through \`tail\`). Accuracy and the value bar still outrank
+   it everywhere they conflict.
    None -> say "queue empty" and stop cleanly (exit without changes in
    headless runs). An idea with source "manual" was typed by the owner and
    may be just a title - derive the search intent and functionality from the
@@ -209,7 +215,8 @@ swapping words and buttons is a build failure, not a shortcut.
     GitHub's failure email. A pushed branch with no PR and a green run is
     the worst outcome - it strands silently.
 12. \`update_suggestion(id, status="done", result_pr_url=<pr url>)\` and
-    \`log_page(url="https://{{DOMAIN}}/<path>", ...)\`.
+    \`log_page(url="https://{{DOMAIN}}/<path>", ...)\` - independent of each
+    other, so issue them together in one turn.
 13. Report: what was built, the PR link, the gate verdict, the one-line core
     transformation, and what to check on the preview.
 `;

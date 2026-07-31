@@ -62,9 +62,16 @@ export function AgentConnectTabs({
 
       {active ? (
         <>
+          {/* connect.bash, NOT connect.mcpAddBash: the full chain includes the
+              gh permission pre-grant for Claude. This surface is the reconnect
+              path (new machine, second dev, fresh clone with no settings file)
+              and the bare MCP add used to be pasted here - leaving an agent
+              that dead-stops on its first gh call, with the block unliftable
+              from chat. Codex's two variants are identical by construction, so
+              this change only restores what Claude's was always meant to be. */}
           <ShellCommandTabs
-            bash={active.connect.mcpAddBash(slug, origin, token)}
-            powershell={active.connect.mcpAddPowershell(slug, origin, token)}
+            bash={active.connect.bash(slug, origin, token)}
+            powershell={active.connect.powershell(slug, origin, token)}
             box={box}
           />
           {/* The caveat is not fine print. An agent offered here that cannot do

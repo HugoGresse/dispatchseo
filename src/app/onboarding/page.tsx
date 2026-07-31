@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { getActiveProjectOrNull, scopedProjects } from "@/lib/active-project";
 import { isCloudMode } from "@/lib/cloud";
+import { hasConfiguredProject } from "@/lib/onboarding-gate";
 import { fetchProjectToken } from "@/lib/projects";
 import { projectAgent } from "@/lib/agents";
 import { requestOrigin } from "@/lib/request-origin";
@@ -20,6 +21,11 @@ import { DISCORD_URL, DiscordMark } from "@/components/discord-mark";
 import { PixelDispatcher } from "@/components/pixel-dispatcher";
 
 export const dynamic = "force-dynamic";
+// The c2 credential step live-verifies an OpenAI key against api.openai.com
+// with a 20s probe timeout; the platform's default action budget is what a
+// slow provider response would otherwise blow through. Settings sets the
+// same limit for the same reason.
+export const maxDuration = 60;
 
 // The add-a-site wizard: site -> Search Console -> keyword data source ->
 // publish mode -> one-tap merge -> timeline -> live finale. /new redirects
@@ -223,13 +229,27 @@ export default async function OnboardingPage({
     redirect("/dashboard?add=1");
   }
 
-  // Owns nothing, yet got past the gate above - in cloud that can only mean a
-  // live subscription, i.e. a returning customer who just deleted their last
-  // site. This route is a standalone shell with no sidebar, and every other
-  // dashboard page needs a project, so the only way to Billing is typing the
-  // URL: the cancel button is invisible to precisely the person hunting for
-  // it. scopedProjects is request-cached, so asking again is free.
-  const strandedNoSites = cloud && Boolean(auth.user) && (await scopedProjects()).length === 0;
+  // Anyone whose setup ISN'T finished gets a way to their billing from here.
+  //
+  // This route is a chrome-less shell with no sidebar, and every other
+  // dashboard page needs a configured project, so the only route to Billing is
+  // typing the URL - the cancel button is invisible to precisely the person
+  // hunting for it.
+  //
+  // It used to key on owning ZERO sites, which covered a returning customer who
+  // had just deleted their last one but missed the case that actually happens:
+  // someone on day one who adds their site, reaches the GitHub step, and only
+  // there discovers their stack can't work with this at all (WordPress, Wix,
+  // Squarespace, Shopify - named on the signup page, easy to miss). They own a
+  // project, so the old condition hid the link from the one person most likely
+  // to be looking for it, mid-trial, with a card already on file.
+  //
+  // hasConfiguredProject covers both: it is false for an account that owns
+  // nothing AND for one whose wizard never reached the finale. An established
+  // owner adding a second site still has a finished first one, so it stays true
+  // for them and they are not invited to go cancel - the original intent.
+  // Request-cached, and the dashboard gate already calls it, so this is free.
+  const setupUnfinished = cloud && Boolean(auth.user) && !(await hasConfiguredProject());
 
   // Someone installed the App straight from github.com - no signed state, so
   // the callback couldn't tie it to a project. Interrupt with a chooser over
@@ -308,10 +328,12 @@ export default async function OnboardingPage({
             </a>
           </div>
           <div className="flex items-center gap-4">
-            {/* The way out for someone who does not want a site here at all -
-                see strandedNoSites above. Only rendered when they own none,
-                so a normal add-a-site run is not invited to go cancel. */}
-            {strandedNoSites ? (
+            {/* The way out for someone this product turns out not to fit - see
+                setupUnfinished above. Only during unfinished setup, so an
+                established owner adding a site is not invited to go cancel.
+                Deliberately "Manage billing" and deliberately quiet: the ask
+                was for a way out, not a cancel button planted mid-flow. */}
+            {setupUnfinished ? (
               <a
                 href="/billing"
                 className="text-sm font-medium text-neutral-500 transition-colors hover:text-neutral-300"

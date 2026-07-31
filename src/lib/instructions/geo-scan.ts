@@ -9,7 +9,7 @@
 // together with the markdown below - they describe the same pipeline.
 export const GEO_SCAN_STEPS = [
   { title: "Questions", plain: "Turns your tracked keywords and product facts into the ~15 questions a real customer would ask an AI assistant." },
-  { title: "Ask", plain: "Runs each question through web search the way an AI assistant would answer it - on your own Claude subscription, costing the platform nothing." },
+  { title: "Ask", plain: "Runs each question through web search the way an AI assistant would answer it - on your own coding agent, costing the platform nothing." },
   { title: "Score", plain: "For every answer: was your site among the cited sources? Which domains got cited instead?" },
   { title: "Record", plain: "Saves each result - including the actual answer text - so the dashboard can show the trend and the gap list." },
   { title: "Gaps", plain: "The domains cited instead of you become next week's content ideas." },
@@ -45,7 +45,10 @@ in this run.
    when a page on it is among the sources that actually support the answer -
    not when it merely appeared somewhere in search results.
 3. **Record everything in one call**: \`record_ai_citations\` with one entry
-   per question - engine \`claude\`, the query, \`has_ai_answer\` (false only
+   per question - engine \`{{AGENT_ENGINE}}\` (the model family actually
+   answering: this run's own agent, so the dashboard's AI-visibility chart
+   attributes answers to the engine that produced them), the query,
+   \`has_ai_answer\` (false only
    if the question produced no meaningful answer), \`cited\`, \`cited_url\`
    when applicable, a 1-2 sentence verbatim \`answer_excerpt\`, and the full
    \`citations\` list (domain, url, title). The excerpt is what makes the

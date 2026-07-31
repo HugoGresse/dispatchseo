@@ -2,21 +2,24 @@
 
 import { useState, useTransition } from "react";
 import { setAgent } from "@/app/actions";
-import { availableAgents } from "@/lib/agents";
+import { availableAgents, agentById } from "@/lib/agents";
+import { AgentMark } from "@/components/agent-mark";
 
 // Which coding agent runs this project's unattended builders.
 //
 // Deliberately NOT framed as "which agent do you use". Any agent connected over
 // MCP drives everything interactively no matter what this says; the only thing
-// it decides is who wakes up at 05:13. Conflating the two would make people
+// it decides is who runs the scheduled builds. Conflating the two would make people
 // think switching here is required before they can use Codex at all, and it
 // isn't.
 export function AgentSwitch({ current, slug }: { current: string; slug: string }) {
   const agents = availableAgents();
   const [selected, setSelected] = useState(current);
   const [todo, setTodo] = useState<string | null>(null);
+  const [needsCredential, setNeedsCredential] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const selectedAgent = agentById(selected);
 
   function choose(id: string) {
     if (id === selected || pending) return;
@@ -24,10 +27,12 @@ export function AgentSwitch({ current, slug }: { current: string; slug: string }
     setSelected(id);
     setError(null);
     setTodo(null);
+    setNeedsCredential(false);
     start(async () => {
       try {
         const res = await setAgent(id, slug);
         setTodo(res.todo);
+        setNeedsCredential(res.needsCredential);
       } catch (e) {
         // Put the radio back where it was. A control that stays on the value
         // you picked after the save failed is a lie about the stored state.
@@ -55,8 +60,11 @@ export function AgentSwitch({ current, slug }: { current: string; slug: string }
                   : "border-neutral-800 bg-neutral-900 hover:border-neutral-700"
               }`}
             >
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="font-medium text-neutral-100">{a.displayName}</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  <AgentMark id={a.id} className="h-[18px] w-[18px] shrink-0" />
+                  <span className="font-medium text-neutral-100">{a.displayName}</span>
+                </span>
                 {on ? (
                   <span className="text-xs font-medium text-violet-300">in use</span>
                 ) : null}
@@ -73,9 +81,28 @@ export function AgentSwitch({ current, slug }: { current: string; slug: string }
           switching rather than left for the builder to discover overnight -
           the run WILL stop and say so, but that is a worse place to learn it. */}
       {todo ? (
-        <p className="rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2.5 text-sm text-amber-200/90">
-          {todo}
-        </p>
+        <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2.5 text-sm text-amber-200/90">
+          <p>
+            <b className="font-semibold text-amber-200">
+              {/* "credential", not "API key": Claude's is an OAuth token from
+                  `claude setup-token`, and calling it an API key sends people
+                  hunting for one at console.anthropic.com. */}
+              Set your {selectedAgent.displayName} credential so builds actually run.
+            </b>{" "}
+            {todo}
+          </p>
+          {/* A link, not just an instruction. The credential box is on this same
+              page, but "on Settings" is not findable when you are already on
+              Settings and the box is two screens away. */}
+          {needsCredential ? (
+            <a
+              href="#agent-credential"
+              className="mt-2 inline-block font-medium text-amber-200 underline underline-offset-2 hover:text-amber-100"
+            >
+              Take me to the key box
+            </a>
+          ) : null}
+        </div>
       ) : null}
 
       <p className="text-xs text-neutral-500">

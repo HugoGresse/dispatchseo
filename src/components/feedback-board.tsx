@@ -7,6 +7,7 @@ import {
   submitFeedbackAction,
   toggleVoteAction,
 } from "@/app/feedback-actions";
+import { SelectWrap } from "@/components/ui";
 import { BODY_MAX, TITLE_MAX, TITLE_MIN } from "@/lib/feedback-limits";
 import type { FeedbackItem, FeedbackStatus } from "@/lib/feedback";
 
@@ -275,18 +276,20 @@ function Card({
             <label className="sr-only" htmlFor={`status-${item.id}`}>
               Status
             </label>
-            <select
-              id={`status-${item.id}`}
-              value={item.status}
-              onChange={(e) => onAdmin(() => setFeedbackStatusAction(item.id, e.target.value))}
-              className="rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 text-xs text-neutral-300 outline-none focus:border-neutral-600"
-            >
-              {ALL_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {STATUS_STYLE[s].label}
-                </option>
-              ))}
-            </select>
+            <SelectWrap>
+              <select
+                id={`status-${item.id}`}
+                value={item.status}
+                onChange={(e) => onAdmin(() => setFeedbackStatusAction(item.id, e.target.value))}
+                className="appearance-none rounded-lg border border-neutral-800 bg-neutral-950 py-1.5 pl-2.5 pr-7 text-xs text-neutral-300 outline-none focus:border-neutral-600"
+              >
+                {ALL_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {STATUS_STYLE[s].label}
+                  </option>
+                ))}
+              </select>
+            </SelectWrap>
             <button
               type="button"
               onClick={() => onAdmin(() => setFeedbackHiddenAction(item.id, !item.hidden))}

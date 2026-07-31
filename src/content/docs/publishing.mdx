@@ -138,6 +138,68 @@ comparison, and
 [Step 6 of the setup wizard](/docs/setup-wizard#step-6-connect-github) for
 exactly what that step asks for on a self-hosted install.
 
+## GitHub Actions costs
+
+The 11 workflows above run as GitHub Actions in your own repo, on your own
+GitHub account - not on DispatchSEO's infrastructure, and we never touch or
+mark up what GitHub charges for them. Each connected site burns roughly 800
+Actions minutes a month keeping research, builds, and validation running.
+
+GitHub's free tier includes 2,000 Actions minutes a month, so your first two
+sites are comfortably covered at $0. From a third site you're past that
+allowance - [GitHub Pro](https://github.com/settings/billing) is $4/month
+and is the simplest fix, or you can let GitHub bill the overage directly.
+Rough numbers, since actual minutes depend on how long your builds run:
+
+| Sites | Roughly |
+| --- | --- |
+| 1 | $0 |
+| 2 | $0 |
+| 3 | ~$4 (GitHub Pro covers it) |
+| 4 | ~$5 |
+| 5 | ~$10 |
+| 6 | ~$15 |
+| 7 | ~$20 |
+| 8 | ~$24 |
+| 9 | ~$29 |
+| 10 | ~$34 |
+
+Treat this as a ballpark, not a bill - repo size and build time move it in
+either direction.
+
+<Callout type="warning" title="GitHub doesn't bill you by default - it pauses you">
+GitHub's spending limit defaults to $0. That means once you're past the free
+minutes, GitHub does not send you a bill - it silently pauses your workflows
+until you add a payment method and raise the limit. Set yours before you
+need it, not after a build goes mysteriously quiet:
+[github.com/settings/billing](https://github.com/settings/billing).
+</Callout>
+
+One way to sidestep all of this: public repositories get unlimited free
+GitHub Actions minutes. If your site's repo can be public, GitHub Actions
+costs nothing at all, regardless of how many sites you connect.
+
+## Turning it off for a site
+
+Settings has a **Disconnect repo** button in the danger zone. It switches off the
+`seo-*` workflows in your repo, deletes them along with the `.dispatchseo` folder
+and the `SEO_MCP_API_KEY` secret, and clears the connection. Every schedule stops,
+so it stops using your GitHub Actions minutes.
+
+What it never touches: the guides and tools that already shipped, any templates
+the setup agent added to your site, and everything this dashboard has tracked -
+keywords, rankings, history. Reconnecting the repo later re-installs the pipeline.
+
+The button is there for your first site too. That one can't be deleted, because
+the rest of your setup is anchored to it, so disconnecting is how you stop it.
+
+If GitHub can't be reached - a rotated token, an uninstalled App - the repo stays
+connected on purpose and the error says why. Clearing the connection while the
+workflows were still live would leave them running against a project that no
+longer claims them, with nothing left to retry from.
+
+Claude Code can do the same thing with the `disconnect_repo` tool.
+
 ## Publishing pace
 
 However fast ideas get approved, guides ship at a flat rate: **at most one

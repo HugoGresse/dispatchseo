@@ -13,7 +13,7 @@ import { getWeeklyProgress } from "@/lib/progress";
 import { AUTOMATIONS, gatherEvidence } from "@/lib/automations";
 import { credsForProject, keywordSuggestions, relatedKeywords, type KeywordIdea } from "@/lib/dataforseo";
 import { isCloudMode } from "@/lib/cloud";
-import { canMerge, dispatchToolBuild, mergePr, openSeoPrs, verifyPipelinePrereqs } from "@/lib/github";
+import { builderAgentToken, canMerge, dispatchToolBuild, mergePr, openSeoPrs, verifyPipelinePrereqs } from "@/lib/github";
 import {
   indexingBrowserCommand,
   indexingQueue,
@@ -58,6 +58,8 @@ import {
   extractFromMarkdown,
   tokenize,
 } from "@/lib/similarity";
+import { buildBrief } from "@/lib/build-brief";
+import { checkBuildPr } from "@/lib/build-pr-guard";
 import { requestTrendExpand, requestTrendScan } from "@/lib/trends";
 import { serpProviderForProject, providerOrganic } from "@/lib/serp";
 import { gscAccessProbe } from "@/lib/gsc";
@@ -407,6 +409,24 @@ const mcpHandler = createMcpHandler(
           coerced = !owner && (trendSourced || !autoApproved);
         }
         const effective = coerced ? "pending" : status;
+
+        // THE PR HAS TO CONTAIN THE WORK. An agent marking its own build done
+        // is the one moment we can cheaply check its claim against the diff,
+        // and on 2026-07-31 a run reported a full ship check - cover present,
+        // three visuals imported, heading and FAQ counts - on a branch whose
+        // MDX was zero bytes. Instructions cannot fix that; a self-report is
+        // only ever evidence of what the agent believes. So read the diff.
+        //
+        // Owner-driven updates skip it: when the owner says done in chat they
+        // are overriding on purpose, and second-guessing them with a GitHub
+        // call would be both wrong and slow. Unreadable diffs pass (see
+        // build-pr-guard) - this refuses damage it can SEE, never absence of
+        // information.
+        if (!owner && effective === "done" && result_pr_url) {
+          const verdict = await checkBuildPr(p, result_pr_url);
+          if (!verdict.ok) return fail(verdict.reason);
+        }
+
         const patch: Record<string, unknown> = {};
         if (effective) patch.status = effective;
         if (result_pr_url) patch.result_pr_url = result_pr_url;
@@ -589,6 +609,65 @@ const mcpHandler = createMcpHandler(
     // reviewing one article at a time. The math lives in similarity.ts and
     // runs HERE (not in the agent's head) so the verdict is deterministic -
     // the builder cannot grade its own prose on vibes.
+    // The guide builder's opening payload. Replaces the dozen serial calls a
+    // build used to open with - and, more importantly, replaces READING two
+    // or three published posts in full just to learn their structural shape,
+    // which is the single most context-expensive habit in the old pipeline.
+    // Everything here is derived from data the backend already holds or from
+    // the same extractors the sameness gate uses.
+    //
+    // Every section fails open independently: the response's `degraded` array
+    // names what is missing and the playbook falls back to the original
+    // per-step method for exactly that section. This tool can never block a
+    // build; the worst it can do is leave the run doing what it did before.
+    server.registerTool(
+      "get_build_brief",
+      {
+        title: "Get build brief",
+        description:
+          "Call this FIRST in a guide build. One response with everything the run needs to " +
+          "start: the queue head (the approved guide to build, in the owner's exact build " +
+          "order), the live pacing verdict, structural fingerprints of the recent guides " +
+          "(opening word-runs, heading skeletons, cover hues) so the anti-sameness and " +
+          "anti-rhyme checks need no re-reading of published posts, ranked internal-link " +
+          "candidates when the project opted into back-linking, and the site's own GSC " +
+          "numbers for the information-gain step. Pass the target keyword when you know it " +
+          "so link candidates can be ranked against it. Fails OPEN section by section: " +
+          "anything unavailable is listed in `degraded` with the fallback to use, and a " +
+          "degraded brief is never a reason to stop a build.",
+        inputSchema: {
+          keyword: z
+            .string()
+            .optional()
+            .describe(
+              "The new guide's primary keyword, used to rank internal-link candidates by topical closeness. Omit on the first call if the queue head is what tells you the keyword.",
+            ),
+        },
+      },
+      async ({ keyword }) => {
+        const p = currentProject();
+        try {
+          return ok(await buildBrief(p, { keyword }));
+        } catch (e) {
+          // Belt to the module's own per-section braces: even a total failure
+          // returns a usable shape telling the agent to do it the old way.
+          return ok({
+            queue_head: null,
+            queue_depth: 0,
+            pacing: null,
+            recent_guides: [],
+            recent_covers: [],
+            link_candidates: [],
+            site_stats: null,
+            internal_linking: p.internal_linking === true,
+            degraded: [
+              `brief unavailable (${e instanceof Error ? e.message : "unknown error"}) - gather what you need with the individual tools exactly as before; this is not a reason to stop the build`,
+            ],
+          });
+        }
+      },
+    );
+
     server.registerTool(
       "check_sameness",
       {
@@ -611,9 +690,21 @@ const mcpHandler = createMcpHandler(
             .string()
             .optional()
             .describe("The keyword this draft targets, so the check can weigh it against pages already covering it."),
+          stage: z
+            .enum(["outline", "final"])
+            .optional()
+            .describe(
+              "'final' (the default) is the full pre-publish gate on the finished draft - unchanged. " +
+                "'outline' is the cheap EARLY probe: pass just the planned opening line plus the H2 " +
+                "headings as markdown, BEFORE drafting prose or building visuals, and it checks the " +
+                "two signals an outline can carry (opening word-run, heading skeleton). Catching a " +
+                "collision here costs a replanned outline instead of a discarded draft. It skips the " +
+                "stock-phrase signal, which needs body prose, so an outline pass NEVER substitutes " +
+                "for the final check - always run 'final' on the finished guide before the PR.",
+            ),
         },
       },
-      async ({ markdown, primary_keyword }) => {
+      async ({ markdown, primary_keyword, stage }) => {
         const p = currentProject();
         const { data, error } = await db()
           .from("pages")
@@ -663,7 +754,7 @@ const mcpHandler = createMcpHandler(
         ).filter((c): c is NonNullable<typeof c> => c != null);
 
         const draft = extractFromMarkdown(markdown, new Set(tokenize(primary_keyword ?? "")));
-        return ok(compareToCorpus(draft, corpus));
+        return ok(compareToCorpus(draft, corpus, stage ?? "final"));
       },
     );
 
@@ -1581,8 +1672,8 @@ const mcpHandler = createMcpHandler(
         title: "Get site profile",
         description:
           "Read the site profile the backlink playbook personalizes from (name, " +
-          "tagline, descriptions, categories, tags). Returns null if /seo-setup " +
-          "has not written it yet.",
+          "tagline, descriptions, categories, tags). Returns null if the setup " +
+          "workflow (get_instructions workflow=setup) has not written it yet.",
         inputSchema: {},
       },
       async () => {
@@ -1603,8 +1694,8 @@ const mcpHandler = createMcpHandler(
         title: "Set site profile",
         description:
           "Write the site profile the backlink playbook prefills every directory " +
-          "submission and @browser command from. Called by the /seo-setup command " +
-          "after researching the product. Length contracts: tagline <= 60 chars, " +
+          "submission from. Called by the setup workflow (get_instructions " +
+          "workflow=setup) after researching the product. Length contracts: tagline <= 60 chars, " +
           "short_description <= 160 chars, long_description 300-600 chars - " +
           "directories enforce these limits, so keep to them.",
         inputSchema: {
@@ -1675,6 +1766,58 @@ const mcpHandler = createMcpHandler(
         const err = await setTrackedProperty(p.id, site_url);
         if (err) return fail(err);
         return ok({ project: p.slug, gsc_site_url: site_url });
+      },
+    );
+
+    // Parity for the Settings danger zone's Disconnect button (CLAUDE.md's
+    // rule that anything the dashboard can do, the agent can do too). Unlike
+    // set_github_repo above this is NOT cloud-only: the gap it closes is
+    // sharpest on self-host, where the home project cannot be deleted and this
+    // is the only way to stop a pipeline at all.
+    //
+    // Deleting a project deliberately has no MCP tool - it cascades across
+    // every table and ends in a redirect. Disconnecting is the reversible
+    // half: the repo is released, the project and all of its history stay.
+    server.registerTool(
+      "disconnect_repo",
+      {
+        title: "Disconnect the GitHub repo",
+        description:
+          "Stop DispatchSEO running in this project's repo: disable and delete the seo-* " +
+          "workflows, remove the .dispatchseo files and the SEO_MCP_API_KEY secret, and clear " +
+          "the connection. Schedules stop, so it stops consuming the owner's GitHub Actions " +
+          "minutes. Published guides, tools and pages are never touched, and the project keeps " +
+          "its keywords, rankings and history - reconnecting later re-installs the pipeline. " +
+          "If the repo cannot be reached the connection is KEPT, so the attempt can be retried.",
+        inputSchema: {
+          confirm: z
+            .string()
+            .describe(
+              "The connected repo as owner/name, typed exactly. Guards against a disconnect nobody asked for.",
+            ),
+        },
+      },
+      async ({ confirm }) => {
+        const p = currentProject();
+        if (!p.github_repo) return fail("No repo is connected to this project.");
+        if (confirm.trim().toLowerCase() !== p.github_repo.toLowerCase()) {
+          return fail(`Pass confirm="${p.github_repo}" exactly to disconnect it.`);
+        }
+        const { disconnectRepoFromProject } = await import("@/lib/pipeline-uninstall");
+        const result = await disconnectRepoFromProject(p);
+        if (!result.ok) {
+          return fail(
+            `DispatchSEO could not be fully removed from ${result.repo}: ${result.warnings.join(" ")} ` +
+              `The repo is still connected, so this can be retried.`,
+          );
+        }
+        return ok({
+          disconnected: result.repo,
+          workflows_disabled: result.teardown?.workflows_disabled ?? 0,
+          files_removed: result.teardown?.files_removed ?? 0,
+          secret_removed: result.teardown?.secret_removed ?? false,
+          note: "Schedules stopped. Published content and this project's history are unchanged.",
+        });
       },
     );
 
@@ -1969,8 +2112,14 @@ const mcpHandler = createMcpHandler(
               // builder will run research, or it falsely falls back to running
               // it inline (2026-07-24: the owner pasted the token and the agent
               // couldn't tell).
+              // Per-PROJECT-agent, never hardcoded to Claude: this field is
+              // load-bearing (the install playbook branches on it - false
+              // sends the agent off to run research inline and tell the owner
+              // to finish a step they finished), and a Codex self-host with
+              // OPENAI_API_KEY set used to read back false here, re-creating
+              // the exact 2026-07-24 regression along the Codex axis.
               builder_token_configured: Boolean(
-                process.env.CLAUDE_CODE_OAUTH_TOKEN || inst?.builder_claude_token,
+                await builderAgentToken(projectAgent(currentProject()).id),
               ),
               // Parity with Home's builder card and the wizard finale row:
               // true when EITHER build path shows recent life (in-stack
@@ -2405,6 +2554,8 @@ const mcpHandler = createMcpHandler(
         description:
           "The project this token belongs to and how it's set up: domain, mode " +
           "(semi/auto) with the effective auto_approve / auto_approve_tools flags, " +
+          "which coding agent runs the builders (agent: claude|codex - read it " +
+          "before calling set_agent), " +
           "keyword source (dataforseo/serpapi/gsc), whether a SERP " +
           "provider and Search Console are connected, whether THIS repo has its own " +
           "DataForSEO MCP server (dataforseo_repo_mcp - false on the cloud bundled " +

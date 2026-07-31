@@ -135,6 +135,48 @@ export async function canMerge(ref?: RepoRef): Promise<boolean> {
   return Boolean(await tokenForRef(ref));
 }
 
+// Repo Actions VARIABLES (not secrets): readable by workflows as vars.*, which
+// is what makes one usable by seo-tool-validate - the one workflow that must
+// never hold the project's MCP key and so cannot ask the backend which agent
+// to run. The backend writes SEO_AGENT here on every agent switch and install,
+// so that workflow agrees with the dashboard by reading a variable instead of
+// inferring from which secrets exist - the inference breaks when a switch
+// leaves the old agent's secret behind (a Claude->Codex switch would validate
+// with the lapsed Claude token and strand every tool PR unmerged).
+//
+// Best-effort by design: no repo, no token, or a GitHub hiccup must never fail
+// the switch itself - the workflow's inference fallback still runs, exactly as
+// it does for repos whose backend predates this variable.
+export async function setRepoActionsVariable(
+  ref: RepoRef,
+  name: string,
+  value: string,
+): Promise<boolean> {
+  const repo = refRepo(ref);
+  if (!repo) return false;
+  try {
+    const h = await headers(ref);
+    if (!h.Authorization) return false;
+    const patch = await fetch(`${API}/repos/${repo}/actions/variables/${name}`, {
+      method: "PATCH",
+      headers: { ...h, "Content-Type": "application/json" },
+      body: JSON.stringify({ name, value }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (patch.ok) return true;
+    if (patch.status !== 404) return false;
+    const post = await fetch(`${API}/repos/${repo}/actions/variables`, {
+      method: "POST",
+      headers: { ...h, "Content-Type": "application/json" },
+      body: JSON.stringify({ name, value }),
+      signal: AbortSignal.timeout(10000),
+    });
+    return post.ok;
+  } catch {
+    return false;
+  }
+}
+
 export type SeoPr = {
   number: number;
   title: string;
@@ -291,6 +333,30 @@ export function dispatchTrendExpand(
     "seo-trend-expand",
     { topic_id: topicId, topic_title: topicTitle, trigger: "manual" },
     "On it - takes on this subject land here in a few minutes.",
+  );
+}
+
+// The scheduler's wake-up call (see api/cron/seo-dispatch). Unlike the buttons
+// above, nobody is watching this one land, so the caller logs the outcome to
+// cron_runs instead of showing a message - which is why the failure text here
+// is written for an alert email, not a toast.
+//
+// What this CANNOT tell you is whether a workflow actually started. GitHub
+// answers 204 to any well-formed dispatch: a repo with Actions disabled, a
+// workflow file that was deleted, one whose `types:` never listed this event,
+// or a repo out of Actions minutes all accept it and run nothing. That silence
+// is the failure mode the caller's claim row exists to catch - a dispatch this
+// function calls successful is a dispatch GitHub ACCEPTED, never a run that
+// happened.
+export function dispatchScheduledBuild(
+  repo: RepoRef,
+  eventType: string,
+): Promise<{ ok: boolean; message: string }> {
+  return fireDispatch(
+    repo,
+    eventType,
+    { trigger: "scheduled" },
+    "dispatched",
   );
 }
 

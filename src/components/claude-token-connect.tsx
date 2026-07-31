@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { connectClaudeToken, type ConnectClaudeState } from "@/app/actions";
 import { CopyBox, ErrorLine, inputClass } from "@/components/wizard-ui";
 import { agentById } from "@/lib/agents";
+import { MintLink } from "@/components/mint-link";
 
 // Cloud Settings: rotate or re-store the builder credential repo secret through
 // the GitHub App - the permanent home of the wizard's c2 paste, for when the
@@ -45,10 +46,18 @@ export function ClaudeTokenConnect({
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" aria-hidden>
             <polyline points="20 6 9 17 4 12" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
+          {/* "Stored", not "working". A repo secret is write-only - nothing
+              here can read the value back, so a truncated or line-wrapped paste
+              looks identical to a good one from this side. Claiming it works
+              is how someone learns their key was mangled from a failed build
+              the next morning instead of from this box. */}
+          {/* The separator is written as an explicit string, not as loose JSX
+              text after </b>: written the other way the leading space is eaten
+              and it renders "stored- as a secret". */}
           <span>
-            <b className="font-semibold">Your {agent.displayName} credential is connected</b> -
-            stored as a secret on your repo during setup. Nothing to do here unless it expires or
-            gets revoked.
+            <b className="font-semibold">A {agent.displayName} credential is stored</b>
+            {" - as a secret on your repo. Its value can't be read back from here, so the next " +
+              "build is what proves it works; if one fails on the credential, paste it again below."}
           </span>
         </div>
       ) : (
@@ -57,6 +66,11 @@ export function ClaudeTokenConnect({
           never on our side:
         </p>
       )}
+
+      {/* Where to GET one, as a link rather than an address to retype. Shown
+          whether or not a credential is already stored, because the other time
+          you need this page is when the stored one stopped working. */}
+      <MintLink agent={agent} />
 
       {state && "error" in state ? <ErrorLine msg={state.error} /> : null}
       {state && "ok" in state ? (

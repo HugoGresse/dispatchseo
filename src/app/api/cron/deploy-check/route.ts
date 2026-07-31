@@ -99,7 +99,10 @@ export async function GET(req: Request): Promise<Response> {
   }
   if (projectSuffix && !jobParam) {
     return Response.json(
-      { error: "project tokens may only report (job=<name> with ok=1 or fail=<message>)" },
+      {
+        error:
+          "project tokens may only report (job=<name> with ok=1, deferred=<reason>, or fail=<message>)",
+      },
       { status: 403 },
     );
   }
@@ -135,12 +138,43 @@ export async function GET(req: Request): Promise<Response> {
     }
     return Response.json({ recorded: result.error, job });
   }
+  // DEFERRED: the run happened, hit a usage limit, and built nothing. Not a
+  // failure (nothing is broken, the allowance refills) but emphatically not a
+  // completion either, and the difference now has teeth.
+  //
+  // Reporting these as `ok` was harmless when each builder carried its own
+  // three-times-a-day cron: the later triggers fired off GitHub's clock and
+  // never consulted cron_runs, so a deferral at 05:13 still got retried at
+  // 12:13. Now the backend decides what is due by READING these rows
+  // (build-schedule.ts), and a plain `ok` row is a completed run - it resets
+  // the full 20h cadence window and suppresses the very retry the deferral
+  // needs. A guide deferred in the evening would silently slip a whole day,
+  // showing green the entire time.
+  //
+  // So it lands as claimedOnly: a row that says "handed out, never finished".
+  // The short claim-grace window governs instead of the cadence, so the next
+  // dispatcher tick re-fires it within hours - and if deferrals keep coming
+  // for a day and a half, the claim goes stale and alarms, which is the right
+  // answer for an account that is permanently out of allowance.
+  const deferredMsg = url.searchParams.get("deferred");
+  if (deferredMsg) {
+    await reportCronRun(
+      job,
+      { sha: liveSha || null, reported: "deferred", reason: deferredMsg.slice(0, 300) },
+      false,
+      true,
+    );
+    return Response.json({ recorded: "deferred", job });
+  }
   if (url.searchParams.get("ok")) {
     await reportCronRun(job, { sha: liveSha || null, reported: "ok" }, false);
     return Response.json({ recorded: "ok", job });
   }
   if (jobParam) {
-    return Response.json({ error: "job param needs ok=1 or fail=<message>" }, { status: 400 });
+    return Response.json(
+      { error: "job param needs ok=1, deferred=<reason>, or fail=<message>" },
+      { status: 400 },
+    );
   }
 
   // Check mode: run the internal smoke tests.
