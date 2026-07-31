@@ -8,6 +8,10 @@ import { LATEST } from "@/lib/changelog";
 export default function sitemap(): MetadataRoute.Sitemap {
   const base = "https://dispatchseo.com";
   return [
+    // The landing page - the commercial entry point, and the one page a
+    // sitemap that omits it looks broken for. Bare origin, no trailing slash,
+    // to match byte-for-byte what page.tsx emits as its canonical.
+    { url: base, changeFrequency: "weekly", priority: 1 },
     { url: `${base}/blog`, changeFrequency: "daily" },
     ...getAllPosts().map((post) => ({
       url: `${base}/blog/${post.slug}`,

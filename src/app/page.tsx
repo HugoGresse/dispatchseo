@@ -39,6 +39,10 @@ export const metadata: Metadata = {
   title: "DispatchSEO - Automate your SEO with Claude Code",
   description:
     "Claude Code researches keywords, writes guides, builds interactive tools, and tracks your ranks automatically. Every piece is a pull request you approve. Open source, free to self-host.",
+  // "/" is reachable as itself and as "?home=1" (the signed-in opt-out below),
+  // so point both at the bare root rather than letting a crawler treat the
+  // query string as a second copy of the landing page.
+  alternates: { canonical: "/" },
 };
 
 // A padlock, drawn in the same round-capped outline language as the doodles.
