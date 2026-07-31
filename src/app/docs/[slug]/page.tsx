@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MDXRemote } from "next-mdx-remote/rsc";
+import remarkGfm from "remark-gfm";
 import { DOCS_NAV, getDoc, getDocSlugs, getDocHeadings } from "@/lib/docs";
 import { mdxComponents } from "@/components/blog/registry";
 import { TableOfContents } from "@/components/blog/TableOfContents";
@@ -77,7 +78,16 @@ export default async function DocPage({ params }: { params: Promise<{ slug: stri
           <TableOfContents headings={headings} variant="inline" className="mb-8 xl:hidden" />
         )}
 
-        <MDXRemote source={doc.content} components={mdxComponents} />
+        {/* GFM, without which a markdown table is not a table - it renders as the
+            raw pipes the author typed. The registry has styled table/th/td all
+            along; nothing was parsing markdown INTO them, so every table across
+            17 doc pages (the cloud-vs-self-host comparison included) shipped as
+            pipe soup. */}
+        <MDXRemote
+          source={doc.content}
+          components={mdxComponents}
+          options={{ mdxOptions: { remarkPlugins: [remarkGfm] } }}
+        />
 
         {(prev || next) && (
           <div className="mt-12 grid grid-cols-1 gap-3 border-t border-neutral-800 pt-6 sm:grid-cols-2">
