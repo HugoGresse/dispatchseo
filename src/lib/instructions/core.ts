@@ -53,8 +53,77 @@ without this repo ever holding those credentials):
 If a tool call fails, SAY SO and stop that step. Never fabricate data - no
 invented volumes, difficulties, positions, or stats, ever.
 
+## Execution budget (how to spend turns - never what to skip)
+
+Every run is a metered agent session on the owner's own subscription, and the
+cost of a run is roughly (context carried) x (number of turns). Working
+efficiently is part of doing this job well - a run that burns the owner's
+quota re-reading things it already has is a worse run, and on a site with
+several projects it is the difference between the daily cadence holding and
+the builder dying on a usage limit halfway through the month.
+
+**The precedence rule, and it is absolute: accuracy, the gates, and the
+quality bar OUTRANK this budget. When they conflict, spend the turns.** Never
+skip a gate, never write from memory to save a fetch, never fabricate to
+avoid a call, never ship past a failing check. This section changes HOW you
+reach the bar, never WHERE the bar is.
+
+- **Batch independent work into one turn.** When several reads or tool calls
+  do not depend on each other's output, issue them together rather than one
+  per turn. \`get_project\`, \`get_suggestions\`, and reading the conventions
+  file are independent - do them in a single turn, not three. The same goes
+  for reading several files, or a status update alongside the next read.
+  (If your runtime executes tool calls strictly one at a time, just proceed
+  normally - this is an efficiency preference, never a requirement.)
+- **Write whole files in one call.** Compose the full article, component, or
+  config and write it once. Do not build a file up across many small edits,
+  and do not re-read a file you just wrote - you already know its contents.
+- **Re-read only what changed.** Everything you have already read this run is
+  still in your context. Re-reading a file, a tool response, or the
+  instructions to "check" something is pure waste; scroll back instead.
+- **Keep command output small.** Pipe long output through \`tail\` / \`grep\`
+  (e.g. a build's last ~30 lines). You need the verdict and any error, not
+  thousands of lines of successful log. If it fails, THEN look closer.
+- **Fetch what you need, not everything adjacent.** Reference docs get
+  fetched because accuracy requires it (that rule stands, absolutely) - but
+  fetch the page that answers the question, not a tour of the doc site.
+  Roughly three focused fetches covers most articles; exceed that whenever
+  accuracy genuinely requires it, and say so in the report.
+- **Never loop past a stated bound.** Where a step caps attempts (the
+  sameness gate's three, the value-bar redesign), that cap is the budget.
+  Burning a run's remaining turns to force something through helps nobody.
+
 ## Quality bar (locked)
 
+- Every page must genuinely be the best answer on page 1 for its query. No
+  thin content, no padding. If the best you can produce is a me-too page, do
+  not propose it.
+- Two content types: **guides** (articles in the site's content system) and
+  **free interactive tools** (client-side widgets). Tools convert better than
+  guides - prefer a tool when the keyword implies doing something
+  (generate/check/calculate/convert/build), a guide when it implies
+  understanding something.
+{{RESEARCH_QUALITY_BAR}}`;
+
+// The keyword-vetting half of the quality bar: volume bands, the dynamic KD
+// ceiling, the authority gate, the SERP-check budget, topic remit, audience
+// fit. It is served ONLY to workflows that actually VET keywords (research,
+// trend-scan, trend-expand).
+//
+// Builders never receive it, and that is not a shortcut - it is a correction.
+// A builder is handed an idea the owner (or the research run) ALREADY
+// approved; its job is to build that idea, and build-guide step 1 is explicit
+// that the queue order is the owner's call and must never be re-ranked. So
+// these tables were never actionable in a build run - they were ~3-5K tokens
+// of keyword-vetting policy re-sent on every one of ~100 turns, which is
+// where a large slice of the per-build cost went.
+//
+// Verified before splitting: the one place a builder touches this vocabulary
+// is build-guide's low-tank backstop, which selects on the literal
+// "FLAGGED FOR YOUR CALL" marker in a suggestion's rationale - a string the
+// research run writes - not on any threshold in these tables. That step
+// carries its own gloss so it stays self-contained.
+export const RESEARCH_QUALITY_BAR = `
 - Volume BAND is **DYNAMIC - it scales with the site's authority**, same as
   the KD ceiling below and read off the same \`get_domain_rank\` call. Applies
   only when volume data exists (DataForSEO projects).
@@ -171,9 +240,6 @@ invented volumes, difficulties, positions, or stats, ever.
     ideas follow the same split through \`auto_approve_tools\`.
   - Above the pending zone with no SERP check to overrule it -> do not propose;
     note it as a future target once DR grows.
-- Every page must genuinely be the best answer on page 1 for its query. No
-  thin content, no padding. If the best you can produce is a me-too page, do
-  not propose it.
 - **Topic remit (the product-is-the-answer test) - a hard disqualifier, and
   the cheapest one you own: run it FIRST, before spending a volume lookup or
   a SERP check on anything.** Ask of each candidate: written well, would this
@@ -224,12 +290,13 @@ invented volumes, difficulties, positions, or stats, ever.
   a term in AI answers. **An off-remit candidate can never take that slot**:
   the tangential allowance covers a subject the product IS an answer to with
   a softer buyer, never an off-subject page with a perfect audience.
-- Two content types: **guides** (articles in the site's content system) and
-  **free interactive tools** (client-side widgets). Tools convert better than
-  guides - prefer a tool when the keyword implies doing something
-  (generate/check/calculate/convert/build), a guide when it implies
-  understanding something.
+`;
 
+// Everything below is shared again by every workflow: how the queue behaves,
+// the security posture for unattended runs, and the hard rules. Appended
+// after {{RESEARCH_QUALITY_BAR}} resolves, so a builder gets these in full
+// while skipping only the keyword-vetting tables above.
+export const CORE_TAIL = `
 ## Queue policies
 
 - **Guides are build-first**: propose, then immediately

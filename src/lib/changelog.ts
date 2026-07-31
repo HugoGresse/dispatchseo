@@ -30,6 +30,54 @@ export type ChangelogEntry = {
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "2026-07-31.2",
+    date: "2026-07-31",
+    title: "Building a guide uses a lot less of your agent plan",
+    summary:
+      "A build was spending most of its budget re-reading things it had already been told. " +
+      "It now gets what it needs up front in one go, so the same guide costs you roughly a " +
+      "third of the plan usage it did yesterday. Nothing about how a guide is written changed.",
+    changes: [
+      {
+        kind: "improved",
+        text:
+          "Every build used to open by making a dozen separate requests and then reading two " +
+          "or three of your published posts start to finish, just to work out what their " +
+          "openings and headings looked like so the new one wouldn't read like them. All of " +
+          "that now arrives in a single response the moment a build starts - and it comes " +
+          "from the same comparison the sameness check already runs, so what the builder " +
+          "avoids and what the check flags can't drift apart.",
+      },
+      {
+        kind: "improved",
+        text:
+          "The builder also stopped carrying instructions it can't act on. It was being " +
+          "handed the full keyword-vetting rulebook on every single step, on a job where the " +
+          "keyword was already decided and picked by you - plus the whole back-linking " +
+          "policy even on sites that have back-linking switched off. Both are now sent only " +
+          "where they apply.",
+      },
+      {
+        kind: "new",
+        text:
+          "A shape check before writing. The builder now sketches the guide's opening and " +
+          "headings and checks those against everything you've published BEFORE it writes " +
+          "the article, the graphics, or the cover. A post that would have read like a " +
+          "repeat gets reshaped in seconds now, instead of being written in full, caught at " +
+          "the end, and rewritten. The final check on the finished guide is unchanged and " +
+          "still has to pass before anything opens as a pull request.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Weekly tool builds got the same treatment. Every quality gate is exactly where it " +
+          "was - the page-1 check, the original-research requirement, the humanizer pass, " +
+          "the sameness check, your site's own build, and your review of the pull request. " +
+          "This changed how the work gets done, never the bar it has to clear.",
+      },
+    ],
+  },
+  {
     version: "2026-07-30.9",
     date: "2026-07-30",
     title: "Cancelling is a button now",

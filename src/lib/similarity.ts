@@ -189,7 +189,27 @@ function jaccard(a: Set<string>, b: Set<string>): number {
 // Compare one draft against the recent corpus. Returns every flag found (not
 // just the first) so a rewrite fixes everything in one pass instead of
 // discovering the next failure on the next CI run.
-export function compareToCorpus(draft: Features, corpus: CorpusEntry[]): Verdict {
+// Which pass is calling. "final" is the original full-text gate and is
+// unchanged in every respect. "outline" is the cheap early probe: the agent
+// submits only its planned opening line and H2 skeleton, BEFORE drafting
+// prose, visuals, or the humanizer pass - so a topic that collides with the
+// back catalogue dies at ~turn 15 instead of ~turn 75, after all the
+// expensive work is already paid for.
+//
+// The stock-phrase check is skipped at outline stage and ONLY there: it
+// measures prose crutches across the body, and an outline stub has no body,
+// so running it would compare against near-empty text and report a
+// meaningless pass. Opening and heading signals - the two that actually
+// catch a template - work identically on a stub. An outline pass is
+// therefore NOT a substitute for the final gate, and the playbook still
+// requires the full check before the PR.
+export type SamenessStage = "outline" | "final";
+
+export function compareToCorpus(
+  draft: Features,
+  corpus: CorpusEntry[],
+  stage: SamenessStage = "final",
+): Verdict {
   const flags: Flag[] = [];
   if (corpus.length === 0) {
     return {
@@ -239,7 +259,7 @@ export function compareToCorpus(draft: Features, corpus: CorpusEntry[]): Verdict
   //    Only phrases present in MOST of the corpus AND this draft count - a
   //    phrase shared with one post is a coincidence, shared with half the
   //    catalogue it is a template.
-  const draftShingles = shingles(draft.words, STOCK_PHRASE_LEN);
+  const draftShingles = stage === "outline" ? new Set<string>() : shingles(draft.words, STOCK_PHRASE_LEN);
   const spread = new Map<string, number>();
   for (const entry of corpus) {
     for (const s of shingles(entry.words, STOCK_PHRASE_LEN)) {
@@ -268,8 +288,12 @@ export function compareToCorpus(draft: Features, corpus: CorpusEntry[]): Verdict
     compared_against: corpus.length,
     flags,
     note: pass
-      ? `Reads as its own piece against the last ${corpus.length} guides.`
-      : `Too close to what this site already published - rewrite the flagged elements (never loosen the check) and re-run.`,
+      ? stage === "outline"
+        ? `Outline reads as its own shape against the last ${corpus.length} guides. This is the EARLY probe only - the full check on the finished draft is still mandatory before the PR.`
+        : `Reads as its own piece against the last ${corpus.length} guides.`
+      : stage === "outline"
+        ? `Outline collides with what this site already published - change the opening and heading skeleton NOW, before drafting, then re-run. Fixing it here costs a rewrite of the plan; fixing it after the draft costs the whole build.`
+        : `Too close to what this site already published - rewrite the flagged elements (never loosen the check) and re-run.`,
   };
 }
 
