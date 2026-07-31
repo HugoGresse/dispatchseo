@@ -32,7 +32,7 @@ import { MascotFace } from "@/components/mascot-face";
 //
 // The requirement list is deliberately BOTH hard gates, not just the repo one.
 // The wizard refuses to finish without a repo (pipeline-install.ts) AND
-// without a Claude Code token (screen c2 has no skip). Naming one and hiding
+// without a coding agent token (screen c2 has no skip). Naming one and hiding
 // the other just moves the surprise one screen later.
 
 // The bubble's tail, shared by the resting tab and the opened panel so the
@@ -85,8 +85,8 @@ export function SignupRequirements() {
           <p className="mt-1 text-[13px] leading-relaxed text-amber-200/90">
             DispatchSEO publishes by opening pull requests on your site&apos;s code, so your site
             needs to live in a GitHub repo. If it runs on WordPress, Wix, Squarespace, or Shopify,
-            this will not work for you yet. You will also need a Claude subscription with Claude
-            Code.
+            this will not work for you yet. You will also need a coding agent subscription - Claude
+            Code or Codex.
           </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
             <Link

@@ -74,7 +74,7 @@ gh auth status >/dev/null 2>&1 || \
   die "The GitHub CLI isn't logged in. Run 'gh auth login', then rerun."
 say "  All tools present."
 
-# ---- 3. Connect Claude Code to your project --------------------------------
+# ---- 3. Connect the agent to your project ----------------------------------
 say ""
 # "in this folder" is Claude's line and stays exactly as it was - it is true
 # because of --scope local. Codex must NOT claim it: its config is global, and

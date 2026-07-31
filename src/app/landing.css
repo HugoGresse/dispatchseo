@@ -121,7 +121,7 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .pixel-stage { width: min(460px, 92vw); margin: 0 auto 18px; }
 .ld .pixel-stage svg { display: block; width: 100%; height: auto; }
 .ld .hero h1 { font-size: clamp(40px, 6.4vw, 70px); line-height: 1.1; font-weight: 800; margin: 0 auto 22px; max-width: 880px; }
-/* "Claude Code" selection-block highlight: a pseudo-element behind the glyphs,
+/* "coding agent" selection-block highlight: a pseudo-element behind the glyphs,
    inset to hug cap-height and baseline so it never bleeds into the line above,
    wiping in left-to-right on load. */
 /* z-index: 0 makes the span its own stacking context, so the -1 pseudo sits
@@ -307,7 +307,7 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .found-main { flex: 1; min-width: 0; padding: 19px 24px 21px; }
 .ld .found-k { display: block; font-family: var(--disp); font-size: 11.5px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--vio2); }
 .ld .found-v { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 13px; margin-top: 10px; font-family: var(--disp); font-weight: 800; font-size: clamp(29px, 3.6vw, 40px); line-height: 1.04; letter-spacing: -0.035em; color: #fff; }
-/* The same highlight the hero puts behind "Claude Code", same violet - the
+/* The same highlight the hero puts behind "coding agent", same violet - the
    offer reads as part of the page rather than a promo sticker on top of it. */
 .ld .found-hl { position: relative; z-index: 0; display: inline-block; white-space: nowrap; color: #fff; margin-left: 0.06em; }
 .ld .found-hl::before { content: ""; position: absolute; z-index: -1; top: 0.11em; bottom: 0.04em; left: -0.09em; right: -0.09em; background: var(--vio); border-radius: 0.07em; }

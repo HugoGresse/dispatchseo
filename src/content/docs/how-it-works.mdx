@@ -8,7 +8,7 @@ docs easier to follow.
 
 | Piece | Runs where | Responsible for |
 | --- | --- | --- |
-| **Your Claude Code agent** | Your machine, or GitHub Actions | Thinking. Research, judgement, writing. |
+| **Your coding agent** | Your machine, or GitHub Actions | Thinking. Research, judgement, writing. |
 | **DispatchSEO** | Your Docker install, or dispatchseo.com | Remembering. State, schedules, the approval gate. |
 | **Your site's repo** | GitHub | Publishing. Content lands here as pull requests. |
 
@@ -85,7 +85,7 @@ Three kinds of scheduled job keep things moving:
 Where those jobs run depends on how you installed:
 
 - **Self-hosted with Docker**: a cron container fires the backend jobs, and a
-  builder container runs headless Claude Code for the content work. Nothing on
+  builder container runs your headless coding agent for the content work. Nothing on
   the internet needs to reach your machine.
 - **Everything else**: GitHub Actions workflows in your own repo, on their own
   schedules.

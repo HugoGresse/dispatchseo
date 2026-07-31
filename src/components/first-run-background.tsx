@@ -109,7 +109,7 @@ export function FirstRunBackground({ slug, cloud = false }: { slug: string; clou
             <code className="rounded bg-neutral-900 px-1.5 py-0.5 font-mono text-[13px] text-neutral-200">
               /seo-research
             </code>{" "}
-            into Claude Code (in your site&apos;s repo) to run it now - ideas show up here in
+            into your coding agent (in your site&apos;s repo) to run it now - ideas show up here in
             about 10-20 minutes.
           </p>
         )}

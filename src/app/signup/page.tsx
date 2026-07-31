@@ -224,7 +224,7 @@ export default async function SignupPage({
         <p className="text-neutral-300">
           {domain ? (
             <>
-              Create a free account and have Claude Code run{" "}
+              Create a free account and have your coding agent run{" "}
               <span className="inline-flex items-center gap-1.5 align-bottom">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -237,7 +237,7 @@ export default async function SignupPage({
               &apos;s SEO for you.
             </>
           ) : (
-            <>Create a free account and have Claude Code run your site&apos;s SEO for you.</>
+            <>Create a free account and have your coding agent run your site&apos;s SEO for you.</>
           )}
         </p>
         {/* Said before the email field, not after checkout: the wizard's first

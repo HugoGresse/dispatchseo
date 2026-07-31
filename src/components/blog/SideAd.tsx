@@ -44,7 +44,7 @@ export function SideAd({ className = "" }: { className?: string }) {
       <DispatchMark className="h-7 w-7" />
       <p className="mt-3 text-[15px] font-semibold text-neutral-100">DispatchSEO</p>
       <p className="mt-1.5 text-[13px] leading-relaxed text-neutral-400">
-        Claude Code as your SEO manager.
+        Your coding agent as your SEO manager.
       </p>
       <ul className="mt-4 flex flex-col gap-2.5">
         {TICKS.map((tick) => (

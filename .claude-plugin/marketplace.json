@@ -6,7 +6,7 @@
     "url": "https://github.com/NeoZi12"
   },
   "metadata": {
-    "description": "DispatchSEO - self-hostable AGPL SEO manager backend for Claude Code"
+    "description": "DispatchSEO - self-hostable AGPL SEO manager backend for coding agents"
   },
   "plugins": [
     {

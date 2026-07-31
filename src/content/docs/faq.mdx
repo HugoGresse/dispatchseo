@@ -43,9 +43,11 @@ are worth winning. Full breakdown on
 
 ## Do I need a Claude subscription? Which plan?
 
-Yes - Claude Code is the engine, and it isn't part of the free Claude
-plan. Pro, Max, Team, and current Enterprise plans all include it; Pro
-is the cheapest way in if you're starting from nothing. See
+Only if Claude Code is your agent. Claude Code isn't part of the free
+Claude plan - Pro, Max, Team, and current Enterprise plans all include
+it, and Pro is the cheapest way in if you're starting from nothing.
+Codex is the alternative: no Claude subscription, metered per run on an
+OpenAI key instead. See
 [Install Claude Code](/docs/install-claude-code) for the full plan table
 and the five-minute setup.
 
@@ -67,13 +69,13 @@ See [Install on your computer](/docs/docker-compose) and
 ## How is this different from SEObot / Outrank / Ahrefs?
 
 Most SEO content tools learn about your product by crawling your
-homepage - a shallow proxy for something your Claude Code agent already
+homepage - a shallow proxy for something your coding agent already
 knows in depth, from working in your actual codebase. DispatchSEO
 doesn't try to replace that knowledge with its own crawler or its own
 writer model. It's a backend for the agent you already have: MCP tools
 holding the queue, the keywords, the rankings, and the Search Console
 data, plus crons that keep that state fresh. The research and the
-writing happen in your Claude Code, on your own subscription -
+writing happen in your coding agent, on your own plan or key -
 DispatchSEO is state, scheduling, and an approval gate around it, not a
 competing content engine.
 
@@ -144,10 +146,11 @@ revert it. See [Day to day](/docs/day-to-day).
 
 ## What model does it use? Can I change it?
 
-Whatever your own Claude Code is already configured to use. DispatchSEO
+Whatever your own coding agent is already configured to use. DispatchSEO
 doesn't pin a model - it runs your agent, on your plan, with whatever
-default or manually chosen model your Claude Code session already has.
-Change it the same way you'd change it for any other Claude Code work.
+default or manually chosen model your agent session already has.
+Change it the same way you'd change it for any other Claude Code or
+Codex work.
 
 ## Where does my data live?
 
@@ -169,7 +172,7 @@ too.
 ## What if my site doesn't have a blog yet?
 
 Not a blocker. The setup wizard asks, and "not sure" is a valid answer -
-Claude Code checks your repo during setup and decides what to add. See
+your coding agent checks your repo during setup and decides what to add. See
 [The setup wizard, step by step](/docs/setup-wizard).
 
 ## What happens when my GitHub token expires?

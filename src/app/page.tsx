@@ -36,9 +36,9 @@ const GITHUB_URL = "https://github.com/NeoZi12/dispatchseo";
 const DOCS_URL = "/docs";
 
 export const metadata: Metadata = {
-  title: "DispatchSEO - Automate your SEO with Claude Code",
+  title: "DispatchSEO - Automate your SEO with your coding agent",
   description:
-    "Claude Code researches keywords, writes guides, builds interactive tools, and tracks your ranks automatically. Every piece is a pull request you approve. Open source, free to self-host.",
+    "Claude Code or Codex researches keywords, writes guides, builds interactive tools, and tracks your ranks automatically. Every piece is a pull request you approve. Open source, free to self-host.",
   // "/" is reachable as itself and as "?home=1" (the signed-in opt-out below),
   // so point both at the bare root rather than letting a crawler treat the
   // query string as a second copy of the landing page.
@@ -261,8 +261,8 @@ export default async function LandingPage({
           ) : null}
           {/* .br-desk: the composed two-line break is a desktop luxury - phones
               drop it so the headline reflows to whatever fits. */}
-          <h1>Automate your SEO<br className="br-desk" /> with <span className="hl">Claude Code</span></h1>
-          <p className="sub">The agent that built your product now runs your SEO: keyword research, guides, interactive tools, rank tracking - all automatic.</p>
+          <h1>Automate your SEO<br className="br-desk" /> with your <span className="hl">coding agent</span></h1>
+          <p className="sub">Claude Code or Codex - the agent that built your product now runs your SEO: keyword research, guides, interactive tools, rank tracking - all automatic.</p>
 
           <div className="cta-row" id="get-started">
             <DomainCta />
@@ -322,8 +322,8 @@ export default async function LandingPage({
             </div>
             <div className="who-card">
               <svg className="who-doodle vio" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v5.5M12 15.5V21M3 12h5.5M15.5 12H21M5.64 5.64l3.89 3.89M14.47 14.47l3.89 3.89M18.36 5.64l-3.89 3.89M9.53 14.47l-3.89 3.89" /></svg>
-              <h3>Claude Code power users</h3>
-              <p>You already pay for the best writing model there is. DispatchSEO gives it memory, schedules, and a queue, so SEO stops being a weekend project.</p>
+              <h3>Coding agent power users</h3>
+              <p>You already pay for Claude Code or Codex. DispatchSEO gives it memory, schedules, and a queue, so SEO stops being a weekend project.</p>
             </div>
             <div className="who-card">
               <svg className="who-doodle blue" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M8.6 9.4v.6M15.4 9.4v.6" /><path d="M8.8 15.2h6.4" /></svg>
@@ -396,7 +396,7 @@ export default async function LandingPage({
                 <li>Content quality checks</li>
                 <li>Approve or full-auto mode</li>
                 <li>Everything ships as PRs</li>
-                <li>Drive it from Claude Code</li>
+                <li>Drive it from your coding agent</li>
                 <li>Managed schedules</li>
                 <li>Failure alerts by email</li>
                 <li>Email support</li>
@@ -425,7 +425,7 @@ export default async function LandingPage({
                 <li>Content quality checks</li>
                 <li>Approve or full-auto mode</li>
                 <li>Everything ships as PRs</li>
-                <li>Drive it from Claude Code</li>
+                <li>Drive it from your coding agent</li>
                 <li>Managed schedules</li>
                 <li>Failure alerts by email</li>
                 <li>Email support</li>
@@ -453,7 +453,7 @@ export default async function LandingPage({
                 <li>Content quality checks</li>
                 <li>Approve or full-auto mode</li>
                 <li>Everything ships as PRs</li>
-                <li>Drive it from Claude Code</li>
+                <li>Drive it from your coding agent</li>
                 <li>Managed schedules</li>
                 <li>Failure alerts by email</li>
                 <li>Priority support</li>
@@ -531,7 +531,7 @@ export default async function LandingPage({
                 <li>Content quality checks</li>
                 <li>Approve or full-auto mode</li>
                 <li>Everything ships as PRs</li>
-                <li>Drive it from Claude Code</li>
+                <li>Drive it from your coding agent</li>
                 <li>Managed schedules</li>
                 <li>Failure alerts by email</li>
               </ul>
@@ -553,7 +553,7 @@ export default async function LandingPage({
             </details>
             <details>
               <summary>What do I need to run the free version?</summary>
-              <div className="a">A website that lives in a GitHub repo, a Claude subscription with Claude Code, free Google Search Console access, and a machine with Docker. Your laptop works for a test drive, but we highly recommend a machine that stays awake for real use - a $5 VPS or a Raspberry Pi - since schedules only run while it&apos;s on. Rank tracking works with a free SerpApi key; search volume data needs a DataForSEO account, which is the main gap the cloud version fills. The <a href={DOCS_URL}>docs</a> walk you through it.</div>
+              <div className="a">A website that lives in a GitHub repo, a coding agent (a Claude subscription with Claude Code, or a ChatGPT subscription with Codex), free Google Search Console access, and a machine with Docker. Your laptop works for a test drive, but we highly recommend a machine that stays awake for real use - a $5 VPS or a Raspberry Pi - since schedules only run while it&apos;s on. Rank tracking works with a free SerpApi key; search volume data needs a DataForSEO account, which is the main gap the cloud version fills. The <a href={DOCS_URL}>docs</a> walk you through it.</div>
             </details>
             <details>
               <summary>Is this another AI content spammer?</summary>
@@ -564,8 +564,8 @@ export default async function LandingPage({
               <div className="a">No. The agent does the research and explains each idea in plain language: what the keyword is, why it looks winnable, and what the article should cover. You judge whether it sounds right for your business, which is the part no tool should take from you.</div>
             </details>
             <details>
-              <summary>Does it only work with Claude Code?</summary>
-              <div className="a">Claude Code is the first-class path and what we test against. The server speaks standard MCP though, so other MCP clients can connect to the same tools. Adapters for other coding agents will come when people ask for them.</div>
+              <summary>Which coding agents does it work with?</summary>
+              <div className="a">Claude Code and Codex are both first-class: same tools, same schedules, same overnight builder, and you pick which one a site uses at setup or switch later in one setting. The server also speaks standard MCP, so other MCP clients can connect to the same tools. Adapters for more agents will come when people ask for them.</div>
             </details>
             <details>
               <summary>What does DispatchSEO do with my Google data?</summary>
@@ -601,7 +601,7 @@ export default async function LandingPage({
                 <DispatchMark className="logo-mark" />
                 DispatchSEO
               </a>
-              <p>The open-source SEO autopilot for Claude Code. The agent that knows your product, running its SEO for you.</p>
+              <p>The open-source SEO autopilot for your coding agent. The agent that knows your product, running its SEO for you.</p>
             </div>
             <div className="foot-col">
               <h4>Product</h4>

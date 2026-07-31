@@ -369,7 +369,7 @@ export function CloudOnboardingWizard(props: {
                 onClick={() => setScreen("c2")}
                 className="cursor-pointer rounded-lg bg-violet-500 px-4 py-2 text-sm font-semibold text-neutral-950 transition-colors hover:bg-violet-400"
               >
-                Back to the Claude Code step
+                Back to the coding-agent step
               </button>
             ) : null}
             <button
@@ -447,8 +447,8 @@ export function CloudOnboardingWizard(props: {
           </StepIcon>
           <h2 className="text-2xl font-semibold tracking-tight">Add your site</h2>
           <p className="mb-2.5 text-base text-neutral-400">
-            The website you want Google traffic for. Takes 30 seconds - GitHub and Claude Code
-            connect next.
+            The website you want Google traffic for. Takes 30 seconds - GitHub and your coding
+            agent connect next.
           </p>
           {/* Same slot on all six screens - see StepHelp's note on why the
               position is uniform and why it opens in a new tab. */}
@@ -621,7 +621,7 @@ export function CloudOnboardingWizard(props: {
         </section>
       ) : null}
 
-      {/* ============ c2 · Connect Claude Code ============ */}
+      {/* ============ c2 · Connect the coding agent ============ */}
       {screen === "c2" ? (
         <section>
           <StepIcon>

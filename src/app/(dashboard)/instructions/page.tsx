@@ -84,7 +84,7 @@ function FactsStrip({ data, updatedAt }: { data: ConventionsData; updatedAt: str
         </FactGroup>
       ) : null}
       <p className="ml-auto text-xs text-neutral-600">
-        Found by your Claude Code · {shortDate(updatedAt)}
+        Found by your coding agent · {shortDate(updatedAt)}
       </p>
     </div>
   );
@@ -99,7 +99,7 @@ function SetupCard({ slug }: { slug: string }) {
         not this dashboard&apos;s. (No <Mono>/seo-setup</Mono> there yet? The pipeline install
         adds it; until then paste{" "}
         <Mono>{`Call the ${mcpServerName(slug)} MCP tool get_instructions with workflow setup and follow it exactly`}</Mono>
-        .) Your Claude Code reads your stack, theme, and voice, writes{" "}
+        .) Your coding agent reads your stack, theme, and voice, writes{" "}
         <Mono>.dispatchseo/conventions.md</Mono>, and mirrors the facts here - the previews below
         pick up your colors the moment it does.
       </p>
@@ -223,7 +223,7 @@ export default async function InstructionsPage() {
       <div className="space-y-4">
         <PageHeader
           title="Instructions"
-          hint={`How your Claude Code builds for ${project.domain} - served live, so every run follows the newest playbook.`}
+          hint={`How your coding agent builds for ${project.domain} - served live, so every run follows the newest playbook.`}
         />
         <p className="text-sm text-neutral-500">
           Every workflow here has a matching command you can run yourself -{" "}

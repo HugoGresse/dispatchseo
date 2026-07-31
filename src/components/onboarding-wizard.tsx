@@ -71,7 +71,7 @@ const META: Record<Exclude<Screen, "s5">, { name: string; time: string }> = {
   s2a: { name: "Keyword data", time: "about 3 minutes" },
   s2b_paid: { name: "Keyword data", time: "about 3 minutes" },
   s2b_free: { name: "Keyword data", time: "about 3 minutes" },
-  s3: { name: "Claude Code", time: "just read" },
+  s3: { name: "Coding agent", time: "just read" },
   s3m: { name: "Publish mode", time: "one choice" },
   s_gh: { name: "Connect GitHub", time: "about 2 minutes" },
   s4b: { name: "What happens next", time: "just read" },
@@ -939,20 +939,21 @@ export function OnboardingWizard({
               <line x1="12" y1="19" x2="20" y2="19" strokeLinecap="round" />
             </svg>
           </StepIcon>
-          <h2 className="text-2xl font-semibold tracking-tight">Your Claude Code does the work</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">Your coding agent does the work</h2>
           <p className="mb-2.5 text-base text-neutral-400">
-            Claude Code is the brain. DispatchSEO is its memory and dashboard.
+            Claude Code or Codex is the brain. DispatchSEO is its memory and dashboard.
           </p>
-          <StepHelp href="/docs/install-claude-code" label="I don't have Claude Code yet" />
+          <StepHelp href="/docs/install-claude-code" label="I don't have a coding agent yet" />
           <div className="rounded-xl bg-neutral-900 p-4">
             <p className="text-sm text-neutral-300">
               Nothing to do on this step - the last screen gives you a single command that
-              connects your Claude Code to this project and sets everything up, checking each
+              connects your coding agent to this project and sets everything up, checking each
               value as it goes.
             </p>
             <p className="mt-3 text-sm text-neutral-400">
-              It works with the Claude Code you already have, on your existing subscription -
-              nothing extra to pay, and nothing is billed by DispatchSEO. Your agent researches
+              It works with the agent you already have - Claude Code on your existing Claude
+              subscription, or Codex on your OpenAI key. Nothing extra to pay us either way:
+              DispatchSEO never bills you for agent usage. Your agent researches
               keywords, writes the guides, and opens the pull requests; this dashboard is where
               you watch and approve.
             </p>
@@ -1255,7 +1256,7 @@ export function OnboardingWizard({
               never sit above a command someone still has to run. */}
           {agentWorking ? null : (
             <p className="mb-2.5 text-base text-neutral-400">
-              Two pastes and your Claude Code takes care of the rest.
+              Two pastes and your coding agent takes care of the rest.
             </p>
           )}
 
@@ -1468,7 +1469,7 @@ export function OnboardingWizard({
                   </div>
                 </form>
                 <p className="text-sm text-neutral-500">
-                  That&apos;s your Claude Code running inside Docker, building on schedule, no
+                  That&apos;s your coding agent running inside Docker, building on schedule, no
                   public URL needed. Until it&apos;s on, nothing builds automatically - everything
                   else still works. (Prefer the terminal? Add{" "}
                   <code className="font-mono text-neutral-400">CLAUDE_CODE_OAUTH_TOKEN</code> to the

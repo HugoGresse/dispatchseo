@@ -17,12 +17,14 @@ platform does the installing for you:
 2. **Connect GitHub** - one click installs the DispatchSEO GitHub App on
    your site's repo. The platform then commits the pipeline into the repo
    and manages PRs through the App - no tokens to create or paste.
-3. **Connect your Claude Code** - run `claude setup-token` on your
-   computer and paste the token it prints. It's stored as a secret on
-   **your repo**, never on our side, and builds run on your own Claude
-   Code subscription. Never installed Claude Code?
-   [Do that first](/docs/install-claude-code) - it's about five minutes,
-   and this step's command won't exist until you have.
+3. **Connect your coding agent** - pick Claude Code or Codex, then paste
+   the credential it asks for (`claude setup-token` for Claude Code, an
+   OpenAI API key for Codex). It's stored as a secret on **your repo**,
+   never on our side, and builds run on your own subscription or key.
+   Don't have either yet? Install
+   [Claude Code](/docs/install-claude-code) or
+   [Codex](/docs/install-codex) first - about five minutes, and this
+   step won't work until you have.
 4. **Connect Google Search Console** - one click, sign in with the Google
    account that has access to your property, pick the property. Read-only,
    revocable any time. No service account needed.
@@ -85,11 +87,11 @@ Two choices, switchable later in Settings:
 Whatever you pick, the wizard verifies the credentials against the real
 service before saving them.
 
-## Step 4 - Claude Code
+## Step 4 - Coding agent
 
-Nothing to do here - it just explains the division of labor: Claude Code is
-the brain, DispatchSEO is its memory and dashboard. The connection itself
-happens at the finish line.
+Nothing to do here - it just explains the division of labor: your coding
+agent is the brain, DispatchSEO is its memory and dashboard. The connection
+itself happens at the finish line.
 
 ## Step 5 - Publish mode
 
@@ -142,7 +144,7 @@ month reads as "on schedule" instead of "broken". Just read it.
 
 The last screen gives you two things to copy:
 
-1. **A terminal command** that connects your Claude Code to this project.
+1. **A terminal command** that connects your coding agent to this project.
    Run it inside your site's repo folder.
 2. **A chat message** to paste into Claude Code itself (open the repo,
    type `claude`, paste). This one does the actual install.
@@ -173,7 +175,7 @@ wondering which string goes in it:
 
 | Key | Starts with | What it's for | Where it comes from |
 | --- | --- | --- | --- |
-| Agent key (MCP token) | a long random string | How your Claude Code talks to this dashboard | Generated for you; already inside the `claude mcp add` command the wizard hands you. Also on Settings. |
+| Agent key (MCP token) | a long random string | How your coding agent talks to this dashboard | Generated for you; already inside the `claude mcp add` command the wizard hands you. Also on Settings. |
 | Cron key | a long hex string | Lets the scheduled jobs call your backend | Generated for you; the install sets it as a repo secret. You never paste it by hand. |
 | GitHub token | `ghp_` | Lets the Approve button merge your pull requests | You create it on GitHub in step 6. |
 | Claude token | `sk-ant-oat` | Docker only - lets the bundled builder run Claude Code for you | You create it by running `claude setup-token` on your own computer. |

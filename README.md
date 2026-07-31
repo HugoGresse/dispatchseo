@@ -8,14 +8,14 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-7C5CFC?labelColor=1F2328&style=flat-square"></a>
-  <a href="https://claude.com/product/claude-code"><img alt="Built for Claude Code" src="https://img.shields.io/badge/built%20for-Claude%20Code-D97757?logo=claude&logoColor=white&labelColor=1F2328&style=flat-square"></a>
+  <a href="docs/AGENTS.md"><img alt="Built for Claude Code and Codex" src="https://img.shields.io/badge/built%20for-Claude%20Code%20%2B%20Codex-D97757?labelColor=1F2328&style=flat-square"></a>
   <a href="#-quick-start"><img alt="Self-host in one command" src="https://img.shields.io/badge/self--host-one%20command-2496ED?logo=docker&logoColor=white&labelColor=1F2328&style=flat-square"></a>
   <a href="https://dispatchseo.com/discord"><img alt="Join the Discord" src="https://img.shields.io/badge/Discord-join%20the%20server-5865F2?logo=discord&logoColor=white&labelColor=1F2328&style=flat-square"></a>
 </p>
 
 <div align="center">
   <strong>
-  <h2>Turn Claude Code into your SEO manager</h2><br />
+  <h2>Turn your coding agent into your SEO manager</h2><br />
   <a href="https://dispatchseo.com">DispatchSEO</a>: an open-source alternative to SEObot and Outrank.<br /><br />
   </strong>
   Other SEO tools learn about your product by crawling your homepage. Your agent already knows it,<br />so DispatchSEO gives that agent the missing half: keyword research, content that ships as pull requests, and rank tracking.
@@ -73,7 +73,7 @@
 
 ## ⚡ How it works
 
-1. **Your agent researches.** Claude Code connects to DispatchSEO over MCP,
+1. **Your agent researches.** Claude Code or Codex connects to DispatchSEO over MCP,
    reads the served playbook, and mines keywords from your Search Console
    data, Google Autocomplete, and what it already knows about your product.
    Ideas land in a queue with the reasoning attached.
@@ -199,7 +199,7 @@ page, every setting, every tool.
 | --- | --- |
 | **New here** | [What DispatchSEO is](https://dispatchseo.com/docs/introduction) · [How it works](https://dispatchseo.com/docs/how-it-works) · [Cloud or self-hosted](https://dispatchseo.com/docs/choosing-how-to-run-it) |
 | **Install** | [Your own computer](https://dispatchseo.com/docs/docker-compose) · [A VPS](https://dispatchseo.com/docs/vps) · [From source](https://dispatchseo.com/docs/local-development) |
-| **Set up** | [Install Claude Code](https://dispatchseo.com/docs/install-claude-code) · [Use Codex instead](https://dispatchseo.com/docs/install-codex) · [The setup wizard](https://dispatchseo.com/docs/setup-wizard) · [Search Console](https://dispatchseo.com/docs/search-console) · [Keyword data](https://dispatchseo.com/docs/keyword-data) · [Publishing](https://dispatchseo.com/docs/publishing) · [Connect your site](https://dispatchseo.com/docs/connect-your-site) |
+| **Set up** | [Install Claude Code](https://dispatchseo.com/docs/install-claude-code) · [Install Codex](https://dispatchseo.com/docs/install-codex) · [The setup wizard](https://dispatchseo.com/docs/setup-wizard) · [Search Console](https://dispatchseo.com/docs/search-console) · [Keyword data](https://dispatchseo.com/docs/keyword-data) · [Publishing](https://dispatchseo.com/docs/publishing) · [Connect your site](https://dispatchseo.com/docs/connect-your-site) |
 | **Use it** | [Day to day](https://dispatchseo.com/docs/day-to-day) · [The dashboard](https://dispatchseo.com/docs/dashboard) · [Automations](https://dispatchseo.com/docs/automations) · [Agent commands](https://dispatchseo.com/docs/agent-commands) |
 | **Reference** | [Concepts](https://dispatchseo.com/docs/concepts) · [MCP tools](https://dispatchseo.com/docs/mcp-tools) · [Environment variables](https://dispatchseo.com/docs/environment-variables) · [Schedules](https://dispatchseo.com/docs/schedules) · [Architecture](https://dispatchseo.com/docs/architecture) |
 | **Help** | [Troubleshooting](https://dispatchseo.com/docs/troubleshooting) · [Common questions](https://dispatchseo.com/docs/faq) · [Security](https://dispatchseo.com/docs/security) · [Upgrading](https://dispatchseo.com/docs/upgrading) |
@@ -219,7 +219,7 @@ Once the wizard is done, the loop is small on purpose:
 | Once a week, 5 minutes | Open the dashboard, work through the queue - approve, reject, reorder | Refills the queue with researched ideas and the reasoning behind each one |
 | Every morning | Nothing | Builds the oldest approved idea into a pull request on your repo |
 | When a PR lands | Review and merge (or let auto-merge do it) | Logs the page, requests indexing, starts tracking its keyword |
-| Whenever you want | Ask Claude Code: *"research keywords for me"*, *"what should I write next?"*, *"how are we ranking?"* | Answers from live data over MCP - same state the dashboard shows |
+| Whenever you want | Ask your agent: *"research keywords for me"*, *"what should I write next?"*, *"how are we ranking?"* | Answers from live data over MCP - same state the dashboard shows |
 
 The dashboard's Home page always names the next action, so you don't have to work
 out what to do when you open it.

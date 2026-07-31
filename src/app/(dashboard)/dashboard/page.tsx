@@ -56,6 +56,7 @@ import {
 } from "@/lib/indexing";
 import { getPacing } from "@/lib/pacing";
 import { mcpAddCommand, mcpServerName, setupCommand, setupCommandPS } from "@/lib/mcp-connect";
+import { projectAgent } from "@/lib/agents";
 import { requestOrigin } from "@/lib/request-origin";
 import { ShellCommandTabs } from "@/components/shell-command-tabs";
 import { PacingLine } from "@/components/pacing-info";
@@ -772,10 +773,10 @@ export default async function Home() {
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <CopyButton
                 text={buildCronFixPrompt(project, cronIssues)}
-                label="Copy fix prompt for Claude Code"
+                label="Copy fix prompt"
               />
               <p className="text-xs text-red-300/70">
-                Paste it into Claude Code - it inspects the job, fixes it, and clears this
+                Paste it into your coding agent - it inspects the job, fixes it, and clears this
                 alert over MCP once the fix is verified.
               </p>
             </div>
@@ -802,10 +803,10 @@ export default async function Home() {
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <CopyButton
                 text={buildPipelineUpdatePrompt(project)}
-                label="Copy update prompt for Claude Code"
+                label="Copy update prompt"
               />
               <p className="text-xs text-sky-300/70">
-                Paste it into Claude Code in the site repo - it applies the current pack, and this
+                Paste it into your coding agent in the site repo - it applies the current pack, and this
                 notice clears after the next nightly check.
               </p>
             </div>
@@ -974,15 +975,15 @@ export default async function Home() {
           {needsBuilder ? (
             <SetupStep
               title="Turn on automatic builds"
-              why="This install runs its own builder - your Claude Code inside Docker, building approved ideas on schedule, no public URL needed. It hasn't checked in yet, so nothing builds automatically until this is done. One paste."
+              why="This install runs its own builder - your coding agent inside Docker, building approved ideas on schedule, no public URL needed. It hasn't checked in yet, so nothing builds automatically until this is done. One paste."
               steps={[
-                "On your own computer, run claude setup-token in a terminal and copy the sk-ant-oat... token it prints (it opens a browser login).",
+                "Pick your agent in the box below and follow the one line it shows to mint a credential on your own computer.",
                 "Paste it in the box below - stored encrypted, no files to touch.",
                 "Within ~10 minutes the builder checks in and this card disappears by itself.",
               ]}
-              closing="Until then everything else still works - research, approvals, rankings - only automatic building waits. Prefer the terminal? Add CLAUDE_CODE_OAUTH_TOKEN to the install folder's .env instead - env always wins."
+              closing="Until then everything else still works - research, approvals, rankings - only automatic building waits. Prefer the terminal? Add CLAUDE_CODE_OAUTH_TOKEN or OPENAI_API_KEY to the install folder's .env instead - env always wins."
             >
-              <BuilderTokenConnect />
+              <BuilderTokenConnect current={projectAgent(project).id} />
             </SetupStep>
           ) : null}
           {needsAlertEmail ? (
@@ -1042,15 +1043,19 @@ export default async function Home() {
           {needsProfile ? (
             <SetupStep
               title="Fill in your backlink playbook"
-              why="The Backlinks tab lists the best free and paid backlinks you can set up today, with every submission prefilled with your product's copy. Paste this in Claude Code, in your site's repo (not this dashboard's) - it researches your product and personalizes all of it. This card watches the saved profile and disappears the moment your agent writes it; still here means that run hasn't happened yet."
+              why="The Backlinks tab lists the best free and paid backlinks you can set up today, with every submission prefilled with your product's copy. Paste this into your connected coding agent, in your site's repo (not this dashboard's) - it researches your product and personalizes all of it. This card watches the saved profile and disappears the moment your agent writes it; still here means that run hasn't happened yet."
               command={`Call the ${mcpServerName(project.slug)} MCP tool get_instructions with workflow setup and follow it exactly.`}
             />
           ) : null}
           {needsFirstPage ? (
             <SetupStep
               title="Build your first page"
-              why="You have an approved guide waiting - the daily builder will build it and open a PR automatically tomorrow morning. To build it right now instead of waiting, paste this in Claude Code (in your site's repo)."
-              command="/seo-build"
+              // The get_instructions form rather than /seo-build: slash
+              // commands are a Claude Code file convention, and Codex has no
+              // equivalent. Naming the tool works in both, and in anything
+              // else that connects over MCP later.
+              why="You have an approved guide waiting - the daily builder will build it and open a PR automatically tomorrow morning. To build it right now instead of waiting, paste this into your connected coding agent (in your site's repo). In Claude Code, /seo-build is the shorthand for the same thing."
+              command={`Call the ${mcpServerName(project.slug)} MCP tool get_instructions with workflow build-guide and follow it exactly.`}
             />
           ) : null}
           {pipelineWaiting ? (
@@ -1081,7 +1086,7 @@ export default async function Home() {
           {pipelineTodo && !isCloudMode() ? (
             <SetupStep
               title="Install the content pipeline in your repo"
-              why={`The automations - daily guides, weekly tools, validation, auto-merge - run as GitHub Actions in your site's repo, on your own Claude Code subscription. One command sets up everything: it talks you through each step, checks every value actually works before saving it, then your own agent installs the pipeline and marks this card done.`}
+              why={`The automations - daily guides, weekly tools, validation, auto-merge - run as GitHub Actions in your site's repo, on your own coding agent. One command sets up everything: it talks you through each step, checks every value actually works before saving it, then your own agent installs the pipeline and marks this card done.`}
               commandLabel={`Paste in a terminal, inside your site's repo${project.github_repo ? ` (${project.github_repo})` : ""}:`}
               command={setupCmd ?? undefined}
               commandPs={setupCmdPs ?? undefined}
@@ -1101,14 +1106,14 @@ export default async function Home() {
                   - the repo DispatchSEO publishes to. The script checks it&apos;s the right folder
                   before touching anything.
                 </>,
-                "It will ask you to: approve once in the browser (your Claude Code token - verified before it's saved), and type your DataForSEO email + the API password from app.dataforseo.com/api-access (only if this project uses DataForSEO; NOT your login password).",
-                "It ends by launching your Claude Code, which fetches the pipeline, adapts it to your stack, opens the install PR, and flips this card green itself.",
+                "It will ask you to: approve once in the browser (your coding agent's token - verified before it's saved), and type your DataForSEO email + the API password from app.dataforseo.com/api-access (only if this project uses DataForSEO; NOT your login password).",
+                "It ends by launching your coding agent, which fetches the pipeline, adapts it to your stack, opens the install PR, and flips this card green itself.",
                 // A named prerequisite with no way to satisfy it is a dead
                 // end, and this card is where a half-finished install lands
                 // when the wizard was closed - so it links out like the
                 // wizard's own Claude Code screens do.
                 <>
-                  Needs: Claude Code and the GitHub CLI (gh, logged in). The script tells you
+                  Needs: a coding agent (Claude Code or Codex) and the GitHub CLI (gh, logged in). The script tells you
                   exactly what&apos;s missing if anything is - and{" "}
                   <Link
                     href="/docs/install-claude-code"

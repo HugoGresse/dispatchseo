@@ -29,7 +29,8 @@ a project → copy the setup command from the Home page checklist.
    curl -fsSL <backend>/setup.sh | bash -s -- <project-key> <slug> [backend-url]
    ```
 
-   It registers the MCP server (`dispatchseo-<slug>`) with Claude Code,
+   It registers the MCP server (`dispatchseo-<slug>`) with the site's coding
+   agent (Claude Code or Codex),
    verifies the token, and walks the user through the repo secrets the
    pipeline needs (it explains each one before asking).
 

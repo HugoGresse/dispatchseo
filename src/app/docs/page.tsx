@@ -177,6 +177,7 @@ export default function DocsQuickstart() {
           </span>
           <span>
             <span className="block text-sm font-medium text-neutral-100">
+              A coding agent -{" "}
               <a
                 href="https://claude.com/product/claude-code"
                 target="_blank"
@@ -184,8 +185,16 @@ export default function DocsQuickstart() {
                 className={INLINE_LINK}
               >
                 Claude Code
+              </a>{" "}
+              or{" "}
+              <a
+                href="https://developers.openai.com/codex/cli"
+                target="_blank"
+                rel="noreferrer"
+                className={INLINE_LINK}
+              >
+                Codex
               </a>
-              , and a Claude subscription
             </span>
             <span className="mt-1 block text-sm text-neutral-400">
               Your agent does the actual thinking. It runs on the plan you already pay for -

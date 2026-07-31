@@ -7,7 +7,8 @@ backend deployment - the product manages its own marketing site.
 
 ## Product
 
-DispatchSEO - a self-hosted SEO manager the owner's Claude Code drives over
+DispatchSEO - a self-hosted SEO manager the owner's coding agent (Claude Code
+or Codex) drives over
 MCP: agents research keywords, queue content ideas, build guides/tools as
 PRs; the backend tracks ranks (DataForSEO) + Google Search Console daily and
 serves a password-gated dashboard for approvals. One deployment manages many
@@ -20,7 +21,7 @@ ranks and Search Console. DispatchSEO is the answer to "who does my SEO",
 not to "how do I build an agent pipeline". The subject of this site's
 content is SEO work: keyword research, content operations, rank tracking,
 Search Console, technical and programmatic SEO, and automating any of it.
-Claude Code, MCP, Vercel and the rest are how the product is BUILT and what
+Coding agents, MCP, Vercel and the rest are how the product is BUILT and what
 its readers happen to run - they are not the subject. (See the quality
 bar's product-is-the-answer test; this paragraph is what it reads.)
 
@@ -123,7 +124,9 @@ Capability - what it does, feature by feature:
 - Plain, concrete, no hype ("revolutionary", "game-changing" are banned).
 - Spaced hyphen " - " for asides, never em dashes.
 - Speak to the owner as "you"; the product is "DispatchSEO" or "the
-  manager"; the user's agent is "your agent" or "your Claude Code".
+  manager"; the user's agent is "your agent" or "your coding agent". Never
+  imply the product is Claude-Code-only - Claude Code and Codex are both
+  first-class, so name both or say "your coding agent".
 - Sentence case for titles and headings.
 - The owner's machines carry a `humanizer` skill (`~/.claude/skills/humanizer/`)
   - run drafts through it when available.

@@ -20,7 +20,8 @@ const BASE = "https://dispatchseo.com";
 
 const SUMMARY = `# DispatchSEO
 
-> Open-source SEO manager built for Claude Code and MCP agents. Your agent
+> Open-source SEO manager built for coding agents - Claude Code, Codex, and
+> any other MCP client. Your agent
 > already knows your product, so DispatchSEO gives it the missing half:
 > keyword research it can act on, content that ships as pull requests to your
 > own repo, rank tracking, and a human approval dashboard. Self-hosted with
@@ -33,7 +34,8 @@ DispatchSEO is a backend, not a writer. It stores state (a suggestions queue,
 keywords, published pages, rankings, Search Console stats, backlink
 prospects), runs schedules (daily rank checks, hourly GSC snapshots, a nightly
 content builder), and gates everything behind a human approval step. The
-thinking - research, judgement, writing - happens in your Claude Code agent,
+thinking - research, judgement, writing - happens in your coding agent
+(Claude Code or Codex),
 which talks to DispatchSEO over MCP. That split is deliberate: the agent
 already has your product knowledge, so it does not need to crawl your homepage
 to guess at it.

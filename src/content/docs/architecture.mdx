@@ -13,7 +13,7 @@ want the shape of the product. This page is the reference version.
 DispatchSEO is state, scheduling, and an approval gate. It is deliberately
 not a writer, a researcher, or a strategist - every judgment call about
 which keywords are worth chasing, what angle to take, and whether a draft is
-any good happens in your Claude Code agent, connected over MCP.
+any good happens in your coding agent, connected over MCP.
 
 That split exists because the hard part of SEO content isn't the SEO - it's
 knowing the product. Your agent already has your repo open: your code, your
@@ -69,7 +69,7 @@ is why existing CI secrets never needed rotation when multi-tenancy shipped.
   endpoints with `CRON_SECRET`.
 - **The self-hosted Docker stack** adds two containers with no cloud
   equivalent: `cron`, a small BusyBox crond hitting those same endpoints on
-  the same schedules, and `builder`, a headless Claude Code process that
+  the same schedules, and `builder`, a headless coding-agent process that
   polls `/api/builder/jobs` for due work and executes it in-stack. The
   builder exists specifically for installs with no public URL - a localhost
   or LAN deployment that GitHub's own runners could never call back into.
