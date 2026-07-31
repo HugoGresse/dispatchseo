@@ -191,6 +191,8 @@ jobs:
           safety-strategy: drop-sudo
           output-file: ${{ runner.temp }}/codex-out.txt
           prompt: |
+            ENVIRONMENT RULE (read first, it overrides habit): you have no apply_patch tool here - only the shell. NEVER write or edit a file with a heredoc, printf, or echo. The content is MDX and its backticks WILL be expanded by bash and corrupt the file or fail the command. Write files with python3, passing the content on stdin, never interpolated into the command string. Verify every write with ls -l and head before moving on, and never let a filename come from an unset shell variable.
+
             FIRST call the seo-manager MCP tool get_instructions with workflow trend-expand, then follow the returned markdown exactly - it is the current playbook and overrides any cached knowledge of this pipeline. Also read .dispatchseo/conventions.md for what this product is.
 
             The subject the owner picked: topic_id "${{ github.event.client_payload.topic_id }}", title "${{ github.event.client_payload.topic_title }}".
