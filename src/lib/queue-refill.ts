@@ -2,7 +2,9 @@ import { db } from "./db";
 import { getCronHealth, reportCronRun } from "./cron-alerts";
 import { dispatchResearch } from "./github";
 import { listProjects } from "./projects";
-import { isCloudMode } from "./cloud";
+import { isCloudMode, isLocalBackendUrl } from "./cloud";
+import { inStackBuilderOwnsBuilds } from "./builder-status";
+import { builderJobKey } from "./build-schedule";
 
 // Queue-empty self-heal (2026-07-27 incident).
 //
@@ -83,18 +85,23 @@ async function refillProject(p: {
     return { skipped: "setup incomplete: no installed pipeline to research into" };
   }
 
-  // A localhost backend cannot be reached by GitHub Actions, so a
-  // repository_dispatch there fires a run that dies on its first MCP call. The
-  // docker stack's in-stack builder claims research on its own poll instead -
-  // /api/builder/jobs makes it due the moment the queue is dry, which is the
-  // same self-heal by the other road. Same guard shape as
-  // onboarding/status/route.ts.
-  const localDockerBackend =
-    Boolean(process.env.POSTGREST_URL) &&
-    ((process.env.APP_URL ?? "").includes("localhost") ||
-      (process.env.APP_URL ?? "").includes("127.0.0.1"));
-  if (localDockerBackend) {
-    return { skipped: "local docker backend: the in-stack builder claims research itself" };
+  // Two separate reasons not to hand research to GitHub Actions, and this
+  // used to conflate them into one string test on APP_URL:
+  //
+  // 1. The in-stack builder is alive, so it OWNS the work - /api/builder/jobs
+  //    makes research due the moment the queue is dry. Dispatching as well
+  //    means two runners research the same project the same day: duplicate
+  //    suggestions and DOUBLE DataForSEO spend. This is true no matter how
+  //    reachable the backend is, which is exactly what the old URL test got
+  //    wrong - start.sh rewrites APP_URL to https://$DOMAIN on every VPS
+  //    install, so the recommended setup ran both rails at once.
+  // 2. GitHub's runners cannot reach a localhost/LAN/tailnet backend at all,
+  //    so a dispatch there fires a run that dies on its first MCP call.
+  if (Boolean(process.env.POSTGREST_URL) && (await inStackBuilderOwnsBuilds())) {
+    return { skipped: "the in-stack builder claims research itself" };
+  }
+  if (isLocalBackendUrl(process.env.APP_URL)) {
+    return { skipped: "backend is not reachable from GitHub's runners" };
   }
 
   const dry = await guideQueueDry(p.id);
@@ -133,10 +140,20 @@ async function refillProject(p: {
   // bare row belongs to whoever reported it - counting it would let one
   // tenant's research suppress every other tenant's refill for the rest of the
   // day, which is worse than the double-batch this check prevents.
+  // The in-stack builder reports research under its OWN namespace
+  // (builderJobKey -> builder-research--<slug>), so a self-host install whose
+  // builder researched this morning and then went quiet would otherwise look
+  // like it had never researched at all, and get a second batch dispatched at
+  // GitHub - the double-spend this check exists to prevent, through the one
+  // key it wasn't looking at.
   const startOfUtcDay = new Date().toISOString().slice(0, 10) + "T00:00:00.000Z";
   const researchJobNames = isCloudMode()
     ? [`seo-weekly-research--${p.slug}`]
-    : ["seo-weekly-research", `seo-weekly-research--${p.slug}`];
+    : [
+        "seo-weekly-research",
+        `seo-weekly-research--${p.slug}`,
+        builderJobKey("research", p.slug),
+      ];
   const { data: researchRuns } = await db()
     .from("cron_runs")
     .select("id")

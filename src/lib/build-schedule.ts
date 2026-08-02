@@ -193,9 +193,26 @@ async function approvedCount(projectId: string, type: "guide" | "tool"): Promise
  * the same due-ness math serves both runners without either knowing about the
  * other's naming.
  */
+// The sentence the builder writes when a project's agent has no credential
+// (api/builder/jobs). It lives here because due() has to RECOGNISE it: that
+// row records a job that never ran, so it must not consume a cadence window.
+// Without this, pasting the missing key changed nothing visible - the job
+// stayed not-due for the rest of its window (up to 20h for a build, 6.5 days
+// for geo-scan), which reads as "I did what it asked and it stayed broken".
+export const NO_CREDENTIAL_MARKER = "credential is available to the builder";
+
+function isCredentialBlocked(errors: string[]): boolean {
+  return errors.length > 0 && errors.every((e) => e.includes(NO_CREDENTIAL_MARKER));
+}
+
 export async function dueBuildWork(
   p: Project,
   jobKey: (wf: ScheduledWorkflow) => string,
+  // Set once the credential that blocked this project has actually arrived.
+  // Only then do the blocked rows stop counting - while the key is still
+  // missing they keep parking the job, which is what rate-limits the alert to
+  // one row per cadence instead of one per 10-minute poll.
+  opts?: { credentialAvailable?: boolean },
 ): Promise<ScheduledWorkflow[]> {
   const flags = effectiveAutomations(p);
   const health = await getCronHealth(p.slug);
@@ -211,6 +228,9 @@ export async function dueBuildWork(
     if (!row) return true;
     const ageMs = Date.now() - new Date(row.last_run_at).getTime();
     if (row.claimed_only) return ageMs > CLAIM_GRACE_HOURS * 3_600_000;
+    // The blocker is gone: a "no agent credential" row means this job never
+    // ran, so it owes no cadence. Due immediately, not in 20 hours.
+    if (opts?.credentialAvailable && !row.ok && isCredentialBlocked(row.errors)) return true;
     const cadenceHours = cadenceOverrideHours ?? CADENCE_HOURS[wf];
     // update_available rows are ok:false but INFORMATIONAL (a newer pipeline
     // pack exists) - retrying a build cannot resolve one, so they must not

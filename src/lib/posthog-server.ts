@@ -18,6 +18,26 @@ function client(): PostHog | null {
   });
 }
 
+// Analytics must never be able to fail the thing it is only watching. Every
+// call below runs AFTER the real work has committed - a subscription written,
+// a session created, a checkout opened - and each is awaited by its caller, so
+// a rejection here surfaces as that operation failing.
+//
+// The SDK's _shutdown() is a Promise.race that REJECTS on its own timeout
+// (plain network errors it swallows, but a slow PostHog rejects, after burning
+// 30 seconds of function budget first). That put a third party's bad minute in
+// front of the Polar webhook - which answers non-2xx, gets retried, and after
+// ten of those Polar disables the webhook for every customer - and in front of
+// the auth callback, where it would bounce a correctly-signed-in user to
+// /login?error=1. One wrapper closes all 20 call sites.
+async function flush(ph: PostHog): Promise<void> {
+  try {
+    await ph._shutdown(2000);
+  } catch {
+    // An unsent analytics event is not worth a word to the user.
+  }
+}
+
 export async function captureServer(
   distinctId: string,
   event: string,
@@ -25,8 +45,12 @@ export async function captureServer(
 ): Promise<void> {
   const ph = client();
   if (!ph) return;
-  ph.capture({ distinctId, event, properties });
-  await ph._shutdown();
+  try {
+    ph.capture({ distinctId, event, properties });
+  } catch {
+    return;
+  }
+  await flush(ph);
 }
 
 export async function identifyServer(
@@ -35,8 +59,12 @@ export async function identifyServer(
 ): Promise<void> {
   const ph = client();
   if (!ph) return;
-  ph.identify({ distinctId, properties });
-  await ph._shutdown();
+  try {
+    ph.identify({ distinctId, properties });
+  } catch {
+    return;
+  }
+  await flush(ph);
 }
 
 export async function captureServerException(
@@ -46,6 +74,10 @@ export async function captureServerException(
 ): Promise<void> {
   const ph = client();
   if (!ph || !(error instanceof Error)) return;
-  await ph.captureExceptionImmediate(error, distinctId, properties);
-  await ph._shutdown();
+  try {
+    await ph.captureExceptionImmediate(error, distinctId, properties);
+  } catch {
+    return;
+  }
+  await flush(ph);
 }

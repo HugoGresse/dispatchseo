@@ -56,6 +56,22 @@ export function isEncrypted(value: string): boolean {
   return value.startsWith(PREFIX);
 }
 
+// encryptSecret, but "this install cannot encrypt" comes back as null instead
+// of a throw. Every caller that stores a credential in instance_settings has a
+// friendly branch for that install - "set <ENV_VAR> in your .env instead" -
+// and it sat AFTER the encrypt, so it was unreachable: an install whose
+// password comes from DASHBOARD_PASSWORD env is born "ready" (setup.ts), never
+// runs the claim step, so instance_settings has no row at all, key()'s
+// self-heal UPDATE matches zero rows, and the owner got a blank error boundary
+// instead of the one sentence that would have fixed it.
+export async function tryEncryptSecret(plain: string): Promise<string | null> {
+  try {
+    return await encryptSecret(plain);
+  } catch {
+    return null;
+  }
+}
+
 export async function encryptSecret(plain: string): Promise<string> {
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", await key(), iv);

@@ -674,8 +674,60 @@ export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]>
     pipelineHeartbeatAlerts(projectSlug, reported),
     builderJobHeartbeatAlerts(projectSlug, reported),
   ]);
-  const all = [...health, ...heartbeat, ...builderHeartbeat];
+  const all = await unstaleIdleBuilders([...health, ...heartbeat, ...builderHeartbeat]);
   return [...all, ...(await githubQuotaAlert(projectSlug, all))];
+}
+
+// A build workflow that hasn't run because there is NOTHING TO BUILD is not
+// stale, it is idle - and idle is the normal resting state of a semi-mode
+// project whose owner simply hasn't approved anything this week.
+//
+// This became reachable the moment the build workflows stopped posting ok=1
+// for runs their own guard skipped (2026-08-02). That heartbeat was wrong -
+// it told due() a build had completed and cost the next 20h of dispatch - but
+// while it existed it also, accidentally, kept these rows fresh. Removing it
+// without this gate would have turned "your queue is empty" into a red
+// "seo-daily hasn't run in 36 hours" banner: the GitHub-rail twin of the
+// build-guide false alarm fixed on the builder rail the same day.
+//
+// Only ever CLEARS a stale flag, never sets one, and only for the two
+// approval-gated builders - a job that has real work waiting and still isn't
+// running stays exactly as loud as it was.
+const IDLE_GATED_JOBS: Record<string, "guide" | "tool"> = {
+  "seo-daily": "guide",
+  "seo-tools": "tool",
+  "builder-build-guide": "guide",
+  "builder-build-tool": "tool",
+};
+
+async function unstaleIdleBuilders(health: CronHealth[]): Promise<CronHealth[]> {
+  const candidates = health.filter(
+    (h) => h.stale && h.ok && IDLE_GATED_JOBS[baseJobName(h.job)] !== undefined,
+  );
+  if (candidates.length === 0) return health; // hot path: nothing to check
+  try {
+    const projects = await listProjects();
+    const bySlug = new Map(projects.map((p) => [p.slug, p]));
+    const idle = new Set<string>();
+    for (const h of candidates) {
+      const slug = jobProjectSlug(h.job);
+      const project = slug ? bySlug.get(slug) : null;
+      if (!project) continue; // unknown project: leave the row untouched
+      const { count, error } = await db()
+        .from("suggestions")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", project.id)
+        .eq("type", IDLE_GATED_JOBS[baseJobName(h.job)])
+        .eq("status", "approved");
+      // A failed count must never silence a real alarm - only a proven-empty
+      // queue does.
+      if (!error && (count ?? 0) === 0) idle.add(h.job);
+    }
+    if (idle.size === 0) return health;
+    return health.map((h) => (idle.has(h.job) ? { ...h, stale: false } : h));
+  } catch {
+    return health; // best-effort, like every helper here
+  }
 }
 
 // The GitHub Actions workflows a connected repo runs on a schedule. Used to

@@ -9,6 +9,7 @@ import { buildsActive } from "@/lib/builder-status";
 import { getAnalyticsOverview } from "@/lib/analytics-data";
 import { getJourney } from "@/lib/journey";
 import { getWeeklyProgress } from "@/lib/progress";
+import { getBriefing } from "@/lib/briefing";
 import { AUTOMATIONS, gatherEvidence } from "@/lib/automations";
 import { credsForProject, keywordSuggestions, relatedKeywords, type KeywordIdea } from "@/lib/dataforseo";
 import { isCloudMode } from "@/lib/cloud";
@@ -1904,6 +1905,37 @@ const mcpHandler = createMcpHandler(
             guides: o.guides.map(pageRow),
             tools: o.tools.map(pageRow),
           });
+        } catch (e) {
+          return fail(e instanceof Error ? e.message : String(e));
+        }
+      },
+    );
+
+    server.registerTool(
+      "get_briefing",
+      {
+        title: "Get briefing",
+        description:
+          "The dispatcher's briefing - the card at the top of the dashboard " +
+          "Home, in the agent's own first-person voice. Carries the day's " +
+          "clicks and impressions, what the pipeline is working on right now, " +
+          "and the QUICK WINS: the handful of things worth acting on today, " +
+          "picked from Search Console using the same signals the big SEO tools " +
+          "use (striking-distance queries at position 8-20, page-one queries " +
+          "that rank but don't get clicked, high-impression zero-click " +
+          "queries, rising queries, searches the site newly appears for, and " +
+          "first-ever milestones). Use this when the owner asks 'what should I " +
+          "do about SEO today' or 'anything worth acting on' - it is the " +
+          "shortlist. get_overview is the full picture behind it; " +
+          "get_next_actions is the queue of decisions waiting on the owner. " +
+          "An empty wins list is a real answer on a young site - the " +
+          "'patience' field says why, and inventing a win to fill the gap " +
+          "would defeat the whole point.",
+        inputSchema: {},
+      },
+      async () => {
+        try {
+          return ok(await getBriefing(currentProject()));
         } catch (e) {
           return fail(e instanceof Error ? e.message : String(e));
         }

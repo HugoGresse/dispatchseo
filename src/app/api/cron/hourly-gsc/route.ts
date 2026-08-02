@@ -66,8 +66,32 @@ async function verifyIndexing(project: Project, sc: GscClient): Promise<Record<s
   // had no way to surface: `failed` was returned but nothing ever read it, so
   // this could stay broken forever while cron_runs/the banner/get_cron_health
   // kept reporting success (2026-07-27 audit).
+  //
+  // Loud only if it has ever worked. URL Inspection is a SEPARATE grant from
+  // Search Analytics, and gscAccessProbe only proves the latter - so a project
+  // whose stats sync perfectly can still 403 every inspection (property is
+  // apex but pages are www, a docs subdomain outside the property, the grant
+  // never given). That is unmet setup, not a regression: informational, per
+  // the "crons never run what setup hasn't finished" rule. One stamped
+  // indexed_at anywhere in this project is the proof it once worked, and from
+  // then on a total failure is a real regression worth the banner.
   const allFailed = rows.length > 0 && failed === rows.length;
-  return { checked: rows.length, newly_indexed: newlyIndexed, failed, allFailed };
+  if (!allFailed) return { checked: rows.length, newly_indexed: newlyIndexed, failed, allFailed };
+  const { count: everIndexed } = await db()
+    .from("pages")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", project.id)
+    .not("indexed_at", "is", null);
+  const provenBefore = (everIndexed ?? 0) > 0;
+  return {
+    checked: rows.length,
+    newly_indexed: newlyIndexed,
+    failed,
+    allFailed: provenBefore,
+    ...(provenBefore
+      ? {}
+      : { skipped: "URL Inspection has never succeeded here - check that the service account has it on this property" }),
+  };
 }
 
 async function runProject(project: Project): Promise<Record<string, unknown>> {
@@ -94,9 +118,16 @@ async function runProject(project: Project): Promise<Record<string, unknown>> {
     return { skipped: "no GSC data in window", indexing: await verifyIndexing(project, sc) };
   }
 
-  for (const snap of snaps) {
-    const { error } = await db().from("gsc_stats").upsert(
-      {
+  // One upsert for the whole window, not one per date. Row-at-a-time with a
+  // throw on the first error committed the earlier dates and dropped every
+  // later one, then failed the project's whole run so verifyIndexing never
+  // got to go - a partial write plus a hard stop. The upsert is idempotent on
+  // (project_id, date), so a batch is a straight improvement: all or nothing,
+  // one round trip, and a re-run heals it either way.
+  const { error: upsertError } = await db()
+    .from("gsc_stats")
+    .upsert(
+      snaps.map((snap) => ({
         project_id: project.id,
         date: snap.date,
         clicks: snap.clicks,
@@ -105,11 +136,10 @@ async function runProject(project: Project): Promise<Record<string, unknown>> {
         avg_position: snap.avg_position,
         top_queries: snap.top_queries,
         top_pages: snap.top_pages,
-      },
+      })),
       { onConflict: "project_id,date" },
     );
-    if (error) throw new Error(`${snap.date}: ${error.message}`);
-  }
+  if (upsertError) throw new Error(`gsc_stats upsert: ${upsertError.message}`);
   const indexing = await verifyIndexing(project, sc);
   return { upserted: snaps.map((s) => s.date), indexing };
 }

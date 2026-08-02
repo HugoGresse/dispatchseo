@@ -182,6 +182,11 @@ export const DEFAULT_PROJECT_SLUG = "clockedcode";
 // Fixed id from migration 0004 - also the column default on every table, so
 // writes from pre-projects code keep landing on ClockedCode.
 export const DEFAULT_PROJECT_ID = "00000000-0000-4000-8000-000000000001";
+// The slug the SYNTHETIC env-fallback project answers to. Not the seeded row's
+// slug: the fallback is a stand-in that exists precisely when no row can be
+// read, so it names itself neutrally. Shared with getProjectBySlug because the
+// dashboard hands this slug straight back to every server action.
+const FALLBACK_PROJECT_SLUG = "default";
 
 // mcp_token deliberately excluded - only fetchProjectToken exposes it.
 const COLS =
@@ -261,7 +266,7 @@ function envFallbackProject(): Project {
   const gscSiteUrl = process.env.GSC_SITE_URL ?? null;
   return {
     id: DEFAULT_PROJECT_ID,
-    slug: "default",
+    slug: FALLBACK_PROJECT_SLUG,
     name: "Your site",
     domain: gscSiteUrl?.replace(/^(sc-domain:|https?:\/\/)/, "").replace(/\/+$/, "") ?? "",
     gsc_site_url: gscSiteUrl,
@@ -389,8 +394,18 @@ export async function getProjectBySlug(slug: string): Promise<Project | null> {
   const { data, error } = await selectProjects((cols) =>
     db().from("projects").select(cols).eq("slug", slug).maybeSingle(),
   );
-  if (error) return slug === DEFAULT_PROJECT_SLUG ? envFallbackProject() : null;
-  return (data as unknown as Project) ?? null;
+  if (data) return data as unknown as Project;
+  // The synthetic project's OWN slug has to resolve back to it, or the state
+  // the fallback exists to survive is half-broken: the dashboard renders fine
+  // off envFallbackProject() while every server action that takes a slug -
+  // setAgent, setProjectMode, setAutomationToggle, setInternalLinking,
+  // getAgentCredentialStatuses - throws "Unknown project." on the slug the
+  // page just handed it. Only ever reached when the real row is missing, so a
+  // genuine project named "default" still wins above.
+  if (slug === FALLBACK_PROJECT_SLUG) return envFallbackProject();
+  // No row and no error is a real miss for anything else; only the seeded
+  // default keeps the older read-failed tolerance.
+  return error && slug === DEFAULT_PROJECT_SLUG ? envFallbackProject() : null;
 }
 
 export async function getProjectById(id: string): Promise<Project | null> {

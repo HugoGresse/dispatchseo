@@ -6,7 +6,7 @@ import { mergeToken, builderClaudeToken, builderAgentToken, builderAgentTokens, 
 import { listProjects, fetchProjectToken, effectiveAutomations } from "@/lib/projects";
 import { agentById, projectAgent, type AgentId } from "@/lib/agents";
 import { isCloudMode } from "@/lib/cloud";
-import { dueBuildWork, builderJobKey } from "@/lib/build-schedule";
+import { dueBuildWork, builderJobKey, NO_CREDENTIAL_MARKER } from "@/lib/build-schedule";
 
 export const dynamic = "force-dynamic";
 
@@ -199,9 +199,14 @@ export async function GET(req: Request): Promise<Response> {
           await reportCronRun(
             builderJobKey(wf, p.slug),
             {
+              // Built from NO_CREDENTIAL_MARKER, not a free-floating string:
+              // dueBuildWork matches on it to know this row is a job that
+              // never RAN, so the work goes due the moment the key lands
+              // instead of waiting out a cadence it never used. Reword freely
+              // around the marker; don't drop it.
               error:
-                `${p.slug} is set to build with ${missing}, but no ${missing} credential is ` +
-                `available to the builder. Paste one on Home's automatic-builds card or ` +
+                `${p.slug} is set to build with ${missing}, but no ${missing} ` +
+                `${NO_CREDENTIAL_MARKER}. Paste one on Home's automatic-builds card or ` +
                 `Settings - or switch the site's agent from the top bar.`,
             },
             true,
@@ -219,7 +224,12 @@ export async function GET(req: Request): Promise<Response> {
 
     // Due-ness, cadence collapse on a dry queue, and the approved-count gates
     // all live in build-schedule.ts now - see the header note above.
-    let wanted = await dueBuildWork(p, (wf) => builderJobKey(wf, p.slug));
+    // credentialAvailable: we only reach here WITH a token, so any
+    // "no credential" row is a stale block - clear it from the cadence maths
+    // rather than making the owner wait out a window their fix already ended.
+    let wanted = await dueBuildWork(p, (wf) => builderJobKey(wf, p.slug), {
+      credentialAvailable: true,
+    });
 
     // Open-PR pre-check, the twin of seo-dispatch's: one SEO PR at a time is
     // the pipeline's steady state (built, waiting on checks or a merge), and

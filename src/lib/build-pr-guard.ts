@@ -74,6 +74,12 @@ export async function checkBuildPr(project: RepoRef, prUrl: string): Promise<PrG
         "User-Agent": "dispatchseo",
       },
       cache: "no-store",
+      // Bounded because this runs INLINE on the update_suggestion MCP path: an
+      // unbounded fetch turns a slow GitHub into an agent call that never
+      // returns, which is a worse outcome than the check not happening. The
+      // timeout throws into the catch below, so a hang fails open exactly like
+      // any other infrastructure error - same rule as the header comment.
+      signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) return { ok: true, checked: false };
     files = (await res.json()) as PrFile[];

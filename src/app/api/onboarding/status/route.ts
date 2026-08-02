@@ -4,11 +4,11 @@ import { instanceSettings } from "@/lib/dashboard-auth";
 import { dashboardAuth } from "@/lib/auth-gate";
 import { getProjectBySlug } from "@/lib/projects";
 import { getCronHealth, reportCronRun } from "@/lib/cron-alerts";
-import { buildsActive } from "@/lib/builder-status";
-import { backendBaseUrl } from "@/lib/pipeline-pack";
+import { buildsActive, inStackBuilderOwnsBuilds } from "@/lib/builder-status";
+import { backendBaseUrl, hasDataforseo } from "@/lib/pipeline-pack";
 import { openSeoPrs, dispatchResearch } from "@/lib/github";
 import { ownedProjectIds } from "@/lib/tenant-guard";
-import { isCloudMode } from "@/lib/cloud";
+import { isCloudMode, isLocalBackendUrl } from "@/lib/cloud";
 import { reconcileInstallStamp } from "@/lib/install-reconcile";
 
 // The open install PR, so the wizard can say "your move: merge this" with a
@@ -95,7 +95,7 @@ export async function GET(req: Request): Promise<Response> {
     return Response.json({ error: "unknown project" }, { status: 404 });
   }
 
-  const [keywords, rankChecks, suggestions, pages, gscRows, health, profile] = await Promise.all([
+  const [keywords, rankChecks, suggestions, pages, gscRows, health, profile, firstKeyword] = await Promise.all([
     db().from("keywords").select("id", { count: "exact", head: true }).eq("project_id", project.id),
     db().from("rank_checks").select("id", { count: "exact", head: true }).eq("project_id", project.id),
     db().from("suggestions").select("id", { count: "exact", head: true }).eq("project_id", project.id),
@@ -106,12 +106,23 @@ export async function GET(req: Request): Promise<Response> {
       .from("site_profile")
       .select("id", { count: "exact", head: true })
       .eq("project_id", project.id),
+    // Oldest tracked keyword = the clock the first rank check is measured
+    // against. daily-ranks runs once a day, so "no rank check yet" is only
+    // meaningful once a full cycle has had the chance to run.
+    db()
+      .from("keywords")
+      .select("created_at")
+      .eq("project_id", project.id)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   const canary = health.find((h) => h.job === `seo-canary--${project.slug}`);
   const keywordCount = keywords.count ?? 0;
   const rankCount = rankChecks.count ?? 0;
   const gscCount = gscRows.count ?? 0;
+  const firstKeywordAt = (firstKeyword.data as { created_at?: string } | null)?.created_at ?? null;
 
   // Self-heal the install stamp before anything below reads it. The setup
   // agent is supposed to end its run with mark_pipeline_installed, but that
@@ -156,15 +167,15 @@ export async function GET(req: Request): Promise<Response> {
   // fills itself - no "run /seo-research" for the owner. Needs a repo to
   // dispatch into; debounced through the marker row like the others.
   const suggestionCount = suggestions.count ?? 0;
-  // On a LOCAL docker backend GitHub Actions can't reach us, so seo-weekly-
-  // research is disabled and this repository_dispatch would fire a doomed run
-  // (or silently no-op against a disabled workflow). The in-stack builder
-  // claims the research job on its own poll instead - so skip the dispatch
-  // there. Same guard shape as cron-alerts.ts's IS_DOCKER_STACK localhost check.
-  const localDockerBackend =
-    Boolean(process.env.POSTGREST_URL) &&
-    ((process.env.APP_URL ?? "").includes("localhost") ||
-      (process.env.APP_URL ?? "").includes("127.0.0.1"));
+  // Two reasons to skip the dispatch, and they are different questions - see
+  // queue-refill.ts, which holds the same pair. Either the in-stack builder
+  // owns the work (it claims research on its own poll, and a dispatch would
+  // duplicate the batch and its DataForSEO spend), or GitHub's runners cannot
+  // reach this backend at all (localhost/LAN/tailnet), where seo-weekly-
+  // research is disabled and the dispatch fires a doomed run.
+  const builderOwnsBuilds =
+    Boolean(process.env.POSTGREST_URL) && (await inStackBuilderOwnsBuilds());
+  const localDockerBackend = builderOwnsBuilds || isLocalBackendUrl(process.env.APP_URL);
   if (
     pipelineInstalledAt &&
     project.github_repo &&
@@ -226,6 +237,22 @@ export async function GET(req: Request): Promise<Response> {
     ideas_queued: suggestions.count ?? 0,
     keywords_tracked: keywordCount,
     rank_checks: rankCount,
+    // Can this project EVER produce a rank check? Rank tracking is the paid
+    // half (DataForSEO); a free/GSC-only project has no rank_checks row coming
+    // and never will. The first-run strip waits on rank_checks to hide itself,
+    // so without this it spins forever on a free-mode install while promising
+    // "rankings fill in on their own" - a permanent in-progress state for work
+    // that is not pending, it is not configured.
+    ranks_possible: hasDataforseo(project),
+    // When the first rank check became overdue: daily-ranks runs once a day,
+    // so anything under ~26h from the first tracked keyword is simply "not
+    // yet", not a fault. Mirrors research_overdue above.
+    ranks_overdue: Boolean(
+      keywordCount > 0 &&
+        rankCount === 0 &&
+        firstKeywordAt &&
+        Date.now() - new Date(firstKeywordAt).getTime() > 26 * 3_600_000,
+    ),
     gsc_rows: gscCount,
     pages_known: pages.count ?? 0,
     // Docker installs only: is any build path alive - the in-stack builder's

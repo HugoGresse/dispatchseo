@@ -203,6 +203,11 @@ export async function openSeoPrs(
     // and layer their own cache over this.
     const res = await fetch(`${API}/repos/${target}/pulls?state=open&per_page=20`, {
       headers: await headers(repo),
+      // Home awaits this inside a wide Promise.all, so an unbounded socket
+      // here doesn't degrade one card - it parks the whole dashboard on the
+      // loading screen until the function times out. The catch below already
+      // treats a failure as "no PRs"; this makes a hang reach it.
+      signal: AbortSignal.timeout(10000),
       ...(opts?.live
         ? { cache: "no-store" as const }
         : { next: { revalidate: 60, tags: [`seo-prs:${target}`] } }),
@@ -260,6 +265,11 @@ export async function dispatchToolBuild(
         event_type: "seo-tool-approved",
         client_payload: { suggestion_id: suggestionId },
       }),
+      // seo-dispatch awaits every project's dispatch before it reports the
+      // run, so one hung socket means the run logs NOTHING - the pipeline's
+      // busiest job goes invisible until its 10h staleness threshold. The
+      // try/catch only converts rejections, which is not what a hang is.
+      signal: AbortSignal.timeout(10000),
     });
     return res.ok ? { dispatched: true } : { dispatched: false, reason: "github-error" };
   } catch {
@@ -287,6 +297,7 @@ async function fireDispatch(
       method: "POST",
       headers: { ...(await headers(repo)), "Content-Type": "application/json" },
       body: JSON.stringify({ event_type: eventType, client_payload: payload }),
+      signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) return { ok: false, message: `GitHub answered HTTP ${res.status} - try again.` };
     return { ok: true, message: successMessage };

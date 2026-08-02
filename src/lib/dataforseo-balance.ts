@@ -23,6 +23,11 @@ export async function dataforseoBalance(creds: DataforseoCreds | null): Promise<
           "Basic " + Buffer.from(`${creds.login}:${creds.password}`).toString("base64"),
       },
       next: { revalidate: 300 },
+      // Home awaits this alongside every other card. Without a bound, one
+      // hung socket at DataForSEO holds the whole dashboard on the loading
+      // screen until the function times out - a third party's bad minute
+      // should cost this one card, which the catch below already handles.
+      signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) return null;
     const json = (await res.json()) as {
