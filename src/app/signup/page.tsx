@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { DispatchMark } from "@/components/logo";
-import { AuthDivider, GoogleSignInButton } from "@/components/google-signin";
+import { AuthDivider } from "@/components/google-signin";
+import { SignupConsent } from "@/components/signup-consent";
+import { googleSignIn } from "@/app/auth/google-action";
 import { AuthShell } from "@/components/auth-shell";
 import { FormPending } from "@/components/dispatching";
 import { ResendConfirmation, type ResendResult } from "@/components/resend-confirmation";
@@ -25,6 +27,10 @@ export const dynamic = "force-dynamic";
 // personalizes the headline here, and both auth paths stash it in the
 // pending_domain cookie so the onboarding wizard can prefill step 1 -
 // the visitor should never have to type their domain twice.
+
+// Ties the consent checkbox (rendered above the Google button) to the email
+// form further down the page, so one tick governs both signup paths.
+const SIGNUP_FORM_ID = "signup-email-form";
 
 const DOMAIN_COOKIE = "pending_domain";
 // Which address the confirmation went to. The check-your-inbox screen needs it
@@ -52,6 +58,11 @@ async function signup(formData: FormData) {
   const back = domain ? `&domain=${encodeURIComponent(domain)}` : "";
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
+  // The clickwrap. `required` on the box stops this in the browser, so reaching
+  // here means the form was posted around the UI - but acceptance is the thing
+  // the entire terms of service hangs off, so it is checked where it cannot be
+  // skipped rather than trusted to the client.
+  if (formData.get("accept") !== "yes") redirect(`/signup?error=terms${back}`);
   if (!email || password.length < 8) redirect(`/signup?error=weak${back}`);
   const supabase = await supabaseAuth();
   // Without emailRedirectTo, Supabase sends the confirmed visitor to the
@@ -244,9 +255,12 @@ export default async function SignupPage({
             screen is where a WordPress owner used to discover there was no
             repo to publish into, and that screen sits past the card. */}
         <SignupRequirements />
-        <GoogleSignInButton label="Sign up with Google" domain={domain} />
+        {/* One tick covers both buttons - it belongs to the email form below
+            via the `form` attribute, and rides the Google form as a hidden
+            field. Both server actions re-check it. */}
+        <SignupConsent formId={SIGNUP_FORM_ID} googleAction={googleSignIn} domain={domain} />
         <AuthDivider />
-        <form action={signup} className="space-y-4">
+        <form id={SIGNUP_FORM_ID} action={signup} className="space-y-4">
           <FormPending label="Creating your account" />
           {domain ? <input type="hidden" name="domain" value={domain} /> : null}
           <input type="email" name="email" placeholder="Email" className={inputCls} />
@@ -256,7 +270,11 @@ export default async function SignupPage({
             placeholder="Password (8+ characters)"
             className={inputCls}
           />
-          {error === "weak" ? (
+          {error === "terms" ? (
+            <p className="text-sm text-red-400">
+              Tick the box to accept the terms of service and privacy policy first.
+            </p>
+          ) : error === "weak" ? (
             <p className="text-sm text-red-400">Use a valid email and at least 8 characters.</p>
           ) : error === "exists" ? (
             // Amber, not red: the person did nothing wrong, they already have
@@ -293,17 +311,6 @@ export default async function SignupPage({
             Create account
           </button>
         </form>
-        <p className="text-xs text-neutral-600">
-          By signing up, you agree to our{" "}
-          <Link href="/terms" className="underline hover:text-neutral-400">
-            terms of service
-          </Link>{" "}
-          and{" "}
-          <Link href="/privacy" className="underline hover:text-neutral-400">
-            privacy policy
-          </Link>
-          .
-        </p>
         <p className="text-sm text-neutral-500">
           Already have one?{" "}
           <Link href="/login" className="text-neutral-300 underline">

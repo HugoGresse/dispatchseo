@@ -13,6 +13,13 @@ import { authCallbackUrl } from "@/lib/origin";
 // consent (the dashboard's Connect GSC button), so signup never asks for
 // data scopes.
 export async function googleSignIn(formData: FormData) {
+  // Signing UP through Google forms the contract just as much as the email
+  // form does, so the same clickwrap applies. /login posts no mode and is
+  // untouched: a returning user has already accepted, and there is no box on
+  // that page to tick.
+  if (formData.get("mode") === "signup" && formData.get("accept") !== "yes") {
+    redirect("/signup?error=terms");
+  }
   // The landing hero's typed domain rides a hidden field; stash it in the
   // cookie the onboarding wizard prefills from. The OAuth redirect would
   // drop a query param, a cookie survives the round-trip.
