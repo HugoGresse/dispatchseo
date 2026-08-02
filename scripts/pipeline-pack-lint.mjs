@@ -115,14 +115,19 @@ function checkPnpmSetupShape({ where, content }) {
   for (const block of stepBlocks(content)) {
     if (!/uses:\s*pnpm\/action-setup/.test(block)) continue;
     if (!/^\s*version:/m.test(block)) continue; // no version input - always safe
-    if (!/pnpm_pin\.outputs\.pinned\s*==\s*'0'/.test(block)) {
+    // Two accepted gates: the current detector (`pkg.outputs.pnpm_pinned`,
+    // which also resolves npm/yarn/bun/none repos - 2026-08-02) and its
+    // pnpm-only predecessor (`pnpm_pin.outputs.pinned`), which this repo's
+    // own live copies keep carrying until the post-deploy pack auto-sync
+    // rewrites them.
+    if (!/(pnpm_pin\.outputs\.pinned|pkg\.outputs\.pnpm_pinned)\s*==\s*'0'/.test(block)) {
       fail(
         where,
         "conditional-pnpm-version",
-        "a pnpm/action-setup step passes a `version:` input without being gated on " +
-          "steps.pnpm_pin.outputs.pinned == '0'. pnpm/action-setup hard-errors when a version input " +
-          "sits alongside package.json's packageManager pin, which kills the workflow at setup on " +
-          "every run. Detect the pin at run time and use two mutually-exclusive steps.",
+        "a pnpm/action-setup step passes a `version:` input without being gated on the no-pin " +
+          "detector output (steps.pkg.outputs.pnpm_pinned == '0'). pnpm/action-setup hard-errors " +
+          "when a version input sits alongside package.json's packageManager pin, which kills the " +
+          "workflow at setup on every run. Detect the pin at run time and use two mutually-exclusive steps.",
       );
     }
   }

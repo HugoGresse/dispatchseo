@@ -126,69 +126,112 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shape: [pinned, unpinned]
+        shape: [pinned, unpinned, npm, bun, static]
     steps:
       - uses: actions/checkout@v4
 
       # Written outside the repo root on purpose: this repo's own package.json
-      # carries a pin, and the action defaults to reading that one - which would
-      # make the "unpinned" case silently test the pinned path.
-      - name: Write a fixture package.json of this shape
+      # carries a pin, and detection defaults to reading that one - which would
+      # make every non-pinned case silently test the pinned path.
+      - name: Write a fixture repo of this shape
         env:
           SHAPE: ${{ matrix.shape }}
         run: |
           set -euo pipefail
           mkdir -p fixture
-          if [ "$SHAPE" = "pinned" ]; then
-            printf '{ "name": "fixture", "packageManager": "pnpm@11.5.2" }\n' > fixture/package.json
-          else
-            printf '{ "name": "fixture" }\n' > fixture/package.json
-          fi
-          cat fixture/package.json
+          case "$SHAPE" in
+            pinned)   printf '{ "name": "fixture", "packageManager": "pnpm@11.5.2" }\n' > fixture/package.json ;;
+            unpinned) printf '{ "name": "fixture" }\n' > fixture/package.json
+                      printf 'lockfileVersion: "9.0"\n' > fixture/pnpm-lock.yaml ;;
+            npm)      printf '{ "name": "fixture" }\n' > fixture/package.json
+                      printf '{ "name": "fixture", "lockfileVersion": 3 }\n' > fixture/package-lock.json ;;
+            bun)      printf '{ "name": "fixture" }\n' > fixture/package.json
+                      : > fixture/bun.lock ;;
+            static)   printf '<!doctype html>\n' > fixture/index.html ;;
+          esac
+          ls -la fixture
 
       # Byte-for-byte the detection the shipped workflows run.
-      - name: Detect the pin exactly as the shipped workflows do
-        id: pnpm_pin
+      - name: Detect the package manager exactly as the shipped workflows do
+        id: pkg
         run: |
-          set -euo pipefail
           cd fixture
-          pinned=0
-          if [ -f package.json ] && node -e 'process.exit(require("./package.json").packageManager ? 0 : 1)' 2>/dev/null; then
-            pinned=1
+          pm=none; pnpm_pinned=0; cache=""
+          if [ -f package.json ]; then
+            field=$(node -e 'process.stdout.write(String(require("./package.json").packageManager || ""))' 2>/dev/null || true)
+            case "$field" in
+              pnpm@*) pm=pnpm; pnpm_pinned=1 ;;
+              yarn@*) pm=yarn ;;
+              npm@*)  pm=npm ;;
+              bun@*)  pm=bun ;;
+            esac
+            if [ "$pm" = "none" ]; then
+              if [ -f pnpm-lock.yaml ]; then pm=pnpm
+              elif [ -f package-lock.json ]; then pm=npm
+              elif [ -f yarn.lock ]; then pm=yarn
+              elif [ -f bun.lock ] || [ -f bun.lockb ]; then pm=bun
+              else pm=npm
+              fi
+            fi
           fi
-          echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
-          echo "packageManager pin in package.json: $pinned"
+          # setup-node's cache input hard-errors when the matching lockfile is
+          # missing, so only request a cache that provably exists.
+          case "$pm" in
+            pnpm) if [ -f pnpm-lock.yaml ]; then cache=pnpm; fi ;;
+            npm)  if [ -f package-lock.json ]; then cache=npm; fi ;;
+            yarn) if [ -f yarn.lock ]; then cache=yarn; fi ;;
+          esac
+          { echo "pm=$pm"; echo "pnpm_pinned=$pnpm_pinned"; echo "cache=$cache"; } >> "$GITHUB_OUTPUT"
+          echo "package manager: $pm (pnpm pin: $pnpm_pinned, node cache: ${cache:-off})"
 
       - name: Detection agrees with the fixture
         env:
           SHAPE: ${{ matrix.shape }}
-          PINNED: ${{ steps.pnpm_pin.outputs.pinned }}
+          PM: ${{ steps.pkg.outputs.pm }}
+          PINNED: ${{ steps.pkg.outputs.pnpm_pinned }}
         run: |
           set -euo pipefail
-          expected=0
-          [ "$SHAPE" = "pinned" ] && expected=1
-          if [ "$PINNED" != "$expected" ]; then
-            echo "::error::pin detection returned $PINNED for the $SHAPE fixture (expected $expected) - the detector in the shipped workflows is wrong"
+          case "$SHAPE" in
+            pinned)   want_pm=pnpm; want_pin=1 ;;
+            unpinned) want_pm=pnpm; want_pin=0 ;;
+            npm)      want_pm=npm;  want_pin=0 ;;
+            bun)      want_pm=bun;  want_pin=0 ;;
+            static)   want_pm=none; want_pin=0 ;;
+          esac
+          if [ "$PM" != "$want_pm" ] || [ "$PINNED" != "$want_pin" ]; then
+            echo "::error::detection returned pm=$PM pinned=$PINNED for the $SHAPE fixture (expected pm=$want_pm pinned=$want_pin) - the detector in the shipped workflows is wrong"
             exit 1
           fi
 
       - name: Set up pnpm (version from the repo's packageManager pin)
-        if: steps.pnpm_pin.outputs.pinned == '1'
+        if: steps.pkg.outputs.pm == 'pnpm' && steps.pkg.outputs.pnpm_pinned == '1'
         uses: pnpm/action-setup@v4
         with:
           package_json_file: fixture/package.json
 
       - name: Set up pnpm (no packageManager pin in this repo)
-        if: steps.pnpm_pin.outputs.pinned == '0'
+        if: steps.pkg.outputs.pm == 'pnpm' && steps.pkg.outputs.pnpm_pinned == '0'
         uses: pnpm/action-setup@v4
         with:
           version: 11
           package_json_file: fixture/package.json
 
-      - name: pnpm is actually installed and runnable
+      - name: Set up Bun
+        if: steps.pkg.outputs.pm == 'bun'
+        uses: oven-sh/setup-bun@v2
+
+      - name: The detected package manager is actually installed and runnable
+        env:
+          PM: ${{ steps.pkg.outputs.pm }}
         run: |
           set -euo pipefail
-          pnpm --version
+          case "$PM" in
+            pnpm) pnpm --version ;;
+            npm)  npm --version ;;
+            yarn) yarn --version ;;
+            bun)  bun --version ;;
+            none) echo "static shape - no package manager to install, and none was set up" ;;
+          esac
 
   # Agent-portability gate for the MCP tool surface. Claude Code is forgiving
   # about tool schemas; OpenAI's function-calling validator (which Codex feeds
