@@ -87,6 +87,16 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
       "The privacy policy names every vendor that touches your data, says how long each thing is " +
       "kept, and describes the delete-account button that was already in Settings.",
   },
+  {
+    kind: "fixed",
+    text:
+      "Your coding agent running out of hours no longer looks like a broken build. Claude says " +
+      "\"you've hit your session limit\" when a subscription is spent, and DispatchSEO didn't " +
+      "recognise that particular wording - so a pause that clears by itself arrived as a failed " +
+      "build, a red warning and an alert email, and the build sat stuck until a sweep freed it " +
+      "hours later. It's now treated as what it is: the build stays in the queue and is retried " +
+      "once your limit resets.",
+  },
 ];
 
 // Newest first. The head of this list is what the banner announces.

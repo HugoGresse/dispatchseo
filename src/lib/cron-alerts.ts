@@ -352,7 +352,7 @@ async function alertRunLogBroken(
 // but there is nothing for you to do".
 const CUSTOMER_ACTIONABLE: Array<{ test: RegExp; lead: string }> = [
   {
-    test: /session limit|usage limit|rate.?limit|quota|too many requests|\b429\b/i,
+    test: /session limit|usage limit|limit reached|limit .*resets|rate.?limit|quota|too many requests|\b429\b/i,
     lead: "Your coding agent's account has hit its usage limit, so builds are paused until it resets. Upgrading that account, or switching this site to a different agent in Settings, gives the builders more room.",
   },
   {

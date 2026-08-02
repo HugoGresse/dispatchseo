@@ -146,10 +146,74 @@ function checkLooksLikeWorkflow({ where, content }) {
   if (/\t/.test(content)) fail(where, "workflow-shape", "contains a tab character (invalid YAML indentation)");
 }
 
+// ---- rule 4: the agent usage-limit classifier knows every wording ---------
+// A subscription that has run out of hours is a DEFERRAL - the build stays due
+// and the next dispatch retries it. A failure is a red banner, an alert email,
+// and a suggestion stuck in_progress until the stuck-build sweep frees it hours
+// later. Which one the owner gets is decided by one grep in the workflow, so a
+// wording that grep does not know is a routine pause dressed up as a breakage.
+//
+// That is not hypothetical: the classifier matched usage-limit / limit-reached
+// / rate-limit, and the subscription's actual message is "You've hit your
+// session limit · resets 1:50pm (UTC)". It failed the run instead (2026-08-02).
+// cron-alerts.ts's CUSTOMER_ACTIONABLE already carried "session limit" - two
+// copies of one fact, and the copy that decides defer-vs-fail was the stale
+// one. This rule pins both to the same phrase list.
+const AGENT_LIMIT_PHRASES = ["session limit", "usage limit", "limit reached"];
+
+function checkAgentLimitClassifier({ where, content }) {
+  const branch = content.indexOf('AGENT" = "claude"');
+  if (branch === -1) return; // not a builder workflow
+  const region = content.slice(branch, branch + 2000);
+  const grep = region.match(/grep -qiE '([^']+)'/);
+  if (!grep) {
+    fail(where, "agent-limit-classifier", "the Claude branch has no `grep -qiE '...'` limit classifier - a usage limit would be reported as a hard failure");
+    return;
+  }
+  for (const phrase of AGENT_LIMIT_PHRASES) {
+    if (!grep[1].includes(phrase)) {
+      fail(
+        where,
+        "agent-limit-classifier",
+        `the Claude usage-limit classifier does not match "${phrase}". A subscription that says that gets a ` +
+          `failure email and a stuck build instead of a quiet deferral. Pattern is: ${grep[1]}`,
+      );
+    }
+  }
+}
+
 for (const t of targets) {
   checkNoFatalAdaptMarker(t);
   checkPnpmSetupShape(t);
   checkLooksLikeWorkflow(t);
+  checkAgentLimitClassifier(t);
+}
+
+// The backend twin of rule 4. cron-alerts.ts decides whether the owner is even
+// TOLD what happened; the workflow decides whether it counts as a failure. They
+// have to agree on what a limit looks like or one of them is wrong by default.
+{
+  const where = "src/lib/cron-alerts.ts";
+  try {
+    const content = readFileSync(join(root, "src", "lib", "cron-alerts.ts"), "utf8");
+    const block = content.match(/CUSTOMER_ACTIONABLE[\s\S]{0,400}?test:\s*\/([^/]+)\//);
+    if (!block) {
+      fail(where, "agent-limit-classifier", "could not find the CUSTOMER_ACTIONABLE usage-limit test - if it moved, update this lint with it");
+    } else {
+      for (const phrase of AGENT_LIMIT_PHRASES) {
+        if (!block[1].includes(phrase)) {
+          fail(
+            where,
+            "agent-limit-classifier",
+            `CUSTOMER_ACTIONABLE's first test does not match "${phrase}", so an owner hitting it gets an ` +
+              `operator-worded alert with nothing to act on. Keep it in step with the pack workflows.`,
+          );
+        }
+      }
+    }
+  } catch (e) {
+    fail(where, "agent-limit-classifier", `could not read: ${e.message}`);
+  }
 }
 
 // mcp-codex.toml's truncation contract. getPipelinePack strips the DataForSEO

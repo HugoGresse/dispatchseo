@@ -529,7 +529,11 @@ jobs:
           fi
 
           if [ "$AGENT" = "claude" ]; then
-            if echo "$msg" | grep -qiE 'usage limit|limit reached|rate.?limit'; then
+            # Every wording the subscription emits, not just the one we thought
+            # of - "session limit · resets 1:50pm (UTC)" matched none of these
+            # and was reported as a hard failure. See seo-daily's copy for the
+            # full why; pipeline-pack-lint.mjs holds the two in step.
+            if echo "$msg" | grep -qiE 'session limit|usage limit|limit reached|limit .*resets|rate.?limit'; then
               defer "Claude hit a usage limit this run - the dashboard keeps this build due and re-dispatches it within a few hours. Not a failure."
             fi
             reason="workflow failed (no error detail captured)"

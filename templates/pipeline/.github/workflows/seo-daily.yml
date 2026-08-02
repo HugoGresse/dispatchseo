@@ -607,7 +607,17 @@ jobs:
           if [ "$AGENT" = "claude" ]; then
             # A subscription usage limit is a deferral, not a failure: the
             # 12:00/19:00 attempts pick it up.
-            if echo "$msg" | grep -qiE 'usage limit|limit reached|rate.?limit'; then
+            #
+            # Match every wording the subscription actually emits, not just the
+            # one we thought of. "You've hit your session limit · resets 1:50pm
+            # (UTC)" contains none of usage-limit/limit-reached/rate-limit, so
+            # it fell through to fail() - turning "come back in an hour" into a
+            # red banner and an alert email, and leaving the build to sit
+            # in_progress until the stuck-build sweep freed it hours later.
+            # cron-alerts.ts (CUSTOMER_ACTIONABLE) already knew the phrase; this
+            # copy is the one that decides defer-vs-fail, so keep them in step -
+            # pipeline-pack-lint.mjs fails the build if this drifts again.
+            if echo "$msg" | grep -qiE 'session limit|usage limit|limit reached|limit .*resets|rate.?limit'; then
               defer "Claude hit a usage limit this run - the dashboard keeps this build due and re-dispatches it within a few hours. Not a failure."
             fi
             reason="workflow failed (no error detail captured)"

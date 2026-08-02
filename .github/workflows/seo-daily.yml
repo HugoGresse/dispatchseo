@@ -607,7 +607,10 @@ jobs:
           if [ "$AGENT" = "claude" ]; then
             # A subscription usage limit is a deferral, not a failure: the
             # 12:00/19:00 attempts pick it up.
-            if echo "$msg" | grep -qiE 'usage limit|limit reached|rate.?limit'; then
+            # See the template copy for the why: the subscription's actual
+            # "session limit · resets ..." wording matched none of these and was
+            # reported as a hard failure instead of a deferral.
+            if echo "$msg" | grep -qiE 'session limit|usage limit|limit reached|limit .*resets|rate.?limit'; then
               defer "Claude hit a usage limit this run - the dashboard keeps this build due and re-dispatches it within a few hours. Not a failure."
             fi
             reason="workflow failed (no error detail captured)"
