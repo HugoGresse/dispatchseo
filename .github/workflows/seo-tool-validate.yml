@@ -165,32 +165,56 @@ jobs:
           echo "agent=$agent" >> "$GITHUB_OUTPUT"
           echo "Validating with: $agent"
 
-      # Deliberately NOT an INSTALL-ADAPT step any more. This used to say "if
-      # this repo has a packageManager field, DELETE the version input below" -
-      # a conditional edit left to whoever ran the install, with a fatal
-      # failure mode when it was missed: pnpm/action-setup hard-errors if a
-      # version input sits alongside a packageManager pin, so the builder died
-      # right here on every run, 13 seconds in, BEFORE reaching the step that
-      # reports failures to the dashboard. It shipped that way and broke every
-      # installed repo carrying a pin (2026-07-30). The two cases are now two
-      # mutually-exclusive steps resolved at RUN time: there is nothing to
-      # adapt, so there is nothing to forget. Do not reintroduce a `version:`
-      # input on an unconditional step - scripts/pipeline-pack-lint.mjs fails
-      # the build if the fatal shape comes back.
-      - name: Read this repo's pnpm pin
-        id: pnpm_pin
+      # Deliberately NOT an INSTALL-ADAPT step. Which package manager this
+      # repo uses is resolved at RUN time - packageManager pin first, then
+      # lockfiles - never by an install-time edit, because an edit whose
+      # omission is fatal is banned (scripts/pipeline-pack-lint.mjs; the
+      # 2026-07-30 incident where a missed DELETE-this-line killed every
+      # pinned repo's builder at step 2 is why). Assuming every repo is pnpm
+      # was the same bug one layer up: the zero-touch cloud install commits
+      # this pack verbatim into repos nobody adapted, and the first real
+      # cloud customer's npm+Vite site died 25 seconds into every build
+      # (2026-08-02). pnpm keeps its two blessed shapes (pinned reads the
+      # pin, unpinned pins the action - a version input on a step that also
+      # sees a packageManager pin is what hard-errors); npm/yarn/bun get
+      # their own installs; no package.json at all skips Node setup entirely
+      # and the agent works from the repo's real build story in
+      # .dispatchseo/conventions.md.
+      - name: Detect this repo's package manager
+        id: pkg
         run: |
-          pinned=0
-          if [ -f package.json ] && node -e 'process.exit(require("./package.json").packageManager ? 0 : 1)' 2>/dev/null; then
-            pinned=1
+          pm=none; pnpm_pinned=0; cache=""
+          if [ -f package.json ]; then
+            field=$(node -e 'process.stdout.write(String(require("./package.json").packageManager || ""))' 2>/dev/null || true)
+            case "$field" in
+              pnpm@*) pm=pnpm; pnpm_pinned=1 ;;
+              yarn@*) pm=yarn ;;
+              npm@*)  pm=npm ;;
+              bun@*)  pm=bun ;;
+            esac
+            if [ "$pm" = "none" ]; then
+              if [ -f pnpm-lock.yaml ]; then pm=pnpm
+              elif [ -f package-lock.json ]; then pm=npm
+              elif [ -f yarn.lock ]; then pm=yarn
+              elif [ -f bun.lock ] || [ -f bun.lockb ]; then pm=bun
+              else pm=npm
+              fi
+            fi
           fi
-          echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
-          echo "packageManager pin in package.json: $pinned"
+          # setup-node's cache input hard-errors when the matching lockfile is
+          # missing, so only request a cache that provably exists.
+          case "$pm" in
+            pnpm) if [ -f pnpm-lock.yaml ]; then cache=pnpm; fi ;;
+            npm)  if [ -f package-lock.json ]; then cache=npm; fi ;;
+            yarn) if [ -f yarn.lock ]; then cache=yarn; fi ;;
+          esac
+          { echo "pm=$pm"; echo "pnpm_pinned=$pnpm_pinned"; echo "cache=$cache"; } >> "$GITHUB_OUTPUT"
+          echo "package manager: $pm (pnpm pin: $pnpm_pinned, node cache: ${cache:-off})"
 
       # Pinned -> action-setup reads the exact version out of the field.
       # Passing a version input as well is precisely what hard-errors.
       - name: Set up pnpm (version from the repo's packageManager pin)
-        if: steps.pnpm_pin.outputs.pinned == '1'
+        if: steps.pkg.outputs.pm == 'pnpm' && steps.pkg.outputs.pnpm_pinned == '1'
         uses: pnpm/action-setup@v4
 
       # No pin -> action-setup has to be told. pnpm 11 matches the Node 22
@@ -198,27 +222,64 @@ jobs:
       # should add a packageManager field rather than edit this, which
       # routes it to the exact path above.
       - name: Set up pnpm (no packageManager pin in this repo)
-        if: steps.pnpm_pin.outputs.pinned == '0'
+        if: steps.pkg.outputs.pm == 'pnpm' && steps.pkg.outputs.pnpm_pinned == '0'
         uses: pnpm/action-setup@v4
         with:
           version: 11
 
+      - name: Set up Bun
+        if: steps.pkg.outputs.pm == 'bun'
+        uses: oven-sh/setup-bun@v2
+
       - name: Set up Node
+        if: steps.pkg.outputs.pm != 'none'
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
+          cache: ${{ steps.pkg.outputs.cache }}
 
       - name: Install deps
+        if: steps.pkg.outputs.pm != 'none'
+        env:
+          PM: ${{ steps.pkg.outputs.pm }}
         run: |
-          pnpm install --frozen-lockfile || {
-            s=$?
-            echo "::error::pnpm install failed (exit $s). Frequent causes: (1) ERR_PNPM_IGNORED_BUILDS - pnpm 11 hard-fails dependencies with unanswered build scripts (strictDepBuilds is on by default): answer each one in pnpm-workspace.yaml (allowBuilds: dep: true/false, plus an onlyBuiltDependencies list for older pnpm) and commit. (2) pnpm/lockfile version mismatch - align the workflow's pnpm with the version that wrote pnpm-lock.yaml (package.json packageManager field). Reproduce locally with a fresh 'pnpm install --frozen-lockfile'."
-            exit $s
-          }
+          case "$PM" in
+            pnpm)
+              pnpm install --frozen-lockfile || {
+                s=$?
+                echo "::error::pnpm install failed (exit $s). Frequent causes: (1) ERR_PNPM_IGNORED_BUILDS - pnpm 11 hard-fails dependencies with unanswered build scripts (strictDepBuilds is on by default): answer each one in pnpm-workspace.yaml (allowBuilds: dep: true/false, plus an onlyBuiltDependencies list for older pnpm) and commit. (2) pnpm/lockfile version mismatch - align the workflow's pnpm with the version that wrote pnpm-lock.yaml (package.json packageManager field). Reproduce locally with a fresh 'pnpm install --frozen-lockfile'."
+                exit $s
+              } ;;
+            npm)
+              { if [ -f package-lock.json ]; then npm ci || npm install; else npm install; fi; } || {
+                s=$?
+                echo "::error::npm install failed (exit $s). Reproduce locally with a fresh 'npm ci' (or 'npm install' if the lockfile is stale) and commit whatever lockfile change it produces."
+                exit $s
+              } ;;
+            yarn)
+              corepack enable 2>/dev/null || true
+              { yarn install --immutable || yarn install; } || {
+                s=$?
+                echo "::error::yarn install failed (exit $s). Reproduce locally with 'yarn install' and commit the lockfile it produces."
+                exit $s
+              } ;;
+            bun)
+              bun install || {
+                s=$?
+                echo "::error::bun install failed (exit $s). Reproduce locally with 'bun install'."
+                exit $s
+              } ;;
+          esac
 
       - name: Production build
-        run: pnpm build
+        if: steps.pkg.outputs.pm != 'none'
+        run: |
+          case "${{ steps.pkg.outputs.pm }}" in
+            pnpm) pnpm build ;;
+            npm)  npm run build ;;
+            yarn) yarn build ;;
+            bun)  bun run build ;;
+          esac
         env:
           NEXT_PUBLIC_SUPABASE_URL: "https://placeholder.supabase.co"
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder-anon-key"
@@ -226,16 +287,16 @@ jobs:
 
       # Readiness, not correctness: ANY HTTP answer proves the server is
       # listening, so the only thing this waits out is curl's 000 (nothing on
-      # the port yet). Demanding 200 from `/` used to strand every site whose
-      # home page redirects - which includes this one, where the proxy 307s
-      # `/` to /login unless LANDING_ENABLED is set. That killed PR #25's
-      # validation three runs running on 2026-08-02, with "✓ Ready in 101ms"
-      # sitting two lines above "server failed to start" in the same log.
-      # Whether the app actually works is the agent's call, made against the
-      # tool's own page further down - never this probe's.
+      # the port yet). Demanding 200 from `/` strands every site whose home
+      # page does not serve one - an app behind a login, a locale bounce, a
+      # marketing root that 30x's - and it fails in the most misleading way
+      # available: the log says the server is ready, then says it never
+      # started. It stranded DispatchSEO's own PR #25 for three runs on
+      # 2026-08-02. Whether the app actually works is the agent's call, made
+      # against the tool's own page further down - never this probe's.
       - name: Start server and wait for it
         run: |
-          nohup pnpm start >/tmp/next-server.log 2>&1 &
+          nohup "${{ steps.pkg.outputs.pm }}" run start >/tmp/next-server.log 2>&1 &
           for i in $(seq 1 30); do
             code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/ || true)
             case "$code" in
