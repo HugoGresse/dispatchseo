@@ -603,4 +603,35 @@ Cloud - match whichever region your PostHog project is on.
 
 </Field>
 
+<Field name="DISPATCHSEO_TELEMETRY" type="off" tag="Self-host only">
+
+Set to `off` to stop the once-a-day install ping. Left unset, a self-hosted
+install sends `dispatchseo.com` exactly two things each day: the random
+`DISPATCH_INSTALL_ID` generated on your machine at first boot, and the
+version you're running. No domain, no email, no keywords, no site or Search
+Console data, no tokens.
+
+It's there because downloads can't answer "how many people run this" - one
+person re-running `start.sh` looks the same as ten new installs. Turning it
+off changes nothing else: no nag, no missing features. Confirm it took
+effect with:
+
+```bash
+docker compose exec app wget -qO- \
+  --header "Authorization: Bearer $CRON_SECRET" \
+  http://localhost:3000/api/cron/heartbeat
+# {"sent":false,"reason":"telemetry disabled"}
+```
+
+</Field>
+
+<Field name="DISPATCH_INSTALL_ID" type="uuid" tag="Self-host only">
+
+The random id above. `start.sh` writes one into `.env` on first boot and
+you should not need to touch it. Cloning a configured install to a second
+machine copies the id with it - delete the line on the copy and it
+generates a fresh one, otherwise both machines report as one install.
+
+</Field>
+
 </Fields>

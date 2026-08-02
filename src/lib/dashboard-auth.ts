@@ -41,6 +41,9 @@ type InstanceRow = {
   // wizard-owned pattern; the builder container's own CLAUDE_CODE_OAUTH_TOKEN
   // env (from .env) wins over it.
   builder_claude_token?: string | null;
+  // 0049: random UUID for the anonymous self-host heartbeat, generated on
+  // first send (src/lib/heartbeat.ts). Env DISPATCH_INSTALL_ID wins over it.
+  install_id?: string | null;
 } | null;
 
 // Every protected page checks the cookie, so the instance row is cached for

@@ -29,3 +29,13 @@
 # repo but does NOT run the builder container - before this, that install's
 # only scheduler was GitHub's own, which is what we are moving away from.
 41 */3 * * * /bin/sh /usr/local/bin/hit.sh seo-dispatch >> /proc/1/fd/1 2>&1
+# Anonymous once-a-day "this install is alive" ping to dispatchseo.com - two
+# fields, a random install UUID and the version, nothing about you or your
+# sites. It is the only way the project can tell one machine re-running
+# start.sh from ten separate installs; clone counts and image pulls cannot.
+# Turn it off with DISPATCHSEO_TELEMETRY=off in .env - the route then reports
+# "telemetry disabled" and sends nothing. Full contract:
+# src/lib/heartbeat.ts. Every install fires at the same UTC minute, which is
+# fine at this scale (one small POST each); jitter belongs in the sender if
+# that ever stops being true.
+23 5 * * * /bin/sh /usr/local/bin/hit.sh heartbeat >> /proc/1/fd/1 2>&1

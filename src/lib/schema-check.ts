@@ -111,6 +111,15 @@ const PROBES: Probe[] = [
     table: "subscriptions",
     column: "github_cost_ack_at",
   },
+  // The heartbeat's install id. Its absence is harmless to the owner - the
+  // ping just reports "no stable install id" and sends nothing - so this probe
+  // is here for the coverage rule and to explain a count that stopped growing,
+  // not because a missing column hurts the install.
+  {
+    migration: "0049_install_id",
+    table: "instance_settings",
+    column: "install_id",
+  },
 ];
 
 // Migrations that genuinely CANNOT be probed through this mechanism, with the

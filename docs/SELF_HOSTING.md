@@ -99,3 +99,24 @@ value.
 The full annotated list is on the docs site -
 **[Environment variables](https://dispatchseo.com/docs/environment-variables)** -
 and in [`.env.docker.example`](../.env.docker.example) as raw comments.
+
+## The daily install ping
+
+Once a day your install tells `dispatchseo.com` two things: a random id
+generated on your machine at first boot, and the version you're running.
+That is the entire payload - no domain, no email, no keywords, no site or
+Search Console data, no tokens, and the id isn't derived from any of them.
+
+It exists because nothing else can answer "how many people actually run
+this". Clone counts and image pulls measure download attempts, and one
+person re-running `start.sh` looks identical to ten separate installs.
+
+To turn it off, put this in your `.env` and re-run `sh start.sh`:
+
+```
+DISPATCHSEO_TELEMETRY=off
+```
+
+Nothing else changes - no nag, no degraded features, no reduced support.
+The code is [`src/lib/heartbeat.ts`](../src/lib/heartbeat.ts) if you'd
+rather read it than take our word for it.

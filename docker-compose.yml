@@ -118,6 +118,12 @@ services:
       ALERT_EMAIL: ${ALERT_EMAIL:-}
       ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-}
       SEED_KEYWORDS: ${SEED_KEYWORDS:-}
+      # The anonymous once-a-day install ping (src/lib/heartbeat.ts). The id is
+      # generated into .env by start.sh; setting DISPATCHSEO_TELEMETRY=off
+      # there stops the ping. Both must be listed here or the app container
+      # never sees them - this service enumerates its env explicitly.
+      DISPATCH_INSTALL_ID: ${DISPATCH_INSTALL_ID:-}
+      DISPATCHSEO_TELEMETRY: ${DISPATCHSEO_TELEMETRY:-}
     ports:
       # Bind to LOOPBACK, not 0.0.0.0. A bare "4005:3000" publishes the
       # dashboard on every interface, and Docker writes its own DOCKER-chain

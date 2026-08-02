@@ -70,6 +70,17 @@ export default function PrivacyPage() {
           authentication cookies to keep you signed in, and a short-lived cookie may carry
           your typed domain from signup into setup. There are no advertising cookies.
         </p>
+        <p>
+          <strong className="text-neutral-100">Self-hosted install count.</strong> If you run
+          DispatchSEO yourself, your install sends us two things once a day: a random
+          identifier generated on your own machine at first boot, and the version you are
+          running. That is the whole payload - no domain, no email, no keywords, no site or
+          Search Console data, no tokens, and the identifier is not derived from any of them.
+          It exists so we can tell how many installs are actually running, which download
+          counts cannot answer. Turn it off by setting{" "}
+          <code>DISPATCHSEO_TELEMETRY=off</code> in your <code>.env</code>; nothing else about
+          the software changes when you do.
+        </p>
       </section>
 
       <section className="space-y-3 text-sm leading-relaxed">
