@@ -10,6 +10,7 @@ import {
   DISPATCH_EVENT,
   type ScheduledWorkflow,
 } from "@/lib/build-schedule";
+import { reconcileInstallStamp } from "@/lib/install-reconcile";
 
 // THE SCHEDULER for repos that build through GitHub Actions.
 //
@@ -100,7 +101,20 @@ export async function GET(req: Request): Promise<Response> {
       // Only installed pipelines. A mid-wizard project has no workflows to wake
       // yet - an unmet prerequisite is a normal state during onboarding, so it
       // is a quiet skip, never a failed run (CLAUDE.md's setup-gate rule).
-      if (!p.github_repo || !p.pipeline_installed_at) return out;
+      if (!p.github_repo) return out;
+      if (!p.pipeline_installed_at) {
+        // Before skipping, try the self-heal: a setup run that finished but
+        // never landed its mark_pipeline_installed call leaves a project that
+        // is installed by every backend measurement yet skipped here forever -
+        // research and builds never start, silently. Only a positive verify
+        // stamps; anything else stays the same quiet skip as before.
+        const healed = await reconcileInstallStamp(p);
+        if (healed.state !== "stamped") {
+          if (healed.state === "blocked") out.install_blocked = healed.problems;
+          return out;
+        }
+        out.install_reconciled = true;
+      }
 
       const wanted = await dueBuildWork(p, (wf) => ghJobKey(wf, p.slug));
       if (wanted.length === 0) return out;

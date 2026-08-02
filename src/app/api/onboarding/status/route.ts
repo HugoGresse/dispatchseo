@@ -9,6 +9,7 @@ import { backendBaseUrl } from "@/lib/pipeline-pack";
 import { openSeoPrs, dispatchResearch } from "@/lib/github";
 import { ownedProjectIds } from "@/lib/tenant-guard";
 import { isCloudMode } from "@/lib/cloud";
+import { reconcileInstallStamp } from "@/lib/install-reconcile";
 
 // The open install PR, so the wizard can say "your move: merge this" with a
 // link instead of waiting silently. Cached 60s per repo: the wizard polls
@@ -112,6 +113,21 @@ export async function GET(req: Request): Promise<Response> {
   const rankCount = rankChecks.count ?? 0;
   const gscCount = gscRows.count ?? 0;
 
+  // Self-heal the install stamp before anything below reads it. The setup
+  // agent is supposed to end its run with mark_pipeline_installed, but that
+  // call sits at the end of a run the platform doesn't control - when it
+  // never lands, the project reads as mid-setup forever while every backend
+  // measurement says the install is done. Reconcile from evidence instead;
+  // a "blocked" verdict carries the owner-facing fixes (typically the
+  // Actions create-and-approve-PRs toggle) for the finale to surface.
+  let pipelineInstalledAt = project.pipeline_installed_at;
+  let installBlocked: string[] | null = null;
+  if (!pipelineInstalledAt && project.github_repo) {
+    const healed = await reconcileInstallStamp(project);
+    if (healed.state === "stamped") pipelineInstalledAt = new Date().toISOString();
+    else if (healed.state === "blocked") installBlocked = healed.problems;
+  }
+
   // First-run triggers: real cron code paths, so a failure lands on the
   // same alert rails as any scheduled run. after() keeps the poll response
   // instant while the run continues server-side (a bare fire-and-forget
@@ -150,7 +166,7 @@ export async function GET(req: Request): Promise<Response> {
     ((process.env.APP_URL ?? "").includes("localhost") ||
       (process.env.APP_URL ?? "").includes("127.0.0.1"));
   if (
-    project.pipeline_installed_at &&
+    pipelineInstalledAt &&
     project.github_repo &&
     keywordCount === 0 &&
     suggestionCount === 0 &&
@@ -163,9 +179,7 @@ export async function GET(req: Request): Promise<Response> {
 
   // Only look for a PR while the pipeline is still uninstalled - that's the
   // window where "merge it" is the owner's blocking move.
-  const openPr = project.pipeline_installed_at
-    ? null
-    : await openInstallPr(project);
+  const openPr = pipelineInstalledAt ? null : await openInstallPr(project);
 
   return Response.json({
     // Agent-reported step stamps (mark_install_step) - {} on pre-0036 rows
@@ -180,10 +194,16 @@ export async function GET(req: Request): Promise<Response> {
     // stretches installs toward an hour), "existing"/"detect" are quick.
     content_mode:
       ((project as { content_mode?: unknown }).content_mode as string | undefined) ?? null,
-    repo_connected: Boolean(project.pipeline_installed_at) || Boolean(canary),
+    repo_connected: Boolean(pipelineInstalledAt) || Boolean(canary),
     canary_ok: canary?.ok ?? null, // null = hasn't run yet
     canary_error: canary && !canary.ok ? (canary.errors[0] ?? null) : null,
-    pipeline_installed: Boolean(project.pipeline_installed_at),
+    pipeline_installed: Boolean(pipelineInstalledAt),
+    // Owner-facing blockers from the self-heal verify (null = none known).
+    // The finale renders these as "your move" - typically the GitHub
+    // "Allow Actions to create and approve pull requests" toggle, which the
+    // App cannot set itself and which used to be computed and then dropped.
+    install_blocked: installBlocked,
+    github_repo: project.github_repo,
     // null on pre-0040 rows or when install predates the column - the finale
     // treats that the same as an old agent that never saw verifyPipelinePrereqs,
     // i.e. no signal either way, not a red flag. false is the real distinction:
@@ -195,9 +215,9 @@ export async function GET(req: Request): Promise<Response> {
     // switches from "nothing to do" to an actionable nudge instead of
     // spinning forever on a run that never started.
     research_overdue: Boolean(
-      project.pipeline_installed_at &&
+      pipelineInstalledAt &&
         (suggestions.count ?? 0) === 0 &&
-        Date.now() - new Date(project.pipeline_installed_at).getTime() > 30 * 60_000,
+        Date.now() - new Date(pipelineInstalledAt).getTime() > 30 * 60_000,
     ),
     open_pr: openPr,
     // The backlink playbook's "agent wrote the site profile" signal - lets
