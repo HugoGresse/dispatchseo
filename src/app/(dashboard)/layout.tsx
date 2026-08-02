@@ -117,7 +117,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // picks it up without a prop thread; see paletteFor in pixel-dispatcher.tsx.
   const dispatcherTint =
     active && projectAgent(active).id === "codex"
-      ? ({ "--dispatcher-body": "#f4f4f5", "--dispatcher-shade": "#b3b3bc" } as React.CSSProperties)
+      ? // Same pair as PALETTES.white in pixel-dispatcher.tsx - the hub pages
+        // and the dashboard must dress him identically.
+        ({ "--dispatcher-body": "#f4f4f5", "--dispatcher-shade": "#8f8f99" } as React.CSSProperties)
       : undefined;
   return (
     <div className="flex min-h-screen bg-neutral-950 text-neutral-100" style={dispatcherTint}>

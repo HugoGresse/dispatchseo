@@ -80,10 +80,12 @@ export function proxy(req: NextRequest) {
     // logged-out.
     pathname === "/about" ||
     PUBLIC_FILES.has(pathname) ||
-    // The marketing landing page - cloud deployment only. Self-hosted installs
-    // never set LANDING_ENABLED, so their / stays gated (the page itself also
-    // redirects to /dashboard as defense in depth).
-    (pathname === "/" && process.env.LANDING_ENABLED === "true")
+    // The marketing landing page and its per-agent hub pages - cloud
+    // deployment only. Self-hosted installs never set LANDING_ENABLED, so
+    // theirs stay gated (the pages themselves also redirect to /dashboard as
+    // defense in depth).
+    ((pathname === "/" || pathname === "/claude-code" || pathname === "/codex") &&
+      process.env.LANDING_ENABLED === "true")
   ) {
     return NextResponse.next();
   }

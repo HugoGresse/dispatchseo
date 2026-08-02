@@ -164,6 +164,14 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
       "with the step that's easiest to miss - GitHub needs a payment method on file before " +
       "any budget takes effect at all.",
   },
+  {
+    kind: "new",
+    text:
+      "The site grew a landing page per agent: dispatchseo.com/claude-code and " +
+      "dispatchseo.com/codex. Each one covers that agent specifically - what it runs on, " +
+      "the exact connect command, and the questions people actually ask about it - and " +
+      "the Codex page's dispatcher wears white. Both are linked from the homepage footer.",
+  },
 ];
 
 // Newest first. The head of this list is what the banner announces.
