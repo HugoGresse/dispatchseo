@@ -216,9 +216,12 @@ re-snapshot.
   Cutting a release is a separate, deliberate act, and only ever on the
   maintainer's say-so: the staged lines move into a new `CHANGELOG` entry with a
   semver `version`, a title and a summary, and `UNRELEASED` empties. **Never cut
-  one unprompted** — that entry fires the dashboard banner for every owner, the
-  `/changelog` page, the `get_changelog` MCP tool and a permanent post in the
-  public Discord, all at once. Six releases went out on 2026-07-31 alone, which
+  one unprompted** — that entry hits the `/changelog` page, the `get_changelog`
+  MCP tool and a permanent post in the public Discord, all at once. The
+  dashboard "DispatchSEO has been updated" banner is a separate, rarer opt-in:
+  it fires only when the entry sets `announce: true`, which is the maintainer's
+  call alone — default is silent, reserved for a release owners should stop and
+  look at. Six releases went out on 2026-07-31 alone, which
   is what versions exist to stop; a day of work is one release, and a quiet week
   is fine. Bump minor for anything new, patch for fixes, major only for
   something a self-hoster must act on. Versions are anchor ids, cookie values

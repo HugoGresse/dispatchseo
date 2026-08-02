@@ -15,7 +15,13 @@
 //      invisible everywhere - no banner, not on /changelog, not in Discord.
 //   2. Cutting a release is a separate, deliberate act: the staged lines move
 //      into a new entry at the head of CHANGELOG with a version, a title and a
-//      summary, and UNRELEASED goes back to empty. THAT is what announces.
+//      summary, and UNRELEASED goes back to empty. THAT is what announces -
+//      on /changelog, over get_changelog, and in Discord.
+//   3. The dashboard banner is a THIRD, rarer act: a release only interrupts
+//      owners' dashboards if it sets `announce: true`. Most releases don't -
+//      near-daily banners train people to dismiss them unread. Reserve it for
+//      a release the owner should actually stop and look at (a new control on
+//      their screen, something they must act on).
 //
 // What earns a line at all: if the owner wouldn't notice it without being told,
 // it doesn't get one. If they'd notice but wouldn't do anything differently,
@@ -50,6 +56,15 @@ export type ChangelogEntry = {
   title: string;
   /** One line for the banner: what changed, in the owner's terms. */
   summary: string;
+  /**
+   * Opt-in: show the dashboard "DispatchSEO has been updated" banner for this
+   * release. Releases ship near-daily, so the banner is reserved for the rare
+   * release an owner should actually stop and read about (a new control on
+   * their screen, something they must act on). Omitted or false, the release
+   * still appears on /changelog, in get_changelog, and in the Discord post -
+   * it just doesn't interrupt anyone's dashboard.
+   */
+  announce?: boolean;
   changes: { kind: ChangeKind; text: string }[];
 };
 
@@ -1227,7 +1242,10 @@ export function releaseLabel(version: string): string | null {
   return SEMVER.test(version) ? `v${version}` : null;
 }
 
-// Whether to announce a release to this visitor. Two ways to stay quiet:
+// Whether to announce a release to this visitor. Three ways to stay quiet:
+//   - the release didn't opt into the banner (`announce` unset - the default;
+//     releases ship near-daily, so only the ones the owner should stop and
+//     read about get to interrupt the dashboard),
 //   - they've already acknowledged this version (the cookie), or
 //   - the release predates their project, so it isn't news to them - a brand
 //     new signup should not be greeted with "DispatchSEO has been updated!".
@@ -1249,7 +1267,7 @@ export function unseenRelease(
   projectCreatedAt: string | null | undefined,
 ): ChangelogEntry | null {
   const latest = LATEST;
-  if (!latest) return null;
+  if (!latest?.announce) return null;
   if (seenVersion && CHANGELOG.findIndex((e) => e.version === seenVersion) === 0) return null;
   if (projectCreatedAt) {
     const created = new Date(projectCreatedAt).getTime();
