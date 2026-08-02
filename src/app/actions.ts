@@ -16,7 +16,13 @@ import {
   assertRowOwned,
   assertRowsOwned,
 } from "@/lib/tenant-guard";
-import { remainingSites } from "@/lib/billing";
+import { getSubscription, isActive, remainingSites, TIER_NAMES } from "@/lib/billing";
+import {
+  repoVisibility,
+  githubCostGate,
+  recordGithubCostAck,
+  type AckReason,
+} from "@/lib/github-cost-gate";
 import { dispatchToolBuild, mergePr } from "@/lib/github";
 import { getActiveProject, PROJECT_COOKIE } from "@/lib/active-project";
 import {
@@ -30,8 +36,13 @@ import {
   type AutomationFlags,
 } from "@/lib/projects";
 import { markCronFixed } from "@/lib/cron-alerts";
-import { setProjectAgent, verifyAgentCredential } from "@/lib/agent-settings";
-import { agentById, projectAgent } from "@/lib/agents";
+import {
+  agentCredentialStatuses,
+  setProjectAgent,
+  verifyAgentCredential,
+  type AgentCredentialStatus,
+} from "@/lib/agent-settings";
+import { agentById, isSupportedAgent, projectAgent } from "@/lib/agents";
 import { saveContentPrefs } from "@/lib/content-prefs-store";
 import { encryptSecret } from "@/lib/crypto";
 import { validateSerpapiKey } from "@/lib/serp";
@@ -1142,6 +1153,50 @@ export async function deleteAccount(
 async function createProjectCore(
   formData: FormData,
 ): Promise<{ error: string } | { slug: string; name: string; domain: string; mcpToken: string }> {
+  // The plan gate runs FIRST, before any validation or network work.
+  //
+  // It used to sit further down, next to the owner_user_id assignment - which
+  // meant an owner whose plan was already full still waited through the domain
+  // liveness probe (up to two 6s fetches) and an RDAP registration lookup
+  // before being told the answer was never going to be yes. The refusal has
+  // nothing to do with what they typed, so it shouldn't cost them the checks
+  // that do.
+  let ownerUserId: string | null = null;
+  if (isCloudMode()) {
+    const auth = await dashboardAuth();
+    if (!auth?.user) return { error: "Sign in again to create a project." };
+    const remaining = await remainingSites(auth.user.id);
+    if (remaining !== null && remaining <= 0) {
+      // getSubscription is memoized per request and remainingSites just
+      // populated it, so naming the actual limit costs no extra round trip.
+      const sub = await getSubscription(auth.user.id);
+      return {
+        error: isActive(sub)
+          ? `Your ${TIER_NAMES[sub!.tier] ?? sub!.tier} plan covers ${sub!.sites_limit} site${
+              sub!.sites_limit === 1 ? "" : "s"
+            }. Upgrade on the Billing page to add another.`
+          : "Your plan isn't active, so new sites are paused. Pick a plan on the Billing page to add one.",
+      };
+    }
+    // The third-site GitHub Actions cost gate, enforced on the SERVER for the
+    // same reason the plan limit is: the dialog is the polite version, this is
+    // the one that actually holds. Counts the owner's projects rather than
+    // trusting the client, and sits beside the plan check so both refusals
+    // happen before any validation or network work.
+    const owned = await db()
+      .from("projects")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_user_id", auth.user.id);
+    const gate = await githubCostGate(auth.user.id, owned.count ?? 0);
+    if (gate.required) {
+      return {
+        error:
+          "Before adding a third site, please read the note about GitHub Actions costs and pick how you want to handle it.",
+      };
+    }
+    ownerUserId = auth.user.id;
+  }
+
   const name = String(formData.get("name") ?? "").trim();
   const rawDomain = String(formData.get("domain") ?? "").trim();
   const mode = String(formData.get("mode") ?? "semi");
@@ -1251,18 +1306,11 @@ async function createProjectCore(
   if (contentPathHint && contentMode === "existing") row.content_path_hint = contentPathHint;
   if (siteLaunchedAt) row.site_launched_at = siteLaunchedAt;
   // Cloud accounts own their projects (0031); the whole dashboard scopes by
-  // this column in CLOUD_MODE, so a row without it would be orphaned.
+  // this column in CLOUD_MODE, so a row without it would be orphaned. The
+  // owner and their plan headroom were both resolved at the top of this
+  // function - see the gate there.
   if (isCloudMode()) {
-    const auth = await dashboardAuth();
-    if (!auth?.user) return { error: "Sign in again to create a project." };
-    const remaining = await remainingSites(auth.user.id);
-    if (remaining !== null && remaining <= 0) {
-      return {
-        error:
-          "Your plan doesn't have room for another site - pick or upgrade a plan on the Billing page.",
-      };
-    }
-    row.owner_user_id = auth.user.id;
+    row.owner_user_id = ownerUserId;
     // Bundled DataForSEO is the paid-tier default - the cloud wizard has no
     // keyword-source step (budget caps degrade to GSC-only under the hood).
     row.keyword_source = "dataforseo";
@@ -1524,6 +1572,94 @@ export async function setAgent(
   return { todo: res.todo, needsCredential: res.needsCredential };
 }
 
+export type AddAgentKeyState = { ok: true } | { error: string };
+
+// The header switcher's "Add agent" flow: verify the pasted credential and
+// store it where THIS project's builders read. Deliberately does NOT switch -
+// adding an option and choosing it are different acts, and the add flow
+// exists precisely so nobody feels pushed onto an agent. Once stored, the
+// agent shows up in the switcher's list (its status reads "ready") and
+// switching is its own click, via setAgent.
+export async function addAgentKey(
+  agentId: string,
+  key: string,
+  slug: string,
+): Promise<AddAgentKeyState> {
+  await assertAuthed();
+  const project = await getProjectBySlug(slug);
+  if (!project) return { error: "Unknown project." };
+  if (isCloudMode()) await assertProjectOwned(project.id);
+  if (!isSupportedAgent(agentId)) return { error: "Unknown agent." };
+  const agent = agentById(agentId);
+  // Strip ALL whitespace, not just trim: pasted keys line-wrap and can carry a
+  // real newline mid-token (the known terminal-copy gotcha).
+  const token = key.replace(/\s+/g, "");
+  if (!token) {
+    return { error: `Paste your ${agent.displayName} credential. ${agent.credential.howToMint}` };
+  }
+  const verified = await verifyAgentCredential(agent.id, token);
+  if ("error" in verified) return { error: verified.error };
+
+  if (project.github_installation_id) {
+    // App-connected repo: the builders read a repo secret.
+    const { setRepoSecret } = await import("@/lib/github-app-secrets");
+    const res = await setRepoSecret(project, agent.credential.repoSecretName, token);
+    if (!res.ok) return { error: `Could not store the credential on your repo: ${res.error}` };
+  } else if (isCloudMode()) {
+    // Cloud with the App gone (uninstalled/suspended): the only honest store
+    // target is the repo secret, and without an installation we can't write
+    // it. Refuse rather than fall through - the branch below writes the
+    // deployment-wide instance_settings row, which on the hosted product is
+    // shared by every tenant. Same boundary connectBuilderToken and
+    // connectGscServiceAccount already enforce.
+    return {
+      error:
+        "This site's GitHub connection has lapsed, so the key can't be stored on your repo from here. Reconnect GitHub from the card on Home first - your keys and everything else are untouched.",
+    };
+  } else {
+    // Everything else that can reach this popup builds in the in-stack
+    // container, which reads the instance credential. (An Actions-without-App
+    // repo never shows "needs key" - its secrets are write-only from here, so
+    // the switcher offers a plain switch instead of this form.)
+    const enc = await encryptSecret(token);
+    const { data, error } = await db()
+      .from("instance_settings")
+      .update({ [agent.credential.instanceSettingsColumn]: enc })
+      .eq("id", true)
+      .select("id");
+    if (error) {
+      return {
+        error: /builder_claude_token|builder_openai_key|column/i.test(error.message)
+          ? "This install predates the migration that added builder credentials - re-run start.sh once to apply it, then try again."
+          : error.message,
+      };
+    }
+    if (!data || data.length === 0) {
+      return {
+        error: `This install is configured through environment variables - set ${agent.credential.envVar} in your .env instead.`,
+      };
+    }
+    bustInstanceCache();
+  }
+
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+// Feeds the header agent switcher's dropdown: which agents already have their
+// credential where this project's builders run. Fetched when the dropdown
+// opens, NOT during layout render - the cloud branch asks the GitHub API per
+// agent, and the topbar renders on every dashboard page load.
+export async function getAgentCredentialStatuses(
+  slug: string,
+): Promise<Record<string, AgentCredentialStatus>> {
+  await assertAuthed();
+  const project = await getProjectBySlug(slug);
+  if (!project) throw new Error("Unknown project.");
+  if (isCloudMode()) await assertProjectOwned(project.id);
+  return agentCredentialStatuses(project);
+}
+
 // Internal back-linking: may the guide builder EDIT already-published posts so
 // they link to a new guide? Deliberately its own action rather than another
 // entry in setAutomationToggle - the automation flags answer "how much do I
@@ -1655,7 +1791,14 @@ export async function connectClaudeToken(
   // to re-paste a credential they already pasted, with nothing in the wizard
   // able to clear it. Failing here instead leaves nothing half-done: no secret
   // stored, and the real reason returned (a pre-0044 database says so by name).
-  if (projectAgent(project).id !== agent.id) {
+  //
+  // reconcile=0 opts out: Settings' tabbed credential box stores a key for an
+  // agent WITHOUT switching to it - that's "adding" the second agent, and
+  // which agent actually runs stays a separate, deliberate act (the switch
+  // cards, or the header). Only the wizard's paste commits a picker choice,
+  // and it sends no reconcile field, so the default stays reconcile-on.
+  const reconcile = formData.get("reconcile")?.toString() !== "0";
+  if (reconcile && projectAgent(project).id !== agent.id) {
     try {
       await setProjectAgent(project, agent.id);
     } catch (e) {
@@ -1752,6 +1895,13 @@ export async function runPipelineInstall(
       // then retry" sent people to wait out a dead end.
       agent_token_present: boolean;
       agent_name: string;
+      // "manual-needed" = the App could not switch on GitHub's "Allow Actions
+      // to create and approve pull requests" toggle (it deliberately lacks
+      // Administration permission), so the owner has to flip it themselves.
+      // Computed by installPipelineToRepo since day one but previously dropped
+      // here - the finale never told the owner, and the unlock verify then
+      // refused the stamp with nobody knowing why (2026-08-02, first cloud user).
+      actions_pr_permission?: "set" | "manual-needed";
     }
   | { error: string }
 > {
@@ -1805,6 +1955,7 @@ export async function runPipelineInstall(
     setup_dispatched: result.setup_dispatched,
     agent_token_present: result.agent_token_present,
     agent_name: result.agent_name,
+    actions_pr_permission: result.actions_pr_permission,
   };
 }
 
@@ -1908,4 +2059,50 @@ export async function attachGithubInstallation(projectSlug: string, installation
   jar.delete("gh_install_nonce"); // single-use
   revalidatePath("/onboarding");
   redirect("/onboarding");
+}
+
+// The third-site GitHub Actions cost step: record which way out the owner
+// chose, which is what unlocks createProjectCore's gate for this account.
+//
+// Deliberately NOT a verification. There is no GitHub API that lets an
+// installation token read someone's spending limit (see github-cost-gate.ts),
+// so this stores an informed decision. The value is that the decision gets
+// MADE, at the one moment it's actionable, instead of surfacing weeks later as
+// workflows that silently stopped running.
+//
+// One-way and per account: once answered it never asks again, because the
+// question is about GitHub's free allowance, which the owner now knows about.
+export async function acknowledgeGithubCost(reason: AckReason): Promise<{ ok: true } | { error: string }> {
+  const auth = await dashboardAuth();
+  if (!auth?.user) return { error: "Sign in again to continue." };
+  if (reason !== "billing" && reason !== "public_repos") return { error: "Unknown choice." };
+  // "My repos are public" is the ONE branch we can check rather than take on
+  // trust, so we check it. Public repos get unlimited Actions minutes, which
+  // makes the whole warning moot - but only if it's true, and an owner who
+  // picks this because it's the button that isn't homework would sail past the
+  // warning into exactly the silent-workflow-pause it exists to prevent.
+  // "I've set up billing" stays unverifiable (no API reaches another account's
+  // spending limit), so that one is taken at its word.
+  if (reason === "public_repos") {
+    const visibility = await repoVisibility(auth.user.id);
+    // Two different failures, two different sentences. Telling someone their
+    // repo is private when GitHub simply didn't answer is a claim we can't
+    // back, and it reads as the product being broken.
+    if (visibility === "has_private") {
+      return {
+        error:
+          "We checked your connected repos and at least one is private, so GitHub's free minutes still apply. Make it public, or set an Actions budget instead.",
+      };
+    }
+    if (visibility === "unknown") {
+      return {
+        error:
+          "We couldn't check your repos with GitHub just now, so we can't confirm they're public. Try again in a moment, or set an Actions budget instead.",
+      };
+    }
+  }
+  await recordGithubCostAck(auth.user.id, reason);
+  await captureServer(auth.user.id, "github_cost_acknowledged", { reason });
+  revalidatePath("/", "layout");
+  return { ok: true };
 }

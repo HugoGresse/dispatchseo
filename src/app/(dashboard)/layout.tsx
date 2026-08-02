@@ -6,13 +6,16 @@ import { CHANGELOG_COOKIE, unseenRelease } from "@/lib/changelog";
 import { DispatchMark } from "@/components/logo";
 import { ProjectSwitcher } from "@/components/project-switcher";
 import { ModeSwitch } from "@/components/mode-switch";
+import { AgentHeaderSwitch } from "@/components/agent-header-switch";
+import { projectAgent } from "@/lib/agents";
 import { getActiveProjectOrNull, scopedProjects } from "@/lib/active-project";
 import { isCloudMode } from "@/lib/cloud";
 import { currentUser } from "@/lib/cloud-auth";
 import { SetupProgressBanner } from "@/components/setup-progress-banner";
 import { RepoCleanupBanner } from "@/components/repo-cleanup-banner";
 import { PlanLapsedBanner } from "@/components/plan-lapsed-banner";
-import { getSubscription, planNotice } from "@/lib/billing";
+import { getSubscription, planBadge, planNotice, sitesRemaining } from "@/lib/billing";
+import { githubCostGate } from "@/lib/github-cost-gate";
 import { REPO_NOTICE_COOKIE, decodeRepoNotice } from "@/lib/repo-notice";
 import { PostHogIdentify } from "@/components/posthog-identify";
 
@@ -46,7 +49,26 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // this is the only thing on the dashboard that can explain why a paused
   // account's data stopped moving, and it has to be on every screen, not just
   // the one the owner happens to open.
-  const notice = billing && user ? planNotice(await getSubscription(user.id)) : null;
+  const sub = billing && user ? await getSubscription(user.id) : null;
+  const notice = planNotice(sub);
+  // Which plan this account is on, shown on the Billing row of the sidebar (and
+  // the mobile drawer) so the tier is legible from every screen instead of only
+  // from /billing. Free-standing from the banner above: that one only appears
+  // when something is WRONG, and "which plan am I on" is a question people ask
+  // when everything is fine.
+  const badge = planBadge(sub);
+  // Plan headroom for the switcher's add-project row - computed from the
+  // subscription and the project list this layout already loaded, so the
+  // "Upgrade to add more sites" state costs no extra query. Same arithmetic the
+  // creation gate uses (see sitesRemaining), so the two can't drift apart.
+  const sitesLeft = billing && user ? sitesRemaining(sub, projects.length) : null;
+  // Third-site GitHub Actions cost step. Cheap by construction: the
+  // subscription is already memoized from the planNotice read above and the
+  // project count is in hand, so this adds no query. The expensive half -
+  // proving the owner's repos are public - runs only when someone actually
+  // picks that answer, inside the server action, never on a dashboard render.
+  const githubCost =
+    billing && user ? await githubCostGate(user.id, projects.length) : { required: false as const };
   // Cloud unlocks the dashboard when the wizard reaches its finale
   // (onboarding-gate keys on the c5 stamp), so the owner can explore while
   // the background setup run personalizes their site. Show a top banner in
@@ -88,10 +110,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Outranks both banners below: it's the only one reporting something the
   // owner may still need to go switch off.
   const repoNotice = decodeRepoNotice(jar.get(REPO_NOTICE_COOKIE)?.value);
+  // The pixel dispatcher's body tint follows the active project's agent:
+  // clay (its default, Claude Code's nod) stays untinted, Codex dresses it in
+  // white. Stamped as CSS variables on the shell so every dispatcher inside -
+  // including loading screens, which render synchronously and can't ask -
+  // picks it up without a prop thread; see paletteFor in pixel-dispatcher.tsx.
+  const dispatcherTint =
+    active && projectAgent(active).id === "codex"
+      ? ({ "--dispatcher-body": "#f4f4f5", "--dispatcher-shade": "#b3b3bc" } as React.CSSProperties)
+      : undefined;
   return (
-    <div className="flex min-h-screen bg-neutral-950 text-neutral-100">
+    <div className="flex min-h-screen bg-neutral-950 text-neutral-100" style={dispatcherTint}>
       {user && <PostHogIdentify userId={user.id} email={user.email} />}
-      <Sidebar billing={billing} hasProject={active != null} />
+      <Sidebar billing={billing} hasProject={active != null} plan={badge} />
       <div className="flex min-w-0 flex-1 flex-col">
         {/* One row on every size. Desktop keeps the three-up grid (switcher /
             centered title / mode). Mobile can't: at 390px the centered title
@@ -102,7 +133,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <header className="sticky top-0 z-20 border-b border-neutral-800/80 bg-neutral-950/90 backdrop-blur">
           <div className="flex h-14 items-center gap-2 px-4 sm:px-6 md:grid md:grid-cols-[1fr_auto_1fr]">
             <div className="flex min-w-0 flex-1 items-center gap-1.5 md:flex-none md:gap-2">
-              <MobileNav billing={billing} hasProject={active != null} />
+              <MobileNav billing={billing} hasProject={active != null} plan={badge} />
               <Link href="/dashboard" className="shrink-0 md:hidden" aria-label="DispatchSEO home">
                 <DispatchMark className="h-7 w-auto" />
               </Link>
@@ -111,13 +142,30 @@ export default async function DashboardLayout({ children }: { children: React.Re
                   projects={projects.map((p) => ({ slug: p.slug, name: p.name, domain: p.domain }))}
                   activeSlug={active.slug}
                   cloud={billing}
+                  sitesRemaining={sitesLeft}
+                  githubCostRequired={githubCost.required}
                 />
               )}
             </div>
             <div className="hidden md:block">
               <PageTitle />
             </div>
-            <div className="flex shrink-0 items-center justify-end">
+            <div className="flex shrink-0 items-center justify-end gap-2">
+              {/* Agent first, then mode: "who builds" reads before "how much
+                  gets published without me", matching the order the two
+                  decisions are made in. */}
+              {/* Keyed by project: the layout never remounts on a project
+                  switch, and every bit of this component's state (fetched
+                  statuses, an open key form, the post-switch reminder) is
+                  about ONE project - carrying it across would show project
+                  A's reminder while B is active. */}
+              {active && (
+                <AgentHeaderSwitch
+                  key={active.slug}
+                  current={projectAgent(active).id}
+                  slug={active.slug}
+                />
+              )}
               {active && <ModeSwitch mode={active.mode} slug={active.slug} />}
             </div>
           </div>

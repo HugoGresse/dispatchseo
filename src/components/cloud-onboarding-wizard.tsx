@@ -386,10 +386,38 @@ export function CloudOnboardingWizard(props: {
       );
     }
     return (
-      <p className="text-sm text-neutral-300">
-        Pipeline installed. Your agent is starting first research and personalizing the backlink
-        playbook - the checklist below fills in as it works.
-      </p>
+      <div className="space-y-3">
+        <p className="text-sm text-neutral-300">
+          Pipeline installed. Your agent is starting first research and personalizing the backlink
+          playbook - the checklist below fills in as it works.
+        </p>
+        {installResult.actions_pr_permission === "manual-needed" && githubRepo ? (
+          // The one thing the App can't do for the owner: it deliberately
+          // lacks Administration permission, so this repo setting needs their
+          // click. Until 2026-08-02 this flag was computed and then dropped -
+          // the first real cloud user's install verified everything except
+          // this toggle and nobody was ever told.
+          <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.07] p-3.5 text-sm text-amber-100/90">
+            <b className="font-semibold text-amber-200">One GitHub toggle needs your click:</b>{" "}
+            open{" "}
+            <a
+              href={`https://github.com/${githubRepo}/settings/actions`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-violet-300 underline underline-offset-2 hover:text-violet-200"
+            >
+              your repo&apos;s Actions settings
+            </a>{" "}
+            and enable{" "}
+            <b className="font-medium text-amber-200">
+              &quot;Allow GitHub Actions to create and approve pull requests&quot;
+            </b>
+            . Every content PR is opened from inside a workflow, so the final verification stays
+            blocked until this is on. No need to come back here - it&apos;s re-checked
+            automatically.
+          </div>
+        ) : null}
+      </div>
     );
   }
 

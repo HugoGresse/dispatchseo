@@ -1,7 +1,6 @@
 import { createMcpHandler } from "mcp-handler";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { remainingKeywords } from "@/lib/billing";
 import { joinWaitlist } from "@/lib/waitlist";
 import { getActivityReport } from "@/lib/activity";
 import { getCronHealth, markCronFixed } from "@/lib/cron-alerts";
@@ -792,27 +791,14 @@ const mcpHandler = createMcpHandler(
       },
       async ({ keywords }) => {
         const p = currentProject();
-        // Cloud plan cap (no-op on self-host). Only NET-NEW keywords count -
-        // updating an already-tracked keyword's metrics is always allowed, so
-        // a maxed-out plan can still be maintained, just not grown.
-        const remaining = await remainingKeywords(p.id);
-        if (remaining !== null) {
-          const incoming = [...new Set(keywords.map((k) => k.keyword))];
-          const { data: existing } = await db()
-            .from("keywords")
-            .select("keyword")
-            .eq("project_id", p.id)
-            .in("keyword", incoming);
-          const known = new Set((existing ?? []).map((r) => r.keyword as string));
-          const newCount = incoming.filter((k) => !known.has(k)).length;
-          if (newCount > remaining) {
-            return fail(
-              `Keyword limit reached: this plan allows ${remaining} more tracked keyword(s), ` +
-                `but ${newCount} new one(s) were provided. Upgrade the plan or stop tracking ` +
-                `some keywords. Updating already-tracked keywords is always allowed.`,
-            );
-          }
-        }
+        // No per-plan keyword cap. Plans are sold on SITES; a keyword ceiling
+        // was removed on 2026-08-02 because it never bound in practice - the
+        // DataForSEO budget gate (platformBudgetGate + the pacing ladder in
+        // dataforseo-usage.ts) reaches its limit first on every realistic
+        // usage curve, and it degrades gracefully (rank checks stretch to
+        // every other day, then weekly) instead of refusing the write. Two
+        // gates for one cost driver meant the one nobody could see fired
+        // first and the one built to bend never got the chance.
         const rows = keywords.map((k) => ({
           project_id: p.id,
           keyword: k.keyword,

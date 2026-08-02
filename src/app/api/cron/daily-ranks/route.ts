@@ -56,11 +56,16 @@ async function runRanks(
   project: Project,
   gscReady: GscReadiness,
 ): Promise<Record<string, unknown>> {
+  // Oldest first, and that ORDER IS LOAD-BEARING: the platform-billed sweep
+  // cap (SWEEP_MAX_PLATFORM in dataforseo-tasks.ts) keeps the first N of this
+  // list, so an unordered query would silently rotate which keywords get
+  // checked from run to run and leave every one of them with a broken history.
   const { data: keywords, error } = await db()
     .from("keywords")
     .select("id, keyword")
     .eq("project_id", project.id)
-    .eq("status", "tracking");
+    .eq("status", "tracking")
+    .order("created_at", { ascending: true });
   if (error) throw new Error(error.message);
   const tracked = keywords ?? [];
   if (tracked.length === 0) return { skipped: "no tracked keywords" };

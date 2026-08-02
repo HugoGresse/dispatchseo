@@ -278,6 +278,37 @@ function BillingIcon({ className }: IconProps) {
 // (isCloudMode is server-side) and passes `billing` down.
 const BILLING: NavLink = { href: "/billing", label: "Billing", Icon: BillingIcon };
 
+// The current plan, as a pill on the Billing row.
+//
+// It rides that row rather than sitting in the topbar for two reasons: the
+// topbar already carries the project switcher, the page title, the agent
+// switch and the mode switch, and at 390px it has nothing left to give; and
+// the plan is ACCOUNT state, which is what the bottom group of the sidebar is
+// - Feedback, Billing, Settings, Log out - while everything above it is one
+// site's data. Clicking through lands on the page that can change it.
+//
+// A trial reads as emerald because it is time-boxed and worth noticing; a
+// healthy plan stays neutral so it informs without competing with the nav; a
+// dead one goes amber next to the banner already explaining it.
+const PLAN_TONES: Record<PlanTone, string> = {
+  trial: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+  plan: "border-neutral-700 bg-neutral-800/70 text-neutral-300",
+  warn: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+};
+
+export type PlanTone = "trial" | "plan" | "warn";
+export type PlanChip = { label: string; tone: PlanTone };
+
+function PlanPill({ plan }: { plan: PlanChip }) {
+  return (
+    <span
+      className={`ml-auto shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium leading-none ${PLAN_TONES[plan.tone]}`}
+    >
+      {plan.label}
+    </span>
+  );
+}
+
 // Routes reachable outside the sidebar, so the topbar title still resolves.
 const EXTRA_TITLES: { href: string; label: string }[] = [
   { href: "/settings", label: "Settings" },
@@ -291,7 +322,18 @@ function isActive(href: string, pathname: string) {
   return href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
 }
 
-function SidebarLink({ link, pathname }: { link: NavLink; pathname: string }) {
+function SidebarLink({
+  link,
+  pathname,
+  trailing,
+}: {
+  link: NavLink;
+  pathname: string;
+  // Right-aligned adornment for the row - the plan pill on Billing today. Only
+  // honored on internal links; the external ones already end in their own
+  // open-in-new-tab arrow.
+  trailing?: React.ReactNode;
+}) {
   const active = isActive(link.href, pathname);
   // External: a plain <a> in a new tab. No <Link> (nothing to prefetch off the
   // dashboard's router) and no active state - you never "are" on this page
@@ -333,6 +375,7 @@ function SidebarLink({ link, pathname }: { link: NavLink; pathname: string }) {
     >
       <link.Icon className={`h-5 w-5 shrink-0 ${active ? "text-white" : "text-neutral-500"}`} />
       {link.label}
+      {trailing}
     </Link>
   );
 }
@@ -382,9 +425,13 @@ function NoSiteNote() {
 export function Sidebar({
   billing = false,
   hasProject = true,
+  plan = null,
 }: {
   billing?: boolean;
   hasProject?: boolean;
+  // Starter / Growth / Scale / Free trial. null on self-host, on a deployment
+  // with billing unconfigured, and for an account that never subscribed.
+  plan?: PlanChip | null;
 }) {
   const pathname = usePathname();
   return (
@@ -425,7 +472,13 @@ export function Sidebar({
       </nav>
       <div className="shrink-0 border-t border-neutral-800/80 px-3 py-3">
         <SidebarLink link={FEEDBACK} pathname={pathname} />
-        {billing ? <SidebarLink link={BILLING} pathname={pathname} /> : null}
+        {billing ? (
+          <SidebarLink
+            link={BILLING}
+            pathname={pathname}
+            trailing={plan ? <PlanPill plan={plan} /> : undefined}
+          />
+        ) : null}
         <SidebarLink link={SETTINGS} pathname={pathname} />
         <LogoutLink />
       </div>
@@ -442,9 +495,11 @@ export function Sidebar({
 export function MobileNav({
   billing = false,
   hasProject = true,
+  plan = null,
 }: {
   billing?: boolean;
   hasProject?: boolean;
+  plan?: PlanChip | null;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -544,7 +599,13 @@ export function MobileNav({
             </nav>
             <div className="shrink-0 border-t border-neutral-800/80 px-3 py-3">
               <SidebarLink link={FEEDBACK} pathname={pathname} />
-              {billing ? <SidebarLink link={BILLING} pathname={pathname} /> : null}
+              {billing ? (
+          <SidebarLink
+            link={BILLING}
+            pathname={pathname}
+            trailing={plan ? <PlanPill plan={plan} /> : undefined}
+          />
+        ) : null}
               <SidebarLink link={SETTINGS} pathname={pathname} />
               <LogoutLink />
             </div>

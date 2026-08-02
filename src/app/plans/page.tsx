@@ -248,8 +248,8 @@ export default async function PlansPage() {
                     someone adds their third site. */}
                 {tier !== "starter" ? (
                   <p className="mt-3 text-xs leading-relaxed text-neutral-400">
-                    Your first two sites are free on your own GitHub account. After that it&apos;s
-                    about $5 per site a month, paid to GitHub, not to us.{" "}
+                    After your first two sites, GitHub charges about $5 per site a month - to
+                    them, not to us.{" "}
                     <a
                       href="/docs/publishing#github-actions-costs"
                       className="underline underline-offset-2 hover:text-neutral-300"
@@ -278,15 +278,6 @@ export default async function PlansPage() {
                       <span>
                         <span className="font-medium text-white tabular-nums">{limits.sites}</span>{" "}
                         site{limits.sites === 1 ? "" : "s"}
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-2.5 text-neutral-300">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-violet-400" />
-                      <span>
-                        <span className="font-medium text-white tabular-nums">
-                          {limits.keywords}
-                        </span>{" "}
-                        tracked keywords
                       </span>
                     </li>
                     {CAPABILITIES.map((cap) => (

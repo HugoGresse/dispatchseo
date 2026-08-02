@@ -263,16 +263,16 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   // Billing config: in CLOUD_MODE every plan gate (remainingSites,
-  // remainingKeywords, planGate) fails OPEN when POLAR_ACCESS_TOKEN is unset -
+  // planGate) fails OPEN when POLAR_ACCESS_TOKEN is unset -
   // so a cloud deploy that forgot the token silently grants every account
-  // unlimited sites and keywords, burning DataForSEO spend with no cap. That
+  // unlimited sites, burning DataForSEO spend with no cap. That
   // fail-open is deliberate for self-host, but in cloud it's a misconfiguration
   // that must scream, not shrug. Self-host (CLOUD_MODE off) is always fine.
   if (isCloudMode() && !polarConfigured()) {
     hadError = true;
     checks.billing_config = {
       error:
-        "CLOUD_MODE is on but POLAR_ACCESS_TOKEN is unset - all plan limits are failing open (unlimited sites/keywords for every account). Set POLAR_ACCESS_TOKEN in Vercel project settings and redeploy",
+        "CLOUD_MODE is on but POLAR_ACCESS_TOKEN is unset - all plan limits are failing open (unlimited sites for every account). Set POLAR_ACCESS_TOKEN in Vercel project settings and redeploy",
     };
   } else {
     checks.billing_config = isCloudMode() ? "ok" : "skipped (self-host)";

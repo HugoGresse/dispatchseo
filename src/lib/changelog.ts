@@ -73,6 +73,29 @@ export type ChangelogEntry = {
 // this list - it exists so that writing the note down doesn't ping anyone.
 export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
+    kind: "fixed",
+    text:
+      "Cloud setup no longer gets stuck one step from done. The background setup run could " +
+      "finish all its work without flipping the final \"installed\" switch, which quietly kept " +
+      "research and daily builds from ever starting. The backend now verifies your repo on its " +
+      "own and flips the switch the moment everything checks out - and when one GitHub setting " +
+      "genuinely needs your click (\"Allow GitHub Actions to create and approve pull requests\"), " +
+      "the setup checklist now says so with a direct link, then re-checks automatically after " +
+      "you flip it.",
+  },
+  {
+    kind: "new",
+    text:
+      "Your coding agent now lives in the top bar, next to the Semi/Auto switch. Click its " +
+      "icon to see the agents you've set up and swap which one runs your scheduled builds. " +
+      "Agents you haven't set up aren't listed as if you should be using them - an \"Add " +
+      "agent\" button opens a picker, you paste the key, it's verified and stored, and only " +
+      "then does the agent join the list, ready to switch to whenever you choose. Settings' " +
+      "agent section was folded into one place to match - the switch cards and a per-agent " +
+      "key box together, with a green check on every agent whose key is already in. The " +
+      "little dispatcher plays along too: he wears white when your builds run on Codex.",
+  },
+  {
     kind: "improved",
     text:
       "The sweep that merges finished guides used to run on every status your CI reported - " +
@@ -97,6 +120,49 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
       "Claude Code does here, so the site now says \"AI agents\", the docs and dashboard say " +
       "\"your coding agent\", and both are named wherever the difference matters - no change " +
       "to how anything works.",
+  },
+  {
+    kind: "new",
+    text:
+      "Your plan is now on screen. The sidebar's Billing row carries a badge saying Starter, " +
+      "Growth or Scale - or Free trial while you're still in your first seven days - so you " +
+      "can see what you're on from any page instead of going to look it up.",
+  },
+  {
+    kind: "improved",
+    text:
+      "Adding a site when your plan is full now says so up front. The project switcher shows " +
+      "\"Upgrade to add more sites\" instead of \"+ Add project\", and if you reach the form " +
+      "another way it explains the limit rather than handing you fields to fill in. It also " +
+      "answers immediately - it used to check that your domain was live and look up its " +
+      "registration date first, then refuse for a reason that had nothing to do with either.",
+  },
+  {
+    kind: "improved",
+    text:
+      "Plans no longer cap how many keywords you track. The cap never actually bound - your " +
+      "DataForSEO budget hits its ceiling first, and that one slows rank checks instead of " +
+      "refusing new keywords - so it's gone from the pricing pages and from the code. Plans " +
+      "are sold on sites now, nothing else.",
+  },
+  {
+    kind: "new",
+    text:
+      "Adding a third site now asks about GitHub first. Your automations run as GitHub " +
+      "Actions on your own account, and GitHub's free minutes cover about two sites - past " +
+      "that, if your spending limit is still the default $0, GitHub doesn't bill you, it " +
+      "quietly pauses your workflows. That looked exactly like DispatchSEO breaking. The " +
+      "step explains it in plain terms, points you at the setting, and takes about thirty " +
+      "seconds. If your repos are public it doesn't apply and you'll never see it.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "Everywhere we told you to set a GitHub \"spending limit\" now says what GitHub " +
+      "actually calls it today: a budget, under Budgets and alerts. The old wording sent " +
+      "people looking for a control that isn't there any more. The instructions also lead " +
+      "with the step that's easiest to miss - GitHub needs a payment method on file before " +
+      "any budget takes effect at all.",
   },
 ];
 

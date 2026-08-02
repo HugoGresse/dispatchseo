@@ -2,8 +2,9 @@
 
 import { useActionState, useEffect, useRef, useState, startTransition } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { addSiteAndStartSetup, type WizardCreateState } from "@/app/actions";
+import { acknowledgeGithubCost, addSiteAndStartSetup, type WizardCreateState } from "@/app/actions";
 
 // Adding a site from inside the dashboard, as a dialog.
 //
@@ -35,6 +36,8 @@ export function AddSiteDialog({
   onClose,
   cloud,
   existingSiteCount,
+  planFull = false,
+  githubCostRequired = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -50,6 +53,16 @@ export function AddSiteDialog({
   // owner should only ever see that notice when it's actionable (see the card
   // itself for why the threshold is 2).
   existingSiteCount: number;
+  // The account's plan has no room for another site. The switcher already
+  // swaps its add row for an upgrade link in this state, so the only ways in
+  // here are ?add=1 and the /new redirect - both of which are bookmarkable and
+  // both of which used to hand over a form whose submit could not succeed.
+  // Showing the reason beats letting someone fill it in and lose.
+  planFull?: boolean;
+  // Third site, GitHub Actions cost not yet acknowledged. Shows the cost step
+  // ahead of the form; createProjectCore refuses the write until it's answered,
+  // so this is the polite half of a gate that holds either way.
+  githubCostRequired?: boolean;
 }) {
   const [state, formAction, pending] = useActionState<WizardCreateState, FormData>(
     addSiteAndStartSetup,
@@ -86,10 +99,28 @@ export function AddSiteDialog({
   // dialog opens the way the changelog banner remembers a version. Reset it
   // whenever the dialog reopens so a dismissed notice doesn't stay hidden on
   // a later, unrelated visit.
+  const [acked, setAcked] = useState(false);
+  const [ackPending, setAckPending] = useState(false);
+  const [ackError, setAckError] = useState<string | null>(null);
   const [costNoticeDismissed, setCostNoticeDismissed] = useState(false);
   useEffect(() => {
-    if (open) setCostNoticeDismissed(false);
+    if (open) {
+      setCostNoticeDismissed(false);
+      setAckError(null);
+    }
   }, [open]);
+
+  async function choose(reason: "billing" | "public_repos") {
+    setAckPending(true);
+    setAckError(null);
+    const res = await acknowledgeGithubCost(reason);
+    setAckPending(false);
+    if ("error" in res) {
+      setAckError(res.error);
+      return;
+    }
+    setAcked(true);
+  }
 
   // createProjectCore already switched the dash_project cookie to the new site,
   // so refreshing the current route re-renders every server component against
@@ -138,6 +169,173 @@ export function AddSiteDialog({
   }, [open, onClose, pending]);
 
   if (!open || !mounted) return null;
+
+  // Plan full: the reason, and the one thing that changes it. No form - the
+  // server would refuse the submit anyway (createProjectCore's plan gate), and
+  // a form that cannot succeed is worse than no form.
+  if (planFull) {
+    return createPortal(
+      <div
+        className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 px-4 py-10 backdrop-blur-sm"
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-site-full-title"
+          className="w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-950 p-6 shadow-2xl shadow-black/60"
+        >
+          <h2 id="add-site-full-title" className="text-lg font-semibold text-white">
+            Your plan is full
+          </h2>
+          <p className="mt-1.5 text-sm leading-relaxed text-neutral-400">
+            You&apos;re using every site your current plan covers. Upgrading adds room
+            immediately - the new site picks up the same setup flow your first one went
+            through, and nothing about your existing sites changes.
+          </p>
+          <div className="mt-5 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="cursor-pointer rounded-lg px-3 py-2 text-sm text-neutral-400 transition-colors hover:text-neutral-200"
+            >
+              Not now
+            </button>
+            <Link
+              href="/billing"
+              onClick={onClose}
+              className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-neutral-950 transition-opacity hover:opacity-90"
+            >
+              See plans
+            </Link>
+          </div>
+        </div>
+      </div>,
+      document.body,
+    );
+  }
+
+  // The third-site GitHub Actions cost step.
+  //
+  // Two paragraphs, three numbered steps, one obvious button. An earlier
+  // version explained the situation thoroughly and left the owner staring at
+  // GitHub's billing page with no idea which control to touch - GitHub renamed
+  // "spending limit" to "budget" and moved it behind "Budgets and alerts", so
+  // copy naming the old control sent people looking for something that is not
+  // there. The payment-method line matters most and is easiest to miss: a
+  // budget above $0 does nothing until GitHub has a card on file.
+  //
+  // The old version of this whole step was a dismissible notice above the
+  // fields. It disclosed the same facts and changed nothing, because nobody had
+  // to answer it.
+  if (githubCostRequired && !acked) {
+    return createPortal(
+      <div
+        className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 px-4 py-10 backdrop-blur-sm"
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget && !ackPending) onClose();
+        }}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="gh-cost-title"
+          className="w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-950 p-6 shadow-2xl shadow-black/60"
+        >
+          <h2 id="gh-cost-title" className="text-lg font-semibold text-white">
+            Set a GitHub budget first
+          </h2>
+          <div className="mt-3 space-y-3 text-sm leading-relaxed text-neutral-400">
+            <p>
+              Your automations run as GitHub Actions on your own GitHub account, so this
+              bill is GitHub&apos;s, not ours. Free minutes cover about two sites; a third
+              costs roughly $4 a month.{" "}
+              <a
+                href="/docs/publishing#github-actions-costs"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-neutral-300"
+              >
+                Cost table
+              </a>
+            </p>
+            <p>
+              With no budget set, GitHub doesn&apos;t bill you - it{" "}
+              <strong className="font-medium text-neutral-200">stops your workflows</strong>{" "}
+              when the free minutes run out, and nothing here says why.
+            </p>
+          </div>
+
+          <ol className="mt-4 list-decimal space-y-1.5 rounded-lg border border-neutral-800 bg-neutral-900/50 py-3 pl-9 pr-4 text-sm text-neutral-300">
+            <li>
+              Add a payment method. GitHub won&apos;t let you create a budget without one.
+            </li>
+            <li>
+              Under <span className="font-medium text-white">Budget type</span>, choose{" "}
+              <span className="font-medium text-white">Product-level budget</span> (not the
+              AI credits one it preselects), then{" "}
+              <span className="font-medium text-white">Next: Configure budget</span>.
+            </li>
+            <li>
+              Pick <span className="font-medium text-white">Actions</span> as the product,
+              set an amount, and create the budget.
+            </li>
+          </ol>
+
+          <a
+            href="https://github.com/settings/billing/budgets/new"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-4 block rounded-lg bg-white px-4 py-2.5 text-center text-sm font-medium text-neutral-950 transition-opacity hover:opacity-90"
+          >
+            Create the budget on GitHub &rarr;
+          </a>
+
+          <div className="mt-2.5 space-y-2">
+            <button
+              type="button"
+              onClick={() => choose("billing")}
+              disabled={ackPending}
+              className="w-full cursor-pointer rounded-lg border border-neutral-800 px-4 py-2.5 text-sm text-neutral-300 transition-colors hover:border-neutral-700 hover:text-neutral-100 disabled:opacity-50"
+            >
+              {ackPending ? "Just a moment..." : "Done - continue"}
+            </button>
+            <button
+              type="button"
+              onClick={() => choose("public_repos")}
+              disabled={ackPending}
+              className="w-full cursor-pointer rounded-lg px-4 py-2 text-sm text-neutral-500 transition-colors hover:text-neutral-300 disabled:opacity-50"
+            >
+              My repos are public - skip this
+            </button>
+          </div>
+
+          {ackError ? (
+            <p
+              role="alert"
+              className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300"
+            >
+              {ackError}
+            </p>
+          ) : null}
+
+          <div className="mt-4 flex justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={ackPending}
+              className="cursor-pointer rounded-lg px-3 py-1.5 text-sm text-neutral-600 transition-colors hover:text-neutral-400 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body,
+    );
+  }
 
   const error = state && "error" in state ? state.error : null;
 
@@ -200,11 +398,10 @@ export function AddSiteDialog({
               $4/month covers it, or you pay a few dollars of overage.
             </p>
             <p className="mt-1.5 leading-relaxed text-neutral-400">
-              One thing worth knowing: GitHub&apos;s spending limit defaults to $0. If you run
-              out of free minutes at that limit, GitHub does not bill you - it pauses your
-              workflows until you add a payment method or raise the limit. Set a spending
-              limit in GitHub&apos;s billing settings so your sites do not quietly stop
-              updating.
+              One thing worth knowing: with no Actions budget set, GitHub does not bill
+              you when the free minutes run out - it pauses your workflows. In GitHub&apos;s
+              billing settings, add a payment method, then use Budgets and alerts to
+              create an Actions budget, so your sites do not quietly stop updating.
             </p>
             <table className="mt-3 w-full border-collapse text-xs">
               <thead>

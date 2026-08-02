@@ -381,7 +381,6 @@ export default async function LandingPage({
               <div className="p-sub">One site on autopilot</div>
               <ul>
                 <li>Up to 1 site</li>
-                <li>100 tracked keywords</li>
                 <li>Unlimited articles</li>
                 <li>Unlimited AI-built tools</li>
                 <li>SERP + search volume data</li>
@@ -410,7 +409,6 @@ export default async function LandingPage({
               <div className="p-sub">For a small portfolio</div>
               <ul>
                 <li>Up to 3 sites<span className="li-hint"><button type="button" aria-label="What this costs on GitHub">ⓘ GitHub cost</button><span className="li-pop" role="tooltip">Your first two sites are free on your own GitHub account. After that it&apos;s about $5 per site a month, paid to GitHub, not to us.<a href="/docs/publishing#github-actions-costs">See the cost table</a></span></span></li>
-                <li>300 tracked keywords</li>
                 <li>Unlimited articles</li>
                 <li>Unlimited AI-built tools</li>
                 <li>SERP + search volume data</li>
@@ -438,7 +436,6 @@ export default async function LandingPage({
               <div className="p-sub">Portfolios and agencies</div>
               <ul>
                 <li>Up to 10 sites<span className="li-hint"><button type="button" aria-label="What this costs on GitHub">ⓘ GitHub cost</button><span className="li-pop" role="tooltip">Your first two sites are free on your own GitHub account. After that it&apos;s about $5 per site a month, paid to GitHub, not to us.<a href="/docs/publishing#github-actions-costs">See the cost table</a></span></span></li>
-                <li>1,000 tracked keywords</li>
                 <li>Unlimited articles</li>
                 <li>Unlimited AI-built tools</li>
                 <li>SERP + search volume data</li>

@@ -40,6 +40,13 @@ import type { Project } from "./projects";
 
 export const RANK_TASK_DEPTH = 30;
 export const SWEEP_TASK_DEPTH = 100;
+
+// Most keywords a single platform-billed weekly sweep will pay for. Set well
+// above any honest usage - the largest real project tracks a few dozen - so a
+// customer never meets it; it exists to bound the runaway case, not to price
+// the plan. Never applied to BYO DataForSEO accounts. See the block in
+// queueDailyRankTasks for why this is the only ceiling on that path.
+export const SWEEP_MAX_PLATFORM = 2000;
 const TASK_POST_PATH = "/serp/google/organic/task_post";
 // A standard-queue task normally completes in minutes. One that is still
 // missing after a day is gone (DataForSEO refunds failed tasks); mark it so
@@ -195,13 +202,35 @@ export async function queueDailyRankTasks(
   const eligible = tracked.filter((kw) => !inFlight.has(kw.id));
   const inFlightSkipped = tracked.length - eligible.length;
 
+  // The one hard ceiling on platform-billed rank spend.
+  //
+  // daily-ranks resolves its credentials with the monthly budget gate BYPASSED
+  // (see the comment at its call site) because tracking should degrade, not
+  // stop - the pacing governor thins the cadence to this Monday sweep and
+  // leaves it running. That was bounded while plans capped tracked keywords at
+  // 100/300/1000. Those caps were removed on 2026-08-02, which left the
+  // terminal pacing level posting one paid task per tracked keyword with no
+  // ceiling at all: cost scaled linearly with a number the customer controls,
+  // on an account we bill a flat monthly fee.
+  //
+  // So the sweep keeps the OLDEST N (daily-ranks orders by created_at) and
+  // drops the rest. Oldest wins because those keywords own the rank history
+  // the dashboard charts; a newly added keyword losing its first check is
+  // recoverable, a year-old series going full of holes is not. BYO accounts
+  // are untouched - they spend their own money at whatever scale they like.
+  const capped =
+    creds.billedTo === "platform" && eligible.length > SWEEP_MAX_PLATFORM
+      ? eligible.slice(0, SWEEP_MAX_PLATFORM)
+      : eligible;
+  const sweepDropped = eligible.length - capped.length;
+
   if (isSweepDay) {
     // Ground truth day: every keyword, full depth, with the AI Overview.
     // Runs at every pacing level - it IS the reduced cadence.
     const { posted, failed } = await postSerpTasks(
       project,
       creds,
-      eligible.map((kw) => ({
+      capped.map((kw) => ({
         keywordId: kw.id,
         keyword: kw.keyword,
         purpose: "sweep" as const,
@@ -214,6 +243,7 @@ export async function queueDailyRankTasks(
       sweep: true,
       queued: posted,
       ...(inFlightSkipped > 0 ? { in_flight_skipped: inFlightSkipped } : {}),
+      ...(sweepDropped > 0 ? { over_platform_cap: sweepDropped } : {}),
       failed,
     };
   }
@@ -250,7 +280,7 @@ export async function queueDailyRankTasks(
   const specs: TaskSpec[] = [];
   let restingCount = 0;
   const dayParity = new Date().getUTCDate() % 2;
-  for (const kw of eligible) {
+  for (const kw of capped) {
     if (!latest.has(kw.id)) {
       // Never checked: full-depth discovery today ("confirm" = full-depth
       // regular task whose result is always recorded, found or not).
@@ -300,6 +330,7 @@ export async function queueDailyRankTasks(
     queued: posted,
     resting: restingCount,
     ...(inFlightSkipped > 0 ? { in_flight_skipped: inFlightSkipped } : {}),
+    ...(sweepDropped > 0 ? { over_platform_cap: sweepDropped } : {}),
     ...(pacing === "slowed" ? { pacing: "slowed" } : {}),
     failed,
   };

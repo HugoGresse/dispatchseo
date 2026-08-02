@@ -8,8 +8,9 @@
 // both call the same function rather than implement it twice.
 
 import { db } from "@/lib/db";
-import { agentById, isSupportedAgent, type AgentDefinition } from "@/lib/agents";
-import { hasRepoSecret } from "@/lib/github-app-secrets";
+import { isCloudMode } from "@/lib/cloud";
+import { agentById, availableAgents, isSupportedAgent, type AgentDefinition } from "@/lib/agents";
+import { checkRepoSecret } from "@/lib/github-app-secrets";
 import { builderAgentToken, setRepoActionsVariable } from "@/lib/github";
 import { buildsActive } from "@/lib/builder-status";
 import type { Project } from "@/lib/projects";
@@ -160,6 +161,70 @@ export async function verifyAgentCredential(
   }
 }
 
+export type AgentCredentialStatus = "ready" | "needs-key" | "unknown";
+
+/**
+ * Whether each agent's credential exists where THIS project's builders run -
+ * the read the header switcher needs before offering a switch, so an agent
+ * with no key is offered as "needs key -> the paste box" instead of a switch
+ * that quietly points the builders at nothing.
+ *
+ * Same runner-branching as agentTodo below, minus the prose. "unknown" is a
+ * real answer, not a failure code: a setup.sh repo's secrets are write-only
+ * from here, so the honest offer is a plain switch (setProjectAgent's todo
+ * carries the caveat), never a "needs key" that may be flatly wrong.
+ */
+export async function agentCredentialStatuses(
+  project: Project,
+): Promise<Record<string, AgentCredentialStatus>> {
+  const agents = availableAgents();
+  const unknown = () => Object.fromEntries(agents.map((a) => [a.id, "unknown" as const]));
+  try {
+    if (project.github_installation_id) {
+      // checkRepoSecret, NOT hasRepoSecret: the fail-closed variant collapses
+      // "couldn't ask GitHub" into false, and this is exactly the caller that
+      // must not do that - an instance without App credentials (local dev, a
+      // misconfigured self-host) saw false for every stored secret and told
+      // the owner their existing keys were missing. Only a real 404 from
+      // GitHub is "needs-key"; a failed check is "unknown", which the UI
+      // renders as a plain switch with the post-switch reminder as backstop.
+      const entries = await Promise.all(
+        agents.map(
+          async (a) =>
+            [
+              a.id,
+              await checkRepoSecret(project, a.credential.repoSecretName)
+                .then((h): AgentCredentialStatus => (h ? "ready" : "needs-key"))
+                .catch((): AgentCredentialStatus => "unknown"),
+            ] as const,
+        ),
+      );
+      return Object.fromEntries(entries);
+    }
+    // Cloud without a working App installation (uninstalled, suspended, or
+    // mid-onboarding): nothing here can honestly answer. Critically, the
+    // fallthrough below reads the deployment-wide instance credential, which
+    // on the hosted product is shared infrastructure no tenant's status may
+    // be derived from - same tenant boundary connectBuilderToken enforces.
+    if (isCloudMode()) return unknown();
+    if (project.github_repo && project.pipeline_installed_at && !(await buildsActive())) {
+      return unknown();
+    }
+    const entries = await Promise.all(
+      agents.map(
+        async (a) =>
+          [
+            a.id,
+            ((await builderAgentToken(a.id)) ? "ready" : "needs-key") as AgentCredentialStatus,
+          ] as const,
+      ),
+    );
+    return Object.fromEntries(entries);
+  } catch {
+    return unknown();
+  }
+}
+
 /**
  * The one thing that does NOT follow automatically from the switch: the new
  * agent's credential has to exist wherever the builders run.
@@ -178,7 +243,11 @@ async function agentTodo(project: Project, agent: AgentDefinition): Promise<stri
     // instance-wide credential per agent. Checking the wrong one would produce
     // a confident, useless instruction.
     if (project.github_installation_id) {
-      if (await hasRepoSecret(project, agent.credential.repoSecretName)) return null;
+      // Throwing variant on purpose: this function's own catch renders "could
+      // not check" as silence, which is right - hasRepoSecret's fail-closed
+      // false would instead claim the key is missing to an owner who stored
+      // it, whenever the App is unreachable from here.
+      if (await checkRepoSecret(project, agent.credential.repoSecretName)) return null;
       // Dashboard first, CLI second. Pasting it here runs a real check against
       // the provider before storing; `gh secret set` cannot, because GitHub
       // secrets are write-only - which is exactly how a line-wrapped key gets
@@ -188,6 +257,18 @@ async function agentTodo(project: Project, agent: AgentDefinition): Promise<stri
         `${agent.credential.repoSecretName} yet - the next scheduled build will stop and say so. ` +
         `${agent.credential.howToMint} Paste it in the "${agent.displayName} credential" box on ` +
         `Settings and it gets verified before it is saved.`
+      );
+    }
+    // Cloud with the App gone (uninstalled, suspended, or mid-onboarding):
+    // nothing below can check or store anything for this tenant, and the
+    // instance-credential advice the fallthrough gives is a self-host concept
+    // that must never be shown on the hosted product. The real fix is the
+    // App reconnect, so say that.
+    if (isCloudMode()) {
+      return (
+        `Your builders now run ${agent.displayName}, but this site's GitHub connection has ` +
+        `lapsed, so its credential can't be checked or stored from here. Reconnect GitHub ` +
+        `from the card on Home, and this sorts itself out.`
       );
     }
     // No GitHub App. WHICH runner builds this project decides where the

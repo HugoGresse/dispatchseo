@@ -55,12 +55,24 @@ export function ProjectSwitcher({
   projects,
   activeSlug,
   cloud,
+  sitesRemaining = null,
+  githubCostRequired = false,
 }: {
   projects: SwitcherProject[];
   activeSlug: string;
   // Only so the add-site dialog knows whether to ask for a repo - self-host
   // has no GitHub App to pick one with. See AddSiteDialog.
   cloud: boolean;
+  // Sites this account's plan still has room for. null = uncapped (self-host,
+  // or cloud with billing unconfigured). Zero swaps the add row for an upgrade
+  // link: the server has always refused to create the site, but the button
+  // said "+ Add project" right up until the moment it didn't work, so the
+  // limit read as a bug rather than as the plan doing its job.
+  sitesRemaining?: number | null;
+  // This account is about to add its THIRD site and hasn't yet been told what
+  // that costs on GitHub. Passed through to the dialog, which puts the step in
+  // front of the form. See github-cost-gate.ts for why the step exists.
+  githubCostRequired?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -76,6 +88,9 @@ export function ProjectSwitcher({
     setAdding(true);
   }, []);
   useAddSiteParam(openAdd);
+
+  // null means uncapped, so only an explicit zero closes the door.
+  const planFull = sitesRemaining !== null && sitesRemaining <= 0;
 
   useEffect(() => {
     if (!open) return;
@@ -199,14 +214,34 @@ export function ProjectSwitcher({
             );
           })}
           <div className="my-1 border-t border-neutral-800" />
-          <button
-            type="button"
-            role="menuitem"
-            onClick={openAdd}
-            className="block w-full cursor-pointer rounded-lg px-3 py-2 text-left text-sm text-neutral-300 transition-colors hover:bg-neutral-800 hover:text-neutral-100"
-          >
-            + Add project
-          </button>
+          {planFull ? (
+            <Link
+              href="/billing"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="block rounded-lg px-3 py-2 transition-colors hover:bg-neutral-800"
+            >
+              <span className="block text-sm text-violet-300">Upgrade to add more sites</span>
+              {/* Deliberately no site count here. `remaining` is all this
+                  component knows, and a downgraded account can sit ABOVE its
+                  limit (Scale -> Starter keeps both sites, the newer one just
+                  falls outside coverage) - so "your plan covers N sites"
+                  computed from the list length would be wrong exactly for the
+                  people most likely to read it. */}
+              <span className="mt-0.5 block text-xs text-neutral-500">
+                Your plan has no room for another site.
+              </span>
+            </Link>
+          ) : (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={openAdd}
+              className="block w-full cursor-pointer rounded-lg px-3 py-2 text-left text-sm text-neutral-300 transition-colors hover:bg-neutral-800 hover:text-neutral-100"
+            >
+              + Add project
+            </button>
+          )}
           <Link
             href="/settings"
             role="menuitem"
@@ -223,6 +258,8 @@ export function ProjectSwitcher({
         onClose={() => setAdding(false)}
         cloud={cloud}
         existingSiteCount={projects.length}
+        planFull={planFull}
+        githubCostRequired={githubCostRequired}
       />
 
     </>

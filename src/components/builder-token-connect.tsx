@@ -18,24 +18,33 @@ import { MintLink } from "@/components/mint-link";
 // and this is the moment a credential is actually needed. Storage is per agent
 // (one column each), so pasting a Codex key never overwrites a Claude token -
 // a stack can hold both and run different projects on each.
-export function BuilderTokenConnect({ current = "claude" }: { current?: string }) {
+//
+// `connected` (optional, per agent id) lets a caller that KNOWS what's stored
+// - Settings reads the instance row server-side - render "already saved,
+// paste to replace" instead of a first-time ask. The first-run surfaces (Home
+// card, wizard) omit it, because there a key genuinely doesn't exist yet.
+export function BuilderTokenConnect({
+  current = "claude",
+  connected = {},
+  // Home's card is literally the "turn on automatic builds" moment; Settings
+  // embeds this same box under its Coding agent section, where that label
+  // would claim a bigger act than storing a key.
+  cta = "Turn on automatic builds",
+}: {
+  current?: string;
+  /**
+   * Per agent id. Self-host callers only ever produce true/false (the
+   * instance row is readable truth); "unknown" is accepted for type
+   * compatibility with the shared Settings map and treated as not-stored.
+   */
+  connected?: Record<string, boolean | "unknown">;
+  cta?: string;
+}) {
   const agents = availableAgents();
-  const [agentId, setAgentId] = useState(current);
-  const agent = agentById(agentId);
-  const [state, action, pending] = useActionState<ConnectBuilderTokenState, FormData>(
-    connectBuilderToken,
-    null,
-  );
-  if (state && "ok" in state) {
-    return (
-      <p className="mt-2 text-sm text-emerald-300">
-        Saved - the builder picks it up within a few minutes, then this card disappears on its
-        own.
-      </p>
-    );
-  }
+  const [agentId, setAgentId] = useState(agentById(current).id);
+
   return (
-    <form action={action} className="mt-2 space-y-2">
+    <div className="mt-2 space-y-2">
       {agents.length > 1 ? (
         <div className="flex gap-1" role="tablist" aria-label="Coding agent">
           {agents.map((a) => (
@@ -53,30 +62,113 @@ export function BuilderTokenConnect({ current = "claude" }: { current?: string }
             >
               <AgentMark id={a.id} className="h-3.5 w-3.5 shrink-0" />
               {a.displayName}
+              {/* Green check = this agent's key is stored on this instance -
+                  legible from the tab bar without opening each tab. */}
+              {connected[a.id] === true ? (
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                  className="h-3 w-3 shrink-0 text-emerald-400"
+                  aria-label="key stored"
+                >
+                  <polyline points="20 6 9 17 4 12" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              ) : null}
             </button>
           ))}
         </div>
       ) : null}
-      <p className="text-xs text-neutral-500">{agent.credential.howToMint}</p>
-      <MintLink agent={agent} />
-      {state && "error" in state ? (
-        <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{state.error}</p>
-      ) : null}
-      <input type="hidden" name="agent" value={agentId} />
-      <input
-        name="token"
-        type="password"
-        placeholder={agent.credential.placeholder}
-        autoComplete="off"
-        className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-violet-400/60"
+      {/* Keyed so switching tabs resets the form's action state and the
+          replace-reveal - a success note or an opened form from one agent's
+          tab must not linger under the other's. */}
+      <BuilderTokenForm
+        key={agentId}
+        agentId={agentId}
+        connected={connected[agentId] === true}
+        cta={cta}
       />
-      <button
-        type="submit"
-        disabled={pending}
-        className="cursor-pointer rounded-lg bg-violet-500 px-4 py-2 text-sm font-semibold text-neutral-950 transition-colors hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {pending ? "Saving..." : "Turn on automatic builds"}
-      </button>
-    </form>
+    </div>
+  );
+}
+
+function BuilderTokenForm({
+  agentId,
+  connected,
+  cta,
+}: {
+  agentId: string;
+  connected: boolean;
+  cta: string;
+}) {
+  const agent = agentById(agentId);
+  const [state, action, pending] = useActionState<ConnectBuilderTokenState, FormData>(
+    connectBuilderToken,
+    null,
+  );
+  // A stored credential keeps the paste form tucked away until the owner
+  // actually wants to replace it - nothing to do on the happy path, and a
+  // bare input box under a saved key reads as "you still owe us this".
+  const [replacing, setReplacing] = useState(false);
+  const showForm = !connected || replacing;
+
+  if (state && "ok" in state) {
+    return (
+      <p className="mt-2 text-sm text-emerald-300">
+        Saved - the builder picks it up within a few minutes.
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      {connected ? (
+        <div className="flex items-start gap-2.5 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.07] px-3 py-2.5 text-sm text-emerald-100">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" aria-hidden>
+            <polyline points="20 6 9 17 4 12" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span>
+            <b className="font-semibold">A {agent.displayName} credential is already saved</b>
+            {" - the builder uses it on every run. Nothing to do here unless it expired or was " +
+              "revoked."}
+          </span>
+        </div>
+      ) : null}
+
+      {connected && !replacing ? (
+        <button
+          type="button"
+          onClick={() => setReplacing(true)}
+          className="cursor-pointer text-sm font-medium text-neutral-400 underline underline-offset-2 transition-colors hover:text-neutral-200"
+        >
+          Paste a new key to replace it
+        </button>
+      ) : null}
+
+      {showForm ? (
+        <form action={action} className="space-y-2">
+          <p className="text-xs text-neutral-500">{agent.credential.howToMint}</p>
+          <MintLink agent={agent} />
+          {state && "error" in state ? (
+            <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{state.error}</p>
+          ) : null}
+          <input type="hidden" name="agent" value={agent.id} />
+          <input
+            name="token"
+            type="password"
+            placeholder={connected ? "Paste a new one to replace it" : agent.credential.placeholder}
+            autoComplete="off"
+            className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-violet-400/60"
+          />
+          <button
+            type="submit"
+            disabled={pending}
+            className="cursor-pointer rounded-lg bg-violet-500 px-4 py-2 text-sm font-semibold text-neutral-950 transition-colors hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {pending ? "Saving..." : connected ? "Replace it" : cta}
+          </button>
+        </form>
+      ) : null}
+    </div>
   );
 }

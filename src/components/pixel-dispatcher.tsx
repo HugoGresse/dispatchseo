@@ -38,6 +38,22 @@ const PALETTE: Record<string, string> = {
   m: "#d4d4d8", // mic tip
 };
 
+// The body tint follows the project's coding agent: Claude Code keeps the
+// clay (the default above), Codex renders the little worker in white. The
+// choice arrives as CSS variables (--dispatcher-body / --dispatcher-shade)
+// stamped by the dashboard layout, NOT as a prop - the dispatcher also shows
+// on loading screens, which render synchronously with no way to ask which
+// project is active. Read per frame, so a live agent switch retints on the
+// next tick instead of waiting for a remount. Anywhere outside the dashboard
+// (landing, wizard) the variables are unset and the clay default applies.
+function paletteFor(canvas: HTMLCanvasElement): Record<string, string> {
+  const cs = getComputedStyle(canvas);
+  const body = cs.getPropertyValue("--dispatcher-body").trim();
+  const shade = cs.getPropertyValue("--dispatcher-shade").trim();
+  if (!body) return PALETTE;
+  return { ...PALETTE, c: body, C: shade || body };
+}
+
 // 12 x 11 character grids ('.' = transparent)
 const BODY_OPEN = [
   "...cccccc...",
@@ -109,19 +125,24 @@ function drawGrid(
   grid: string[],
   ox: number,
   oy: number,
+  palette: Record<string, string>,
 ) {
   for (let r = 0; r < grid.length; r++) {
     for (let col = 0; col < grid[r].length; col++) {
       const ch = grid[r][col];
       if (ch === ".") continue;
-      fillPx(ctx, ox + col, oy + r, 1, 1, PALETTE[ch]);
+      fillPx(ctx, ox + col, oy + r, 1, 1, palette[ch]);
     }
   }
 }
 
 // Draw the whole scene at tick t. Same composition + order as the old SVG,
 // so later paints (desk, monitor) still sit in front of the character.
-function drawScene(ctx: CanvasRenderingContext2D, t: number) {
+function drawScene(
+  ctx: CanvasRenderingContext2D,
+  t: number,
+  palette: Record<string, string>,
+) {
   ctx.clearRect(0, 0, VB_W, VB_H);
 
   // --- character position + frame ---
@@ -167,8 +188,8 @@ function drawScene(ctx: CanvasRenderingContext2D, t: number) {
   fillPx(ctx, 74, 34, 2, 6, "#2e2e35");
 
   // character + headset
-  drawGrid(ctx, grid, charX, charY);
-  if (headsetY !== null) drawGrid(ctx, HEADSET, charX, headsetY);
+  drawGrid(ctx, grid, charX, charY, palette);
+  if (headsetY !== null) drawGrid(ctx, HEADSET, charX, headsetY, palette);
 
   // desk
   fillPx(ctx, 77, 30, 32, 1, "#3a3a42");
@@ -225,14 +246,14 @@ export function PixelDispatcher({
     if (!ctx) return;
     // Reduced motion: paint the settled scene once, no ticking.
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      drawScene(ctx, DROP_END + 36);
+      drawScene(ctx, DROP_END + 36, paletteFor(canvas!));
       return;
     }
     let t = working ? DROP_END : 0;
-    drawScene(ctx, t);
+    drawScene(ctx, t, paletteFor(canvas!));
     const id = setInterval(() => {
       t += 1;
-      drawScene(ctx, t);
+      drawScene(ctx, t, paletteFor(canvas!));
     }, TICK_MS);
     return () => clearInterval(id);
   }, [working]);

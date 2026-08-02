@@ -4,14 +4,15 @@ import { instanceCronSecret } from "@/lib/dashboard-auth";
 import { requestOrigin } from "@/lib/request-origin";
 import { AgentConnectTabs } from "@/components/agent-connect-tabs";
 import { AgentSwitch } from "@/components/agent-switch";
-import { projectAgent } from "@/lib/agents";
+import { agentById, availableAgents, isSupportedAgent, projectAgent } from "@/lib/agents";
 import { getActiveProjectOrNull } from "@/lib/active-project";
 import { credsForProject } from "@/lib/dataforseo";
 import { DEFAULT_PROJECT_ID, fetchProjectToken } from "@/lib/projects";
 import { isCloudMode } from "@/lib/cloud";
 import { ClaudeTokenConnect } from "@/components/claude-token-connect";
 import { BuilderTokenConnect } from "@/components/builder-token-connect";
-import { hasRepoSecret } from "@/lib/github-app-secrets";
+import { checkRepoSecret } from "@/lib/github-app-secrets";
+import { builderAgentToken } from "@/lib/github";
 import { DeleteProjectForm } from "@/components/delete-project";
 import { DisconnectRepoForm } from "@/components/disconnect-repo";
 import { DeleteAccountForm } from "@/components/delete-account";
@@ -80,7 +81,11 @@ function AccountSection({ email }: { email: string | null }) {
   );
 }
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ credential?: string }>;
+}) {
   const auth = await requireDashboard();
 
   // Account-level facts, resolved once: both the last-site warning and the
@@ -158,10 +163,37 @@ export default async function SettingsPage() {
   // Claude token would report "connected" off a secret nothing reads any more.
   // GitHub never returns secret values, only existence; fail closed on error.
   const agent = projectAgent(project);
-  const agentCredentialSet =
-    isCloudMode() && project.github_installation_id
-      ? await hasRepoSecret(project, agent.credential.repoSecretName).catch(() => false)
-      : false;
+  // Which agent the credential box opens on. Usually the project's agent, but
+  // the header switcher deep-links here with ?credential=codex when the owner
+  // is adding the OTHER agent's key - opening on the current agent's tab in
+  // that moment would ask them to paste a Codex key into a form labeled
+  // Claude.
+  const { credential: credentialParam } = await searchParams;
+  const credentialAgent = isSupportedAgent(credentialParam) ? agentById(credentialParam) : agent;
+  // Whether each agent already has its credential stored, so the box can say
+  // "already saved - this replaces it" per tab instead of looking like a
+  // required first-time setup for a key the owner pasted weeks ago. Three
+  // states on purpose: true (stored), false (GitHub/the DB said no), and
+  // "unknown" (couldn't ask - no App reachable). Collapsing unknown into
+  // false is how a stored key gets presented as missing.
+  const agentCredentialSet: Record<string, boolean | "unknown"> = Object.fromEntries(
+    await Promise.all(
+      availableAgents().map(async (a) => {
+        if (isCloudMode()) {
+          return [
+            a.id,
+            project.github_installation_id
+              ? await checkRepoSecret(project, a.credential.repoSecretName).catch(
+                  () => "unknown" as const,
+                )
+              : ("unknown" as const),
+          ] as const;
+        }
+        // Self-host: the instance credential is our own row - readable truth.
+        return [a.id, Boolean(await builderAgentToken(a.id).catch(() => null))] as const;
+      }),
+    ),
+  );
   // Self-host only: the cron secret is INSTANCE-wide, not per-project, so in
   // cloud it would hand every tenant the platform's own key. Null on a classic
   // env install (no instance row) - the section just doesn't render.
@@ -234,9 +266,13 @@ export default async function SettingsPage() {
         />
       </section>
 
-      {/* Anchored: the agent switch below links here the moment a switch leaves
-          the builders without a credential, so "set your key" is one click and
-          not a hunt. scroll-mt keeps the heading clear of the sticky header.
+      {/* ONE section for the whole agent story: which agent runs the builds
+          (the cards), then the key it runs on (the box below, one tab per
+          agent so it always says which agent's key it is taking). Anchored:
+          the switch cards link here the moment a switch leaves the builders
+          without a credential, and the header switcher's post-switch reminder
+          deep-links here with ?credential=<agent> preselecting the right tab.
+          scroll-mt keeps the heading clear of the sticky header.
 
           BOTH runners get a box, because the anchor is only honest if it
           exists everywhere the switch renders. Cloud (App-connected) stores a
@@ -247,31 +283,39 @@ export default async function SettingsPage() {
           adding a Codex site to a working Claude stack had a switch banner
           pointing at a box that no longer rendered anywhere, and a project
           that silently built nothing. */}
-      {isCloudMode() && project.github_installation_id ? (
-        <section id="agent-credential" className="scroll-mt-24 space-y-3">
-          <SectionTitle sub="the credential builds run on - rotate it here whenever it expires or gets revoked">
-            {agent.displayName} credential
-          </SectionTitle>
-          <ClaudeTokenConnect
-            agent={agent.id}
-            connected={agentCredentialSet}
-            slug={project.slug}
-          />
-        </section>
-      ) : (
-        <section id="agent-credential" className="scroll-mt-24 space-y-3">
-          <SectionTitle sub="the credential the in-stack builder runs on - stored once per instance, shared by every project on the same agent">
-            Builder credential
-          </SectionTitle>
-          <BuilderTokenConnect current={agent.id} />
-        </section>
-      )}
-
-      <section className="space-y-3">
-        <SectionTitle sub="which agent your scheduled builders run - not which agent you use day to day">
+      <section id="agent-credential" className="scroll-mt-24 space-y-3">
+        <SectionTitle sub="which agent your scheduled builders run, and the credential they run on - not which agent you use day to day">
           Coding agent
         </SectionTitle>
         <AgentSwitch current={agent.id} slug={project.slug} />
+        <div className="space-y-3 rounded-xl border border-neutral-800 bg-neutral-900 p-4 sm:p-5">
+          <div>
+            <h3 className="text-sm font-semibold text-neutral-100">Credential</h3>
+            <p className="mt-0.5 text-xs text-neutral-500">
+              {isCloudMode()
+                ? "one secret per agent, stored on your repo - adding one agent's key never touches the other's, and pasting here never switches anything by itself"
+                : "one credential per agent, stored once per instance and shared by every project on the same agent - pasting here never switches anything by itself"}
+            </p>
+          </div>
+          {/* Branch on the MODE alone, never on the installation: a cloud
+              tenant whose App lapsed must see the repo-secret box (which
+              says "can't check" and fails storing with the reconnect
+              message), not the instance box - that one describes, and
+              writes, deployment-shared state. */}
+          {isCloudMode() ? (
+            <ClaudeTokenConnect
+              agent={credentialAgent.id}
+              connected={agentCredentialSet}
+              slug={project.slug}
+            />
+          ) : (
+            <BuilderTokenConnect
+              current={credentialAgent.id}
+              connected={agentCredentialSet}
+              cta="Save credential"
+            />
+          )}
+        </div>
       </section>
 
       {/* Folded away by default: the key and the connect paste are a

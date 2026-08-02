@@ -738,7 +738,7 @@ async function githubQuotaAlert(
         errors: [
           `${silent.length} of this repo's scheduled automations stopped reporting at the same time (${silent.join(", ")}). ` +
             `With ${sameAccount.length} sites on one GitHub account, the likeliest cause is that account's monthly GitHub Actions minutes running out. ` +
-            `GitHub does not bill you for this or email you about it - it just pauses workflows until you add a payment method and raise the spending limit above $0 at https://github.com/settings/billing. ` +
+            `GitHub does not bill you for this or email you about it - it just pauses workflows. At https://github.com/settings/billing, add a payment method, then open Budgets and alerts and create an Actions budget above $0. ` +
             `Builds resume on their own once you do, and the allowance resets on your GitHub billing date.`,
         ],
         update_available: false,

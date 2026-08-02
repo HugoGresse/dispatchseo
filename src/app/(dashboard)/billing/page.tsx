@@ -75,7 +75,7 @@ export default async function BillingPage({
         title="Billing"
         hint={
           active
-            ? `You're on ${TIER_COPY[sub!.tier].name} - ${sub!.sites_limit} site${sub!.sites_limit === 1 ? "" : "s"}, ${sub!.keywords_limit} tracked keywords.${
+            ? `You're on ${TIER_COPY[sub!.tier].name} - ${sub!.sites_limit} site${sub!.sites_limit === 1 ? "" : "s"}.${
                 // A cancelled-but-still-running plan says so in the FIRST line
                 // on the page, not only in the panel further down. The whole
                 // question someone has after cancelling is "do I still have it
@@ -130,7 +130,13 @@ export default async function BillingPage({
           return (
             <div
               key={tier}
-              className={`rounded-xl border p-5 ${isCurrent ? "border-white/40 bg-neutral-900" : "border-neutral-800 bg-neutral-950"}`}
+              // flex column + mt-auto on the CTA below: the cards carry
+              // different amounts of copy (only the multi-site tiers get the
+              // GitHub cost note), so a CTA that simply followed the content
+              // sat at a different height in every card. Grid items stretch to
+              // the row's height already, so pushing the CTA to the bottom
+              // lines all three up whatever the copy above them does.
+              className={`flex flex-col rounded-xl border p-5 ${isCurrent ? "border-white/40 bg-neutral-900" : "border-neutral-800 bg-neutral-950"}`}
             >
               <h3 className="font-semibold text-white">{TIER_COPY[tier].name}</h3>
               <p className="mt-1 text-2xl font-bold text-white">
@@ -149,7 +155,6 @@ export default async function BillingPage({
                 <li>
                   Up to {limits.sites} site{limits.sites === 1 ? "" : "s"}
                 </li>
-                <li>{limits.keywords} tracked keywords</li>
               </ul>
               {/* The SECOND door to checkout, and the one that was missing this.
                   /plans is where a new customer picks a tier; this page is where
@@ -162,8 +167,8 @@ export default async function BillingPage({
                   tier, so on Starter this would warn about the impossible. */}
               {tier !== "starter" ? (
                 <p className="mt-3 text-xs leading-relaxed text-neutral-500">
-                  Your first two sites are free on your own GitHub account. After that it&apos;s
-                  about $5 per site a month, paid to GitHub, not to us.{" "}
+                  After your first two sites, GitHub charges about $5 per site a month - to
+                  them, not to us.{" "}
                   <a
                     href="/docs/publishing#github-actions-costs"
                     className="underline underline-offset-2 hover:text-neutral-300"
@@ -172,8 +177,17 @@ export default async function BillingPage({
                   </a>
                 </p>
               ) : null}
+              {/* mt-auto pushes the CTA to the card's bottom so all three line
+                  up; pt-5 is the FLOOR on the gap above it. Without that floor
+                  the tallest card (GitHub note + button) had the two touching,
+                  because mt-auto resolves to zero once the copy fills the
+                  height. */}
+              <div className="mt-auto pt-5">
               {isCurrent ? (
-                <p className="mt-4 text-center text-sm font-medium text-neutral-300">
+                // Same py-2 as the buttons it sits in line with, so the
+                // current-plan card's baseline matches the others' instead of
+                // floating a few pixels high.
+                <p className="py-2 text-center text-sm font-medium text-neutral-300">
                   Current plan
                 </p>
               ) : (
@@ -189,15 +203,16 @@ export default async function BillingPage({
                   // alongside the unpaid one. hasUpstreamSub was written for
                   // this line (see its comment above) and never wired to it.
                   href={hasUpstreamSub ? "/api/polar/portal" : `/api/polar/checkout?tier=${tier}`}
-                  className="mt-4 block rounded-lg bg-white px-4 py-2 text-center text-sm font-medium text-neutral-950"
+                  className="block rounded-lg bg-white px-4 py-2 text-center text-sm font-medium text-neutral-950"
                 >
                   {hasUpstreamSub
-                    ? `Switch ${TIER_COPY[tier].name}`
+                    ? `Switch to ${TIER_COPY[tier].name}`
                     : tier === "starter"
                       ? "Start free trial"
                       : `Choose ${TIER_COPY[tier].name}`}
                 </a>
               )}
+              </div>
             </div>
           );
         })}

@@ -102,6 +102,15 @@ const PROBES: Probe[] = [
     table: "subscriptions",
     column: "cancel_at_period_end",
   },
+  // The third-site GitHub Actions cost acknowledgement. githubCostGate treats
+  // an absent column as "don't gate", so a missing 0048 degrades to the old
+  // dismissible-notice behaviour rather than blocking anyone - but it does mean
+  // the step silently never appears, which is exactly what this probe is for.
+  {
+    migration: "0048_github_cost_ack",
+    table: "subscriptions",
+    column: "github_cost_ack_at",
+  },
 ];
 
 // Migrations that genuinely CANNOT be probed through this mechanism, with the

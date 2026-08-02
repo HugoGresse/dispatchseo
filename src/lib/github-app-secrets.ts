@@ -62,21 +62,42 @@ export async function setRepoSecret(
   return res.ok ? { ok: true } : { ok: false, error: `secret write failed: HTTP ${res.status}` };
 }
 
-// Existence probe (no values ever come back from GitHub's secrets API) - the
-// pipeline installer uses it to gate the setup dispatch on the Claude token
-// having been pasted.
+// Existence probe with an honest third answer: GitHub answering 404 is FALSE,
+// GitHub answering 200 is TRUE, and anything that prevented asking at all -
+// missing App credentials (a self-host or local env without GITHUB_APP_*),
+// a failed installation token, a 403, a network error - THROWS. The
+// distinction is load-bearing for any caller that renders "needs key" off a
+// false: an instance that cannot reach the App sees false for every secret
+// that exists, and told the owner to re-paste keys they already stored.
+// (No values ever come back from GitHub's secrets API - existence only.)
+export async function checkRepoSecret(
+  project: { github_repo: string | null; github_installation_id: number | null },
+  name: string,
+): Promise<boolean> {
+  if (!project.github_repo || !project.github_installation_id) {
+    throw new Error("no App-connected repo to check");
+  }
+  const token = await installationToken(project.github_installation_id);
+  const res = await fetch(`${GH}/repos/${project.github_repo}/actions/secrets/${name}`, {
+    headers: headers(token),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (res.status === 404) return false;
+  if (!res.ok) throw new Error(`secret check failed: HTTP ${res.status}`);
+  return true;
+}
+
+// Fail-closed convenience over checkRepoSecret - "couldn't ask" collapses to
+// false. Right for gates where the safe default is "treat as absent" (the
+// pipeline installer holding the setup dispatch until the token is pasted);
+// wrong for anything user-facing that says "needs key" - use checkRepoSecret
+// there and render the failure as unknown instead.
 export async function hasRepoSecret(
   project: { github_repo: string | null; github_installation_id: number | null },
   name: string,
 ): Promise<boolean> {
-  if (!project.github_repo || !project.github_installation_id) return false;
   try {
-    const token = await installationToken(project.github_installation_id);
-    const res = await fetch(`${GH}/repos/${project.github_repo}/actions/secrets/${name}`, {
-      headers: headers(token),
-      signal: AbortSignal.timeout(10000),
-    });
-    return res.ok;
+    return await checkRepoSecret(project, name);
   } catch {
     return false;
   }

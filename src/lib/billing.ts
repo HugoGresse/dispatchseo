@@ -19,10 +19,20 @@ import { REASON_LABELS, type CancellationReason } from "./cancellation-reasons";
 
 export type Tier = "starter" | "growth" | "scale";
 
-export const TIER_LIMITS: Record<Tier, { sites: number; keywords: number; price: number }> = {
-  starter: { sites: 1, keywords: 100, price: 49 },
-  growth: { sites: 3, keywords: 300, price: 99 },
-  scale: { sites: 10, keywords: 1000, price: 149 },
+export const TIER_LIMITS: Record<Tier, { sites: number; price: number }> = {
+  starter: { sites: 1, price: 49 },
+  growth: { sites: 3, price: 99 },
+  scale: { sites: 10, price: 149 },
+};
+
+// Display names for the badge in the dashboard chrome. Deliberately a map
+// rather than capitalizing the tier string: a tier id that isn't a single
+// lowercase word would render as mangled copy in the one place every owner
+// sees on every screen.
+export const TIER_NAMES: Record<Tier, string> = {
+  starter: "Starter",
+  growth: "Growth",
+  scale: "Scale",
 };
 
 // Product ids come from the Polar dashboard once the three products exist.
@@ -63,7 +73,6 @@ export type Subscription = {
   tier: Tier;
   status: string;
   sites_limit: number;
-  keywords_limit: number;
   current_period_end: string | null;
   /**
    * Pending cancellation. Polar leaves a cancelled-at-period-end subscription
@@ -71,6 +80,15 @@ export type Subscription = {
    * can't tell a renewing plan from an ending one - this can.
    */
   cancel_at_period_end: boolean;
+  /**
+   * Third-site GitHub Actions cost acknowledgement (migration 0048), and which
+   * way out the owner took. Optional on the type, not just nullable: a database
+   * that hasn't run 0048 omits the columns entirely from `select("*")`, and
+   * githubCostGate tells that apart from a genuine null so a pending migration
+   * can't put every owner on a step whose answer it has nowhere to store.
+   */
+  github_cost_ack_at?: string | null;
+  github_cost_ack_reason?: string | null;
 };
 
 // Per-request memo, POSITIVE RESULTS ONLY. cache(() => new Map()) hands every
@@ -173,6 +191,33 @@ export function planNotice(sub: Subscription | null): PlanNotice | null {
   return { kind: "ended", endedAt: sub.current_period_end };
 }
 
+export type PlanBadge = { label: string; tone: "trial" | "plan" | "warn" };
+
+// What plan this account is on, in two words, for the dashboard chrome.
+//
+// The tier was previously visible ONLY on /billing, so "how many sites does my
+// plan allow" and "am I still in the trial" were questions you had to navigate
+// to answer - and the add-site limit that enforces the tier gave no hint the
+// tier existed at all.
+//
+// A TRIAL outranks the tier name. Polar models a trial as status "trialing" on
+// the tier the customer picked (Starter today - the only tier with one), so
+// showing "Starter" during those seven days would hide the single most
+// time-sensitive fact about the account: that a card is about to be charged.
+// isActive() treats both the same, so nothing downstream cares which one shows.
+//
+// null when there is nothing truthful to say: self-host, billing unconfigured,
+// or an account that has never subscribed (a fresh signup is mid-onboarding,
+// not planless). A dead plan still gets a badge - it's the one state where
+// silence reads as "everything's fine".
+export function planBadge(sub: Subscription | null): PlanBadge | null {
+  if (!isCloudMode() || !polarConfigured() || !sub) return null;
+  if (sub.status === "trialing") return { label: "Free trial", tone: "trial" };
+  if (sub.status === "active") return { label: TIER_NAMES[sub.tier] ?? sub.tier, tone: "plan" };
+  if (sub.status === "past_due") return { label: "Past due", tone: "warn" };
+  return { label: "Plan ended", tone: "warn" };
+}
+
 // "This database doesn't have that column (yet)", told apart from every other
 // write failure. PostgREST answers PGRST204 on a write naming an unknown
 // column and 42703 when Postgres itself rejects it; both spell the message out,
@@ -207,7 +252,6 @@ export async function applySubscriptionState(state: {
   if (state.tier) {
     row.tier = state.tier;
     row.sites_limit = limits!.sites;
-    row.keywords_limit = limits!.keywords;
   }
   if (state.providerCustomerId !== undefined) row.provider_customer_id = state.providerCustomerId;
   if (state.providerSubscriptionId !== undefined)
@@ -483,9 +527,26 @@ async function writeCancelFlag(
   if (error) console.error(`[billing] cancel flag write failed for ${userId}: ${error.message}`);
 }
 
+// The site-allowance arithmetic, given a subscription and a count the caller
+// already has. Split out so the dashboard layout can render the "plan full"
+// state without a second round trip: it has already loaded the subscription
+// (for planNotice) and the owner's projects (for the switcher), which is
+// exactly the same set remainingSites() would go and COUNT again. Both callers
+// share this one definition so the button the owner sees and the gate that
+// refuses them can never disagree.
+export function sitesRemaining(sub: Subscription | null, ownedCount: number): number | null {
+  if (!isCloudMode() || !polarConfigured()) return null;
+  if (!isActive(sub)) return 0;
+  return Math.max(0, sub!.sites_limit - ownedCount);
+}
+
 // How many more sites this user's plan allows. null = unlimited (self-host,
 // or cloud with billing not yet configured - fail open, never lock the
 // owner out of their own product because an env var is missing).
+//
+// Counts from the database rather than trusting a caller's list: this is the
+// enforcement path (createProjectCore), and it has to be right even when it's
+// reached from somewhere that never loaded the owner's projects.
 export async function remainingSites(userId: string): Promise<number | null> {
   if (!isCloudMode() || !polarConfigured()) return null;
   const sub = await getSubscription(userId);
@@ -494,7 +555,7 @@ export async function remainingSites(userId: string): Promise<number | null> {
     .from("projects")
     .select("id", { count: "exact", head: true })
     .eq("owner_user_id", userId);
-  return Math.max(0, sub!.sites_limit - (count ?? 0));
+  return sitesRemaining(sub, count ?? 0);
 }
 
 // Same positive-only memo as getSubscription above, for the same reason: a
@@ -503,7 +564,7 @@ export async function remainingSites(userId: string): Promise<number | null> {
 // while a found owner is immutable for the life of the request.
 const projectOwnerMemo = cache(() => new Map<string, string>());
 
-// The owner lookup planGate, remainingKeywords, and platformBudgetGate (see
+// The owner lookup planGate and platformBudgetGate (see
 // dataforseo-usage.ts) all need: which user owns this project, or null for
 // self-host/pre-0031 rows. Collapses any lookup error the same way every
 // caller already tolerated - "can't tell who owns it" reads as "don't gate".
@@ -552,26 +613,4 @@ export async function planGate(
     return { allowed: false, reason: `beyond the plan's ${sub!.sites_limit}-site limit` };
   }
   return { allowed: true };
-}
-
-// The tracked-keyword allowance left on this project's ACCOUNT plan (the
-// limit is per account, not per site - otherwise 3 sites x 300 would
-// triple the quota). Tracked keywords x daily SERP checks is ~90% of
-// DataForSEO cost, so this cap is the real abuse guard. null = unlimited
-// (self-host, billing unconfigured, or ownerless project). owner_user_id is
-// looked up directly because the MCP's currentProject() doesn't carry it.
-export async function remainingKeywords(projectId: string): Promise<number | null> {
-  if (!isCloudMode() || !polarConfigured()) return null;
-  // Column/table missing (pre-0031) or no owner: don't cap.
-  const ownerId = await ownerUserIdForProject(projectId);
-  if (!ownerId) return null;
-  const sub = await getSubscription(ownerId);
-  if (!isActive(sub)) return 0;
-  const owned = await ownedProjectsOldestFirst(ownerId);
-  const { count } = await db()
-    .from("keywords")
-    .select("id", { count: "exact", head: true })
-    .in("project_id", owned)
-    .eq("status", "tracking");
-  return Math.max(0, sub!.keywords_limit - (count ?? 0));
 }

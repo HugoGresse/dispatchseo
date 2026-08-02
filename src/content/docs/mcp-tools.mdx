@@ -290,12 +290,6 @@ rank cron checks every tracked keyword daily while it ranks in the top
 30, plus a weekly full-depth sweep for everything else. Fields you omit
 are left as-is on existing rows.
 
-<Callout type="note">
-On the bundled cloud plan, tracked-keyword slots are capped per plan -
-but only **net-new** keywords count against it. Updating the metrics on
-an already-tracked keyword is always allowed, even at the cap.
-</Callout>
-
 <Fields>
   <Field name="keywords" type="array" required="true">
     One object per keyword: `keyword` (required), `volume`, `kd`, `cpc`,
