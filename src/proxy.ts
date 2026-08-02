@@ -33,6 +33,11 @@ const PUBLIC_FILES = new Set([
   // broken-image placeholder for every anonymous visitor (it only looked fine
   // in-browser because the developer had a session cookie).
   "/dispatch-mark.png",
+  // Sentry's tunnel (next.config.ts tunnelRoute). The browser POSTs error
+  // reports here, and the errors most worth catching are the ones on /login
+  // and /signup - where the visitor has no cookie by definition. Gate it and
+  // every anonymous crash report 307s into the login page and is lost.
+  "/monitoring",
 ]);
 
 const CLOUD_COOKIE = /^sb-.+-auth-token/;

@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
+import { reportBoundaryError } from "@/lib/report-boundary-error";
+
 // Dashboard-scoped error boundary. The root one (src/app/error.tsx) sits ABOVE
 // (dashboard)/layout.tsx, so a throw on any single screen replaced the sidebar,
 // topbar, project switcher and every banner with a bare retry card - the only
@@ -19,6 +22,8 @@ export default function DashboardError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => reportBoundaryError(error), [error]);
+
   return (
     <div className="flex min-h-[50vh] items-center justify-center px-6">
       <div className="max-w-md space-y-4 rounded-lg border border-neutral-800 bg-neutral-900/50 p-6 text-center">

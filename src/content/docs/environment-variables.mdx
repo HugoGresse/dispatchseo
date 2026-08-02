@@ -603,6 +603,50 @@ Cloud - match whichever region your PostHog project is on.
 
 </Field>
 
+<Field name="NEXT_PUBLIC_SENTRY_DSN" type="string" tag="">
+
+The DSN from your own Sentry project (Settings → Client Keys). Turns on
+error tracking for the browser, the server and the edge runtime at once.
+Leave it empty and nothing is ever sent anywhere: each SDK skips
+initialisation and the build skips Sentry's bundler plugin. The SDK code is
+still bundled either way (roughly 65KB gzipped that never runs), because
+loading it lazily would mean missing the errors that fire during startup.
+The DSN is not a secret - it ships in the browser bundle by design and only
+identifies where events are sent.
+
+</Field>
+
+<Field name="SENTRY_DSN" type="string" tag="">
+
+Only needed to send server and edge errors to a *different* Sentry project
+than browser errors. Unset, both use `NEXT_PUBLIC_SENTRY_DSN`.
+
+</Field>
+
+<Field name="SENTRY_ORG" type="string" tag="Build-time">
+
+Your Sentry organisation slug. Used with `SENTRY_PROJECT` and
+`SENTRY_AUTH_TOKEN` to upload source maps at build time, so production
+stack traces point at real files and line numbers instead of minified
+chunks. Omit all three and errors still arrive - only unminified traces
+are lost.
+
+</Field>
+
+<Field name="SENTRY_PROJECT" type="string" tag="Build-time">
+
+The Sentry project slug that source maps upload to. See `SENTRY_ORG`.
+
+</Field>
+
+<Field name="SENTRY_AUTH_TOKEN" type="string" tag="Build-time">
+
+An org auth token from Sentry Settings → Auth Tokens, with the
+`project:releases` scope. Unlike the DSN this **is** a secret - it never
+reaches the browser and is only read while building. See `SENTRY_ORG`.
+
+</Field>
+
 <Field name="DISPATCHSEO_TELEMETRY" type="off" tag="Self-host only">
 
 Set to `off` to stop the once-a-day install ping. Left unset, a self-hosted

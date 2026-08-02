@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   // Docker builds trace a minimal server into .next/standalone (~10x smaller
@@ -53,4 +54,31 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Sentry is wrapped ONLY when a DSN is configured. Left on unconditionally the
+// plugin still rewrites the client bundle and warns about the missing auth
+// token on every self-hosted `docker compose up` build - noise about a service
+// that install has not signed up for.
+//
+// This skips the PLUGIN, not the SDK: instrumentation-client.ts imports
+// @sentry/nextjs statically, so ~65KB gzipped (measured) rides along in every
+// build, DSN or not - it simply never initialises and never sends. Making that
+// import lazy would drop the weight for self-hosters but would also miss the
+// errors thrown before the chunk resolves, which are the ones worth having.
+//
+// tunnelRoute proxies browser events through /monitoring instead of straight to
+// ingest.sentry.io, which ad blockers block by default - without it the errors
+// most worth seeing (the ones hitting users who run uBlock) are the ones that
+// never arrive. It is a build-injected rewrite, so /monitoring must also be
+// allowlisted in src/proxy.ts or the gate 307s those POSTs to /login.
+export default process.env.NEXT_PUBLIC_SENTRY_DSN
+  ? withSentryConfig(nextConfig, {
+      // Source-map upload needs all three; missing any one downgrades to
+      // "errors arrive, stack traces are minified" rather than a failed build.
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      silent: !process.env.CI,
+      widenClientFileUpload: true,
+      tunnelRoute: "/monitoring",
+    })
+  : nextConfig;

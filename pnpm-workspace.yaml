@@ -3,12 +3,18 @@
 # list alone) makes a fresh `pnpm install --frozen-lockfile` hard-fail with
 # ERR_PNPM_IGNORED_BUILDS, which killed the CI builder runs.
 allowBuilds:
+  # Its postinstall fetches the sentry-cli binary that withSentryConfig shells
+  # out to for source-map upload. Blocked, the build still succeeds and errors
+  # still arrive - every stack trace is just minified, which is the whole
+  # reason for uploading maps.
+  '@sentry/cli': true
   core-js: true
   sharp: true
   unrs-resolver: false
 # Kept for older pnpm versions that read the approve-list instead.
 onlyBuiltDependencies:
   - sharp
+  - '@sentry/cli'
 
 # next pins postcss@8.4.31, which carries GHSA-qx2v-qp2m-jg93 (moderate).
 # Force the patched line everywhere; postcss 8.5.x is a drop-in patch series.

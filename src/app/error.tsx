@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
+import { reportBoundaryError } from "@/lib/report-boundary-error";
+
 // Global error boundary - the "unknown unknowns" net. Every dashboard data
 // provider degrades on its own (the 2026-07-20 reliability audit traced all
 // mid-setup states through every page without finding a crash path), so this
@@ -13,6 +16,8 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => reportBoundaryError(error), [error]);
+
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-6">
       <div className="max-w-md space-y-4 rounded-lg border border-neutral-800 bg-neutral-900/50 p-6 text-center">
