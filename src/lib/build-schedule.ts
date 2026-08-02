@@ -53,6 +53,62 @@ export const CADENCE_HOURS: Record<ScheduledWorkflow, number> = {
 // "done" for the rest of its cadence window.
 export const CLAIM_GRACE_HOURS = 3;
 
+// A FAILED run must not hold the cadence window. due() used to read only
+// last_run_at, so a row that says "this build failed" was arithmetically
+// identical to one that says "this build shipped" - the job went quiet for its
+// whole cadence and the next attempt was a day away.
+//
+// That is not theoretical: on 2026-08-02 seo-daily--maxpertise failed at
+// 08:53, the fix shipped at 14:20 and reached their repo, and nothing
+// re-dispatched, because the failure row still owned the window until 04:53 the
+// next morning. A paying customer sat on 8 approved ideas and 0 published pages
+// for a full day. On a product that promises a guide a day, one transient
+// failure - a GitHub blip, a cancelled runner, an npm hiccup - costs a
+// publishing day.
+//
+// 2h is short enough to recover inside the same night and long enough that a
+// genuinely broken repo retries ~10x a day rather than on every 3h dispatch
+// tick. The escalating backoff below stops a permanently broken project from
+// burning a runner minute every 2h forever: consecutive failures widen the
+// window (2h, 4h, 8h, capped at the normal cadence), so a repo that is properly
+// broken settles back to its usual once-a-day attempt and shows up as a
+// standing red banner instead of a bill.
+export const FAILURE_RETRY_HOURS = 2;
+
+// A QUOTA failure is not a broken repo - it is "come back later", and the agent
+// account it belongs to is the CUSTOMER's, not ours. Backing off on it is
+// exactly wrong: the customer's Claude/Codex window resets on a clock (the
+// message usually names it - "resets 1:50pm (UTC)"), so the right move is to
+// keep checking at the short interval until it clears, not to widen to 8h and
+// then 16h and lose the rest of their day.
+//
+// Live example this rule exists for: seo-tools--maxpertise failed twice on
+// 2026-08-02 at 12:36 and 12:37 with "You've hit your session limit · resets
+// 1:50pm (UTC)". With plain backoff that is 2 strikes -> a 4h window; the reset
+// was 70 minutes away. Escalating would have idled a paying customer's builder
+// for hours after their quota was already back.
+//
+// Matching on message text is deliberately narrow and is a HINT, not a verdict:
+// a false negative just means normal backoff, a false positive just means we
+// retry at 2h instead of 4h. Neither can lose data or double-build - the
+// builders' own gates (built-today, open PR, empty queue) make an extra attempt
+// a no-op.
+const QUOTA_HINT = /session limit|usage limit|rate.?limit|quota|too many requests|\b429\b/i;
+
+export function looksLikeQuotaFailure(errors: readonly string[] | null | undefined): boolean {
+  return (errors ?? []).some((e) => QUOTA_HINT.test(e));
+}
+
+export function failureRetryHours(
+  consecutiveFailures: number,
+  cadenceHours: number,
+  quota = false,
+): number {
+  if (quota) return Math.min(FAILURE_RETRY_HOURS, cadenceHours);
+  const widened = FAILURE_RETRY_HOURS * 2 ** Math.max(0, consecutiveFailures - 1);
+  return Math.min(widened, cadenceHours);
+}
+
 // The cron_runs job key each workflow reports under, per runner. The GitHub
 // workflows report the names they have always reported (seo-daily et al,
 // suffixed with the project slug by the deploy-check route); the in-stack
@@ -85,6 +141,39 @@ export const DISPATCH_EVENT: Record<ScheduledWorkflow, string> = {
   "geo-scan": "seo-geo-scan",
 };
 
+// How many times in a row each job has ended in a real FAILURE, newest-first.
+// Claim rows are skipped (a hand-out is not an outcome) and the count stops at
+// the first success, so a job that failed once after a healthy run scores 1 and
+// gets the shortest retry window.
+//
+// This reads cron_runs directly rather than going through getCronHealth, which
+// collapses to one row per job and so cannot see a streak. 200 rows covers the
+// four scheduled jobs of one project many times over.
+async function consecutiveFailures(jobKeys: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (jobKeys.length === 0) return out;
+  const { data, error } = await db()
+    .from("cron_runs")
+    .select("job, ok, claimed_only, created_at")
+    .in("job", jobKeys)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  // A failed read must not widen anyone's window - callers default to 1, the
+  // shortest retry, so an unreadable history errs toward trying again sooner.
+  if (error || !data) return out;
+  const settled = new Set<string>();
+  for (const row of data) {
+    const job = row.job as string;
+    if (settled.has(job) || row.claimed_only) continue;
+    if (row.ok) {
+      settled.add(job);
+      continue;
+    }
+    out.set(job, (out.get(job) ?? 0) + 1);
+  }
+  return out;
+}
+
 async function approvedCount(projectId: string, type: "guide" | "tool"): Promise<number> {
   const { count } = await db()
     .from("suggestions")
@@ -110,16 +199,31 @@ export async function dueBuildWork(
 ): Promise<ScheduledWorkflow[]> {
   const flags = effectiveAutomations(p);
   const health = await getCronHealth(p.slug);
+  const fails = await consecutiveFailures(SCHEDULED_WORKFLOWS.map(jobKey));
 
   // Due = no run row inside the cadence window, or the only row inside it is a
   // claim that outlived its grace period, meaning the runner it was handed to
-  // never actually finished it.
+  // never actually finished it, or the last real outcome was a FAILURE that has
+  // now waited out its (backing-off) retry window.
   const due = (wf: ScheduledWorkflow, cadenceOverrideHours?: number) => {
-    const row = health.find((h) => h.job === jobKey(wf));
+    const key = jobKey(wf);
+    const row = health.find((h) => h.job === key);
     if (!row) return true;
     const ageMs = Date.now() - new Date(row.last_run_at).getTime();
     if (row.claimed_only) return ageMs > CLAIM_GRACE_HOURS * 3_600_000;
-    return ageMs > (cadenceOverrideHours ?? CADENCE_HOURS[wf]) * 3_600_000;
+    const cadenceHours = cadenceOverrideHours ?? CADENCE_HOURS[wf];
+    // update_available rows are ok:false but INFORMATIONAL (a newer pipeline
+    // pack exists) - retrying a build cannot resolve one, so they must not
+    // shorten the window or every project would rebuild on every tick.
+    if (!row.ok && !row.update_available) {
+      const retryHours = failureRetryHours(
+        fails.get(key) ?? 1,
+        cadenceHours,
+        looksLikeQuotaFailure(row.errors),
+      );
+      return ageMs > retryHours * 3_600_000;
+    }
+    return ageMs > cadenceHours * 3_600_000;
   };
 
   const wanted: ScheduledWorkflow[] = [];
