@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import posthog from "posthog-js";
+import { posthogReady } from "@/lib/posthog-client";
 import { DispatchMark } from "@/components/logo";
 
 // Vercel-style navigation: an icon sidebar on desktop (Sidebar), a slide-out
@@ -394,7 +395,11 @@ function LogoutLink() {
   return (
     <a
       href="/logout"
-      onClick={() => posthog.reset()}
+      onClick={() => {
+        // No-op when analytics was declined - posthog-js is never initialised
+        // in that case, and reset() on it throws, which would break logout.
+        if (posthogReady()) posthog.reset();
+      }}
       className="flex items-center gap-3.5 rounded-lg px-3.5 py-2.5 text-[15px] text-neutral-400 transition-colors hover:bg-neutral-900 hover:text-neutral-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400"
     >
       <LogoutIcon className="h-5 w-5 shrink-0 text-neutral-500" />

@@ -1,14 +1,16 @@
-import posthog from "posthog-js";
 import * as Sentry from "@sentry/nextjs";
+
+import { startPostHog } from "@/lib/posthog-client";
 
 // Self-host installs leave the token unset - posthog-js has no way to no-op
 // itself, so skip init entirely rather than call it with an empty token.
-if (process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN) {
-  posthog.init(process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN, {
-    api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
-    defaults: "2026-05-30",
-  });
-}
+//
+// startPostHog() also refuses to init until the visitor has consented, because
+// this PostHog project does autocapture and session recording and the dashboard
+// ties both to a named account. On a first visit nothing loads here at all; the
+// banner (AnalyticsConsentBanner) calls startPostHog() again on Accept. See
+// lib/analytics-consent.ts for why Sentry below is deliberately NOT gated.
+startPostHog();
 
 // Browser-side Sentry. Same skip-when-unset rule as PostHog above and as the
 // server side in instrumentation.ts.
