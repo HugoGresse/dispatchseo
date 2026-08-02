@@ -25,6 +25,22 @@ if [ -z "$DISPATCHSEO_PULLED" ] && [ -d .git ] && command -v git >/dev/null 2>&1
   exec sh "$0"
 fi
 
+# Fail early with the real fix when docker or the compose v2 plugin is
+# missing - the raw CLI errors ("docker: 'compose' is not a docker command")
+# send people down the wrong rabbit hole. docker-compose v1 (the hyphen
+# binary) is not enough: this script uses the v2 plugin syntax throughout.
+if ! command -v docker >/dev/null 2>&1; then
+  echo "Docker isn't installed (or isn't on PATH)."
+  echo "Install it first: https://docs.docker.com/engine/install/  then re-run  sh start.sh"
+  exit 1
+fi
+if ! docker compose version >/dev/null 2>&1; then
+  echo "Docker is here, but the Compose v2 plugin isn't ('docker compose version' failed)."
+  echo "Install it: https://docs.docker.com/compose/install/linux/"
+  echo "(the legacy docker-compose v1 binary is not enough)"
+  exit 1
+fi
+
 [ -f .env ] || cp .env.docker.example .env
 
 # Notepad (and friends) save CRLF, and docker compose reads .env raw - a \r
@@ -46,6 +62,31 @@ if ! grep -q '^CRON_SECRET=..*' .env; then
   fi
   [ -n "$SECRET" ] || { echo "Could not generate CRON_SECRET (no openssl, no /dev/urandom)"; exit 1; }
   echo "CRON_SECRET=$SECRET" >> .env
+fi
+
+# A random id for the once-a-day "this install is alive" ping (see
+# docker/cron/crontab and src/lib/heartbeat.ts). It identifies this INSTALL and
+# nothing else - it is not derived from your domain, your email or your data,
+# and the ping carries only this id plus the version. Delete the line or set
+# DISPATCHSEO_TELEMETRY=off in .env to stop it.
+#
+# Written here rather than only in the database because a stack whose owner
+# never ran the setup wizard has no instance_settings row to store one in, and
+# an install that cannot produce a STABLE id has to send nothing at all - a
+# fresh random id each day would report one machine as hundreds of installs.
+# Unlike CRON_SECRET this must never abort the boot: an unusable ping is not a
+# reason to refuse to start.
+if ! grep -q '^DISPATCH_INSTALL_ID=..*' .env; then
+  if command -v openssl >/dev/null 2>&1; then
+    HEX=$(openssl rand -hex 16)
+  else
+    HEX=$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')
+  fi
+  # 32 hex chars sliced into UUID v4 shape (literal "4" for the version nibble,
+  # "a" for the variant) - the exact shape INSTALL_ID_RE validates on both ends.
+  if [ -n "$HEX" ] && [ "${#HEX}" -ge 30 ]; then
+    echo "DISPATCH_INSTALL_ID=$(echo "$HEX" | cut -c1-8)-$(echo "$HEX" | cut -c9-12)-4$(echo "$HEX" | cut -c13-15)-a$(echo "$HEX" | cut -c16-18)-$(echo "$HEX" | cut -c19-30)" >> .env
+  fi
 fi
 
 # Host port for the dashboard. An explicit DISPATCH_PORT in .env always
@@ -86,8 +127,25 @@ if [ -n "$DOMAIN" ]; then
   PROFILE="--profile domain"
   # (|| true: grep -v exits 1 when nothing survives the filter, and set -e
   # would abort the whole boot over an .env that only held APP_URL.)
-  { grep -v '^APP_URL=' .env || true; } > .env.new && mv .env.new .env
+  # DISPATCHSEO_LAST_DOMAIN records that WE wrote this APP_URL, so the
+  # else-branch below can tell "owner deleted DOMAIN, heal APP_URL" apart
+  # from "owner runs their own reverse proxy and hand-set APP_URL" - the
+  # one case that must never be overwritten (docs/vps.mdx documents it).
+  { grep -v -e '^APP_URL=' -e '^DISPATCHSEO_LAST_DOMAIN=' .env || true; } > .env.new && mv .env.new .env
   echo "APP_URL=https://$DOMAIN" >> .env
+  echo "DISPATCHSEO_LAST_DOMAIN=$DOMAIN" >> .env
+else
+  # DOMAIN was removed (firewalled 80/443 is the usual reason to back out):
+  # if APP_URL is still exactly the address the old DOMAIN run wrote, point
+  # it back at localhost - otherwise the app keeps building links to an
+  # https address caddy no longer serves. A hand-set APP_URL never matches
+  # the recorded last domain, so it is left alone.
+  LAST_DOMAIN=$(grep '^DISPATCHSEO_LAST_DOMAIN=..*' .env | tail -1 | cut -d= -f2 | tr -d '\r')
+  CUR_APP_URL=$(grep '^APP_URL=..*' .env | tail -1 | cut -d= -f2- | tr -d '\r')
+  if [ -n "$LAST_DOMAIN" ] && [ "$CUR_APP_URL" = "https://$LAST_DOMAIN" ]; then
+    { grep -v -e '^APP_URL=' -e '^DISPATCHSEO_LAST_DOMAIN=' .env || true; } > .env.new && mv .env.new .env
+    echo "APP_URL=http://localhost:$PORT" >> .env
+  fi
 fi
 
 # Prefer the prebuilt images (published to GHCR by CI) - first boot becomes
@@ -97,9 +155,20 @@ fi
 # a private repo phase. --build on the fallback keeps upgrades honest:
 # "git pull && sh start.sh" always runs the code you just pulled.
 if ! grep -q '^BUILD_FROM_SOURCE=1' .env 2>/dev/null \
-  && docker compose $PROFILE pull --quiet app builder >/dev/null 2>&1; then
+  && docker compose $PROFILE pull --quiet app builder >/dev/null; then
   docker compose $PROFILE up -d --no-build
 else
+  # Say WHY we're compiling: the silent fallback looked like a hang, and a
+  # from-source Next.js build needs far more memory than the pulled images
+  # (the documented 1 GB VPS minimum is for pulling, not compiling).
+  if ! grep -q '^BUILD_FROM_SOURCE=1' .env 2>/dev/null; then
+    echo ""
+    echo "  Couldn't download the prebuilt images (see any error above) - building"
+    echo "  from source instead. First build takes a while and needs ~4 GB of"
+    echo "  memory; on a small VPS, add swap or just re-run  sh start.sh  later"
+    echo "  to retry the download."
+    echo ""
+  fi
   docker compose $PROFILE up -d --build
 fi
 
@@ -110,11 +179,22 @@ if [ -n "$DOMAIN" ]; then
   echo "  Next step -> open  https://$DOMAIN  in your browser."
   echo '  (a fresh certificate can take a minute after DNS lands - just refresh)'
 else
-  echo "  Next step -> open  http://localhost:$PORT  in your browser."
-  echo "
-  (on a VPS? localhost means the server itself - give the dashboard a real
-   address instead: add DOMAIN=dispatch.your-domain.com to .env and re-run
-   sh start.sh. Guide: https://dispatchseo.com/docs/vps)"
+  # Two different next steps depending on where this box lives. An SSH
+  # login usually means a remote server, so lead with the VPS branch then
+  # - but always print both: sudo strips SSH_* so detection can miss.
+  LOCAL_MSG="  Installing on your own computer?
+   -> open  http://localhost:$PORT  in your browser."
+  VPS_MSG="  Installing on a VPS / cloud server?
+   -> localhost is this server, not your computer - it won't open from
+      your browser. Give the dashboard a real address instead: add
+      DOMAIN=dispatch.your-domain.com to .env, then re-run  sh start.sh
+      (HTTPS is automatic). Needs the domain's DNS A record pointing at
+      this server. Guide + a no-domain option: https://dispatchseo.com/docs/vps"
+  if [ -n "$SSH_CONNECTION" ] || [ -n "$SSH_TTY" ]; then
+    echo "$VPS_MSG"; echo; echo "$LOCAL_MSG"
+  else
+    echo "$LOCAL_MSG"; echo; echo "$VPS_MSG"
+  fi
 fi
 echo '  The setup wizard takes it from there.
 

@@ -494,7 +494,12 @@ while :; do
   # can actually execute. The backend hands out nothing outside that set, so a
   # job is never claimed (burning its cadence window) for an agent we could not
   # have run.
-  feed=$(curl -s --max-time 60 -H "Authorization: Bearer ${CRON_SECRET}" "$APP/api/builder/jobs?claim=1&agents=$AGENTS")
+  # &gh=1 declares a container-side BUILDER_GH_TOKEN, the one GitHub identity
+  # the backend cannot see - without it the backend (correctly) hands out no
+  # jobs when its own stored merge token is missing.
+  GH_FLAG=""
+  [ -n "$BUILDER_GH_TOKEN" ] && GH_FLAG="&gh=1"
+  feed=$(curl -s --max-time 60 -H "Authorization: Bearer ${CRON_SECRET}" "$APP/api/builder/jobs?claim=1&agents=$AGENTS$GH_FLAG")
   if [ -z "$feed" ] || ! echo "$feed" | jq -e . >/dev/null 2>&1; then
     log "backend not reachable yet - retrying in 60s"
     sleep 60; continue

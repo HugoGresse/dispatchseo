@@ -18,7 +18,17 @@ export async function buildsActive(): Promise<boolean> {
   const inst = (await instanceSettings()) as unknown as {
     builder_last_seen_at?: string | null;
   } | null;
-  if (inst?.builder_last_seen_at) return true;
+  // Recency-checked, not presence-checked: this used to return true on ANY
+  // stamp ever written, so one successful poll on day one latched the setup
+  // nag off forever - a builder that later died for good (stopped container,
+  // failed image pull on upgrade, crash loop) never brought it back.
+  if (
+    inst?.builder_last_seen_at &&
+    Date.now() - new Date(inst.builder_last_seen_at).getTime() <
+      EVIDENCE_WINDOW_DAYS * 86400000
+  ) {
+    return true;
+  }
   // PostgREST's like patterns inside or() use * as the wildcard.
   const { data } = await db()
     .from("cron_runs")

@@ -4,7 +4,7 @@ import { reportCronRun } from "@/lib/cron-alerts";
 import { credsForProject } from "@/lib/dataforseo";
 import { mergeToken, builderClaudeToken, builderAgentToken, builderAgentTokens, openSeoPrs } from "@/lib/github";
 import { listProjects, fetchProjectToken, effectiveAutomations } from "@/lib/projects";
-import { projectAgent, type AgentId } from "@/lib/agents";
+import { agentById, projectAgent, type AgentId } from "@/lib/agents";
 import { isCloudMode } from "@/lib/cloud";
 import { dueBuildWork, builderJobKey } from "@/lib/build-schedule";
 
@@ -96,6 +96,27 @@ export async function GET(req: Request): Promise<Response> {
     declared ? declared.split(",").map((a) => a.trim()).filter(Boolean) : ["claude"],
   );
 
+  // Whether ANY GitHub identity exists for job work: the wizard's stored
+  // merge token, or a BUILDER_GH_TOKEN on the container itself - which only
+  // the container can know about, so it declares it (?gh=1) the same way it
+  // declares its agents. Every job below starts with a token-authenticated
+  // clone, so without one there is nothing to hand out - and handing jobs out
+  // anyway is what the old flow did: the claim row burned the cadence window,
+  // the container's own gate dropped the job on the floor, and the only
+  // signal was a "stuck claim" staleness alert up to 36h later. Deliberately
+  // quiet like the missing-agent-key gate below: connect-GitHub is a named
+  // setup step with its own wizard screen and Home card. Merge sweeps are NOT
+  // gated here - run.sh already reports those loudly when tokenless, and
+  // auto-merge-on-with-no-token is a regression, not setup-in-progress.
+  const ghToken = await mergeToken();
+  const ghAvailable = Boolean(ghToken) || new URL(req.url).searchParams.get("gh") === "1";
+
+  // Hoisted out of the per-project loop: which agents this INSTANCE holds any
+  // key for. Used twice - the response's agent_tokens field, and the
+  // drifted-agent check inside the loop.
+  const agentTokens = await builderAgentTokens();
+  const anyAgentKey = Object.values(agentTokens).some(Boolean);
+
   type Job = {
     key: string;
     workflow: string;
@@ -148,20 +169,47 @@ export async function GET(req: Request): Promise<Response> {
       out.mergeSweep = { slug: p.slug, repo: p.github_repo, mcp_token: token };
     }
 
-    // From here on it is BUILD work, which does need an agent. The project's
-    // agent decides which credential is resolved, which MCP config the container
-    // writes, and which binary it runs. Resolving here rather than in the
-    // container is what keeps a mixed stack honest - one site on Claude and one
-    // on Codex both get served, and neither is handed the other's key.
+    // From here on it is BUILD work, which needs a GitHub identity (every job
+    // starts with a token-authenticated clone) - see ghAvailable above.
+    if (!ghAvailable) return out;
+
+    // ...and an agent. The project's agent decides which credential is
+    // resolved, which MCP config the container writes, and which binary it
+    // runs. Resolving here rather than in the container is what keeps a mixed
+    // stack honest - one site on Claude and one on Codex both get served, and
+    // neither is handed the other's key.
     const agent = projectAgent(p).id;
-    if (!runnable.has(agent)) return out;
-    const agentToken = await builderAgentToken(agent);
+    const agentToken = runnable.has(agent) ? await builderAgentToken(agent) : null;
     // No credential for this project's agent: leave the work unclaimed so it is
     // waiting the moment a key is pasted, instead of burning a cadence window on
-    // a run that cannot start. Deliberately quiet - an instance mid-setup has no
-    // key yet, and that is a normal state, not a regression (CLAUDE.md's
-    // setup-gate rule).
-    if (!agentToken) return out;
+    // a run that cannot start. Quiet when NO agent has a key yet - an instance
+    // mid-setup is a normal state, not a regression (CLAUDE.md's setup-gate
+    // rule), and the wizard's builder step plus Home's card own that surface.
+    // LOUD when the instance verifiably runs builds for a DIFFERENT agent:
+    // that is a site switched (or installed) onto an agent nobody gave a key,
+    // and without this its research and builds would sit undone with no
+    // cron_runs row to ever go stale - indefinite, invisible silence. One fail
+    // row per due job; the row stamps the cadence clock due() reads, so this
+    // re-alerts once per cadence window, not once per 10-minute poll.
+    if (!agentToken) {
+      if (claim && (declared !== null || anyAgentKey)) {
+        const missing = agentById(agent).displayName;
+        const wanted = await dueBuildWork(p, (wf) => builderJobKey(wf, p.slug));
+        for (const wf of wanted) {
+          await reportCronRun(
+            builderJobKey(wf, p.slug),
+            {
+              error:
+                `${p.slug} is set to build with ${missing}, but no ${missing} credential is ` +
+                `available to the builder. Paste one on Home's automatic-builds card or ` +
+                `Settings - or switch the site's agent from the top bar.`,
+            },
+            true,
+          );
+        }
+      }
+      return out;
+    }
 
     // Defense in depth: this route feeds the self-hosted docker builder, which
     // must never carry the cloud platform's bundled DataForSEO credentials -
@@ -229,7 +277,7 @@ export async function GET(req: Request): Promise<Response> {
   // overrides it.
   return Response.json({
     poll_seconds: 600,
-    gh_token: (await mergeToken()) ?? null,
+    gh_token: ghToken ?? null,
     // The wizard-stored Claude token (0037), so the builder needs no .env
     // edit. The container's own CLAUDE_CODE_OAUTH_TOKEN env still wins in
     // run.sh; this is the fallback it reaches for when that env is unset.
@@ -243,7 +291,7 @@ export async function GET(req: Request): Promise<Response> {
     // Every agent this instance holds a key for. The container uses this to
     // decide what to DECLARE on its next claiming poll (?agents=), which closes
     // the loop: it only claims work it can run.
-    agent_tokens: await builderAgentTokens(),
+    agent_tokens: agentTokens,
     jobs,
     merge_sweeps: mergeSweeps,
   });
