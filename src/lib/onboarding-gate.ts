@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { db } from "./db";
 import { listProjects } from "./projects";
 import { isCloudMode } from "./cloud";
-import { scopedProjects } from "./active-project";
+import { scopedProjectsChecked } from "./active-project";
 
 // "The wizard is a must": the dashboard stays locked until the OWNER'S side
 // of setup is genuinely done. On self-host that means the pipeline install
@@ -35,7 +35,12 @@ export const hasConfiguredProject = cache(async (): Promise<boolean> => {
   // a run that was never fired (2026-07-28). Screenless rows still pass on a
   // repo alone: same pre-0030 grandfathering as self-host below.
   if (isCloudMode()) {
-    const mine = await scopedProjects();
+    const { projects: mine, degraded } = await scopedProjectsChecked();
+    // Fail OPEN on a read error, the way the self-host branch below already
+    // does. Answering "false" here bounces a fully-onboarded customer into the
+    // add-a-site wizard because of a transient blip; answering "true" lets the
+    // page render and surface the real error, which is recoverable by refresh.
+    if (degraded) return true;
     return mine.some(
       (p) =>
         p.pipeline_installed_at != null ||

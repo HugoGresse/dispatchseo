@@ -349,6 +349,23 @@ export async function listProjects(): Promise<Project[]> {
 // funnels that to the onboarding wizard. Requires migration 0031; a missing
 // column comes back as an empty list, never a cross-tenant leak.
 export async function listProjectsForOwner(userId: string): Promise<Project[]> {
+  return (await listProjectsForOwnerChecked(userId)).projects;
+}
+
+// The checked form, mirroring listProjectsChecked: "this account owns nothing"
+// and "we could not read this account" are DIFFERENT ANSWERS, and collapsing
+// them into [] was a customer-facing lie. A single transient read error on a
+// paying customer with a live site sent them to /onboarding, and if the
+// subscriptions read blipped too, on to /plans - the pricing page - as though
+// they had never signed up. The crons have had this distinction since 0004;
+// the cloud read path was the one place still throwing it away.
+//
+// A genuinely absent column/table (pre-0031) is NOT degraded: that is the
+// correct "no projects" answer during first boot, exactly as in
+// listProjectsChecked.
+export async function listProjectsForOwnerChecked(
+  userId: string,
+): Promise<{ projects: Project[]; degraded: string | null }> {
   const { data, error } = await selectProjects((cols) =>
     db()
       .from("projects")
@@ -356,8 +373,16 @@ export async function listProjectsForOwner(userId: string): Promise<Project[]> {
       .eq("owner_user_id", userId)
       .order("created_at", { ascending: true }),
   );
-  if (error || !data) return [];
-  return data as unknown as Project[];
+  if (error) {
+    if (/does not exist|could not find|PGRST205|42P01/i.test(error.message)) {
+      return { projects: [], degraded: null };
+    }
+    console.error(
+      `[projects] listProjectsForOwner failed for ${userId} on a non-schema error: ${error.message}`,
+    );
+    return { projects: [], degraded: error.message };
+  }
+  return { projects: (data ?? []) as unknown as Project[], degraded: null };
 }
 
 export async function getProjectBySlug(slug: string): Promise<Project | null> {

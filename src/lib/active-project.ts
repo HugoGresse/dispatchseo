@@ -5,7 +5,7 @@ import {
   DEFAULT_PROJECT_ID,
   getProjectBySlug,
   listProjects,
-  listProjectsForOwner,
+  listProjectsForOwnerChecked,
   type Project,
 } from "./projects";
 import { isCloudMode } from "./cloud";
@@ -23,13 +23,26 @@ export const PROJECT_COOKIE = "dash_project";
 // gates / page call this - they all did, and each call was its own DB
 // round-trip (plus a remote auth check in CLOUD_MODE) before the dedupe.
 export const scopedProjects = cache(async (): Promise<Project[]> => {
-  if (isCloudMode()) {
-    const user = await currentUser();
-    if (!user) return [];
-    return listProjectsForOwner(user.id);
-  }
-  return listProjects();
+  return (await scopedProjectsChecked()).projects;
 });
+
+// Same query, but it also says whether the read FAILED as opposed to coming
+// back genuinely empty. Only getActiveProject and the onboarding gate need
+// this: they are the two places that turn "no projects" into a redirect, and
+// redirecting a paying customer to the pricing page because Supabase hiccuped
+// is the worst possible reading of a transient error.
+export const scopedProjectsChecked = cache(
+  async (): Promise<{ projects: Project[]; degraded: string | null }> => {
+    if (isCloudMode()) {
+      const user = await currentUser();
+      if (!user) return { projects: [], degraded: null };
+      return listProjectsForOwnerChecked(user.id);
+    }
+    // Self-host keeps the tolerant path: listProjects always yields at least the
+    // synthetic fallback, so it never reaches a redirect on emptiness anyway.
+    return { projects: await listProjects(), degraded: null };
+  },
+);
 
 // Which project the dashboard is looking at, or null when a cloud account
 // has none yet. The switcher writes the cookie; every screen reads it here.
@@ -73,6 +86,14 @@ export const getActiveProjectOrNull = cache(async (): Promise<Project | null> =>
 export async function getActiveProject(): Promise<Project> {
   const p = await getActiveProjectOrNull();
   if (!p) {
+    // "We could not read your sites" must never be answered with "you have no
+    // sites, here is our pricing". Throwing lands on the error boundary, whose
+    // retry actually works the moment the blip passes - a redirect to /plans
+    // just tells a paying customer their account is gone.
+    const { degraded } = await scopedProjectsChecked();
+    if (degraded) {
+      throw new Error("We couldn't load your sites just now - refresh to try again.");
+    }
     const { getSubscription, isActive } = await import("./billing");
     const user = await currentUser();
     const sub = user ? await getSubscription(user.id) : null;
