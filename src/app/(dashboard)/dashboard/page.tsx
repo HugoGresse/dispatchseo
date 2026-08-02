@@ -66,6 +66,7 @@ import { DockerAccessTip } from "@/components/docker-access-tip";
 import { ChromeExtensionTip } from "@/components/chrome-extension-tip";
 import { FirstRunBackground } from "@/components/first-run-background";
 import AiVisibilitySection from "./ai-visibility-section";
+import { looksLikeQuotaFailure } from "@/lib/build-schedule";
 
 export const dynamic = "force-dynamic";
 
@@ -413,7 +414,23 @@ export default async function Home() {
     .filter((h) => !isCloudMode() || h.job.includes(`--${project.slug}`))
     .filter((h) => !h.ok || h.stale);
   const updateNotices = isCloudMode() ? [] : jobIssues.filter((h) => h.update_available);
-  const cronIssues = jobIssues.filter((h) => !h.update_available);
+
+  // Agent-quota waits split off the same way, and for the same reason: the
+  // customer's own Claude/Codex account hitting its usage window is a NORMAL
+  // state of a bring-your-own-credential product, not a fault in theirs or
+  // ours. Red-boxing it was actively harmful - the failure box offers "Copy fix
+  // prompt", and pasting that into their agent spends more of the quota they
+  // just ran out of on a problem no agent can fix, while "Mark fixed" writes an
+  // ok row that pushes their next build out by a full cadence.
+  //
+  // `stale` still wins: a job that is BOTH quota-blocked AND overdue has stopped
+  // running for longer than its schedule allows, which is a real problem again.
+  const quotaWaits = jobIssues.filter(
+    (h) => !h.update_available && !h.ok && !h.stale && looksLikeQuotaFailure(h.errors),
+  );
+  const cronIssues = jobIssues.filter(
+    (h) => !h.update_available && !quotaWaits.some((q) => q.job === h.job),
+  );
 
   // The last window before bundled DataForSEO runs out. Exhaustion itself is
   // already owned by the needsUsageLimit setup card below - this is the part
@@ -759,6 +776,31 @@ export default async function Home() {
                 </>
               ) : null}
               .
+            </p>
+          </div>
+        ) : null}
+        {quotaWaits.length > 0 ? (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
+            <p className="font-medium text-amber-200">
+              Waiting on your coding agent&apos;s usage limit
+            </p>
+            <p className="mt-1 text-amber-300/90">
+              Your agent account has hit its limit, so {quotaWaits.length === 1 ? "a build is" : "some builds are"}{" "}
+              paused. This resumes on its own once the limit resets - there is nothing to fix, and
+              no need to mark anything.
+            </p>
+            <ul className="mt-2 space-y-0.5 text-amber-300/90">
+              {quotaWaits.map((h) => (
+                <li key={h.job}>
+                  <span className="break-words font-mono">{h.job}</span>
+                  {h.errors[0] ? ` - ${h.errors[0]}` : null}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-amber-300/70">
+              Hitting this often means the site is producing more than the plan on that account
+              covers - upgrading it, or switching to a different agent in Settings, gives the
+              builders more room.
             </p>
           </div>
         ) : null}
