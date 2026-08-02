@@ -100,6 +100,9 @@ headlessly and need a real API key, which is its own step further down.
 ## Tell DispatchSEO you're on Codex
 
 Open your dashboard, go to **Settings → Coding agent**, and pick **Codex**.
+The coding-agent pill in the top bar, next to the Semi/Auto switch, does
+the same thing from any page: click it, then **Add agent** if Codex isn't
+on the list yet.
 
 That one switch is what the scheduled builders read. It does not affect
 anything you do at a keyboard: whatever agent you have connected over MCP
@@ -154,9 +157,19 @@ Where it goes depends on where your builds run:
   minutes. Setting `OPENAI_API_KEY` in your `.env` works too and overrides
   the stored value, which is the path for scripted installs.
 
+On a self-hosted install, one paste now covers both of those places. Since
+2026-08-02, pasting on the dashboard also pushes the same value to every
+connected repo's `OPENAI_API_KEY` Actions secret, in whichever order you do
+things - paste first and connect GitHub later, or the other way round. That
+closes a real bug: the paste used to reach only the docker builder, so the
+GitHub-scheduled workflows read nothing and died within seconds
+complaining about a missing token the owner had genuinely pasted. You only
+need `gh secret set` by hand if the sync couldn't reach a repo, which needs
+a GitHub token connected first - reconnect, then re-paste to retry.
+
 Claude Code's equivalent is `CLAUDE_CODE_OAUTH_TOKEN`, in exactly the same
-two places. The names are different because the credentials are different;
-nothing else about the wiring changes.
+two places, with the same automatic sync. The names are different because
+the credentials are different; nothing else about the wiring changes.
 
 Both the install script and the dashboard verify a pasted key with a real
 inference call before storing it, rather than a shape check. A stored key

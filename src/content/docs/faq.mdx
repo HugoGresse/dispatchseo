@@ -170,7 +170,10 @@ variables, or `CODEX_MODEL` in your `.env` on a Docker install.
 
 Self-hosted: entirely in the Postgres container the install creates on
 your own machine, reachable only over Docker's internal network - never
-Supabase, never our servers. Hosted (dispatchseo.com): Supabase,
+Supabase, never our servers, aside from a once-a-day anonymous install
+ping carrying a random id and your version number and nothing else (see
+[Security and your data](/docs/security#telemetry-on-a-self-hosted-install),
+which also covers turning it off). Hosted (dispatchseo.com): Supabase,
 operated by the maintainer. Either way, your site's actual content lives
 in your own GitHub repo, not in DispatchSEO's database. Full detail on
 [Security and your data](/docs/security).

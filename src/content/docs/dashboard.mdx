@@ -203,8 +203,32 @@ whether OAuth is ever set up.
 "What's new" opens the public changelog in a new tab rather than a page
 inside the dashboard - it's the same list the `get_changelog` MCP tool
 returns and the `/changelog` page anyone can read. A banner on the
-dashboard itself announces an unseen release the first time you load a
-page after it ships.
+dashboard itself announces the rare release worth stopping for - a new
+control on your screen, something you should act on - the first time you
+load a page after it ships. Most releases don't raise one: they go out
+near-daily, and a banner every time would only train you to dismiss it
+unread. They still land on the changelog.
+
+## Coding agent
+
+<Pill tone="neutral">Topbar</Pill>
+
+The pill next to the Semi/Auto switch shows which coding agent runs this
+project's scheduled builds. Click it for a dropdown of the agents you've
+already added, each with a one-click switch. Agents you haven't set up
+aren't listed as though you should be using them - **Add agent** opens a
+picker instead, you paste that agent's key, it's verified against the
+provider before anything is stored, and only then does the agent join the
+list. Each entry carries its credential status: ready, needs a key, or -
+when the check genuinely couldn't run, which on cloud means a lapsed
+GitHub App install - unknown, with a reconnect prompt rather than a guess.
+
+Switching only changes who runs the *unattended* builds; whatever agent
+you have connected over MCP keeps driving everything interactively. It
+takes effect on the next scheduled run, with no change to your repo. The
+same controls, with more room, live on Settings below - and the agent
+over MCP can do it too, with `set_agent` (see
+[MCP tools](/docs/mcp-tools)).
 
 ## Settings
 
@@ -213,8 +237,12 @@ page after it ships.
 `/settings` shows the account you're signed in to, then this project's
 facts (name, domain, GitHub repo, Search Console property, DataForSEO
 connection, publish mode, site-launched date - several of these are
-editable inline), the keyword data source picker, a Claude Code token
-rotation control (cloud projects with the GitHub App installed), the
+editable inline), the keyword data source picker, a **Coding agent**
+section (a switch card per agent you've added, plus a tabbed key box for
+pasting a Claude Code token or an OpenAI key - each verified before it's
+stored, with a green check on every agent whose key is confirmed in
+place; the `?credential=` links the topbar switcher hands you open
+straight onto the right tab), the
 project's MCP key with its ready-to-paste connect command, a cron key
 (self-host only - the key your scheduled jobs use to call this backend),
 and a danger zone for deleting the project or the whole account. The home
@@ -226,7 +254,10 @@ account and a way to close it.
 <Pill tone="violet">Cloud only</Pill>
 
 `/billing` shows your current plan, the three tiers with their site
-limits, a DataForSEO usage meter for bundled-plan customers (with
+limits, and the sidebar's Billing row carries a short badge of that plan
+- Starter, Growth, Scale, or Free trial during your first seven days -
+so you can see what you're on from any page without coming here. It also
+shows a DataForSEO usage meter for bundled-plan customers (with
 a note if usage has slowed or capped rank checks for the rest of the
 period), and links out to the Polar-hosted checkout and billing portal for
 invoices, payment method, and cancellation. Self-hosted deployments have no

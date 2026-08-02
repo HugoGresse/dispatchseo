@@ -97,14 +97,21 @@ There is no user auth — every caller is trusted server code (MCP tools + crons
 Tables have RLS enabled with **zero policies**, so only the service-role key can
 touch them. **Never import `db.ts` into anything that ships to the browser.**
 
-### Auth (single user, no middleware)
+### Auth (single user, gated at the edge)
 
 - **Dashboard:** password gate in `dashboard-auth.ts`. Login is a server action
   that sets an HMAC-of-a-fixed-message cookie (`dash_auth`) keyed by
   `DASHBOARD_PASSWORD`; changing the password invalidates all sessions. There is
-  **no `middleware.ts`** — every protected page checks
-  `isValidCookie(jar.get("dash_auth")?.value)` itself and `redirect("/login")`.
-  New dashboard pages must add this guard.
+  no `middleware.ts` — its Next 16 successor is **`src/proxy.ts`**, which gates
+  every non-allowlisted path on cookie *presence* (`dash_auth`, or a Supabase
+  `sb-*-auth-token` in `CLOUD_MODE`) and 307s the rest to `/login`. Presence is
+  only routing: every protected page still checks
+  `isValidCookie(jar.get("dash_auth")?.value)` itself and `redirect("/login")`,
+  so a forged cookie renders nothing. New dashboard pages must add that guard —
+  and **any new route a logged-out visitor must reach (a public page, a script,
+  an image) has to be added to `src/proxy.ts`'s allowlist or it 307s to `/login`
+  in production.** Self-host rarely notices (no `LANDING_ENABLED`); cloud always
+  does.
 - **Crons:** `checkCron()` requires `Authorization: Bearer ${CRON_SECRET}`.
 - **MCP:** per-project `mcp_token` (or legacy `MCP_API_KEY` → ClockedCode).
 
@@ -125,6 +132,11 @@ kill the rest — then returns **HTTP 500 if anything failed** so the Vercel run
 log surfaces it. Every route also calls `reportCronRun()` (`cron-alerts.ts`):
 runs log to `cron_runs`, failures show on the dashboard Home banner and the
 `get_cron_health` MCP tool, and email the owner via Resend (debounced per job).
+One deliberate exception: **`heartbeat`** is a single global ping to
+`dispatchseo.com` (anonymous self-host install count), not a per-project loop,
+and skips `reportCronRun()` on purpose — a failed heartbeat costs this project
+one data point and costs the owner nothing, so it must never reach the
+banner/email rail (`src/lib/heartbeat.ts`).
 
 **Post-deploy smoke test:** every push to main triggers
 `.github/workflows/deploy-check.yml`, which polls
@@ -181,7 +193,11 @@ re-snapshot.
   action and leave MCP behind. This does not license research/generation tools
   (see the MCP section); the parity rule is about *state* — reads, writes,
   approvals, ordering, config. If a surface genuinely can't have a counterpart
-  (e.g. a purely visual chart), say so in the PR rather than skipping quietly.
+  (e.g. a purely visual chart, or operator-only telemetry with no per-tenant
+  state and nothing an agent should read or set, like the self-host heartbeat),
+  say so in the PR rather than skipping quietly. The mirror of this rule:
+  a tool that exists must be listed in `src/content/docs/mcp-tools.mdx` — an
+  undocumented tool is one the agent never learns it has.
 - **Migrations** (`supabase/migrations/NNNN_*.sql`) are numbered, additive, and
   zero-downtime — new columns use `ADD COLUMN … DEFAULT <clockedcode id>` so
   in-flight code keeps writing valid rows. Add a new numbered file rather than

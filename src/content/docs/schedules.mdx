@@ -273,6 +273,15 @@ possible on a machine with no public URL at all.
 <MetaItem label="If it fails">Same banner/email/`get_cron_health` rails as every other job on this page. `docker compose logs cron` shows every hit as it fires.</MetaItem>
 </Meta>
 
+The crontab fires one more job the cloud schedule has no equivalent for:
+a **heartbeat** at 05:23 UTC, the anonymous install ping covered in
+[Security and your data](/docs/security#telemetry-on-a-self-hosted-install).
+Unlike everything else on this page, it deliberately does **not** call
+`reportCronRun()` - a failed ping costs this project one data point and
+costs you nothing, so it never raises a banner, an email, or a
+`get_cron_health` entry. `DISPATCHSEO_TELEMETRY=off` in your `.env`
+turns it off for good.
+
 The **cron container** (`docker/cron/crontab`) deliberately does **not**
 schedule `weekly-opportunities`, even though it's part of the same file:
 that route is retired, hard-scoped to a single project, duplicates

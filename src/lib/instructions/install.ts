@@ -113,24 +113,28 @@ Inspect this repo and adjust these known spots before committing:
   and skip the smoke/canary dispatches.
 
 - **Package manager / Node setup** in seo-daily.yml, seo-tools.yml, and
-  seo-tool-validate.yml: the pnpm/action-setup + cache steps and every
-  \`pnpm install/build/start\` become this repo's real commands (npm, yarn,
-  bun - and the Node version the repo actually uses). Two rules:
-  - **Leave the pnpm setup steps ALONE.** They ship as TWO mutually-exclusive
-    steps guarded by a \`pnpm_pin\` check that resolves at RUN time in this
-    repo: one for a repo with a \`packageManager\` pin (no \`version:\` input,
-    because the action reads the pin) and one for a repo without (\`version:
-    11\`). There is nothing to adapt here, so there is nothing to get wrong.
-    Do NOT delete the \`version:\` input, do NOT collapse the two steps into
-    one, and do NOT add a \`version:\` to the unconditional path. This exact
-    edit is what killed the builder in every installed repo carrying a pin on
-    2026-07-30: \`pnpm/action-setup\` hard-errors when a \`version:\` input
-    sits beside a \`packageManager\` pin (plain string compare, "11" vs
-    "11.5.2" included), and it died at step 2 - BEFORE the step that reports
-    failures - so it failed silently. If a repo uses npm/yarn/bun instead,
-    replace BOTH steps together with that tool's single setup step.
-  - pnpm 11 requires Node 22+; keep node-version in sync with what the repo
-    really builds on.
+  seo-tool-validate.yml: **there is nothing here for you to adapt, for ANY
+  package manager.** As of 2026-08-02 a \`Detect this repo's package manager\`
+  step (id \`pkg\`) resolves it at RUN time in this repo - \`packageManager\`
+  pin first, then lockfile (pnpm-lock.yaml > package-lock.json > yarn.lock >
+  bun.lock) - and every step after it is gated on its outputs
+  (\`steps.pkg.outputs.pm\` / \`pnpm_pinned\` / \`cache\`). pnpm's two blessed
+  shapes, npm, yarn, Bun, and "no package.json at all" each have their own
+  guarded step already.
+  - **Leave every one of those steps exactly as shipped** - do not edit,
+    reorder, collapse, delete or replace them, whether this repo is pnpm or
+    not. An earlier version of this playbook told you to replace the pnpm
+    setup steps with the repo's own tool when it wasn't pnpm; that is now
+    WRONG - the template does it itself, and a hand-edit fights the
+    detection. Two incidents are why the rule is this absolute: 2026-07-30, a
+    missed install-time edit killed the builder in every repo carrying a
+    \`packageManager\` pin, at step 2, BEFORE the step that reports failures,
+    so it died silently; 2026-08-02, the first real cloud customer's
+    npm + Vite site died 25 seconds into every build because the pack assumed
+    pnpm.
+  - The one thing still worth checking: **Node version.** \`node-version: 22\`
+    is hardcoded (pnpm 11 needs 22+). If this repo genuinely builds on a
+    different version, change it in the "Set up Node" step.
 - **Prove the install step exactly the way CI will run it - BEFORE the PR
   opens.** Run the repo's install command fresh with the workflow's flags
   (\`pnpm install --frozen-lockfile\`, \`npm ci\`, ...) and require exit 0.

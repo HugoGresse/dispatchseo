@@ -121,6 +121,11 @@ it to, and nothing else:
 - **DataForSEO or SerpApi**, if you've connected either, for keyword
   data.
 - **Resend**, if you've set up failure-alert email.
+- **`dispatchseo.com`** - once a day, the anonymous install ping
+  described under
+  [Telemetry on a self-hosted install](#telemetry-on-a-self-hosted-install)
+  below: a random id and your version number, nothing else. Turn it off
+  with `DISPATCHSEO_TELEMETRY=off`.
 
 That's the complete list. Your Postgres data itself never leaves the
 machine - it isn't among the calls above, and it can't be, since
@@ -166,9 +171,11 @@ them is safe to paste into a chat, a screenshot, or a public issue. The
 OpenAI key deserves one extra habit: when you stop using a project, revoke
 the key at the provider too, not just here.
 
-## No telemetry on a self-hosted install
+## Telemetry on a self-hosted install
 
-Self-hosted installs never initialize PostHog (the product analytics
+Two different things share that word, and they're worth telling apart.
+
+**Product analytics: none.** Self-hosted installs never initialize PostHog (the product analytics
 DispatchSEO's own team uses for the cloud service). The client-side
 init code checks for a project token before calling `posthog.init()` at
 all and skips entirely when it's unset; the server-side helpers no-op
@@ -182,6 +189,21 @@ telemetry (`NEXT_TELEMETRY_DISABLED=1`). Vercel's page-view widget
 (`<Analytics />`) is present in every build but only sends data on
 Vercel's own infrastructure; on a self-hosted install it requests a
 script from your own server, gets a 404, and stops there.
+
+**The one exception: a daily install ping.** Once a day, at 05:23 UTC,
+your install POSTs `dispatchseo.com` two fields - a random id generated
+on your own machine at first boot, and the version you're running. That
+is the whole payload: no domain, no email, no keywords, no site or
+Search Console data, no tokens, and the id isn't derived from any of
+them. It exists because nothing else can answer "how many people
+actually run this" - clone counts and image pulls measure download
+attempts, and one person re-running `start.sh` looks identical to ten
+separate installs. To turn it off, put `DISPATCHSEO_TELEMETRY=off` in
+your `.env` and re-run `sh start.sh`; nothing else changes. The code is
+[`src/lib/heartbeat.ts`](https://github.com/NeoZi12/dispatchseo/blob/main/src/lib/heartbeat.ts)
+if you'd rather read it than take our word for it, and
+[Environment variables](/docs/environment-variables) documents both
+settings involved.
 
 ## Reporting a vulnerability
 

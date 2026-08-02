@@ -129,7 +129,7 @@ docker compose down -v && sh start.sh
 ## Nothing is being built
 
 <Symptom error="The builder never opens a pull request">
-**What it means.** Almost always one of three things, and the logs say which:
+**What it means.** Almost always one of the following, and the logs say which:
 `docker compose logs builder`.
 
 **Fixes:**
@@ -138,7 +138,10 @@ docker compose down -v && sh start.sh
    `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`) for Claude Code
    projects, `OPENAI_API_KEY` (from platform.openai.com/api-keys) for Codex
    projects. Easiest is pasting it in the credential box on Settings, which
-   verifies it before storing; `.env` works too.
+   verifies it before storing; `.env` works too. You don't have to spot this
+   in the logs any more: a job that comes due with no credential for its
+   agent now writes a failed run - red banner on Home, and an email if you've
+   set alerts up - naming what's missing, instead of being skipped in silence.
 2. **The credential got line-wrapped on paste.** This one is nasty because it
    looks fine. Terminals wrap long values, and copying can bring a real newline
    with it, which silently invalidates them. Re-copy it in one piece and check
@@ -151,6 +154,12 @@ docker compose down -v && sh start.sh
    A model 404 is the same family: builds default to `gpt-5`, and some
    accounts can't serve it - set `CODEX_MODEL=` in `.env` (or the
    `SEO_CODEX_MODEL` repo variable on GitHub-Actions installs).
+5. **Cloud only - the repo won't let Actions open pull requests.** The
+   DispatchSEO GitHub App deliberately can't change your repo's own settings,
+   so this one is yours to flip: repo **Settings → Actions → General → "Allow
+   GitHub Actions to create and approve pull requests."** The onboarding
+   finale names it with a direct link when it applies, and re-checks by
+   itself once you turn it on.
 </Symptom>
 
 <Symptom error="user cancelled MCP tool call (Codex)">

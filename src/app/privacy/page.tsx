@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description: "What data DispatchSEO collects, how it is used, and how to remove it.",
 };
 
-const EFFECTIVE = "July 22, 2026";
+const EFFECTIVE = "August 2, 2026";
 
 export default function PrivacyPage() {
   return (

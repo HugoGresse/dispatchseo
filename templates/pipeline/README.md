@@ -14,7 +14,10 @@ hidden directories (`.github/`, `.claude/`), so use `ls -a`.
 - Connected repos (including this repo's own dogfood copies in
   `.github/workflows/`) are *consumers*: a fix proven in one of them must be
   ported into the template here, or new installs will not get it.
-- Stack-specific spots (pnpm vs npm, content dirs, dev port, public env
-  placeholders) are intentionally reference-stack defaults - the install
-  playbook (`src/lib/instructions/install.ts`) tells the agent to adapt them
-  to the target repo.
+- Stack-specific spots (content dirs, dev port, public env placeholders) are
+  intentionally reference-stack defaults - the install playbook
+  (`src/lib/instructions/install.ts`) tells the agent to adapt them to the
+  target repo. The package manager is the one exception: since 2026-08-02 the
+  three build workflows detect it themselves at run time (a `Detect this
+  repo's package manager` step), so it is *not* an install-time adaptation -
+  the playbook tells the agent to leave those steps alone.

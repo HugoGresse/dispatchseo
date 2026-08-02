@@ -103,6 +103,26 @@ also in [`LATER.md`](../LATER.md).
 | Conditional `dataforseo` block in `mcp-ci.json` | **Fixed 2026-07-20** | `getPipelinePack()` now strips the `dataforseo` server from `.github/mcp-ci.json` at serve time for projects without DataForSEO credentials (own creds, or env fallback for the default project) - free-mode installs never ship a stdio server wired to blank secrets. |
 | `indexnow.yml` | Deferred | Tracked in [`LATER.md`](../LATER.md) ("IndexNow workflow in the pipeline pack"). |
 
+Audit run 2026-08-02 (4 parallel agents: builders, self-host, onboarding,
+pipeline), plus the first outside self-host install the same day - which
+supplied two of these rows the audit had not reached. Rows marked **Fixed**
+landed the same day; **Deferred** rows are tracked here and in
+[`LATER.md`](../LATER.md).
+
+| Finding | Status | Note |
+| --- | --- | --- |
+| Jobs feed handed out work the container had no identity to execute | Fixed | The feed now withholds jobs from a site with no stored merge token and no container-declared `BUILDER_GH_TOKEN` (`&gh=1`). A claim the container would then drop burned the cadence window and read as a stuck claim for up to 36h. |
+| A site pointed at an agent nobody gave a key to was skipped silently | Fixed | It now writes a fail row per due job, self-debounced by the cadence clock, so there is a `cron_runs` row to go stale and alert on instead of nothing at all. |
+| `buildsActive()` disabled the automatic-builds nag permanently | Fixed | Now recency-checked (14 days); one successful check-in no longer switches the reminder off forever. |
+| `start.sh` had no preflight and no way back from `DOMAIN` | Fixed | Docker + Compose-v2 preflight names the real fix instead of surfacing a cryptic CLI error; the from-source fallback says why it fell back and what that needs; removing `DOMAIN` heals `APP_URL` back to localhost on the next start, leaving hand-set reverse-proxy URLs untouched. |
+| A finished cloud install could fail to stamp itself installed | Fixed | `install-reconcile.ts` self-heals from its own evidence (saved site profile + a passing `verifyPipelinePrereqs`) rather than waiting on the setup agent's final `mark_pipeline_installed`, which sits at the end of a run the platform doesn't control. Research and daily builds used to never start. |
+| `seo-tool-validate`'s readiness probe demanded an exact 200 from `/` | Fixed | Any site whose root redirects - login bounce, locale bounce, a marketing root that 30x's - failed the wait loop and stranded the tool PR unreviewed until auto-merge gave up. Readiness is not correctness: the loop now only waits out curl's `000`. Fixed in `templates/pipeline/` too, and `pipeline-pack.json` regenerated. |
+| The three build workflows hardcoded `pnpm` | Fixed | Two mutually-exclusive `if:` steps resolve the repo's package manager at run time, per the conventions rule that no template may depend on an install-time edit whose omission is fatal. |
+| Third-site GitHub cost acknowledgement could fail silently | Fixed | `recordGithubCostAck` swallowed write errors, then `createProjectCore` re-checked the gate on submit and refused - walking the owner into a dead end over a note they had just answered. It now returns false and the step says what happened. |
+| Self-host builders read a repo secret the wizard never wrote | Fixed | GitHub-scheduled workflows read a **repo** secret; the wizard paste stored an **instance** credential, and with no GitHub App on self-host nothing copied it across, so workflows died in seconds over a token the owner had genuinely pasted. Pasting now syncs to every connected repo's Actions secret (and connecting a repo later pushes stored credentials to it), and `seo-dispatch` checks the secret before waking a workflow rather than dispatching one born dead. |
+| Trend radar needs a public URL but only says so after "Scan now" | Deferred | Tracked in [`LATER.md`](../LATER.md). |
+| Wizard finale doesn't verify the first research run landed | Deferred | Tracked in [`LATER.md`](../LATER.md); the builder fail-rows above cover the loud half. |
+
 ## How to add a new automation
 
 Every new cron, GitHub workflow, or scheduled job in this codebase ships with

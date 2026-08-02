@@ -35,6 +35,14 @@ Then the finale installs everything itself and shows live progress until
 your site's first data lands. Keyword data is included in your plan -
 there is nothing to set up for it.
 
+There is one thing the App can't do for you. It deliberately holds no
+permission to change your repo's own settings, and some repos have
+GitHub's "Allow GitHub Actions to create and approve pull requests"
+turned off - which stops DispatchSEO opening the pull requests it
+publishes through. When that's the case, the finale says so with a direct
+link to the setting. Flip it once; the checklist re-checks on its own and
+unblocks, so there's nothing to come back and confirm.
+
 The rest of this page describes the **self-hosted** wizard, which has a
 few more steps because your own install does the work the platform does
 on the hosted version.
