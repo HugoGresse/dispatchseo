@@ -20,6 +20,7 @@ import {
 } from "@/components/client";
 import { GhTokenConnect } from "@/components/gh-token-connect";
 import { BuilderTokenConnect } from "@/components/builder-token-connect";
+import { DispatchingInline } from "@/components/dispatching";
 import { IdeaCard } from "@/components/idea-card";
 import { TrafficByPage } from "@/components/seo-cards";
 import { TrendScanButton, TrendScanPoller, TrendScanSweep } from "@/components/trend-scan";
@@ -280,16 +281,21 @@ async function ActivitySection({
 
 // Placeholder that reserves the same two-column shape the real section takes,
 // so streaming it in doesn't shove the page around underneath the reader.
+// The inline dispatcher above it says which of the two it is: a section still
+// on its way, not an empty one.
 function SectionSkeleton({ rows = 3 }: { rows?: number }) {
   return (
-    <div className="grid items-start gap-4 [&>*]:min-w-0 lg:grid-cols-2">
-      {[0, 1].map((col) => (
-        <div key={col} className="space-y-2 rounded-xl bg-neutral-900 p-4">
-          {Array.from({ length: rows }).map((_, i) => (
-            <div key={i} className="h-4 animate-pulse rounded bg-neutral-800" />
-          ))}
-        </div>
-      ))}
+    <div className="space-y-3">
+      <DispatchingInline />
+      <div className="grid items-start gap-4 [&>*]:min-w-0 lg:grid-cols-2">
+        {[0, 1].map((col) => (
+          <div key={col} className="space-y-2 rounded-xl bg-neutral-900 p-4">
+            {Array.from({ length: rows }).map((_, i) => (
+              <div key={i} className="h-4 animate-pulse rounded bg-neutral-800" />
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

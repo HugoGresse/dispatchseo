@@ -73,6 +73,13 @@ export type ChangelogEntry = {
 // this list - it exists so that writing the note down doesn't ping anyone.
 export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
+    kind: "improved",
+    text:
+      "Every dashboard screen now says \"Loading\" while it loads, with the dispatcher at his " +
+      "desk on top of the grey placeholder boxes - the same one the setup wizard shows. He " +
+      "wears your site's agent colours: clay for Claude Code, white for Codex.",
+  },
+  {
     kind: "fixed",
     text:
       "Tool PRs no longer get stuck unreviewed on sites whose home page redirects - an app " +
