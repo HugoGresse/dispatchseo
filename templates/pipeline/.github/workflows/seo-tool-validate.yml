@@ -285,15 +285,27 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder-anon-key"
           NEXT_PUBLIC_SITE_URL: "http://localhost:3000"
 
+      # Readiness, not correctness: ANY HTTP answer proves the server is
+      # listening, so the only thing this waits out is curl's 000 (nothing on
+      # the port yet). Demanding 200 from `/` strands every site whose home
+      # page does not serve one - an app behind a login, a locale bounce, a
+      # marketing root that 30x's - and it fails in the most misleading way
+      # available: the log says the server is ready, then says it never
+      # started. It stranded DispatchSEO's own PR #25 for three runs on
+      # 2026-08-02. Whether the app actually works is the agent's call, made
+      # against the tool's own page further down - never this probe's.
       - name: Start server and wait for it
         run: |
           nohup "${{ steps.pkg.outputs.pm }}" run start >/tmp/next-server.log 2>&1 &
           for i in $(seq 1 30); do
             code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/ || true)
-            [ "$code" = "200" ] && echo "server up" && exit 0
+            case "$code" in
+              ""|000) : ;;
+              *) echo "server up (HTTP $code from /)"; exit 0 ;;
+            esac
             sleep 2
           done
-          echo "server failed to start"; cat /tmp/next-server.log; exit 1
+          echo "server never answered on :3000"; cat /tmp/next-server.log; exit 1
         env:
           NEXT_PUBLIC_SUPABASE_URL: "https://placeholder.supabase.co"
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder-anon-key"
