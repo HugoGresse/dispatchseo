@@ -73,9 +73,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
         run: |
-          open=$(gh pr list --repo "$GITHUB_REPOSITORY" --label seo --state open --json number --jq 'length')
+          # Tool PRs carry BOTH `seo` and `seo-tool`, and auto-merge never merges
+          # a tool PR unattended - it waits for tool-validated AND the owner. So
+          # counting them here let one unreviewed tool PR pause the entirely
+          # separate GUIDE builder indefinitely, while every paused attempt
+          # reported ok=1 and kept the dashboard green (2026-08-02). Guides are
+          # blocked only by another guide PR.
+          open=$(gh pr list --repo "$GITHUB_REPOSITORY" --label seo --state open --json number,labels \
+            --jq '[.[] | select([.labels[].name] | index("seo-tool") | not)] | length')
           if [ "$open" != "0" ]; then
-            echo "An SEO PR is already open - skipping this run so only one is ever open at a time."
+            echo "A guide PR is already open - skipping this run so only one is ever open at a time."
+            echo "skip_reason=a guide PR is already open and unmerged" >> "$GITHUB_OUTPUT"
           fi
           # Automation-flag gate: the DispatchSEO dashboard can pause guide
           # builds (auto_build_guides off). 404 = backend without the endpoint
@@ -94,6 +102,7 @@ jobs:
               # real outcome), and the in-stack builder covers this window too.
               echo "Backend unreachable right now (rebooting?) - deferring; it will re-dispatch when it is back."
               open=defer
+              echo "skip_reason=the backend was unreachable, so this run was deferred" >> "$GITHUB_OUTPUT"
             elif [ "$code" != "200" ] && [ "$code" != "404" ]; then
               echo "::error::project-mode endpoint returned HTTP $code"; exit 1
             fi
@@ -635,9 +644,19 @@ jobs:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           OUTCOME: ${{ job.status }}
+          SKIP_REASON: ${{ steps.guard.outputs.skip_reason }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # names the failed step in the report
         run: |
-          if [ "$OUTCOME" = "success" ]; then
+          if [ -n "$SKIP_REASON" ]; then
+            # A run that was BLOCKED is not a run that succeeded. Reporting ok=1
+            # here anchored the cadence window, so a single unmerged PR or one
+            # backend reboot bought a full day of silence with a green dashboard
+            # to match (2026-08-02). deferred= records the truth: handed out,
+            # nothing produced, still due.
+            curl -sG --max-time 30 -H "Authorization: Bearer $SEO_MCP_API_KEY" \
+              --data-urlencode "job=seo-daily" --data-urlencode "deferred=$SKIP_REASON" \
+              "https://dispatchseo.com/api/cron/deploy-check" || true
+          elif [ "$OUTCOME" = "success" ]; then
             curl -sG --max-time 30 -H "Authorization: Bearer $SEO_MCP_API_KEY" \
               --data-urlencode "job=seo-daily" --data-urlencode "ok=1" \
               "https://dispatchseo.com/api/cron/deploy-check" || true
