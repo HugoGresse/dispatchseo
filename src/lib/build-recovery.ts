@@ -9,8 +9,13 @@ import { reportCronRun } from "./cron-alerts";
 // sweep, called from the hourly-gsc cron (the most frequent backend
 // heartbeat), reverts anything stuck in_progress far past the build
 // workflows' own 45-minute timeout back to approved, so the next scheduled
-// builder attempt simply picks it up again. Recovery is an alert, not a
-// silent fix: the owner should know a run died mid-build.
+// builder attempt simply picks it up again.
+//
+// Recovery is RECORDED, not alarmed. It used to report hadError=true, which -
+// once the job name carried the project slug - emailed the owner AND the
+// customer to say a job "failed", about an event the sweep had already fixed
+// and whose own text ends "there is nothing to do" (2026-08-02). Only repeated
+// recovery for the same project goes loud; see the threshold below.
 
 const STUCK_AFTER_HOURS = 3;
 
@@ -80,16 +85,44 @@ export async function recoverStuckBuilds(): Promise<void> {
     const { getProjectById } = await import("./projects");
     for (const [projectId, titles] of byProject) {
       const slug = (await getProjectById(projectId))?.slug ?? null;
+      const job = slug ? `build-recovery--${slug}` : "build-recovery";
+      const lines = titles.map(
+        (t) =>
+          `"${t}" stopped partway through building and has been put back in the queue - ` +
+          `the next scheduled build retries it automatically, so there is nothing to do`,
+      );
+      // ONE recovery is routine and self-healing - the sweep already fixed it,
+      // and the message says so in as many words. Alerting on it emails the
+      // owner AND (since the job name carries the slug) the customer, to tell
+      // them a thing that needs no action "failed". That is the alert-noise
+      // failure mode this whole rail is supposed to prevent: an alarm nobody can
+      // act on teaches people to ignore the ones they can.
+      //
+      // REPETITION is the real signal. A build dying once is a cancelled runner
+      // or an agent that ran out of turns; the same project's builds dying
+      // repeatedly inside a day means something is actually broken and no amount
+      // of re-queueing will fix it. So the row is always written - the audit
+      // trail matters - but it only goes loud on the third recovery in 24h.
+      const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+      const { count } = await db()
+        .from("cron_runs")
+        .select("id", { count: "exact", head: true })
+        .eq("job", job)
+        .eq("ok", false)
+        .gte("created_at", since);
+      const repeated = (count ?? 0) >= 2; // this one would be the 3rd
       await reportCronRun(
-        slug ? `build-recovery--${slug}` : "build-recovery",
-        {
-          failed: titles.map(
-            (t) =>
-              `"${t}" stopped partway through building and has been put back in the queue - ` +
-              `the next scheduled build retries it automatically, so there is nothing to do`,
-          ),
-        },
-        true, // surfaces on the banner + email: a dead build should be known
+        job,
+        repeated
+          ? {
+              failed: [
+                ...lines,
+                `this is the ${(count ?? 0) + 1}th build recovery for this site in 24h - ` +
+                  `re-queueing is no longer fixing it, so the builds are failing for a real reason`,
+              ],
+            }
+          : { note: lines.join(" | ") },
+        repeated,
       );
     }
   } catch (e) {
