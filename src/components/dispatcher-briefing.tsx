@@ -316,12 +316,6 @@ function WinRow({ win }: { win: QuickWin }) {
         className="group -mx-2 flex gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-neutral-800/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400"
       >
         <WinBody win={win} />
-        <span
-          aria-hidden="true"
-          className="ml-auto mt-0.5 shrink-0 self-start text-neutral-700 transition-colors group-hover:text-neutral-400"
-        >
-          →
-        </span>
       </Link>
     </li>
   );
@@ -456,15 +450,14 @@ export function DispatcherBriefing({
           {briefing.numbers ? <Numbers numbers={briefing.numbers} /> : null}
 
           {briefing.wins.length > 0 ? (
-            <div className="mt-5 border-t border-neutral-800/70 pt-4">
-              {/* Labelled as a report, not a to-do list. These are things that
-                  went the site's way; naming them as chores would hand the
-                  owner homework on the one part of the page meant to show the
-                  work paying off. */}
-              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-neutral-600">
-                Quick wins
-              </p>
-              <ul className="mt-1 divide-y divide-neutral-800/60">
+            // Unlabelled, and no arrow per row. The lines are the agent still
+            // talking, straight on from the sentence above them - a heading
+            // would break that into a section, and a chevron on every row would
+            // turn a report into a task list. Each row is still a link to the
+            // screen it came from, because every claim here has to be
+            // checkable; the hover wash is enough to say so.
+            <div className="mt-5 border-t border-neutral-800/70 pt-2">
+              <ul className="divide-y divide-neutral-800/60">
                 {briefing.wins.map((w) => (
                   <WinRow key={w.key} win={w} />
                 ))}

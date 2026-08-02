@@ -155,6 +155,9 @@ const EXPECTED_CTR: Record<number, number> = {
 // module's credibility rests on never calling noise a result.
 const MIN_IMPRESSIONS_STRIKING = 5;
 const MIN_IMPRESSIONS_TRENDING = 10;
+// How much the PRIOR window must have done before "up N%" is a real claim
+// rather than division by nearly nothing. See the filter in findWins.
+const MIN_TRENDING_BASE = 5;
 const MIN_IMPRESSIONS_CTR_GAP = 30;
 const MIN_IMPRESSIONS_ZERO_CLICK = 25;
 
@@ -284,7 +287,13 @@ function findWins(
         before && prior.length > 0 ? (before.impressions / prior.length) * recent.length : 0;
       return { q, priorRate, gain: priorRate > 0 ? (q.impressions - priorRate) / priorRate : null };
     })
-    .filter((r) => r.gain != null && r.gain >= 0.25)
+    // The prior window needs a real base before a percentage means anything.
+    // Without this floor, a query that did a third of an impression a week ago
+    // and 16 this week reports "4700% above the week before" - arithmetically
+    // true, and exactly the kind of number that teaches an owner to stop
+    // believing this card. Genuinely-new queries are already covered by the
+    // new_query win, which says so in words instead of a ratio.
+    .filter((r) => r.gain != null && r.gain >= 0.25 && r.priorRate >= MIN_TRENDING_BASE)
     .sort((a, b) => (b.gain ?? 0) - (a.gain ?? 0))[0];
   if (trending && trending.gain != null) {
     wins.push({
@@ -368,7 +377,9 @@ function findWins(
     wins.push({
       key: "indexed",
       kind: "indexed",
-      headline: `Google indexed ${plural(weekly.newly_indexed, "of our pages")} this week.`,
+      // NOT plural() here - it appends its own "s", which turned this into
+      // "8 of our pagess". "pages" is already plural; only the count varies.
+      headline: `Google indexed ${nf(weekly.newly_indexed)} of our pages this week.`,
       detail: "Nothing can rank until Google has it indexed, so this is the step before results.",
       href: "/pages",
     });
