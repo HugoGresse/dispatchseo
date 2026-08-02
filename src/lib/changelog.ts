@@ -75,6 +75,13 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
     kind: "new",
     text:
+      "Once your first page is live, Home shows one quiet line asking for a GitHub star. It only " +
+      "appears after the pipeline has actually published something, and starring or dismissing it " +
+      "makes it gone for good - it never asks twice.",
+  },
+  {
+    kind: "new",
+    text:
       "Analytics now ask before they run. On your first visit one quiet bar offers to accept or " +
       "decline product analytics and session recording - decline and none of it loads, and " +
       "nothing else about the product changes.",

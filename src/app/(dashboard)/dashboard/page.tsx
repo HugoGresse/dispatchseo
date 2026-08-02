@@ -65,6 +65,8 @@ import { NextBuildCountdown } from "@/components/agent-status";
 import { DispatcherBriefing } from "@/components/dispatcher-briefing";
 import { computeBriefing } from "@/lib/briefing";
 import { CHANGELOG_COOKIE, unseenRelease } from "@/lib/changelog";
+import { STAR_COOKIE, shouldAskForStar } from "@/lib/star-prompt";
+import { StarPrompt } from "@/components/star-prompt";
 import { cookies } from "next/headers";
 import { DockerAccessTip } from "@/components/docker-access-tip";
 import { ChromeExtensionTip } from "@/components/chrome-extension-tip";
@@ -731,10 +733,12 @@ export default async function Home() {
   // the right shape on every screen except this one, where an agent is already
   // mid-sentence about the site, so the bar steps aside on /dashboard and the
   // dispatcher delivers the news itself.
-  const release = unseenRelease(
-    (await cookies()).get(CHANGELOG_COOKIE)?.value,
-    project.created_at,
-  );
+  const jar = await cookies();
+  const release = unseenRelease(jar.get(CHANGELOG_COOKIE)?.value, project.created_at);
+  // The once-ever star ask. Gated on a page actually being live, so it can
+  // only appear after the product has done the thing it was installed to do -
+  // and gated on the cookie, so answering it either way ends it for good.
+  const askStar = shouldAskForStar(jar.get(STAR_COOKIE)?.value, guidesLiveCount);
   const briefing = computeBriefing({
     overview,
     journey,
@@ -914,6 +918,9 @@ export default async function Home() {
         keywordsTracked={kwCount.count ?? 0}
         guidesPublished={guidesLiveCount}
       />
+
+      {/* ---------- THE ONE ASK (once ever, after the first page goes live) ---------- */}
+      {askStar ? <StarPrompt livePages={guidesLiveCount} /> : null}
 
       {/* ---------- NEEDS YOU (cloud) - see hasCloudSetupCards ---------- */}
       {hasCloudSetupCards ? (
