@@ -333,6 +333,49 @@ async function alertRunLogBroken(
 // CUSTOMER is alerted when their own automation breaks - the cloud answer to
 // self-host's BYO email. Cloud only: db() is the supabase-js service client
 // there (auth.admin available); self-host's single owner IS the operator.
+// WHICH FAILURES A CUSTOMER SHOULD BE EMAILED ABOUT.
+//
+// The operator gets every failure - that never changes. The customer gets only
+// the ones they can actually DO something about, because an email that names a
+// problem the reader cannot fix is worse than no email: it is alarming, it
+// invites a support message we answer with "ignore that", and it trains them to
+// ignore the next one that mattered.
+//
+// The bar this failed before: on 2026-08-02 one paying customer got three
+// failure emails in a day, two of which said, in full, "workflow failed -
+// https://github.com/.../runs/30740655773". They cannot read that log (it is
+// their repo, but the message names nothing), and the actual cause was their
+// own agent account running out of quota - which the email never mentioned.
+//
+// Everything not matched here stays operator-only and still shows on the
+// customer's dashboard banner, which is the right surface for "something is off
+// but there is nothing for you to do".
+const CUSTOMER_ACTIONABLE: Array<{ test: RegExp; lead: string }> = [
+  {
+    test: /session limit|usage limit|rate.?limit|quota|too many requests|\b429\b/i,
+    lead: "Your coding agent's account has hit its usage limit, so builds are paused until it resets. Upgrading that account, or switching this site to a different agent in Settings, gives the builders more room.",
+  },
+  {
+    test: /secret|credential|token|unauthorized|forbidden|revoked|\b401\b|\b403\b/i,
+    lead: "Your coding agent's credential looks missing, expired or revoked, so the builders cannot run. Re-paste it on the dashboard and they resume on the next scheduled run.",
+  },
+  {
+    test: /search console|gsc|google.*(permission|access|denied)/i,
+    lead: "We lost access to your Search Console property, so traffic stats have stopped updating. Re-granting access on the Google page restores them.",
+  },
+  {
+    test: /github app|installation|repository not found|repo.*(access|permission)/i,
+    lead: "Our GitHub App no longer has access to your repository, so nothing can be built or merged. Reconnecting it from the dashboard fixes this.",
+  },
+];
+
+export function customerActionableLead(errors: string[]): string | null {
+  for (const { test, lead } of CUSTOMER_ACTIONABLE) {
+    if (errors.some((e) => test.test(e))) return lead;
+  }
+  return null;
+}
+
 async function ownerContactForJob(
   job: string,
 ): Promise<{ email: string; domain: string | null } | null> {
@@ -363,6 +406,7 @@ async function sendCustomerFailureEmail(
   domain: string | null,
   job: string,
   errors: string[],
+  lead: string,
 ): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return false;
@@ -387,12 +431,16 @@ async function sendCustomerFailureEmail(
     body: JSON.stringify({
       from,
       to,
-      subject: `DispatchSEO: a job needs attention on ${site}`,
+      // Lead with the CAUSE and the fix, not the job name. This email is only
+      // ever sent for a failure we can name a customer action for (see
+      // customerActionableLead), so it should read as "here is what to do",
+      // never as "a job called seo-tools failed, good luck".
+      subject: `DispatchSEO: ${site} needs something from you`,
       text:
-        `Heads up - one of the automated jobs for ${site} (${baseJobName(job)}) just failed, ` +
-        `so it may have paused.\n\n${list || "(no detail captured)"}\n\n` +
-        `Most issues clear on their own on the next scheduled run. Open your DispatchSEO ` +
-        `dashboard for the latest status - if it keeps failing, just reply to this email.`,
+        `${lead}\n\nWhat we saw on ${site}:\n${list || "(no detail captured)"}\n\n` +
+        `Nothing is lost - the work stays queued and picks up again by itself once this ` +
+        `is sorted. Your DispatchSEO dashboard shows the current status, and you can ` +
+        `reply to this email if you want a hand.`,
     }),
     signal: AbortSignal.timeout(15000),
   });
@@ -465,10 +513,14 @@ export async function reportCronRun(
         // without setting up any email of their own. Per-tenant debounce comes
         // free - the job name carries the slug, so cron_runs.emailed_at is
         // already per-tenant.
-        if (isCloudMode()) {
+        const lead = isCloudMode() ? customerActionableLead(errors) : null;
+        if (lead) {
           try {
             const owner = await ownerContactForJob(job);
-            if (owner && (await sendCustomerFailureEmail(owner.email, owner.domain, job, errors))) {
+            if (
+              owner &&
+              (await sendCustomerFailureEmail(owner.email, owner.domain, job, errors, lead))
+            ) {
               sent = true;
             }
           } catch (e) {
