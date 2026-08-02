@@ -60,6 +60,11 @@ export function proxy(req: NextRequest) {
     // before anyone has an install to log into.
     pathname === "/docs" ||
     pathname.startsWith("/docs/") ||
+    // Public free tools (src/app/free-tools) - same public-by-design
+    // reasoning as /blog and /docs: these are the free-tools funnel's whole
+    // point, and must render for a logged-out visitor.
+    pathname === "/free-tools" ||
+    pathname.startsWith("/free-tools/") ||
     // Landing-page slideshow assets - the marketing page must load them
     // logged-out (they are product screenshots, nothing sensitive).
     pathname.startsWith("/screenshots/") ||
