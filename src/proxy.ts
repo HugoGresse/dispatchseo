@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { createServerClient } from "@supabase/ssr";
 
 // Next 16 proxy (the middleware.ts successor). Gates the dashboard behind the
 // password cookie. /api/* is excluded - the MCP route and crons carry their
@@ -34,7 +35,66 @@ const PUBLIC_FILES = new Set([
   "/dispatch-mark.png",
 ]);
 
-export function proxy(req: NextRequest) {
+const CLOUD_COOKIE = /^sb-.+-auth-token/;
+
+// THE ONLY PLACE A ROTATED SESSION CAN BE SAVED.
+//
+// Supabase rotates the refresh token every time it is used. Persisting the new
+// one means writing cookies - and cookies().set() THROWS inside a Server
+// Component, which is why cloud-auth's setAll swallows it. So no page render
+// could ever save a refreshed session: Supabase handed back a new token, the
+// browser never received it, and the next navigation replayed the spent one.
+// Outside GoTrue's short reuse window that trips reuse detection and kills the
+// token family, and the customer is bounced to /login having done nothing
+// wrong. Active users only survived by accident, because the dashboard polls
+// two Route Handlers, which CAN write cookies.
+//
+// The proxy is the one hop in a GET's path that can legally set cookies, so
+// rotation lands here. Two deliberate choices:
+//
+//   getSession(), not getUser(). getUser() calls the auth server on EVERY
+//   request; getSession() reads the cookie and only goes to the network when
+//   the token actually needs refreshing. This is not an auth decision - every
+//   protected page still re-validates with currentUser() and redirects itself,
+//   and the proxy has only ever done presence-based routing - so the cheaper
+//   call is the correct one here. Security does not move.
+//
+//   Fail OPEN on anything unexpected. This runs on every gated request; a throw
+//   here would 500 the entire product, which is far worse than any bug it
+//   fixes. On error we return null and the caller falls through to exactly the
+//   behaviour that shipped before this existed.
+async function persistRotatedSession(req: NextRequest): Promise<NextResponse | null> {
+  const url = process.env.SUPABASE_URL;
+  const anonKey = process.env.SUPABASE_ANON_KEY;
+  if (!url || !anonKey) return null;
+  try {
+    const res = NextResponse.next({ request: req });
+    const supabase = createServerClient(url, anonKey, {
+      cookies: {
+        getAll: () => req.cookies.getAll(),
+        setAll: (toSet) => {
+          for (const { name, value, options } of toSet) res.cookies.set(name, value, options);
+        },
+      },
+    });
+    const { data, error } = await supabase.auth.getSession();
+    if (!error && data.session) return res; // rotation (if any) is now on `res`
+    if (error) return null; // network/transient - let the page decide, as before
+    // No session behind a present cookie: it is spent or revoked, and proven so.
+    // Clear it rather than letting the customer bounce off /login forever with a
+    // cookie that reads as "signed in" to the gate and "expired" to every page -
+    // signOut() cannot do this, it returns early on exactly this error class.
+    const dead = NextResponse.redirect(new URL("/login", req.url));
+    for (const c of req.cookies.getAll()) {
+      if (CLOUD_COOKIE.test(c.name)) dead.cookies.delete(c.name);
+    }
+    return dead;
+  } catch {
+    return null;
+  }
+}
+
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (
     pathname.startsWith("/api/") ||
@@ -60,11 +120,13 @@ export function proxy(req: NextRequest) {
     // before anyone has an install to log into.
     pathname === "/docs" ||
     pathname.startsWith("/docs/") ||
-    // Public free tools (src/app/free-tools) - same public-by-design
-    // reasoning as /blog and /docs: these are the free-tools funnel's whole
-    // point, and must render for a logged-out visitor.
-    pathname === "/free-tools" ||
-    pathname.startsWith("/free-tools/") ||
+    // Public free tools (src/app/free-tools) - the funnel's whole point is
+    // that a logged-out visitor can use them. LANDING_ENABLED-gated like the
+    // marketing pages below, and for the same reason: on a self-hosted
+    // install this is OUR funnel on THEIR domain, and every CTA in it
+    // ("Start for free" -> /signup) bounces to /login there anyway.
+    ((pathname === "/free-tools" || pathname.startsWith("/free-tools/")) &&
+      process.env.LANDING_ENABLED === "true") ||
     // Landing-page slideshow assets - the marketing page must load them
     // logged-out (they are product screenshots, nothing sensitive).
     pathname.startsWith("/screenshots/") ||
@@ -101,11 +163,15 @@ export function proxy(req: NextRequest) {
   // session server-side via the auth gate.
   const hasCloudSession =
     process.env.CLOUD_MODE === "true" &&
-    req.cookies.getAll().some((c) => /^sb-.+-auth-token/.test(c.name));
+    req.cookies.getAll().some((c) => CLOUD_COOKIE.test(c.name));
   if (!cookie && !hasCloudSession) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
+  }
+  if (hasCloudSession) {
+    const rotated = await persistRotatedSession(req);
+    if (rotated) return rotated;
   }
   return NextResponse.next();
 }

@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { isTransientErrorMessage } from "./dataforseo";
-import { isCloudMode } from "./cloud";
+import { isCloudMode, isLocalBackendUrl } from "./cloud";
 import { listProjects, effectiveAutomations } from "./projects";
 
 // Cron failure alerts (LATER.md gap A4). Every cron route calls
@@ -192,6 +192,13 @@ export function collectErrors(value: unknown, path = ""): string[] {
       for (const item of val) {
         if (typeof item === "string") out.push(path ? `${path}: ${item}` : item);
       }
+    } else if (key === "failed" && typeof val === "string") {
+      // Not every producer of `failed` uses an array: RefillOutcome
+      // (queue-refill.ts) reports a single string. Unwrapping only the array
+      // shape meant a refill failure nested inside a cron's result JSON
+      // vanished from the errors list entirely - visible only because refill
+      // also reports under its own marker row.
+      out.push(path ? `${path}: ${val}` : val);
     } else if (val && typeof val === "object") {
       out.push(...collectErrors(val, at));
     }
@@ -513,11 +520,23 @@ export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]>
   const { data, error } = await db()
     .from("cron_runs")
     .select("job, ok, errors, created_at, claimed_only")
-    // 500 rows ≈ a week+ even with seo-auto-merge reporting every run -
-    // wide enough that a sparse job's latest row (deploy-check only logs on
-    // pushes) stays inside the window while frequent jobs pile rows on top.
+    // The window has to be WIDER THAN THE WIDEST STALENESS THRESHOLD, or a job
+    // ages out before it can ever be flagged late - it simply vanishes from
+    // health, no row, no ok:false, no stale, nothing on the banner.
+    //
+    // 500 was "a week+" when written and is not any more: this table is shared
+    // by every tenant, and measured on 2026-08-02 the 500-row window reached
+    // back 74.5h against the 192h threshold the three weekly jobs carry - 2.6x
+    // too short. seo-auto-merge alone was 35% of the rows. It also silently
+    // cost money: dueBuildWork reads a missing row as "due", so research
+    // re-dispatched at roughly double cadence and double DataForSEO spend.
+    //
+    // 3000 restores ~18 days at today's rate. This is a ceiling that grows with
+    // tenant count, not a fix - the real answer is one row per job
+    // (`distinct on (job)`) via an RPC or view, which removes the window
+    // entirely. Revisit before this deployment carries many more sites.
     .order("created_at", { ascending: false })
-    .limit(500);
+    .limit(3000);
   if (error || !data) return []; // missing table = no alerts, not a crash
   // cron_runs is keyed by the SLUG-based job name, not project_id, so a deleted-
   // and-recreated project (or any slug reuse) would otherwise inherit the prior
@@ -614,15 +633,37 @@ export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]>
         : (row.created_at as string);
       const ageHours = staleAgeHours(new Date(clockFrom).getTime());
       const staleLimit = STALE_HOURS[baseJobName(job)] ?? (claimed ? 36 : Infinity);
+      // A claim/deferral says "handed out" or "ran and produced nothing" - it is
+      // the ABSENCE of an outcome, so it must never be able to CLEAR a red one.
+      // Reading ok straight off the latest row meant the next dispatch of a job
+      // whose last real outcome was a failure flipped the customer's banner
+      // green with nothing fixed - and get_cron_health told the agent the same
+      // lie, so it stopped investigating. The staleness clock above already
+      // does this correctly via lastRealAt; ok was the half that was missed
+      // (seen live on seo-daily--maxpertise, 2026-08-02: FAIL at 08:53:41,
+      // green again by the next tick).
+      const okRow = claimed
+        ? (data.find((r) => (r.job as string) === job && !r.claimed_only) ?? null)
+        : row;
       return {
         job,
-        ok: Boolean(row.ok),
+        // No real row anywhere in the window: nothing has ever finished, so
+        // there is no failure to report - staleness is the signal that covers
+        // this, not a red banner with no error text behind it.
+        ok: okRow ? Boolean(okRow.ok) : true,
         // Unlisted jobs run per push/dispatch - no schedule, never stale
         // (unless stuck claimed, per above).
         stale: ageHours > staleLimit,
         last_run_at: row.created_at as string,
-        errors,
-        update_available: !row.ok && isPipelineUpdateNotice(job, errors),
+        // Carried from the SAME row ok came from. Taking ok from the last real
+        // outcome but errors from the claim on top of it produced "failed on
+        // its last run" with no message after it - a red banner that names no
+        // cause is one nobody can act on.
+        errors: okRow ? ((okRow.errors as string[]) ?? []) : errors,
+        update_available:
+          okRow != null &&
+          !okRow.ok &&
+          isPipelineUpdateNotice(job, (okRow.errors as string[]) ?? []),
         claimed_only: claimed,
       };
     });
@@ -729,6 +770,12 @@ async function githubQuotaAlert(
         return row?.stale === true;
       });
       if (silent.length < QUOTA_SILENT_JOBS) continue;
+      // A real row under this exact job name already exists once the owner has
+      // used "mark as fixed" (which INSERTS a row keyed by the job name).
+      // Synthesizing a second entry would show the same alert twice on Home
+      // and hand get_cron_health two rows with one job name - and the newer
+      // real row is the one carrying the owner's acknowledgement, so it wins.
+      if (health.some((h) => h.job === `github-actions-quota--${p.slug}`)) continue;
 
       out.push({
         job: `github-actions-quota--${p.slug}`,
@@ -757,9 +804,10 @@ async function githubQuotaAlert(
 // like builder-research/builder-geo-scan above, because they're gated on
 // per-project state a global threshold can't see: auto_build_guides/
 // auto_build_tools can be deliberately OFF (no row ever, correctly not an
-// alarm), and build-tool additionally only ever runs when something is
-// actually approved and waiting (an empty tool queue is a normal, common
-// state, not a bug). A blind threshold would false-alarm on both. This
+// alarm), and both builders additionally only ever run when something is
+// actually approved and waiting (an empty queue is a normal, common state,
+// not a bug - semi mode leaves ideas pending until the owner approves them,
+// so a quiet weekend is expected). A blind threshold would false-alarm. This
 // checks the actual gating condition per project instead - only self-host
 // (IS_DOCKER_STACK), since cloud has no in-stack builder at all.
 // (builder-merge is deliberately NOT covered here: "no open PR to merge" is
@@ -783,16 +831,22 @@ async function builderJobHeartbeatAlerts(
       if (!p.github_repo || !p.pipeline_installed_at) continue;
       const flags = effectiveAutomations(p);
       const wanted: Array<"build-guide" | "build-tool"> = [];
-      if (flags.auto_build_guides) wanted.push("build-guide");
-      if (flags.auto_build_tools) {
+      // Mirror dueWorkflows() exactly: BOTH builders are gated on the flag AND
+      // on something actually being approved (build-schedule.ts). Checking the
+      // flag alone says "has work waiting" when nothing is - a semi-mode owner
+      // who simply hasn't approved anything for 30h got a red banner blaming
+      // their builder's token, which no amount of token-fixing could clear.
+      const approvedWaiting = async (type: "guide" | "tool") => {
         const { count } = await db()
           .from("suggestions")
           .select("id", { count: "exact", head: true })
           .eq("project_id", p.id)
-          .eq("type", "tool")
+          .eq("type", type)
           .eq("status", "approved");
-        if ((count ?? 0) > 0) wanted.push("build-tool");
-      }
+        return (count ?? 0) > 0;
+      };
+      if (flags.auto_build_guides && (await approvedWaiting("guide"))) wanted.push("build-guide");
+      if (flags.auto_build_tools && (await approvedWaiting("tool"))) wanted.push("build-tool");
       for (const wf of wanted) {
         const job = `builder-${wf}--${p.slug}`;
         if (alreadyReported.has(job)) continue; // the main window already covers it
@@ -859,15 +913,15 @@ async function pipelineHeartbeatAlerts(
   alreadyReported: Set<string>,
 ): Promise<CronHealth[]> {
   try {
-    // Localhost installs: GitHub's runners can never reach this backend,
-    // so repo workflows physically cannot report - their silence is
-    // geometry, not rotted secrets, and the in-stack builder does the
-    // building anyway. Telling those owners to "re-run the setup command"
-    // forever would be a false alarm on every localhost install.
-    if (IS_DOCKER_STACK) {
-      const appUrl = process.env.APP_URL ?? "";
-      if (appUrl.includes("localhost") || appUrl.includes("127.0.0.1")) return [];
-    }
+    // Unreachable installs: GitHub's runners can never reach a backend on
+    // localhost, a LAN or a tailnet, so repo workflows physically cannot
+    // report - their silence is geometry, not rotted secrets, and the
+    // in-stack builder does the building anyway. Telling those owners to
+    // "re-run the setup command" forever is a false alarm they cannot clear.
+    // isLocalBackendUrl covers private ranges too: the string test this
+    // replaced saw 192.168.x / 100.x as public and alarmed on every homelab
+    // and Tailscale install.
+    if (IS_DOCKER_STACK && isLocalBackendUrl(process.env.APP_URL)) return [];
     const { data: projects, error } = await db()
       .from("projects")
       .select("id, slug, github_repo, pipeline_installed_at");

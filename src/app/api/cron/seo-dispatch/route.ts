@@ -3,7 +3,8 @@ import { reportCronRun } from "@/lib/cron-alerts";
 import { listProjects } from "@/lib/projects";
 import { dispatchScheduledBuild, openSeoPrs } from "@/lib/github";
 import { isCloudMode } from "@/lib/cloud";
-import { instanceSettings } from "@/lib/dashboard-auth";
+import { planGate } from "@/lib/billing";
+import { inStackBuilderOwnsBuilds } from "@/lib/builder-status";
 import {
   dueBuildWork,
   ghJobKey,
@@ -58,25 +59,9 @@ export const maxDuration = 300;
 // running the in-stack builder gets its work from /api/builder/jobs instead;
 // dispatching as well would double-build every project on it. The builder
 // stamps a heartbeat on every claiming poll, so a recent stamp means it is
-// alive and owns the work. Cloud has no in-stack builder and never checks.
-const BUILDER_ALIVE_HOURS = 3;
-
-async function inStackBuilderOwnsBuilds(): Promise<boolean> {
-  if (isCloudMode()) return false;
-  try {
-    const inst = (await instanceSettings()) as unknown as {
-      builder_last_seen_at?: string | null;
-    } | null;
-    const seen = inst?.builder_last_seen_at;
-    if (!seen) return false;
-    return Date.now() - new Date(seen).getTime() < BUILDER_ALIVE_HOURS * 3_600_000;
-  } catch {
-    // Schema drift (a pre-0032 database has no heartbeat column) reads as "no
-    // in-stack builder", which is the safe direction: dispatching to GitHub
-    // when nothing else is building beats both runners standing down.
-    return false;
-  }
-}
+// alive and owns the work. The predicate lives in builder-status.ts because
+// queue-refill needs the same answer - it used to ask a different question
+// (is APP_URL localhost?) and got it wrong on every public-DOMAIN install.
 
 export async function GET(req: Request): Promise<Response> {
   const denied = await checkCron(req);
@@ -104,6 +89,25 @@ export async function GET(req: Request): Promise<Response> {
       // yet - an unmet prerequisite is a normal state during onboarding, so it
       // is a quiet skip, never a failed run (CLAUDE.md's setup-gate rule).
       if (!p.github_repo) return out;
+
+      // Plan gate, same shape daily-ranks and hourly-gsc already use. This was
+      // the ONLY scheduled path without it: rank tracking and Search Console
+      // stopped for a lapsed account while the overnight builder kept running,
+      // writing guides and opening PRs for free, indefinitely. The dashboard's
+      // own PlanLapsedBanner asserts the opposite in so many words - "Rank
+      // tracking, Search Console imports and the overnight builder have all
+      // stopped" - so this makes the product's own promise true.
+      //
+      // A downgrade was the worse case: sites past the new limit had their
+      // ranks frozen while their builder kept publishing against stale data.
+      // Informational skip, never hadError - a lapsed plan is a normal state,
+      // not a broken run (CLAUDE.md's setup-gate rule).
+      const gate = await planGate(p.id);
+      if (!gate.allowed) {
+        out.skipped = `plan: ${gate.reason}`;
+        return out;
+      }
+
       if (!p.pipeline_installed_at) {
         // Before skipping, try the self-heal: a setup run that finished but
         // never landed its mark_pipeline_installed call leaves a project that
