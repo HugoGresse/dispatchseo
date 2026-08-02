@@ -230,6 +230,15 @@ async function sendFailureEmail(job: string, errors: string[]): Promise<boolean>
   // the thing that's down, that advice is actively wrong - the banner is
   // frozen on the last state that was written - so this branch says so.
   const isRunLog = job === RUN_LOG_JOB;
+  // A deploy check fails for two very different reasons, and the email used to
+  // assert the louder one either way: "the code that went live is broken" when
+  // in fact the newest commit never went live AT ALL and the previous one is
+  // serving perfectly (2026-08-02 - Vercel never picked up a push, and the
+  // email sent the reader hunting a build failure that did not exist). One
+  // means roll back, the other means re-trigger; saying the wrong one costs
+  // exactly the time an alert is supposed to save.
+  const neverWentLive =
+    isDeploy && errors.length > 0 && errors.every((e) => /never went live|not live after/i.test(e));
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -238,16 +247,22 @@ async function sendFailureEmail(job: string, errors: string[]): Promise<boolean>
       to,
       subject: isRunLog
         ? "DispatchSEO cron alerting is blind - run log is not writable"
-        : isDeploy
-          ? "DispatchSEO deploy check failed"
-          : `DispatchSEO job failed: ${job}`,
+        : neverWentLive
+          ? "DispatchSEO deploy never went live"
+          : isDeploy
+            ? "DispatchSEO deploy check failed"
+            : `DispatchSEO job failed: ${job}`,
       text:
         (isRunLog
           ? `Cron outcomes cannot be written to the database, so every job's ` +
             `result is being thrown away as it finishes.\n\n`
-          : isDeploy
-            ? `The post-deploy smoke test just failed - the code that went live is broken.\n\n`
-            : `The ${job} job just failed.\n\n`) +
+          : neverWentLive
+            ? `The newest commit has not gone live. Whatever deployed before it ` +
+              `is still serving, so the product is UP - it is running one commit ` +
+              `behind, and nothing here says the new code is broken.\n\n`
+            : isDeploy
+              ? `The post-deploy smoke test just failed - the code that went live is broken.\n\n`
+              : `The ${job} job just failed.\n\n`) +
         `${list || "(no error detail captured)"}\n\n` +
         (isRunLog
           ? `Until this is fixed the Home banner and get_cron_health are BLIND: ` +

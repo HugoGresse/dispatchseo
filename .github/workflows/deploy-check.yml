@@ -43,9 +43,21 @@ jobs:
               *) echo "Unexpected HTTP $code:"; cat body.json || true; sleep 15 ;;
             esac
           done
-          echo "Deploy for $SHA never went live within 10 minutes - Vercel build likely failed."
+          # "Never went live" has TWO causes with opposite fixes, and calling it
+          # a failed build was wrong half the time: Vercel can also never START
+          # a build, when the git-integration webhook is dropped - then nothing
+          # failed, the commit simply does not exist as a deployment (seen
+          # 2026-08-02 on 1c6b475, while the previous commit served fine). The
+          # waiting body carries live_sha, so say what IS serving and name both
+          # remedies instead of sending the reader to a build log that may not
+          # exist.
+          live=$(jq -r '.live_sha // empty' body.json 2>/dev/null || true)
+          echo "Deploy for $SHA never went live within 10 minutes. Currently serving: ${live:-unknown}"
+          msg="deploy for ${SHA:0:7} never went live within 10 minutes"
+          [ -n "$live" ] && msg="$msg (still serving ${live:0:7})"
+          msg="$msg - open the project's Deployments list: a FAILED deployment for this commit means read its build log; NO deployment for it at all means Vercel never picked the push up, and a redeploy (or any new commit) ships it"
           curl -sG --max-time 30 -H "Authorization: Bearer $CRON_SECRET" \
-            --data-urlencode "fail=deploy for ${SHA:0:7} not live after 10 minutes - check the Vercel build" \
+            --data-urlencode "fail=$msg" \
             "$URL/api/cron/deploy-check"
           exit 1
 
