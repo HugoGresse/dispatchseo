@@ -73,400 +73,430 @@ export type ChangelogEntry = {
 // this list - it exists so that writing the note down doesn't ping anyone.
 export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
-    kind: "fixed",
-    text:
-      "A red \"something failed\" notice on Home no longer turns itself green when the next run " +
-      "is merely handed out. Being picked up is not the same as succeeding, and the banner - and " +
-      "the answer your agent gets - now say so until something actually finishes.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "Being signed out at random is fixed. Your session is refreshed as you browse; before, the " +
-      "refreshed sign-in was never saved, so sooner or later a normal click landed you back on " +
-      "the login page having done nothing wrong.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "A brief database hiccup no longer looks like \"you have no account\". It now retries and " +
-      "says so plainly if it still can't reach us, instead of showing you an empty product.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "Hitting your coding agent's usage limit no longer looks like a broken product. It's a " +
-      "normal, temporary pause - Home now names it as one and tells you when building resumes.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "A build that failed no longer holds the next attempt for the whole cadence window - it " +
-      "backs off and retries instead of waiting a full day to try again.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "Rankings that had quietly stopped updating, and builds that had died without a trace, now " +
-      "surface on Home instead of looking like everything is fine.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "On the hosted plans, a trial no longer reads as a paid plan, and cancelling now actually " +
-      "takes effect on your account.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "Builds now follow your repo's own Node version - an `.nvmrc` if you have one, otherwise " +
-      "the `engines.node` floor in package.json, otherwise 22. Nothing to edit in the workflow, " +
-      "and because it's decided when the build runs, a pipeline update can't undo it.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "A run that was skipped on purpose - queue empty, a pull request already open, builds " +
-      "paused - no longer reports itself as a finished build. It used to hold off the next one " +
-      "for up to 20 hours, so a guide approved in the morning could sit until the evening.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "An empty queue no longer turns into a \"your builds stopped running\" warning. If there " +
-      "is nothing approved to build, the builder being quiet is the correct behaviour, not a " +
-      "fault - the warning is now reserved for work that really is waiting and not happening.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "Your public sitemap now uses your own domain - self-hosted installs were publishing " +
-      "dispatchseo.com URLs in their sitemap.xml.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "Pasting an agent key now tells you if it couldn't also be stored on your GitHub repo, " +
-      "and which permission is missing. Before, it said \"saved\" either way and your scheduled " +
-      "builds kept failing on a secret that was never written.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "A one-off crashed build no longer leaves a red warning on Home forever. The build is " +
-      "already re-queued and retried automatically, so the notice now clears itself once that " +
-      "has happened.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "An update worth announcing no longer gets buried by the next small release, Search " +
-      "Console stats for a whole window no longer save only partway when one date fails, and a " +
-      "pipeline update can no longer open a surprise second install pull request on your repo.",
-  },
-  {
     kind: "new",
     text:
-      "Your agent now greets you at the top of Home and reports on the day in its own words. " +
-      "It says hello, gives you one sentence, and that's it unless you open the full report. " +
-      "The status pill and the stack of coloured banners are gone; the agent tells you if " +
-      "something broke or if it's still setting up, the same way it tells you anything else. " +
-      "Open the report and you get quick wins: SEO shows nothing for the first couple of " +
-      "months, so it reads your Search Console data for the good news that IS there that " +
-      "early. Searches you sit at #12 for and could take with one push. Pages that rank but " +
-      "nobody clicks, where the title is the whole problem. Searches Google has only just " +
-      "started showing you for. It never invents one to fill the space; a quiet week says so. " +
-      "The agent wears your agent's colour, orange on Claude Code and white on Codex, and " +
-      "your coding agent can read the same briefing over MCP with get_briefing.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "The \"researching in the background - running your first rank check\" strip no longer sits " +
-      "there indefinitely. On a free (Search-Console-only) site there was never a rank check " +
-      "coming, so it spun forever; it now finishes once your queue fills. And if you DO have " +
-      "DataForSEO but no rank check has landed a full day after keywords were tracked, it says " +
-      "that plainly instead of claiming it's still working.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "A guide pull request that fell behind your main branch now fixes itself. Every guide edits " +
-      "the same couple of registry files, so a pull request left open while anything else merges " +
-      "used to come back conflicted and sit there red until you rebased it by hand. The merge " +
-      "sweep now updates the branch from main and merges it on the next pass.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "When a pull request genuinely can't be merged, Home now tells you why - conflicts, a " +
-      "branch protection rule, or a branch that's out of date - instead of \"workflow failed\" " +
-      "with a link into the GitHub Actions log, or blaming branch protection for a conflict.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "One unmergeable guide no longer stops the rest of the merge sweep. It used to abort the " +
-      "whole run, so later pull requests and the stuck-tool-check never ran at all.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "Home no longer shows a red \"your builder has never run - check its token\" warning when " +
-      "the truth is simply that you haven't approved anything yet. It only warns when there is " +
-      "genuinely something approved and waiting that the builder hasn't picked up.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "Installs running on a home network or a private address (192.168.x, a Tailscale address, " +
-      "your own machine's name) no longer get a permanent warning telling them to re-run setup " +
-      "because their pipeline \"never reported\". Those installs are unreachable from GitHub by " +
-      "design, which was never a fault to report.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "On a server install with your own domain, research could run twice on the same day - once " +
-      "in the built-in builder and once on GitHub - which meant duplicate ideas and double the " +
-      "DataForSEO spend. Whichever one is actually running now owns the job.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "Tool pull requests now validate on sites that aren't Next.js. The checker used to assume " +
-      "`start` on port 3000, so a Vite, Hugo, Astro or plain-static site failed every tool PR. " +
-      "Put your own command and port in `.dispatchseo/serve` and it uses those - and that file " +
-      "survives pipeline updates.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "Adding an agent from the topbar switcher no longer risks blanking the whole dashboard if " +
-      "the save fails - it shows the reason in the panel. The key you paste there is now also " +
-      "copied to your repo, so scheduled builds on GitHub stop failing seconds in on a missing " +
-      "credential. And if the agent check can't load, the panel says so and offers a retry " +
-      "instead of spinning forever.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "Saving a credential on an install whose password comes from your .env now tells you to " +
-      "set it in .env, instead of failing with a blank error screen.",
+      "Analytics now ask before they run. On your first visit one quiet bar offers to accept or " +
+      "decline product analytics and session recording - decline and none of it loads, and " +
+      "nothing else about the product changes.",
   },
   {
     kind: "improved",
     text:
-      "Every dashboard screen now says \"Loading\" while it loads, with the dispatcher at his " +
-      "desk on top of the grey placeholder boxes - the same one the setup wizard shows. He " +
-      "wears your site's agent colours: clay for Claude Code, white for Codex.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "Tool PRs no longer get stuck unreviewed on sites whose home page redirects - an app " +
-      "behind a login, a country/language bounce, anything that doesn't answer with a plain " +
-      "page at the root. The check that waits for your site to start was insisting on a " +
-      "specific answer from the home page, gave up on anything else, and left the tool sitting " +
-      "in a pull request nobody was told about. It now just waits for your site to respond.",
-  },
-  {
-    kind: "new",
-    text:
-      "Self-hosted installs now send one anonymous ping a day so we can tell how many people " +
-      "actually run DispatchSEO - downloads only ever showed how many people tried. It carries " +
-      "two things: a random id made on your own machine, and your version. No domain, no email, " +
-      "no keywords, no site data, no tokens. Set DISPATCHSEO_TELEMETRY=off in your .env to stop " +
-      "it; nothing else changes if you do.",
-  },
-  {
-    kind: "improved",
-    text:
-      "The self-host boot message no longer tells VPS installers to open localhost. It now " +
-      "prints two clearly separate next steps - own computer vs VPS/cloud server - and when " +
-      "you're installing over SSH it leads with the VPS instructions.",
-  },
-  {
-    kind: "improved",
-    text:
-      "The self-host setup wizard now asks which coding agent you use - Claude Code or Codex " +
-      "- and every command it hands you comes pre-adapted to your pick. Codex is a first-class " +
-      "path through setup, not a footnote behind a fold-out.",
-  },
-  {
-    kind: "improved",
-    text:
-      "Wherever a Claude Code credential is asked for, `claude setup-token` is now a copyable " +
-      "box instead of a link to the from-scratch install guide.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "A site pointed at a coding agent nobody gave a key to now shows up as a failed build " +
-      "on Home within its normal schedule, instead of silently never researching or building " +
-      "again. And with GitHub not yet connected, the bundled builder no longer \"claims\" work " +
-      "it can't start - the work just waits, ready the moment you connect.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "The dashboard's \"turn on automatic builds\" reminder comes back if the bundled builder " +
-      "stops checking in for two weeks - it used to switch off forever after the first " +
-      "successful check-in.",
-  },
-  {
-    kind: "improved",
-    text:
-      "start.sh got three guard rails: it checks Docker and the Compose v2 plugin up front " +
-      "(with the real fix named, instead of a cryptic CLI error), it says so when it falls " +
-      "back from downloading prebuilt images to compiling from source (and what that needs), " +
-      "and removing DOMAIN from .env now points the dashboard back at localhost on the next " +
-      "start instead of leaving it aimed at a dead https address.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "On self-host, the agent credential you paste on the dashboard now also lands on your " +
-      "connected repo as the Actions secret its scheduled workflows read - one paste feeds " +
-      "both build paths, in either order (token first or GitHub first). Before, workflows " +
-      "died in seconds with \"the token is missing\" over a token you had genuinely pasted, " +
-      "because it was sitting in the other pocket and nothing copied it across without the " +
-      "GitHub App. The scheduler also checks the repo secret before waking a workflow, so a " +
-      "half-finished setup waits quietly instead of emailing you failures from GitHub.",
-  },
-  {
-    kind: "improved",
-    text:
-      "The wizard now says the agent install typically takes 30-40 minutes, which is what it " +
-      "actually takes - the old 10-20 estimate made normal installs feel stuck.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "Cloud setup no longer gets stuck one step from done. The background setup run could " +
-      "finish all its work without flipping the final \"installed\" switch, which quietly kept " +
-      "research and daily builds from ever starting. The backend now verifies your repo on its " +
-      "own and flips the switch the moment everything checks out - and when one GitHub setting " +
-      "genuinely needs your click (\"Allow GitHub Actions to create and approve pull requests\"), " +
-      "the setup checklist now says so with a direct link, then re-checks automatically after " +
-      "you flip it.",
-  },
-  {
-    kind: "new",
-    text:
-      "Your coding agent now lives in the top bar, next to the Semi/Auto switch. Click its " +
-      "icon to see the agents you've set up and swap which one runs your scheduled builds. " +
-      "Agents you haven't set up aren't listed as if you should be using them - an \"Add " +
-      "agent\" button opens a picker, you paste the key, it's verified and stored, and only " +
-      "then does the agent join the list, ready to switch to whenever you choose. Settings' " +
-      "agent section was folded into one place to match - the switch cards and a per-agent " +
-      "key box together, with a green check on every agent whose key is already in. The " +
-      "little dispatcher plays along too: he wears white when your builds run on Codex.",
-  },
-  {
-    kind: "improved",
-    text:
-      "The sweep that merges finished guides used to run on every status your CI reported - " +
-      "including the ones saying a check had only just started. Vercel alone posts several " +
-      "of those per preview, and each one cost a whole billed minute to wake up and discover " +
-      "there was nothing to do yet. It now sits out anything that can't possibly be ready. " +
-      "A green guide still merges within a minute of its last check, exactly as before.",
-  },
-  {
-    kind: "improved",
-    text:
-      "The safety sweep behind it dropped from hourly to every six hours. It exists for the " +
-      "rare case where GitHub loses an event, and it was spending about 300 minutes a month " +
-      "per site confirming there was nothing to merge - 15% of the free GitHub allowance on " +
-      "a check that almost never finds anything. Public repos have always had unlimited " +
-      "minutes and were never affected.",
-  },
-  {
-    kind: "improved",
-    text:
-      "DispatchSEO stopped describing itself as a Claude Code product. Codex does everything " +
-      "Claude Code does here, so the site now says \"AI agents\", the docs and dashboard say " +
-      "\"your coding agent\", and both are named wherever the difference matters - no change " +
-      "to how anything works.",
-  },
-  {
-    kind: "new",
-    text:
-      "Your plan is now on screen. The sidebar's Billing row carries a badge saying Starter, " +
-      "Growth or Scale - or Free trial while you're still in your first seven days - so you " +
-      "can see what you're on from any page instead of going to look it up.",
-  },
-  {
-    kind: "improved",
-    text:
-      "Adding a site when your plan is full now says so up front. The project switcher shows " +
-      "\"Upgrade to add more sites\" instead of \"+ Add project\", and if you reach the form " +
-      "another way it explains the limit rather than handing you fields to fill in. It also " +
-      "answers immediately - it used to check that your domain was live and look up its " +
-      "registration date first, then refuse for a reason that had nothing to do with either.",
-  },
-  {
-    kind: "improved",
-    text:
-      "Plans no longer cap how many keywords you track. The cap never actually bound - your " +
-      "DataForSEO budget hits its ceiling first, and that one slows rank checks instead of " +
-      "refusing new keywords - so it's gone from the pricing pages and from the code. Plans " +
-      "are sold on sites now, nothing else.",
-  },
-  {
-    kind: "new",
-    text:
-      "Adding a third site now asks about GitHub first. Your automations run as GitHub " +
-      "Actions on your own account, and GitHub's free minutes cover about two sites - past " +
-      "that, if your spending limit is still the default $0, GitHub doesn't bill you, it " +
-      "quietly pauses your workflows. That looked exactly like DispatchSEO breaking. The " +
-      "step explains it in plain terms, points you at the setting, and takes about thirty " +
-      "seconds. If your repos are public it doesn't apply and you'll never see it.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "Everywhere we told you to set a GitHub \"spending limit\" now says what GitHub " +
-      "actually calls it today: a budget, under Budgets and alerts. The old wording sent " +
-      "people looking for a control that isn't there any more. The instructions also lead " +
-      "with the step that's easiest to miss - GitHub needs a payment method on file before " +
-      "any budget takes effect at all.",
-  },
-  {
-    kind: "new",
-    text:
-      "The site grew a landing page per agent: dispatchseo.com/claude-code and " +
-      "dispatchseo.com/codex. Each one covers that agent specifically - what it runs on, " +
-      "the exact connect command, and the questions people actually ask about it - and " +
-      "the Codex page's dispatcher wears white. Both are linked from the homepage footer.",
-  },
-  {
-    kind: "new",
-    text:
-      "dispatchseo.com/free-tools is open - small SEO tools that are free and need no " +
-      "account. The first one takes two or more of your pages and tells you which should " +
-      "link to which, with the anchor text to use, taken word-for-word from the page doing " +
-      "the linking. It all runs in your browser; nothing you paste is sent anywhere.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "On cloud, pipeline fixes now reach your repo within minutes of shipping instead of " +
-      "at the next daily check. Every deploy sweeps the connected repos and updates any " +
-      "that run an older pipeline - so a workflow bug we fix stops failing your builds the " +
-      "same hour, not the next day.",
-  },
-  {
-    kind: "improved",
-    text:
-      "When a pipeline run fails before the writing agent even starts, the alert now names " +
-      "the exact step that died instead of just \"workflow failed\" - so the email tells you " +
-      "(and us) what to look at without opening the Actions log.",
+      "The privacy policy and terms of service have been rewritten, and there is now a " +
+      "subprocessor list and a data processing agreement you can hand to a procurement team. " +
+      "The privacy policy names every vendor that touches your data, says how long each thing is " +
+      "kept, and describes the delete-account button that was already in Settings.",
   },
 ];
 
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.1.0",
+    date: "2026-08-02",
+    title: "Home is a briefing from your agent now - and the warnings on it are true",
+    summary:
+      "Home opens with your agent saying hello and reporting on the day in its own words; the " +
+      "status pill and the stack of coloured banners are gone. Your coding agent moved to the " +
+      "top bar, where you can add one or switch which one runs your builds. And a long pass " +
+      "over every warning DispatchSEO shows you: an empty queue, a paused run and a site still " +
+      "being set up stopped being reported as faults, while builds that really had died " +
+      "stopped hiding.",
+    announce: true,
+    changes: [
+      {
+        kind: "new",
+        text:
+          "Your agent now greets you at the top of Home and reports on the day in its own words. " +
+          "It says hello, gives you one sentence, and that's it unless you open the full report. " +
+          "The status pill and the stack of coloured banners are gone; the agent tells you if " +
+          "something broke or if it's still setting up, the same way it tells you anything else. " +
+          "Open the report and you get quick wins: SEO shows nothing for the first couple of " +
+          "months, so it reads your Search Console data for the good news that IS there that " +
+          "early. Searches you sit at #12 for and could take with one push. Pages that rank but " +
+          "nobody clicks, where the title is the whole problem. Searches Google has only just " +
+          "started showing you for. It never invents one to fill the space; a quiet week says so. " +
+          "The agent wears your agent's colour, orange on Claude Code and white on Codex, and " +
+          "your coding agent can read the same briefing over MCP with get_briefing.",
+      },
+      {
+        kind: "new",
+        text:
+          "Self-hosted installs now send one anonymous ping a day so we can tell how many people " +
+          "actually run DispatchSEO - downloads only ever showed how many people tried. It carries " +
+          "two things: a random id made on your own machine, and your version. No domain, no email, " +
+          "no keywords, no site data, no tokens. Set DISPATCHSEO_TELEMETRY=off in your .env to stop " +
+          "it; nothing else changes if you do.",
+      },
+      {
+        kind: "new",
+        text:
+          "Your coding agent now lives in the top bar, next to the Semi/Auto switch. Click its " +
+          "icon to see the agents you've set up and swap which one runs your scheduled builds. " +
+          "Agents you haven't set up aren't listed as if you should be using them - an \"Add " +
+          "agent\" button opens a picker, you paste the key, it's verified and stored, and only " +
+          "then does the agent join the list, ready to switch to whenever you choose. Settings' " +
+          "agent section was folded into one place to match - the switch cards and a per-agent " +
+          "key box together, with a green check on every agent whose key is already in. The " +
+          "little dispatcher plays along too: he wears white when your builds run on Codex.",
+      },
+      {
+        kind: "new",
+        text:
+          "Your plan is now on screen. The sidebar's Billing row carries a badge saying Starter, " +
+          "Growth or Scale - or Free trial while you're still in your first seven days - so you " +
+          "can see what you're on from any page instead of going to look it up.",
+      },
+      {
+        kind: "new",
+        text:
+          "Adding a third site now asks about GitHub first. Your automations run as GitHub " +
+          "Actions on your own account, and GitHub's free minutes cover about two sites - past " +
+          "that, if your spending limit is still the default $0, GitHub doesn't bill you, it " +
+          "quietly pauses your workflows. That looked exactly like DispatchSEO breaking. The " +
+          "step explains it in plain terms, points you at the setting, and takes about thirty " +
+          "seconds. If your repos are public it doesn't apply and you'll never see it.",
+      },
+      {
+        kind: "new",
+        text:
+          "The site grew a landing page per agent: dispatchseo.com/claude-code and " +
+          "dispatchseo.com/codex. Each one covers that agent specifically - what it runs on, " +
+          "the exact connect command, and the questions people actually ask about it - and " +
+          "the Codex page's dispatcher wears white. Both are linked from the homepage footer.",
+      },
+      {
+        kind: "new",
+        text:
+          "dispatchseo.com/free-tools is open - small SEO tools that are free and need no " +
+          "account. The first one takes two or more of your pages and tells you which should " +
+          "link to which, with the anchor text to use, taken word-for-word from the page doing " +
+          "the linking. It all runs in your browser; nothing you paste is sent anywhere.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Every dashboard screen now says \"Loading\" while it loads, with the dispatcher at his " +
+          "desk on top of the grey placeholder boxes - the same one the setup wizard shows. He " +
+          "wears your site's agent colours: clay for Claude Code, white for Codex.",
+      },
+      {
+        kind: "improved",
+        text:
+          "The self-host boot message no longer tells VPS installers to open localhost. It now " +
+          "prints two clearly separate next steps - own computer vs VPS/cloud server - and when " +
+          "you're installing over SSH it leads with the VPS instructions.",
+      },
+      {
+        kind: "improved",
+        text:
+          "The self-host setup wizard now asks which coding agent you use - Claude Code or Codex " +
+          "- and every command it hands you comes pre-adapted to your pick. Codex is a first-class " +
+          "path through setup, not a footnote behind a fold-out.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Wherever a Claude Code credential is asked for, `claude setup-token` is now a copyable " +
+          "box instead of a link to the from-scratch install guide.",
+      },
+      {
+        kind: "improved",
+        text:
+          "start.sh got three guard rails: it checks Docker and the Compose v2 plugin up front " +
+          "(with the real fix named, instead of a cryptic CLI error), it says so when it falls " +
+          "back from downloading prebuilt images to compiling from source (and what that needs), " +
+          "and removing DOMAIN from .env now points the dashboard back at localhost on the next " +
+          "start instead of leaving it aimed at a dead https address.",
+      },
+      {
+        kind: "improved",
+        text:
+          "The wizard now says the agent install typically takes 30-40 minutes, which is what it " +
+          "actually takes - the old 10-20 estimate made normal installs feel stuck.",
+      },
+      {
+        kind: "improved",
+        text:
+          "The sweep that merges finished guides used to run on every status your CI reported - " +
+          "including the ones saying a check had only just started. Vercel alone posts several " +
+          "of those per preview, and each one cost a whole billed minute to wake up and discover " +
+          "there was nothing to do yet. It now sits out anything that can't possibly be ready. " +
+          "A green guide still merges within a minute of its last check, exactly as before.",
+      },
+      {
+        kind: "improved",
+        text:
+          "The safety sweep behind it dropped from hourly to every six hours. It exists for the " +
+          "rare case where GitHub loses an event, and it was spending about 300 minutes a month " +
+          "per site confirming there was nothing to merge - 15% of the free GitHub allowance on " +
+          "a check that almost never finds anything. Public repos have always had unlimited " +
+          "minutes and were never affected.",
+      },
+      {
+        kind: "improved",
+        text:
+          "DispatchSEO stopped describing itself as a Claude Code product. Codex does everything " +
+          "Claude Code does here, so the site now says \"AI agents\", the docs and dashboard say " +
+          "\"your coding agent\", and both are named wherever the difference matters - no change " +
+          "to how anything works.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Adding a site when your plan is full now says so up front. The project switcher shows " +
+          "\"Upgrade to add more sites\" instead of \"+ Add project\", and if you reach the form " +
+          "another way it explains the limit rather than handing you fields to fill in. It also " +
+          "answers immediately - it used to check that your domain was live and look up its " +
+          "registration date first, then refuse for a reason that had nothing to do with either.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Plans no longer cap how many keywords you track. The cap never actually bound - your " +
+          "DataForSEO budget hits its ceiling first, and that one slows rank checks instead of " +
+          "refusing new keywords - so it's gone from the pricing pages and from the code. Plans " +
+          "are sold on sites now, nothing else.",
+      },
+      {
+        kind: "improved",
+        text:
+          "When a pipeline run fails before the writing agent even starts, the alert now names " +
+          "the exact step that died instead of just \"workflow failed\" - so the email tells you " +
+          "(and us) what to look at without opening the Actions log.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "A red \"something failed\" notice on Home no longer turns itself green when the next run " +
+          "is merely handed out. Being picked up is not the same as succeeding, and the banner - and " +
+          "the answer your agent gets - now say so until something actually finishes.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Being signed out at random is fixed. Your session is refreshed as you browse; before, the " +
+          "refreshed sign-in was never saved, so sooner or later a normal click landed you back on " +
+          "the login page having done nothing wrong.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "A brief database hiccup no longer looks like \"you have no account\". It now retries and " +
+          "says so plainly if it still can't reach us, instead of showing you an empty product.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Hitting your coding agent's usage limit no longer looks like a broken product. It's a " +
+          "normal, temporary pause - Home now names it as one and tells you when building resumes.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "A build that failed no longer holds the next attempt for the whole cadence window - it " +
+          "backs off and retries instead of waiting a full day to try again.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Rankings that had quietly stopped updating, and builds that had died without a trace, now " +
+          "surface on Home instead of looking like everything is fine.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "On the hosted plans, a trial no longer reads as a paid plan, and cancelling now actually " +
+          "takes effect on your account.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Builds now follow your repo's own Node version - an `.nvmrc` if you have one, otherwise " +
+          "the `engines.node` floor in package.json, otherwise 22. Nothing to edit in the workflow, " +
+          "and because it's decided when the build runs, a pipeline update can't undo it.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "A run that was skipped on purpose - queue empty, a pull request already open, builds " +
+          "paused - no longer reports itself as a finished build. It used to hold off the next one " +
+          "for up to 20 hours, so a guide approved in the morning could sit until the evening.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "An empty queue no longer turns into a \"your builds stopped running\" warning. If there " +
+          "is nothing approved to build, the builder being quiet is the correct behaviour, not a " +
+          "fault - the warning is now reserved for work that really is waiting and not happening.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Your public sitemap now uses your own domain - self-hosted installs were publishing " +
+          "dispatchseo.com URLs in their sitemap.xml.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Pasting an agent key now tells you if it couldn't also be stored on your GitHub repo, " +
+          "and which permission is missing. Before, it said \"saved\" either way and your scheduled " +
+          "builds kept failing on a secret that was never written.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "A one-off crashed build no longer leaves a red warning on Home forever. The build is " +
+          "already re-queued and retried automatically, so the notice now clears itself once that " +
+          "has happened.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "An update worth announcing no longer gets buried by the next small release, Search " +
+          "Console stats for a whole window no longer save only partway when one date fails, and a " +
+          "pipeline update can no longer open a surprise second install pull request on your repo.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "The \"researching in the background - running your first rank check\" strip no longer sits " +
+          "there indefinitely. On a free (Search-Console-only) site there was never a rank check " +
+          "coming, so it spun forever; it now finishes once your queue fills. And if you DO have " +
+          "DataForSEO but no rank check has landed a full day after keywords were tracked, it says " +
+          "that plainly instead of claiming it's still working.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "A guide pull request that fell behind your main branch now fixes itself. Every guide edits " +
+          "the same couple of registry files, so a pull request left open while anything else merges " +
+          "used to come back conflicted and sit there red until you rebased it by hand. The merge " +
+          "sweep now updates the branch from main and merges it on the next pass.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "When a pull request genuinely can't be merged, Home now tells you why - conflicts, a " +
+          "branch protection rule, or a branch that's out of date - instead of \"workflow failed\" " +
+          "with a link into the GitHub Actions log, or blaming branch protection for a conflict.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "One unmergeable guide no longer stops the rest of the merge sweep. It used to abort the " +
+          "whole run, so later pull requests and the stuck-tool-check never ran at all.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Home no longer shows a red \"your builder has never run - check its token\" warning when " +
+          "the truth is simply that you haven't approved anything yet. It only warns when there is " +
+          "genuinely something approved and waiting that the builder hasn't picked up.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Installs running on a home network or a private address (192.168.x, a Tailscale address, " +
+          "your own machine's name) no longer get a permanent warning telling them to re-run setup " +
+          "because their pipeline \"never reported\". Those installs are unreachable from GitHub by " +
+          "design, which was never a fault to report.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "On a server install with your own domain, research could run twice on the same day - once " +
+          "in the built-in builder and once on GitHub - which meant duplicate ideas and double the " +
+          "DataForSEO spend. Whichever one is actually running now owns the job.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Tool pull requests now validate on sites that aren't Next.js. The checker used to assume " +
+          "`start` on port 3000, so a Vite, Hugo, Astro or plain-static site failed every tool PR. " +
+          "Put your own command and port in `.dispatchseo/serve` and it uses those - and that file " +
+          "survives pipeline updates.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Adding an agent from the topbar switcher no longer risks blanking the whole dashboard if " +
+          "the save fails - it shows the reason in the panel. The key you paste there is now also " +
+          "copied to your repo, so scheduled builds on GitHub stop failing seconds in on a missing " +
+          "credential. And if the agent check can't load, the panel says so and offers a retry " +
+          "instead of spinning forever.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Saving a credential on an install whose password comes from your .env now tells you to " +
+          "set it in .env, instead of failing with a blank error screen.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Tool PRs no longer get stuck unreviewed on sites whose home page redirects - an app " +
+          "behind a login, a country/language bounce, anything that doesn't answer with a plain " +
+          "page at the root. The check that waits for your site to start was insisting on a " +
+          "specific answer from the home page, gave up on anything else, and left the tool sitting " +
+          "in a pull request nobody was told about. It now just waits for your site to respond.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "A site pointed at a coding agent nobody gave a key to now shows up as a failed build " +
+          "on Home within its normal schedule, instead of silently never researching or building " +
+          "again. And with GitHub not yet connected, the bundled builder no longer \"claims\" work " +
+          "it can't start - the work just waits, ready the moment you connect.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "The dashboard's \"turn on automatic builds\" reminder comes back if the bundled builder " +
+          "stops checking in for two weeks - it used to switch off forever after the first " +
+          "successful check-in.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "On self-host, the agent credential you paste on the dashboard now also lands on your " +
+          "connected repo as the Actions secret its scheduled workflows read - one paste feeds " +
+          "both build paths, in either order (token first or GitHub first). Before, workflows " +
+          "died in seconds with \"the token is missing\" over a token you had genuinely pasted, " +
+          "because it was sitting in the other pocket and nothing copied it across without the " +
+          "GitHub App. The scheduler also checks the repo secret before waking a workflow, so a " +
+          "half-finished setup waits quietly instead of emailing you failures from GitHub.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Cloud setup no longer gets stuck one step from done. The background setup run could " +
+          "finish all its work without flipping the final \"installed\" switch, which quietly kept " +
+          "research and daily builds from ever starting. The backend now verifies your repo on its " +
+          "own and flips the switch the moment everything checks out - and when one GitHub setting " +
+          "genuinely needs your click (\"Allow GitHub Actions to create and approve pull requests\"), " +
+          "the setup checklist now says so with a direct link, then re-checks automatically after " +
+          "you flip it.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Everywhere we told you to set a GitHub \"spending limit\" now says what GitHub " +
+          "actually calls it today: a budget, under Budgets and alerts. The old wording sent " +
+          "people looking for a control that isn't there any more. The instructions also lead " +
+          "with the step that's easiest to miss - GitHub needs a payment method on file before " +
+          "any budget takes effect at all.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "On cloud, pipeline fixes now reach your repo within minutes of shipping instead of " +
+          "at the next daily check. Every deploy sweeps the connected repos and updates any " +
+          "that run an older pipeline - so a workflow bug we fix stops failing your builds the " +
+          "same hour, not the next day.",
+      },
+    ],
+  },
   {
     version: "1.0.0",
     date: "2026-07-31",
