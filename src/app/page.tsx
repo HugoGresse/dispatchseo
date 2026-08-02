@@ -459,8 +459,8 @@ export default async function LandingPage({
             </div>
           </div>
 
-          {/* Mobile pricing (<=980px). The three plans differ in exactly four
-              things, so a phone gets a compare scoreboard plus one shared
+          {/* Mobile pricing (<=980px). The three plans differ in exactly three
+              things - price, sites, support - so a phone gets a compare scoreboard plus one shared
               feature list instead of three near-identical twenty-row columns.
               Nothing is dropped: every feature above appears either as a
               compare row or in "On every plan". The .plans grid above is the
@@ -492,11 +492,6 @@ export default async function LandingPage({
                   <td><b>10</b> sites</td>
                 </tr>
                 <tr>
-                  <td><b>100</b> keywords</td>
-                  <td className="pm-pick"><b>300</b> keywords</td>
-                  <td><b>1,000</b> keywords</td>
-                </tr>
-                <tr>
                   <td>Email support</td>
                   <td className="pm-pick">Email support</td>
                   <td>Priority support</td>
@@ -505,8 +500,8 @@ export default async function LandingPage({
               <tfoot>
                 <tr>
                   <td><a className="btn btn-solid" href="/signup">Start free</a></td>
-                  <td className="pm-pick"><a className="btn btn-solid" href="/signup">Choose</a></td>
-                  <td><a className="btn btn-solid" href="/signup">Choose</a></td>
+                  <td className="pm-pick"><a className="btn btn-solid" href="/signup">Start now</a></td>
+                  <td><a className="btn btn-solid" href="/signup">Start now</a></td>
                 </tr>
               </tfoot>
             </table>
