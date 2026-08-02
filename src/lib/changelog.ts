@@ -267,12 +267,19 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
       "the linking. It all runs in your browser; nothing you paste is sent anywhere.",
   },
   {
-    kind: "fix",
+    kind: "fixed",
     text:
       "On cloud, pipeline fixes now reach your repo within minutes of shipping instead of " +
       "at the next daily check. Every deploy sweeps the connected repos and updates any " +
       "that run an older pipeline - so a workflow bug we fix stops failing your builds the " +
       "same hour, not the next day.",
+  },
+  {
+    kind: "improved",
+    text:
+      "When a pipeline run fails before the writing agent even starts, the alert now names " +
+      "the exact step that died instead of just \"workflow failed\" - so the email tells you " +
+      "(and us) what to look at without opening the Actions log.",
   },
 ];
 

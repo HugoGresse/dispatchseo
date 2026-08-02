@@ -43,6 +43,7 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
+      actions: read # the outcome report reads which step failed
     steps:
       - uses: actions/checkout@v4
 
@@ -541,14 +542,22 @@ jobs:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           OUTCOME: ${{ job.status }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # names the failed step in the report
         run: |
           if [ "$OUTCOME" = "success" ]; then
             curl -sG --max-time 30 -H "Authorization: Bearer $SEO_MCP_API_KEY" \
               --data-urlencode "job=seo-tools" --data-urlencode "ok=1" \
               "{{BACKEND_URL}}/api/cron/deploy-check" || true
           else
+            # Name the failing step so the alert email/banner says WHERE the run
+            # died, not just that it did - the operator can't open a customer's
+            # private Actions log, and "workflow failed" alone forced exactly
+            # that dead end (2026-08-02). Best-effort: on any API hiccup the
+            # message falls back to the bare form.
+            step=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs" \
+              --jq '[.jobs[].steps[]? | select(.conclusion=="failure") | .name] | first // empty' 2>/dev/null || true)
             curl -sG --max-time 30 -H "Authorization: Bearer $SEO_MCP_API_KEY" \
               --data-urlencode "job=seo-tools" \
-              --data-urlencode "fail=workflow failed - $RUN_URL" \
+              --data-urlencode "fail=workflow failed${step:+ at step '$step'} - $RUN_URL" \
               "{{BACKEND_URL}}/api/cron/deploy-check" || true
           fi
