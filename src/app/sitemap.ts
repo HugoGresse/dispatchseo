@@ -12,6 +12,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // sitemap that omits it looks broken for. Bare origin, no trailing slash,
     // to match byte-for-byte what page.tsx emits as its canonical.
     { url: base, changeFrequency: "weekly", priority: 1 },
+    // The agent-specific hubs - same commercial intent as the flagship page,
+    // just keyword-first for "dispatchseo claude code" / "dispatchseo codex".
+    { url: `${base}/claude-code`, changeFrequency: "weekly", priority: 0.9 },
+    { url: `${base}/codex`, changeFrequency: "weekly", priority: 0.9 },
     { url: `${base}/blog`, changeFrequency: "daily" },
     ...getAllPosts().map((post) => ({
       url: `${base}/blog/${post.slug}`,

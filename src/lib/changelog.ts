@@ -83,6 +83,14 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
       "\"your coding agent\", and both are named wherever the difference matters - no change " +
       "to how anything works.",
   },
+  {
+    kind: "new",
+    text:
+      "The site grew a landing page per agent: dispatchseo.com/claude-code and " +
+      "dispatchseo.com/codex. Each one covers that agent specifically - what it runs on, " +
+      "the exact connect command, and the questions people actually ask about it - and " +
+      "the Codex page's dispatcher wears white. Both are linked from the homepage footer.",
+  },
 ];
 
 // Newest first. The head of this list is what the banner announces.

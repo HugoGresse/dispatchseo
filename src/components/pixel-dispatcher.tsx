@@ -29,13 +29,33 @@ const VB_Y = 12;
 const VB_W = 128;
 const VB_H = 32;
 
-const PALETTE: Record<string, string> = {
-  c: "#d97757", // clay body
-  C: "#b0563a", // clay shade / legs
-  e: "#1a1a1e", // eyes
-  v: "#8b5cf6", // violet (headset, mug)
-  V: "#6d3fd8", // violet shade
-  m: "#d4d4d8", // mic tip
+// Body colour is the only thing that changes between agents - the desk, the
+// headset, the monitor and everything else stays the site's own clay/violet,
+// so recolouring the character never reads as a second theme. "clay" (our
+// nod to Claude Code's rust) is the default and the only palette every
+// existing call site renders, byte-identical to before this variant existed.
+// "white" is Codex/OpenAI's colour: a near-white body with a mid-grey shade
+// for the legs/outline so they still read against the near-black scene -
+// eyes stay the same dark ink in both, per the character's own design.
+export type MascotVariant = "clay" | "white";
+
+const PALETTES: Record<MascotVariant, Record<string, string>> = {
+  clay: {
+    c: "#d97757", // clay body
+    C: "#b0563a", // clay shade / legs
+    e: "#1a1a1e", // eyes
+    v: "#8b5cf6", // violet (headset, mug)
+    V: "#6d3fd8", // violet shade
+    m: "#d4d4d8", // mic tip
+  },
+  white: {
+    c: "#f4f4f5", // near-white body
+    C: "#8f8f99", // grey shade / legs
+    e: "#1a1a1e", // eyes
+    v: "#8b5cf6",
+    V: "#6d3fd8",
+    m: "#d4d4d8",
+  },
 };
 
 // 12 x 11 character grids ('.' = transparent)
@@ -109,19 +129,20 @@ function drawGrid(
   grid: string[],
   ox: number,
   oy: number,
+  palette: Record<string, string>,
 ) {
   for (let r = 0; r < grid.length; r++) {
     for (let col = 0; col < grid[r].length; col++) {
       const ch = grid[r][col];
       if (ch === ".") continue;
-      fillPx(ctx, ox + col, oy + r, 1, 1, PALETTE[ch]);
+      fillPx(ctx, ox + col, oy + r, 1, 1, palette[ch]);
     }
   }
 }
 
 // Draw the whole scene at tick t. Same composition + order as the old SVG,
 // so later paints (desk, monitor) still sit in front of the character.
-function drawScene(ctx: CanvasRenderingContext2D, t: number) {
+function drawScene(ctx: CanvasRenderingContext2D, t: number, palette: Record<string, string>) {
   ctx.clearRect(0, 0, VB_W, VB_H);
 
   // --- character position + frame ---
@@ -167,8 +188,8 @@ function drawScene(ctx: CanvasRenderingContext2D, t: number) {
   fillPx(ctx, 74, 34, 2, 6, "#2e2e35");
 
   // character + headset
-  drawGrid(ctx, grid, charX, charY);
-  if (headsetY !== null) drawGrid(ctx, HEADSET, charX, headsetY);
+  drawGrid(ctx, grid, charX, charY, palette);
+  if (headsetY !== null) drawGrid(ctx, HEADSET, charX, headsetY, palette);
 
   // desk
   fillPx(ctx, 77, 30, 32, 1, "#3a3a42");
@@ -213,9 +234,11 @@ function drawScene(ctx: CanvasRenderingContext2D, t: number) {
 export function PixelDispatcher({
   className,
   working,
+  variant = "clay",
 }: {
   className?: string;
   working?: boolean;
+  variant?: MascotVariant;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -223,19 +246,20 @@ export function PixelDispatcher({
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     if (!ctx) return;
+    const palette = PALETTES[variant];
     // Reduced motion: paint the settled scene once, no ticking.
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      drawScene(ctx, DROP_END + 36);
+      drawScene(ctx, DROP_END + 36, palette);
       return;
     }
     let t = working ? DROP_END : 0;
-    drawScene(ctx, t);
+    drawScene(ctx, t, palette);
     const id = setInterval(() => {
       t += 1;
-      drawScene(ctx, t);
+      drawScene(ctx, t, palette);
     }, TICK_MS);
     return () => clearInterval(id);
-  }, [working]);
+  }, [working, variant]);
 
   return (
     <div className={className ?? "pixel-stage"}>

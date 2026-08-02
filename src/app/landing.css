@@ -820,3 +820,49 @@ html:has(.ld) { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) {
   .ld .why-scrim, .ld .why-pop { animation: none; }
 }
+
+/* ==========================================================================
+   Agent-specific landing pages (claude-code/, codex/), shared with
+   agent-landing.tsx. The hero, features, demo and FAQ sections reuse the
+   flagship page's own markup and classes untouched (.hero/.hl, #features,
+   #demo, .faq), including their existing mobile rules further up this file
+   - this block only covers the one thing that is genuinely new: the
+   cross-link card. Breakpoints below match the file's own tiers
+   (980 / 600 / 380) rather than inventing new ones.
+   ========================================================================== */
+
+/* cross-link card: "Also works with Codex/Claude Code ->". A bordered row,
+   not a pill. Balanced top/bottom padding so the card floats clear of the
+   FAQ band above it instead of hugging the section edge. */
+.ld .agent-crosslink-sec { padding: 80px 0; }
+.ld .agent-crosslink { display: flex; align-items: center; gap: 18px; max-width: 640px; margin: 0 auto; padding: 24px 28px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); text-decoration: none; transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease; }
+.ld .agent-crosslink:hover { border-color: var(--line3); transform: translateY(-2px); box-shadow: 0 20px 44px -24px rgba(0, 0, 0, 0.7); }
+.ld .agent-crosslink:focus-visible { outline: 2px solid var(--vio2); outline-offset: 3px; }
+.ld .agent-crosslink-mark { width: 34px; height: 34px; flex-shrink: 0; color: var(--txt); }
+.ld .agent-crosslink-text { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.ld .agent-crosslink-text b { font-family: var(--disp); font-size: 17px; font-weight: 700; color: #fff; letter-spacing: -0.01em; }
+.ld .agent-crosslink-text span { font-size: 14px; color: var(--mut); }
+.ld .agent-crosslink-arrow { width: 18px; height: 18px; flex-shrink: 0; color: var(--dim); transition: transform 0.15s ease, color 0.15s ease; }
+.ld .agent-crosslink:hover .agent-crosslink-arrow { color: #fff; transform: translateX(3px); }
+
+/* Tablet + phone (matches the file's own 980px tier): the chip shrinks a
+   notch in step with the rest of the hero (h1/sub/pixel-stage all scale
+   down at this breakpoint too), and the cross-link drops to a centred
+   column - text and mark stack, the arrow disappears since there's nothing
+   left for it to point along. */
+@media (max-width: 980px) {
+  .ld .agent-crosslink-sec { padding: 56px 0; }
+  .ld .agent-crosslink { flex-direction: column; text-align: center; padding: 26px 22px; gap: 12px; }
+  .ld .agent-crosslink-arrow { display: none; }
+}
+
+/* Small phone (matches the file's own 380px tier): trims the crosslink
+   card's own padding/mark a little further so it never gets tighter than
+   the page's outer gutter (--pad: 16px here) at the narrowest supported
+   width. Nothing in this file scrolls horizontally below this point. */
+@media (max-width: 380px) {
+  .ld .agent-crosslink { padding: 22px 18px; }
+  .ld .agent-crosslink-mark { width: 28px; height: 28px; }
+  .ld .agent-crosslink-text b { font-size: 16px; }
+  .ld .agent-crosslink-text span { font-size: 13px; }
+}

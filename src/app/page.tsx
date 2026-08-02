@@ -613,6 +613,8 @@ export default async function LandingPage({
               <a href="#features">Features</a>
               <a href="#pricing">Pricing</a>
               <a href="#faq">FAQ</a>
+              <a href="/claude-code">DispatchSEO for Claude Code</a>
+              <a href="/codex">DispatchSEO for Codex</a>
             </div>
             <div className="foot-col">
               <h4>Open source</h4>

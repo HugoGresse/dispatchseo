@@ -13,9 +13,21 @@ import { createPortal } from "react-dom";
 // 58px bar. .ld has no transform/filter, so fixed resolves to the viewport
 // there, and the scoped .ld selectors + font variables still apply.
 
-type Props = { githubUrl: string; docsUrl: string };
+type NavLink = { href: string; label: string };
 
-export function LandingNav({ githubUrl, docsUrl }: Props) {
+// The home page's own section anchors - the default so every existing call
+// site (just page.tsx today) renders byte-identical to before this prop
+// existed. Agent-specific pages (claude-code/, codex/) pass their own set.
+const DEFAULT_LINKS: NavLink[] = [
+  { href: "#demo", label: "Demo" },
+  { href: "#pricing", label: "Pricing" },
+  { href: "#faq", label: "FAQ" },
+  { href: "/blog", label: "Blog" },
+];
+
+type Props = { githubUrl: string; docsUrl: string; links?: NavLink[] };
+
+export function LandingNav({ githubUrl, docsUrl, links = DEFAULT_LINKS }: Props) {
   const [open, setOpen] = useState(false);
   const [host, setHost] = useState<HTMLElement | null>(null);
   const panelId = useId();
@@ -95,10 +107,9 @@ export function LandingNav({ githubUrl, docsUrl }: Props) {
               aria-label="Menu"
             >
               <div className="nav-panel-links">
-                <a href="#demo" onClick={close}>Demo</a>
-                <a href="#pricing" onClick={close}>Pricing</a>
-                <a href="#faq" onClick={close}>FAQ</a>
-                <a href="/blog" onClick={close}>Blog</a>
+                {links.map((l) => (
+                  <a key={l.href} href={l.href} onClick={close}>{l.label}</a>
+                ))}
                 <a href={docsUrl} onClick={close}>Docs</a>
                 <a href={githubUrl} onClick={close}>
                   GitHub
