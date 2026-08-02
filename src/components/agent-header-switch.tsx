@@ -271,9 +271,20 @@ export function AgentHeaderSwitch({ current, slug }: { current: string; slug: st
             >
               <span
                 aria-hidden
-                className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border border-dashed border-neutral-600 text-[13px] leading-none"
+                className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border border-dashed border-neutral-600"
               >
-                +
+                {/* SVG, not a "+" text glyph: font baseline metrics sat the
+                    character visibly below the circle's center. */}
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  className="h-2.5 w-2.5"
+                  aria-hidden
+                >
+                  <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+                </svg>
               </span>
               Add agent
             </button>
