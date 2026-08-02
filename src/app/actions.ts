@@ -1189,9 +1189,17 @@ async function createProjectCore(
       .eq("owner_user_id", auth.user.id);
     const gate = await githubCostGate(auth.user.id, owned.count ?? 0);
     if (gate.required) {
+      // Names the way out, because one caller has no way to show the step.
+      // The dashboard dialog puts the cost step in front of this form, so its
+      // users never see this string. The onboarding wizard shares this function
+      // and has no such step - so someone who reaches /onboarding?new=1
+      // directly (a bookmark, the back button) would otherwise get a refusal
+      // referring to a note that is nowhere on their screen, with nothing to
+      // click. Sending them to the surface that CAN take the answer turns a
+      // dead end into a detour.
       return {
         error:
-          "Before adding a third site, please read the note about GitHub Actions costs and pick how you want to handle it.",
+          "Adding a third site needs one quick step about GitHub Actions costs first. Open your dashboard and use Add project - it'll walk you through it.",
       };
     }
     ownerUserId = auth.user.id;
@@ -2101,7 +2109,14 @@ export async function acknowledgeGithubCost(reason: AckReason): Promise<{ ok: tr
       };
     }
   }
-  await recordGithubCostAck(auth.user.id, reason);
+  if (!(await recordGithubCostAck(auth.user.id, reason))) {
+    // Keep them on the step. The alternative is letting them through to a form
+    // whose submit will refuse for a reason that makes no sense to them.
+    return {
+      error:
+        "We couldn't save that just now. Try again in a moment - nothing has been lost.",
+    };
+  }
   await captureServer(auth.user.id, "github_cost_acknowledged", { reason });
   revalidatePath("/", "layout");
   return { ok: true };

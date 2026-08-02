@@ -65,16 +65,21 @@ export async function githubCostGate(
 }
 
 /**
- * Record the owner's answer.
+ * Record the owner's answer. Returns false if it did not land.
  *
- * Tolerant of a database that has not run 0048 yet: migrations here are applied
- * by hand, so a deploy can legitimately land minutes before the column does.
- * A failed write must NOT strand someone on a step they cannot get past, so an
- * error is logged and swallowed - the worst case is being asked again next
- * time, which is a far better outcome than a customer who cannot add the site
- * they are paying for.
+ * REPORTS failure rather than swallowing it, which is the opposite of what this
+ * did first, and the first version created a soft-lock. The write was
+ * best-effort on the theory that a lost ack only costs one repeated question.
+ * It doesn't: createProjectCore re-checks the gate on submit, so a swallowed
+ * failure sent the owner past the step, through the whole form, and into
+ * "please read the note about GitHub Actions costs and pick how you want to
+ * handle it" - about the note they had just answered, with no way forward and
+ * nothing on screen admitting anything had failed.
+ *
+ * Failing at the click is recoverable and honest. Failing at submit is a
+ * dead end that looks like a lie.
  */
-export async function recordGithubCostAck(userId: string, reason: AckReason): Promise<void> {
+export async function recordGithubCostAck(userId: string, reason: AckReason): Promise<boolean> {
   const { error } = await db()
     .from("subscriptions")
     .update({
@@ -87,7 +92,9 @@ export async function recordGithubCostAck(userId: string, reason: AckReason): Pr
     console.error(
       `[github-cost-gate] ack write failed for ${userId} (apply migration 0048?): ${error.message}`,
     );
+    return false;
   }
+  return true;
 }
 
 /** Tri-state on purpose - see below for why a boolean was wrong. */
