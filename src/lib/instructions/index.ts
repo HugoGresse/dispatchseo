@@ -48,7 +48,7 @@ import { TREND_SCAN, TREND_SCAN_STEPS } from "./trend-scan";
 import { TREND_EXPAND, TREND_EXPAND_STEPS } from "./trend-expand";
 import { GEO_SCAN, GEO_SCAN_STEPS } from "./geo-scan";
 
-export const INSTRUCTIONS_VERSION = "2026-08-02.2";
+export const INSTRUCTIONS_VERSION = "2026-08-02.5";
 
 export const WORKFLOWS = [
   "install",

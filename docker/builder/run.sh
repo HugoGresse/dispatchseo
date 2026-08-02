@@ -147,11 +147,39 @@ merge_sweep() { # merge_sweep <slug> <owner/repo>
         log "PR #$n in $2 touches protected files - leaving it for the owner"
         continue
       fi
-      if timeout 120 gh pr merge "$n" --repo "$2" --squash --delete-branch >/dev/null 2>&1; then
+      # Keep the failure text: "could not merge" has several causes and they
+      # send the owner to completely different places. A merge CONFLICT is by
+      # far the most common (two guide PRs open at once both append to the
+      # content registry, or main moved on under an older branch) and has
+      # nothing to do with branch protection - telling someone to go check
+      # repo settings for it wastes the one message we get.
+      if merge_err=$(timeout 120 gh pr merge "$n" --repo "$2" --squash --delete-branch 2>&1); then
         log "auto-merged green guide PR #$n in $2"
         report "builder-merge--$1" ok
       else
-        report "builder-merge--$1" fail "could not merge green PR #$n - merge it on GitHub and check branch protection"
+        # Self-heal first, same as the GitHub rail: every guide PR appends to
+        # the same shared registry files, so one left open while anything else
+        # merges comes back CONFLICTING and nothing ever rebased it. Asking
+        # GitHub to merge the base branch in fixes it whenever the two sides
+        # touched different lines, which is the usual case.
+        case "$merge_err" in
+          *"merge conflicts"*|*"not mergeable"*|*"Base branch was modified"*|*"not up to date"*)
+            if timeout 120 gh api -X PUT "repos/$2/pulls/$n/update-branch" >/dev/null 2>&1; then
+              log "PR #$n in $2 was out of date - updated it from the default branch; it merges on the next sweep"
+              continue
+            fi ;;
+        esac
+        case "$merge_err" in
+          *"merge conflicts"*|*"not mergeable"*)
+            reason="PR #$n has conflicts with the default branch that need a human or an agent to resolve - the automatic branch update could not fix them" ;;
+          *"Base branch was modified"*|*"not up to date"*)
+            reason="PR #$n is behind the default branch and could not be updated automatically - update the branch on GitHub and it merges on the next sweep" ;;
+          *"Required status check"*|*"protected branch"*|*"branch protection"*|*"review"*)
+            reason="PR #$n is blocked by a branch protection rule (a required review or status check) - merge it on GitHub, or relax the rule for this repo" ;;
+          *)
+            reason="could not merge green PR #$n: $(echo "$merge_err" | tr '\n' ' ' | cut -c1-200)" ;;
+        esac
+        report "builder-merge--$1" fail "$reason"
       fi
     done
 }

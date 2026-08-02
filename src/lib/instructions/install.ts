@@ -132,9 +132,13 @@ Inspect this repo and adjust these known spots before committing:
     so it died silently; 2026-08-02, the first real cloud customer's
     npm + Vite site died 25 seconds into every build because the pack assumed
     pnpm.
-  - The one thing still worth checking: **Node version.** \`node-version: 22\`
-    is hardcoded (pnpm 11 needs 22+). If this repo genuinely builds on a
-    different version, change it in the "Set up Node" step.
+  - **Node version resolves at run time too** - \`.nvmrc\` if this repo has
+    one, otherwise \`engines.node\` from package.json read as a FLOOR (">=18"
+    is a minimum a Node 22 runner already meets, so it does not drag the
+    build down onto an EOL major), otherwise 22. Leave the "Set up Node"
+    step exactly as shipped. If this repo must build on a specific major,
+    add an \`.nvmrc\` to the REPO - never edit the workflow, because a pack
+    update rewrites it verbatim and your edit disappears with it.
 - **Prove the install step exactly the way CI will run it - BEFORE the PR
   opens.** Run the repo's install command fresh with the workflow's flags
   (\`pnpm install --frozen-lockfile\`, \`npm ci\`, ...) and require exit 0.
@@ -148,6 +152,14 @@ Inspect this repo and adjust these known spots before committing:
 - **Public env placeholders** (NEXT_PUBLIC_*) in those workflows exist so
   the build never trips on missing vars. Replace them with whatever public
   env THIS repo's production build needs; drop the ones it doesn't.
+  **This is the one adaptation that still lives INSIDE a pack file, so a
+  pipeline update overwrites it** - unlike \`.dispatchseo/publish-paths\`,
+  \`.dispatchseo/serve\` and \`.dispatchseo/conventions.md\`, which are
+  repo-owned and survive. It fails loudly when it happens (the build stops
+  on the missing var and reports home), so it is recoverable, not silent:
+  if a build starts failing on a public env var right after an update, this
+  is why - re-apply it and say so in the PR. Prefer values the build can get
+  from the repo itself over anything hand-typed here.
 - **The auto-merge path gate** only auto-merges guide PRs whose files all
   live under the repo's publish dirs. Those dirs come from
   \`.dispatchseo/publish-paths\` - one path prefix per line, # comments
@@ -164,8 +176,18 @@ Inspect this repo and adjust these known spots before committing:
   skip the file and write it after the setup workflow (next step) discovers
   or scaffolds it.
 - **The tool validator** (seo-tool-validate.yml) builds the PR and exercises
-  the tool page on localhost:3000 - adjust the port/start command if this
-  repo serves differently.
+  the tool page against a locally-served production build. It defaults to
+  \`<pm> run start\` on port 3000 (Next's shape). If THIS repo serves
+  differently - Vite \`preview\` on 4173, Hugo \`server\` on 1313, a built
+  dir behind \`python3 -m http.server\`, or any repo with no package.json -
+  WRITE \`.dispatchseo/serve\` now, two lines:
+  \`command=<what serves the production build>\` and \`port=<the port it
+  listens on>\`. Never edit the port or start command inside
+  seo-tool-validate.yml itself - that file is pack-owned and the next pack
+  update reverts the edit, which is the 2026-07-30 failure shape.
+  \`.dispatchseo/serve\` is repo-owned and survives updates, exactly like
+  \`.dispatchseo/publish-paths\`. Get this wrong and every tool PR fails
+  validation and strands unmerged.
 - **IndexNow dispatches** in the merge steps reference an indexnow.yml the
   repo may not have; the \`|| echo\` fallbacks make that harmless. Mention it
   as a nice-to-have, do not build it in this run.

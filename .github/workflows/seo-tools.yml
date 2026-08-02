@@ -65,6 +65,7 @@ jobs:
           open=$(gh pr list --repo "$GITHUB_REPOSITORY" --label seo-tool --state open --json number --jq 'length')
           if [ "$open" != "0" ]; then
             echo "A tool PR is already open - skipping. The suggestion stays approved; the weekly sweep will pick it up once the open PR lands."
+            echo "skip_reason=a tool PR is already open and unmerged" >> "$GITHUB_OUTPUT"
           fi
           # Automation-flag gate: the DispatchSEO dashboard can pause tool
           # builds (auto_build_tools off). 404 = backend without the endpoint
@@ -82,6 +83,7 @@ jobs:
               # attempt and the in-stack builder both cover this window.
               echo "Backend unreachable right now (rebooting?) - deferring to the next scheduled attempt."
               open=defer
+              echo "skip_reason=the backend was unreachable, so this run was deferred" >> "$GITHUB_OUTPUT"
             elif [ "$code" != "200" ] && [ "$code" != "404" ]; then
               echo "::error::project-mode endpoint returned HTTP $code"; exit 1
             fi
@@ -241,8 +243,35 @@ jobs:
             npm)  if [ -f package-lock.json ]; then cache=npm; fi ;;
             yarn) if [ -f yarn.lock ]; then cache=yarn; fi ;;
           esac
-          { echo "pm=$pm"; echo "pnpm_pinned=$pnpm_pinned"; echo "cache=$cache"; } >> "$GITHUB_OUTPUT"
-          echo "package manager: $pm (pnpm pin: $pnpm_pinned, node cache: ${cache:-off})"
+          # Node major, resolved at RUN time - same rule and same reason as the
+          # package manager above. `node-version: 22` was hardcoded here while
+          # the install playbook told the installing agent to hand-edit it if
+          # the repo built on something else, which is the banned shape exactly:
+          # a pack update pushes this file VERBATIM, so that edit self-reverts
+          # on the next sync and the builder then dies on the wrong major in a
+          # repo nobody is watching (2026-08-02).
+          #
+          # .nvmrc first - a repo that ships one has DECLARED the version its
+          # own developers build on, so it is honoured as written. engines.node
+          # is read as a FLOOR rather than a target: ">=18" is a minimum a Node
+          # 22 runner already satisfies, and resolving it downward would move
+          # working installs onto an EOL major - and below pnpm 11's own floor -
+          # to satisfy a constraint that was never violated. 22 when neither
+          # file says anything, which is what every install already runs, so a
+          # repo that declares nothing sees no change at all.
+          node_v=22
+          if [ -f .nvmrc ]; then
+            # Tolerates "v22", "22.11.0" and trailing whitespace; an alias like
+            # "lts/*" names no number, so the default stands.
+            v=$(grep -Eo '[0-9]+(\.[0-9]+){0,2}' .nvmrc 2>/dev/null | head -1)
+            [ -n "$v" ] && node_v="$v"
+          elif [ -f package.json ]; then
+            eng=$(node -e 'process.stdout.write(String((require("./package.json").engines||{}).node||""))' 2>/dev/null || true)
+            major=$(printf '%s' "$eng" | grep -Eo '[0-9]+' | head -1)
+            if [ -n "$major" ] && [ "$major" -gt 22 ]; then node_v="$major"; fi
+          fi
+          { echo "pm=$pm"; echo "pnpm_pinned=$pnpm_pinned"; echo "cache=$cache"; echo "node=$node_v"; } >> "$GITHUB_OUTPUT"
+          echo "package manager: $pm (pnpm pin: $pnpm_pinned, node cache: ${cache:-off}, node: $node_v)"
 
       # Pinned -> action-setup reads the exact version out of the field.
       # Passing a version input as well is precisely what hard-errors.
@@ -251,8 +280,8 @@ jobs:
         uses: pnpm/action-setup@v4
 
       # No pin -> action-setup has to be told. pnpm 11 matches the Node 22
-      # pinned below; a repo whose lockfile was written by an older major
-      # should add a packageManager field rather than edit this, which
+      # floor resolved above; a repo whose lockfile was written by an older
+      # major should add a packageManager field rather than edit this, which
       # routes it to the exact path above.
       - name: Set up pnpm (no packageManager pin in this repo)
         if: steps.guard.outputs.open == '0' && steps.pkg.outputs.pm == 'pnpm' && steps.pkg.outputs.pnpm_pinned == '0'
@@ -268,7 +297,9 @@ jobs:
         if: steps.guard.outputs.open == '0' && steps.pkg.outputs.pm != 'none'
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # Resolved by the detection step above, never hand-edited - see the
+          # comment there for why an install-time edit could not stay applied.
+          node-version: ${{ steps.pkg.outputs.node }}
           cache: ${{ steps.pkg.outputs.cache }}
 
       - name: Install deps (so the skill's build/verify step works)
@@ -542,9 +573,40 @@ jobs:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           OUTCOME: ${{ job.status }}
+          SKIP_REASON: ${{ steps.guard.outputs.skip_reason }}
+          OPEN: ${{ steps.guard.outputs.open }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # names the failed step in the report
         run: |
-          if [ "$OUTCOME" = "success" ]; then
+          # A NO-WORK skip reports NOTHING - seo-daily's twin, same reasoning.
+          # The guard sets open=paused (tool builds toggled off on the
+          # dashboard) or open=skip (today's sweep already ran / nothing is
+          # approved), every step after it no-ops, job.status is therefore
+          # success, and this step used to post ok=1. The backend decides what
+          # is due by READING these rows (build-schedule.ts) and an ok row means
+          # a COMPLETED build, so a run that did nothing anchored the whole
+          # cadence window - which on a weekly workflow costs a week, not a day.
+          #
+          # Silence rather than deferred=, which is what the two BLOCKED cases
+          # below report. A deferral lands as a claim row that is re-fired after
+          # a 3h grace - right when something was genuinely prevented, wrong on
+          # the already-ran-today path, where it is a dispatch loop billing a
+          # runner minute every 3h until midnight. Nothing happened here, so the
+          # last REAL outcome keeps owning the cadence window and the staleness
+          # clock. An unset/unexpected OPEN (a guard step that died before
+          # writing its output) deliberately falls through to the failure branch.
+          case "$OPEN" in
+            paused|skip)
+              echo "Guard skipped this run (open=$OPEN) - no build was attempted, so nothing is reported and the last real outcome keeps the cadence window."
+              exit 0 ;;
+          esac
+          if [ -n "$SKIP_REASON" ]; then
+            # A run that was BLOCKED is not a run that succeeded. ok=1 anchored
+            # the cadence window, so one unmerged PR or a single backend reboot
+            # bought a full day of silence behind a green dashboard (2026-08-02).
+            curl -sG --max-time 30 -H "Authorization: Bearer $SEO_MCP_API_KEY" \
+              --data-urlencode "job=seo-tools" --data-urlencode "deferred=$SKIP_REASON" \
+              "https://dispatchseo.com/api/cron/deploy-check" || true
+          elif [ "$OUTCOME" = "success" ]; then
             curl -sG --max-time 30 -H "Authorization: Bearer $SEO_MCP_API_KEY" \
               --data-urlencode "job=seo-tools" --data-urlencode "ok=1" \
               "https://dispatchseo.com/api/cron/deploy-check" || true

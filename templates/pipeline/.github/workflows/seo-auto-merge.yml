@@ -127,12 +127,19 @@ jobs:
           echo "merge=$merge" >> "$GITHUB_OUTPUT"
 
       - name: Merge green SEO PRs
+        id: merge
         if: steps.guard.outputs.skip != '1' && steps.mode.outputs.merge != 'off'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          # A PR we cannot merge is REPORTED, never fatal. It used to exit 1
+          # mid-loop, which killed the rest of the sweep - one guide PR with a
+          # merge conflict stopped every later PR AND the stalled-tool-
+          # validation step below from running at all (2026-08-02, usagecut).
+          BLOCKED_FILE="${RUNNER_TEMP:-/tmp}/merge-blocked"
+          : > "$BLOCKED_FILE"
 
           prs=$(gh pr list --repo "$REPO" --label seo --state open --json number --jq '.[].number')
           if [ -z "$prs" ]; then
@@ -216,7 +223,45 @@ jobs:
                 # URL-polling and pings straight from the sitemap.
                 slugs=$(gh pr view "$n" --repo "$REPO" --json files \
                   --jq '[.files[].path | select(test("\\.mdx$")) | split("/") | last | sub("\\.mdx$"; "")] | join(" ")')
-                gh pr merge "$n" --repo "$REPO" --squash --delete-branch
+                # Keep WHY the merge was refused: the causes send the owner to
+                # completely different places, and a conflict (two guide PRs
+                # open at once both appending to the content registry, or main
+                # moving on under an older branch) has nothing to do with the
+                # branch protection the old message blamed.
+                if ! merge_err=$(gh pr merge "$n" --repo "$REPO" --squash --delete-branch 2>&1); then
+                  # Self-heal the common case before reporting anything. Every
+                  # guide PR appends to the same shared registry files, so any
+                  # guide PR still open when something else merges comes back
+                  # CONFLICTING - and nothing ever rebased it, so it sat red
+                  # forever waiting on a human. Ask GitHub to merge the base
+                  # branch in: it succeeds whenever the two sides touched
+                  # different lines (the usual case - two appends in different
+                  # places), and the PR merges on the next sweep. A genuine
+                  # line-level conflict still 422s and falls through to the
+                  # message below.
+                  case "$merge_err" in
+                    *"merge conflicts"*|*"not mergeable"*|*"Base branch was modified"*|*"not up to date"*)
+                      if gh api -X PUT "repos/$REPO/pulls/$n/update-branch" >/dev/null 2>&1; then
+                        echo "PR #$n was out of date - updated it from the default branch; it merges on the next sweep."
+                        echo "::endgroup::"
+                        continue
+                      fi ;;
+                  esac
+                  case "$merge_err" in
+                    *"merge conflicts"*|*"not mergeable"*)
+                      reason="guide PR #$n has conflicts with the default branch that need a human or an agent to resolve - the automatic branch update could not fix them" ;;
+                    *"Base branch was modified"*|*"not up to date"*)
+                      reason="guide PR #$n is behind the default branch and this repo requires branches to be up to date - update the branch and it merges on the next sweep" ;;
+                    *"Required status check"*|*"protected branch"*|*"review"*)
+                      reason="guide PR #$n is blocked by a branch protection rule (a required review or status check) - merge it on GitHub, or relax the rule" ;;
+                    *)
+                      reason="could not merge green guide PR #$n: $(echo "$merge_err" | tr '\n' ' ' | cut -c1-200)" ;;
+                  esac
+                  echo "::warning::$reason"
+                  printf '%s\n' "$reason" >> "$BLOCKED_FILE"
+                  echo "::endgroup::"
+                  continue
+                fi
                 # This squash push is made with GITHUB_TOKEN, and GITHUB_TOKEN
                 # pushes never trigger push-event workflows - so the IndexNow
                 # workflow would silently skip every auto-merged guide.
@@ -237,6 +282,17 @@ jobs:
             esac
             echo "::endgroup::"
           done
+
+          # Hand the precise reason to the report step. Without this the
+          # dashboard said only "workflow failed - <run url>", which is the
+          # one thing the doctrine forbids: a failure whose detail exists
+          # solely in an Actions log the owner has no reason to open.
+          if [ -s "$BLOCKED_FILE" ]; then
+            count=$(wc -l < "$BLOCKED_FILE" | tr -d ' ')
+            msg=$(head -1 "$BLOCKED_FILE")
+            [ "$count" -gt 1 ] && msg="$msg (and $((count - 1)) more PR(s) blocked the same way)"
+            echo "blocked=$msg" >> "$GITHUB_OUTPUT"
+          fi
 
       # Self-healing for the tool pipeline. Two ways a tool PR ends up with
       # no verdict label and would otherwise strand silently:
@@ -303,9 +359,17 @@ jobs:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           OUTCOME: ${{ job.status }}
+          BLOCKED: ${{ steps.merge.outputs.blocked }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # names the failed step in the report
         run: |
-          if [ "$OUTCOME" = "success" ]; then
+          # A PR the sweep declined to merge is a real "needs you" state even
+          # though the run itself is green - report the reason, not a run URL.
+          if [ -n "$BLOCKED" ]; then
+            curl -sG --max-time 30 -H "Authorization: Bearer $SEO_MCP_API_KEY" \
+              --data-urlencode "job=seo-auto-merge" \
+              --data-urlencode "fail=$BLOCKED" \
+              "{{BACKEND_URL}}/api/cron/deploy-check" || true
+          elif [ "$OUTCOME" = "success" ]; then
             curl -sG --max-time 30 -H "Authorization: Bearer $SEO_MCP_API_KEY" \
               --data-urlencode "job=seo-auto-merge" --data-urlencode "ok=1" \
               "{{BACKEND_URL}}/api/cron/deploy-check" || true
