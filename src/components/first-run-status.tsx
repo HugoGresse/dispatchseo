@@ -390,7 +390,7 @@ export function FirstRunStatus({ slug, cloud }: { slug: string; cloud?: boolean 
                 <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-violet-500" />
               </span>
             ) : null}
-            {allDone ? "Complete" : "Typically 10-20 min"}
+            {allDone ? "Complete" : "Typically 30-40 min"}
           </p>
         </div>
         <div className="mt-2 h-1 overflow-hidden rounded-full bg-neutral-800">

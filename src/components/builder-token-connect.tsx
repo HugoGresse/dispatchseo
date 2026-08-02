@@ -117,6 +117,16 @@ function BuilderTokenForm({
     return (
       <p className="mt-2 text-sm text-emerald-300">
         Saved - the builder picks it up within a few minutes.
+        {/* Only claim the repo sync when it verifiably happened - the sync is
+            best-effort, and implying a secret exists that doesn't is how the
+            9-second workflow failure this feature fixes came about. */}
+        {state.syncedRepos && state.syncedRepos.length > 0 ? (
+          <>
+            {" "}Also stored on{" "}
+            <b className="font-medium">{state.syncedRepos.join(", ")}</b> as a repo secret, so
+            GitHub-scheduled runs read it too.
+          </>
+        ) : null}
       </p>
     );
   }

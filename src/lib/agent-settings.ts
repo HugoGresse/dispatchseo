@@ -10,7 +10,8 @@
 import { db } from "@/lib/db";
 import { isCloudMode } from "@/lib/cloud";
 import { agentById, availableAgents, isSupportedAgent, type AgentDefinition } from "@/lib/agents";
-import { checkRepoSecret } from "@/lib/github-app-secrets";
+import { checkRepoSecret, setRepoSecret } from "@/lib/github-app-secrets";
+import { listProjects } from "@/lib/projects";
 import { builderAgentToken, setRepoActionsVariable } from "@/lib/github";
 import { buildsActive } from "@/lib/builder-status";
 import type { Project } from "@/lib/projects";
@@ -159,6 +160,38 @@ export async function verifyAgentCredential(
       error: "Couldn't reach OpenAI to verify that key. Check your connection and try again.",
     };
   }
+}
+
+/**
+ * Push one agent credential to every connected repo's Actions secrets, so a
+ * single paste feeds BOTH build rails: the in-stack builder reads
+ * instance_settings, GitHub-scheduled workflows read the repo secret. On
+ * self-host there is no App to copy it across, and that gap cost a fresh
+ * install its first research runs (2026-08-02): token pasted in the wizard,
+ * seo-weekly-research died 9 seconds later on the missing repo secret, and
+ * GitHub emailed the owner a failure for a step they believed they had done.
+ *
+ * Best-effort per repo and never throws - a repo-less project, a token
+ * without secrets access, or a GitHub hiccup must not fail the paste that is
+ * this function's reason to run. Returns the repos actually written, so the
+ * caller can SAY what happened instead of implying more than it knows.
+ */
+export async function syncAgentSecretToRepos(agentId: string, value: string): Promise<string[]> {
+  const agent = agentById(agentId);
+  const synced: string[] = [];
+  try {
+    const projects = await listProjects();
+    await Promise.allSettled(
+      projects.map(async (p) => {
+        if (!p.github_repo) return;
+        const res = await setRepoSecret(p, agent.credential.repoSecretName, value);
+        if (res.ok) synced.push(p.github_repo);
+      }),
+    );
+  } catch {
+    /* best-effort, see above */
+  }
+  return synced;
 }
 
 export type AgentCredentialStatus = "ready" | "needs-key" | "unknown";

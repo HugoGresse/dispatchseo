@@ -1,11 +1,36 @@
 import sodium from "libsodium-wrappers";
 import { installationToken } from "./github-app";
+import { isCloudMode } from "./cloud";
 
-// GitHub Actions repo secrets, written through the App installation token.
+// GitHub Actions repo secrets - written through the App installation token in
+// cloud, or the instance's stored PAT (the wizard's one-tap-merge token, repo
+// scope) on self-host, which the secrets API accepts just the same. The PAT
+// path exists because a self-host has no App, and "the backend can't copy the
+// token across" turned a credential pasted in the wizard into a 9-second
+// workflow failure that emailed the owner (2026-08-02, first outside install).
 // GitHub's secrets API requires the plaintext sealed (libsodium crypto_box_seal)
 // with the repo's public key - this module is the only place that dance lives.
 // Server-only: values pass through here in plaintext for the duration of the
 // request and are never persisted on our side.
+
+// Which credential can touch this repo's secrets. Never a shared/operator
+// token for a cloud tenant: without an App installation there, the honest
+// answer is "none" - the same tenant boundary connectBuilderToken enforces.
+async function repoToken(project: {
+  github_repo: string | null;
+  github_installation_id: number | null;
+}): Promise<string | null> {
+  if (project.github_installation_id) {
+    try {
+      return await installationToken(project.github_installation_id);
+    } catch {
+      return null;
+    }
+  }
+  if (isCloudMode()) return null;
+  const { tokenForRef } = await import("./github");
+  return tokenForRef(project);
+}
 
 async function sealedBox(plaintext: string, repoPublicKeyB64: string): Promise<string> {
   await sodium.ready;
@@ -30,12 +55,14 @@ export async function setRepoSecret(
   value: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!project.github_repo) return { ok: false, error: "no repo connected" };
-  if (!project.github_installation_id) return { ok: false, error: "GitHub App not installed" };
-  let token: string;
-  try {
-    token = await installationToken(project.github_installation_id);
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  const token = await repoToken(project);
+  if (!token) {
+    return {
+      ok: false,
+      error: project.github_installation_id
+        ? "could not get an App installation token"
+        : "no GitHub credential for this repo (no App installation, no stored token)",
+    };
   }
   let keyRes: Response;
   try {
@@ -74,10 +101,9 @@ export async function checkRepoSecret(
   project: { github_repo: string | null; github_installation_id: number | null },
   name: string,
 ): Promise<boolean> {
-  if (!project.github_repo || !project.github_installation_id) {
-    throw new Error("no App-connected repo to check");
-  }
-  const token = await installationToken(project.github_installation_id);
+  if (!project.github_repo) throw new Error("no repo to check");
+  const token = await repoToken(project);
+  if (!token) throw new Error("no GitHub credential to check with");
   const res = await fetch(`${GH}/repos/${project.github_repo}/actions/secrets/${name}`, {
     headers: headers(token),
     signal: AbortSignal.timeout(10000),

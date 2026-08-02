@@ -11,6 +11,8 @@ import {
   type ScheduledWorkflow,
 } from "@/lib/build-schedule";
 import { reconcileInstallStamp } from "@/lib/install-reconcile";
+import { checkRepoSecret } from "@/lib/github-app-secrets";
+import { projectAgent } from "@/lib/agents";
 
 // THE SCHEDULER for repos that build through GitHub Actions.
 //
@@ -139,6 +141,30 @@ export async function GET(req: Request): Promise<Response> {
         }
       }
       if (buildable.length === 0) return out;
+
+      // Every workflow about to be woken dies in a 9-second preflight if the
+      // project's agent credential is not in the repo's secrets - and GitHub
+      // emails the owner that failure, for what is usually just "setup not
+      // finished" (the exact class the setup-gate rule keeps quiet; it hit
+      // the first outside install on 2026-08-02, twice). The backend can now
+      // check the secret itself - App token in cloud, the stored PAT on
+      // self-host - so verifiably-absent is an informational skip that names
+      // the fix. "Couldn't ask" dispatches as before: the workflow's own
+      // preflight stays the backstop, and a previously-working pipeline that
+      // loses its secret still surfaces through heartbeat staleness.
+      try {
+        const agentDef = projectAgent(p);
+        if (!(await checkRepoSecret(p, agentDef.credential.repoSecretName))) {
+          out.skipped =
+            `setup incomplete: ${p.github_repo} has no ${agentDef.credential.repoSecretName} ` +
+            `secret yet, so its workflows can't run ${agentDef.displayName}. Paste the ` +
+            `${agentDef.displayName} credential on the dashboard (it syncs to the repo), or ` +
+            `set the repo secret directly.`;
+          return out;
+        }
+      } catch {
+        /* can't check from here - dispatch, and let the preflight answer */
+      }
 
       const dispatched: string[] = [];
       const failed: string[] = [];

@@ -39,6 +39,7 @@ import { markCronFixed } from "@/lib/cron-alerts";
 import {
   agentCredentialStatuses,
   setProjectAgent,
+  syncAgentSecretToRepos,
   verifyAgentCredential,
   type AgentCredentialStatus,
 } from "@/lib/agent-settings";
@@ -732,6 +733,23 @@ export async function connectGithubToken(
     };
   }
   bustInstanceCache();
+  // The reverse of connectBuilderToken's repo sync: a credential pasted
+  // BEFORE GitHub was connected had no repo to land on - now it does. Push
+  // every stored agent key to this repo's secrets so the GitHub-scheduled
+  // workflows find theirs regardless of which order the owner did setup in.
+  // Best-effort: the token store above already succeeded, and that is what
+  // this action promised.
+  try {
+    const { builderAgentToken } = await import("@/lib/github");
+    const { setRepoSecret } = await import("@/lib/github-app-secrets");
+    const { availableAgents } = await import("@/lib/agents");
+    for (const a of availableAgents()) {
+      const stored = await builderAgentToken(a.id);
+      if (stored) await setRepoSecret(project, a.credential.repoSecretName, stored);
+    }
+  } catch {
+    /* best-effort, see above */
+  }
   revalidatePath("/", "layout");
   return { ok: true };
 }
@@ -1820,7 +1838,10 @@ export async function connectClaudeToken(
   return { ok: true };
 }
 
-export type ConnectBuilderTokenState = { ok: true } | { error: string } | null;
+export type ConnectBuilderTokenState =
+  | { ok: true; syncedRepos?: string[] }
+  | { error: string }
+  | null;
 
 // Self-host / docker sibling of connectClaudeToken: the owner pastes their
 // `claude setup-token` output on the dashboard's automatic-builds step and it
@@ -1868,9 +1889,16 @@ export async function connectBuilderToken(
     };
   }
   bustInstanceCache();
+  // The same paste feeds BOTH build rails. This stores where the in-stack
+  // builder reads; GitHub-scheduled workflows read a repo secret instead, and
+  // with no App on self-host nothing else copies it across - the gap that
+  // turned a wizard paste into a 9-second workflow failure emailing the owner
+  // (2026-08-02). Best-effort: the instance store above is the paste's
+  // contract, the repo sync is the bonus, and the result says which happened.
+  const syncedRepos = await syncAgentSecretToRepos(agent.id, token);
   revalidatePath("/onboarding");
   revalidatePath("/dashboard");
-  return { ok: true };
+  return { ok: true, syncedRepos };
 }
 
 // The cloud finale's install trigger (c5): commits the pipeline pack into

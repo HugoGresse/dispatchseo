@@ -1491,7 +1491,7 @@ export function OnboardingWizard({
                 <p>
                   <b className="font-semibold text-neutral-100">Then let the agent work - this is
                   the long part.</b>{" "}
-                  Typically 10-20 minutes. If your site has no blog yet, the agent builds your
+                  Typically 30-40 minutes. If your site has no blog yet, the agent builds your
                   whole content home from scratch, which can stretch toward an hour - it&apos;s
                   building real infrastructure, not stuck.
                 </p>
@@ -1667,7 +1667,7 @@ export function OnboardingWizard({
                 <p className="text-lg font-semibold text-white">Your agent is working.</p>
               </div>
               <p className="mx-auto mt-2 max-w-md text-center text-[15px] leading-relaxed text-neutral-300">
-                Typically <b className="font-medium text-neutral-100">10-20 minutes</b> - up to
+                Typically <b className="font-medium text-neutral-100">30-40 minutes</b> - up to
                 an hour if it&apos;s building your blog from scratch. Long is normal; it&apos;s
                 not stuck.
               </p>

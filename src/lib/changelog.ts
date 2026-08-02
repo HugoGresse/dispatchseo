@@ -144,6 +144,23 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
     kind: "fixed",
     text:
+      "On self-host, the agent credential you paste on the dashboard now also lands on your " +
+      "connected repo as the Actions secret its scheduled workflows read - one paste feeds " +
+      "both build paths, in either order (token first or GitHub first). Before, workflows " +
+      "died in seconds with \"the token is missing\" over a token you had genuinely pasted, " +
+      "because it was sitting in the other pocket and nothing copied it across without the " +
+      "GitHub App. The scheduler also checks the repo secret before waking a workflow, so a " +
+      "half-finished setup waits quietly instead of emailing you failures from GitHub.",
+  },
+  {
+    kind: "improved",
+    text:
+      "The wizard now says the agent install typically takes 30-40 minutes, which is what it " +
+      "actually takes - the old 10-20 estimate made normal installs feel stuck.",
+  },
+  {
+    kind: "fixed",
+    text:
       "Cloud setup no longer gets stuck one step from done. The background setup run could " +
       "finish all its work without flipping the final \"installed\" switch, which quietly kept " +
       "research and daily builds from ever starting. The backend now verifies your repo on its " +
