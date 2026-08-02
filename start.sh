@@ -25,6 +25,25 @@ if [ -z "$DISPATCHSEO_PULLED" ] && [ -d .git ] && command -v git >/dev/null 2>&1
   exec sh "$0"
 fi
 
+# No git clone here (the tarball path install.sh takes when git is absent).
+# Say so LOUDLY, because the image pull further down is NOT gated on this:
+# without it, an upgrade quietly lands the newest app + builder images on
+# whatever setup.sql and docker-compose.yml this folder was created with -
+# so new migrations never apply and new compose env never reaches the
+# containers. Nothing errors; features just silently don't exist, while
+# docs/upgrading.mdx promises "sh start.sh is the whole upgrade". A warning
+# that names the real command is the least this can do.
+if [ ! -d .git ]; then
+  echo ""
+  echo "  Note: this folder is not a git clone, so start.sh cannot refresh"
+  echo "  DispatchSEO's own files (database migrations, docker-compose.yml)."
+  echo "  Your containers may update while the schema they expect does not."
+  echo ""
+  echo "  To upgrade properly, re-run the installer in this folder:"
+  echo "    curl -fsSL https://dispatchseo.com/install.sh | sh"
+  echo ""
+fi
+
 # Fail early with the real fix when docker or the compose v2 plugin is
 # missing - the raw CLI errors ("docker: 'compose' is not a docker command")
 # send people down the wrong rabbit hole. docker-compose v1 (the hyphen
@@ -87,6 +106,40 @@ if ! grep -q '^DISPATCH_INSTALL_ID=..*' .env; then
   if [ -n "$HEX" ] && [ "${#HEX}" -ge 30 ]; then
     echo "DISPATCH_INSTALL_ID=$(echo "$HEX" | cut -c1-8)-$(echo "$HEX" | cut -c9-12)-4$(echo "$HEX" | cut -c13-15)-a$(echo "$HEX" | cut -c16-18)-$(echo "$HEX" | cut -c19-30)" >> .env
   fi
+fi
+
+# The telemetry opt-out is only real if the app container actually SEES the
+# setting. DISPATCHSEO_TELEMETRY reaches it through exactly one line in
+# docker-compose.yml (the app service enumerates its env explicitly, so an
+# unlisted variable simply never arrives), and the compose file in this folder
+# is whatever the git pull at the top of this script last managed to fetch -
+# which forks with local commits, tarball installs and offline machines all
+# skip quietly. So an owner can put DISPATCHSEO_TELEMETRY=off in .env, re-run
+# this script, watch it succeed, and keep sending the daily ping.
+#
+# Of the two ways an opt-out can fail, "still sending" is the one that breaks a
+# promise /privacy and the docs make in writing. Never let that be silent.
+if [ -f docker-compose.yml ] \
+  && grep -q '^DISPATCHSEO_TELEMETRY=..*' .env 2>/dev/null \
+  && ! grep -q '^[[:space:]]*DISPATCHSEO_TELEMETRY:' docker-compose.yml 2>/dev/null; then
+  echo ""
+  echo "  Warning: your .env sets DISPATCHSEO_TELEMETRY, but the docker-compose.yml"
+  echo "  in this folder is an older copy that never passes it to the app"
+  echo "  container - so the setting is ignored and the anonymous once-a-day"
+  echo "  install ping keeps sending until you fix one of these:"
+  echo ""
+  echo "    - Update this folder's files, then start again:"
+  echo "        git pull && sh start.sh"
+  echo "    - No git here? Re-run the installer in this folder instead:"
+  echo "        curl -fsSL https://dispatchseo.com/install.sh | sh"
+  echo "    - Or edit docker-compose.yml by hand: under the app service's"
+  echo "      'environment:' block, add this line (2 spaces deeper than 'app:'"
+  echo "      plus 4 more, matching the lines already there):"
+  echo '        DISPATCHSEO_TELEMETRY: ${DISPATCHSEO_TELEMETRY:-}'
+  echo ""
+  echo "  What the ping contains, and nothing else: a random install id and the"
+  echo "  version. Details: https://dispatchseo.com/docs/security#telemetry-on-a-self-hosted-install"
+  echo ""
 fi
 
 # Host port for the dashboard. An explicit DISPATCH_PORT in .env always

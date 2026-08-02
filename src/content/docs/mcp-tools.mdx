@@ -251,6 +251,40 @@ queue via `propose_suggestion` and wait.
 Returns `{ ok: true, message }` for a tool, or `{ ok: true, note }` for a
 guide (explaining the front-of-queue placement instead).
 
+### `get_build_brief`
+
+The guide build's opening call - the build-guide playbook says to make it
+**first**, before anything else. One response carries what a run used to
+collect over a dozen serial calls: the queue head (the approved guide to
+build, in the owner's exact build order, sorted by the same helper
+`get_suggestions` uses so the two can't name different items), how deep that
+queue is, the live pacing verdict, structural fingerprints of the last few
+published guides, ranked internal-link candidates when the project has
+back-linking on, and the site's own GSC numbers for the information-gain
+step. The fingerprints are the real saving: each one is a published guide's
+opening word-run and its heading skeleton with the topic stripped, computed
+by the same extractor `check_sameness` judges the draft with, so the run
+never has to read two or three published posts in full just to learn their
+shape.
+
+Every section fails open on its own. Anything unavailable is named in
+`degraded` along with the fallback to use for that one section - a degraded
+brief is never a reason to stop a build.
+
+<Fields>
+  <Field name="keyword" type="string">
+    The new guide's primary keyword, used to rank internal-link candidates by
+    topical closeness. Omit it on a first call when the queue head is what
+    tells you the keyword.
+  </Field>
+</Fields>
+
+Returns `{ queue_head, queue_depth, pacing, recent_guides, link_candidates,
+site_stats, internal_linking, degraded }`. `link_candidates` is only
+populated when `set_internal_linking` is on. An empty approved queue arrives
+as a `degraded` line too - it's a real state, not a lookup failure, and the
+playbook has a backstop for it.
+
 ### `check_sameness`
 
 The pre-publish sameness gate: does this draft read like the guides this
@@ -772,6 +806,29 @@ access checks keep failing, the guess was probably wrong.
   </Field>
 </Fields>
 
+### `disconnect_repo`
+
+Stops DispatchSEO running in this project's repo: the `seo-*` workflows are
+disabled and deleted, the `.dispatchseo` files and the `SEO_MCP_API_KEY`
+secret are removed, and the connection is cleared. Schedules stop, so the
+repo stops spending the owner's GitHub Actions minutes. Published guides,
+tools and pages are never touched, and the project keeps its keywords,
+rankings and history - reconnecting later re-installs the pipeline. If the
+repo can't be reached the connection is **kept**, so the attempt can be
+retried rather than leaving a project pointing at a half-cleaned repo.
+Deleting a project deliberately has no tool here; disconnecting is the
+reversible half.
+
+<Fields>
+  <Field name="confirm" type="string" required="true">
+    The connected repo as `owner/name`, typed exactly. Anything else is
+    refused - it guards against a disconnect nobody asked for.
+  </Field>
+</Fields>
+
+Returns `{ disconnected, workflows_disabled, files_removed, secret_removed,
+note }`.
+
 ### `set_github_repo`
 
 <Pill tone="violet">Cloud only</Pill>
@@ -808,6 +865,30 @@ Claude subscription vs metered OpenAI usage), so it's their call.
   </Field>
 </Fields>
 
+### `set_internal_linking`
+
+<Pill tone="amber">Owner only</Pill>
+
+The only door to internal back-linking. With it on, the guide builder edits
+2-3 of the closest already-published posts in the same PR so they link to
+each new guide - one sentence changed per post, nothing else touched - which
+is what turns a set of posts into a cluster that compounds. This is the only
+DispatchSEO behaviour that modifies pages the owner already published, so
+it's off by default, kept separate from the semi/auto automation flags, and a
+PR that edits published posts is never auto-merged regardless of
+`auto_merge`. Ask the owner before turning it on - never enable it on your
+own initiative because it would make a run tidier.
+
+<Fields>
+  <Field name="enabled" type="boolean" required="true">
+    `true` to allow editing published posts, `false` to stop.
+  </Field>
+</Fields>
+
+Returns `{ project, internal_linking, note }`. On a database that hasn't run
+migration `0045_project_internal_linking.sql` yet the call fails, naming that
+migration.
+
 ### `get_project`
 
 The project this token belongs to and how it's set up: domain, mode,
@@ -832,6 +913,20 @@ plus the journey (which SEO stage the site is in, what to expect next)
 and this week's real movement. Takes no parameters. Start here for
 "what's going on with my SEO" - it's the whole picture. For raw daily
 GSC snapshots use `get_site_stats`; for rank history use `get_rankings`.
+
+### `get_briefing`
+
+The dispatcher's briefing - the card at the top of Home, in the agent's
+own first-person voice. Takes no parameters. Returns the day's clicks and
+impressions, what the pipeline is building right now, and `wins`: the
+shortlist of things worth acting on today, read out of Search Console
+using the signals the big SEO tools lead with - striking-distance queries
+(position 8-20, one push from page one), page-one queries that rank but
+don't get clicked, high-impression zero-click queries, rising queries,
+searches the site has newly started appearing for, and first-ever
+milestones. Call it for "what should I do about SEO today". An empty
+`wins` list is a real answer on a young site; `patience` says why, and
+inventing a win to fill the gap defeats the point of the tool.
 
 ### `get_activity`
 
@@ -908,6 +1003,98 @@ site's own activity (for that, use `get_activity`).
     Trims the list, 1 to 50. Defaults to 10.
   </Field>
 </Fields>
+
+### `get_feedback`
+
+Feature requests people have asked for in DispatchSEO itself, most-voted
+first - the same board the dashboard shows at `/feedback`. Like
+`get_changelog`, this is about the product, not your site. The board is
+shared, not per-project: the token you connect with only says *who* is
+asking, which is what one-vote-per-account is counted by. Each request comes
+back with its vote count, whether this account already voted for it, and
+whether this account wrote it.
+
+<Fields>
+  <Field name="limit" type="number">
+    How many requests to return, 1 to 200. Defaults to 50.
+  </Field>
+  <Field name="status" type="string">
+    `open`, `planned`, `in_progress`, `shipped`, or `declined`.
+  </Field>
+</Fields>
+
+Returns `{ dashboard_url, moderator, total, requests }` - `moderator:true`
+means this account is the one that can also call `update_feedback`.
+
+### `submit_feedback`
+
+Asks for something in DispatchSEO itself - a feature, a change, a thing
+that's missing - posted to the shared board under the account that owns this
+project. Check `get_feedback` first: voting for an existing request beats
+posting a duplicate. Plain text only, and the rules are enforced rather than
+silently cleaned up - links, email addresses and HTML are rejected outright,
+with the reason named. An account can post 5 requests a day, and re-sending
+the same title within 24 hours comes back as a double-submit rather than a
+second row.
+
+<Fields>
+  <Field name="title" type="string" required="true">
+    The request in one line, 6 to 120 characters.
+  </Field>
+  <Field name="body" type="string">
+    Optional detail: what you're trying to do and what gets in the way. Up to
+    1200 characters.
+  </Field>
+</Fields>
+
+Returns `{ id, title, emailed, dashboard_url }`. `emailed:false` only means
+the maintainer's notification didn't send - the request is on the board
+either way.
+
+### `vote_feedback`
+
+<Pill tone="violet">Cloud only</Pill>
+
+Adds or removes this account's vote on a request from the board. One vote per
+account per request, and setting a vote it already holds is a no-op - safe to
+retry, since a retry can't undo the vote it just cast. A vote needs an
+account, so a self-hosted deployment gets an error pointing at
+`submit_feedback` instead.
+
+<Fields>
+  <Field name="id" type="string" required="true">
+    The request's id, from `get_feedback`.
+  </Field>
+  <Field name="vote" type="boolean">
+    `true` to vote (the default), `false` to take the vote back.
+  </Field>
+</Fields>
+
+Returns `{ id, voted, votes }` - the settled state and the new count.
+
+### `update_feedback`
+
+<Pill tone="amber">Moderator only</Pill>
+
+Sets a request's status or hides it from the board. Fails for everyone else;
+`get_feedback`'s `moderator` field is what tells you whether this account
+qualifies. Hiding never deletes - the request stays in the database and only
+drops off the board. Pass `status`, `hidden`, or both; passing neither is an
+error.
+
+<Fields>
+  <Field name="id" type="string" required="true">
+    The request's id, from `get_feedback`.
+  </Field>
+  <Field name="status" type="string">
+    `open`, `planned`, `in_progress`, `shipped`, or `declined`.
+  </Field>
+  <Field name="hidden" type="boolean">
+    `true` hides it from the board, `false` puts it back.
+  </Field>
+</Fields>
+
+Returns `{ id, status, hidden, updated }`.
 
 ## Instructions and install
 

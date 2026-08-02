@@ -52,6 +52,56 @@ release worth stopping for - a new control on your screen, something you
 have to act on - raises a dismissible in-dashboard banner the first time
 you load a page after your install crosses that version.
 
+## Updating the pipeline in your site repo
+
+`sh start.sh` upgrades this stack - the dashboard, the backend, the
+database. It does **not** touch the SEO workflows living in your website's
+own repository. Those files (`.github/workflows/seo-*.yml`, the MCP config
+files, the `.claude/commands/seo-*.md` shims) were committed there once, by
+the install workflow, and they stay exactly as they were until you re-apply
+them. So when a release improves a workflow, your repo keeps running the
+old copy - possibly for months - unless you do the step below. On the
+hosted version the backend pushes the new pack into the repo itself; a
+self-host install has no GitHub App to do that with, so this one is yours.
+
+**How you'll know.** The dashboard Home page shows a blue
+**"Pipeline update available"** notice naming your repo. It's deliberately
+quiet - no red banner, no email - because nothing is broken: everything
+keeps publishing on the version you have. The nightly health check raises
+it, so it appears within a day of you upgrading.
+
+**How to apply it.** Open a terminal in a checkout of your **site repo**
+(the folder where you connected the MCP server, not the `dispatchseo`
+folder), and run:
+
+```bash
+claude "Call the dispatchseo-yoursite MCP tool get_instructions with workflow install and follow it exactly."
+```
+
+With Codex, the same sentence:
+
+```bash
+codex "Call the dispatchseo-yoursite MCP tool get_instructions with workflow install and follow it exactly."
+```
+
+Replace `dispatchseo-yoursite` with your project's MCP server name - it's
+`dispatchseo-` followed by your project's slug, and it's the name in the
+connect command the dashboard gave you. There's also a **Copy update
+prompt** button on the notice itself, which copies a longer version of the
+same instruction with your repo name already filled in.
+
+The agent fetches the current pack, sees the version stamp is behind, and
+rewrites only the pack's own files, then opens a pull request titled
+"Install the DispatchSEO content pipeline". **Merge that PR** - the
+workflows only count once they're on your default branch. Nothing you
+adapted is at risk: repo-owned files (`.dispatchseo/conventions.md`,
+`.dispatchseo/publish-paths`) are never part of the pack, and secrets that
+are already set aren't re-minted.
+
+Once merged, the notice clears itself after the next nightly check sees the
+versions match. To clear it right away, use the **mark applied** link on
+the notice.
+
 ## Backing up
 
 The one thing worth backing up is your Postgres volume

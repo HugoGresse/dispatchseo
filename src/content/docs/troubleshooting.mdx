@@ -126,6 +126,25 @@ docker compose down -v && sh start.sh
 ```
 </Symptom>
 
+<Symptom error="Pipeline update available (blue notice on Home)">
+**What it means.** The SEO workflows in your site repo are a version behind
+this backend. Not a failure - `sh start.sh` upgrades the stack but never
+touches your site repo, so the workflow files there stay as they are until
+you re-apply the pipeline pack. Everything keeps publishing meanwhile.
+
+**Fix.** In a terminal, inside a checkout of your **site repo** (not the
+`dispatchseo` folder):
+
+```bash
+claude "Call the dispatchseo-yoursite MCP tool get_instructions with workflow install and follow it exactly."
+```
+
+Swap `claude` for `codex` if that's your agent, and
+`dispatchseo-yoursite` for your project's MCP server name. Merge the pull
+request it opens. Full walkthrough:
+[Updating the pipeline in your site repo](/docs/upgrading#updating-the-pipeline-in-your-site-repo).
+</Symptom>
+
 ## Nothing is being built
 
 <Symptom error="The builder never opens a pull request">

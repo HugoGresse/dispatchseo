@@ -23,13 +23,41 @@ type Status = {
   // give docker owners the right next step instead.
   is_docker: boolean;
   builds_active: boolean;
+  // Rank tracking is the paid half. A free/GSC-only project has no rank check
+  // coming, ever - waiting on one kept this strip spinning forever while its
+  // own copy promised "rankings fill in on their own" (2026-08-02).
+  ranks_possible?: boolean;
+  ranks_overdue?: boolean;
 };
 
-export function FirstRunBackground({ slug, cloud = false }: { slug: string; cloud?: boolean }) {
+export function FirstRunBackground({
+  slug,
+  cloud = false,
+  quiet = false,
+}: {
+  slug: string;
+  cloud?: boolean;
+  // Home renders this quiet: the dispatcher's briefing already says "I'm
+  // still setting up in the background" in its own voice, so the violet strip
+  // below would be the same sentence twice. The component still MOUNTS and
+  // still polls, because the poll is not cosmetic - the status endpoint is
+  // what fires the first research / rank / GSC runs after the wizard closes
+  // (see its route comments). The overdue branch stays visible either way: it
+  // reports a promise that was NOT kept and hands over the command that fixes
+  // it, which is more than a tone change and more than the server-derived
+  // briefing can know.
+  quiet?: boolean;
+}) {
   const [status, setStatus] = useState<Status | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const settled = Boolean(status && status.ideas_queued > 0 && status.rank_checks > 0);
+  // Settled = everything this project can produce has arrived. Older backends
+  // don't send ranks_possible; treating a missing field as "ranks are coming"
+  // keeps their behaviour exactly as it was.
+  const ranksPossible = status?.ranks_possible !== false;
+  const settled = Boolean(
+    status && status.ideas_queued > 0 && (status.rank_checks > 0 || !ranksPossible),
+  );
 
   useEffect(() => {
     let stopped = false;
@@ -116,6 +144,34 @@ export function FirstRunBackground({ slug, cloud = false }: { slug: string; clou
       </div>
     );
   }
+
+  // The rank half of the same honesty rule. The strip's other promise is
+  // "rankings fill in on their own", and daily-ranks is the job that keeps it.
+  // Keywords tracked, a full day gone and still no rank check means it did
+  // not run - say so and name the fix, instead of spinning on a claim that
+  // stopped being true. (Free/GSC-only projects never reach here: settled
+  // above already excludes them, because for them a rank check is not late,
+  // it is not part of the product they configured.)
+  if (status.ranks_overdue) {
+    return (
+      <div className="flex items-center gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3">
+        <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" aria-hidden />
+        <p className="text-sm text-amber-100/90">
+          <b className="font-medium text-amber-200">
+            Your keywords aren&apos;t getting rank checks.
+          </b>{" "}
+          They&apos;ve been tracked for over a day and the daily rank check still hasn&apos;t
+          recorded one - usually DataForSEO credentials that are missing, out of credit, or
+          rejected. Check the DataForSEO card on Settings; the background-jobs banner names the
+          error if there is one.
+        </p>
+      </div>
+    );
+  }
+
+  // Past this point the component is purely the "it's running" strip, which
+  // the briefing above now owns - keep polling, render nothing.
+  if (quiet) return null;
 
   const line =
     status.ideas_queued === 0

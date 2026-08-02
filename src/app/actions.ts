@@ -45,7 +45,7 @@ import {
 } from "@/lib/agent-settings";
 import { agentById, isSupportedAgent, projectAgent } from "@/lib/agents";
 import { saveContentPrefs } from "@/lib/content-prefs-store";
-import { encryptSecret } from "@/lib/crypto";
+import { encryptSecret, tryEncryptSecret } from "@/lib/crypto";
 import { validateSerpapiKey } from "@/lib/serp";
 import { placeAtFront, writeQueueOrder } from "@/lib/queue";
 import { duplicateNote, findDuplicateSuggestion, isDuplicateKeyError } from "@/lib/suggestion-dedupe";
@@ -569,7 +569,15 @@ export async function connectGscServiceAccount(
         "That JSON has no client_email/private_key - make sure it's the service account KEY file (Keys → Add key → Create new key → JSON).",
     };
   }
-  const enc = await encryptSecret(raw);
+  const enc = await tryEncryptSecret(raw);
+  if (enc === null) {
+    // No encryption key resolvable = no instance_settings row = the classic
+    // env-based install below. Same answer, reached before the throw.
+    return {
+      error:
+        "This install is configured through environment variables - set GSC_SERVICE_ACCOUNT_JSON in your deployment env instead.",
+    };
+  }
   const { data, error } = await db()
     .from("instance_settings")
     .update({ gsc_service_account_json: enc })
@@ -693,6 +701,12 @@ export async function connectGithubToken(
   // passes it and then the builder can't even clone (2026-07-23 e2e: install
   // sailed through, every background build died on clone). Probe the
   // capability the builder actually uses: reading the repo's commits.
+  //
+  // The hint below also names Secrets, which nothing here probes: this same
+  // token is what copies an agent credential into the repo's Actions secrets,
+  // and a fine-grained token needs that permission granted separately (classic
+  // `repo` scope includes it). Cheaper to ask for it while someone is already
+  // on the token screen than to have them come back for a 403 later.
   try {
     const probe = await fetch(
       `https://api.github.com/repos/${project.github_repo}/commits?per_page=1`,
@@ -708,13 +722,18 @@ export async function connectGithubToken(
     // 409 = empty repo (no commits yet) - contents access proven anyway.
     if (!probe.ok && probe.status !== 409) {
       return {
-        error: `The token can see ${project.github_repo} but can't read its code, so builds can't clone it. Fine-grained token? Give it "Contents" repository permission (Read and write) and paste it again.`,
+        error: `The token can see ${project.github_repo} but can't read its code, so builds can't clone it. Fine-grained token? Give it "Contents" repository permission (Read and write) - and "Secrets" (Read and write) while you're there, so your agent key can be stored on the repo too - then paste it again.`,
       };
     }
   } catch {
     return { error: "Could not reach GitHub - try again." };
   }
-  const enc = await encryptSecret(token);
+  const enc = await tryEncryptSecret(token);
+  if (enc === null) {
+    return {
+      error: "This install is configured through environment variables - set GH_MERGE_TOKEN in your deployment env instead.",
+    };
+  }
   const { data, error } = await db()
     .from("instance_settings")
     .update({ gh_merge_token: enc })
@@ -1598,7 +1617,10 @@ export async function setAgent(
   return { todo: res.todo, needsCredential: res.needsCredential };
 }
 
-export type AddAgentKeyState = { ok: true } | { error: string };
+// `syncCaveat` = stored, but the repo secret half was refused. A caveat rather
+// than an error on purpose: the key IS saved, and telling someone it failed
+// would send them re-pasting a credential that is already in place.
+export type AddAgentKeyState = { ok: true; syncCaveat?: string } | { error: string };
 
 // The header switcher's "Add agent" flow: verify the pasted credential and
 // store it where THIS project's builders read. Deliberately does NOT switch -
@@ -1647,7 +1669,12 @@ export async function addAgentKey(
     // container, which reads the instance credential. (An Actions-without-App
     // repo never shows "needs key" - its secrets are write-only from here, so
     // the switcher offers a plain switch instead of this form.)
-    const enc = await encryptSecret(token);
+    const enc = await tryEncryptSecret(token);
+    if (enc === null) {
+      return {
+        error: `This install is configured through environment variables - set ${agent.credential.envVar} in your .env instead.`,
+      };
+    }
     const { data, error } = await db()
       .from("instance_settings")
       .update({ [agent.credential.instanceSettingsColumn]: enc })
@@ -1666,6 +1693,18 @@ export async function addAgentKey(
       };
     }
     bustInstanceCache();
+    // One paste feeds BOTH build rails - the same rule connectBuilderToken
+    // follows. Without this, a self-host stack that also has a connected repo
+    // stores the key only where the in-stack builder reads it, and the repo's
+    // own scheduled workflows keep dying seconds in on the missing secret,
+    // emailing the owner about a credential they just pasted. A sync that
+    // reaches repos and is refused by all of them leaves exactly that failure
+    // standing, so it comes back as a caveat instead of a bare success.
+    const { synced, failed } = await syncAgentSecretToRepos(agent.id, token);
+    if (synced.length === 0 && failed.length > 0) {
+      revalidatePath("/", "layout");
+      return { ok: true, syncCaveat: repoSyncCaveat(agent.credential.repoSecretName, failed) };
+    }
   }
 
   revalidatePath("/", "layout");
@@ -1839,9 +1878,29 @@ export async function connectClaudeToken(
 }
 
 export type ConnectBuilderTokenState =
-  | { ok: true; syncedRepos?: string[] }
+  | { ok: true; syncedRepos?: string[]; syncCaveat?: string }
   | { error: string }
   | null;
+
+// The credential is stored, but the repo half of the promise was refused.
+//
+// Silence here is the whole bug: syncAgentSecretToRepos is best-effort, so a
+// blanket failure came back as an empty list, the UI simply omitted its "also
+// stored on your repo" sentence, and the owner went on waiting for scheduled
+// workflows that keep dying seconds in on the secret they believe they just
+// stored. The likely cause is specific enough to name: a classic `repo`-scope
+// token covers the Actions secrets API, a FINE-GRAINED one needs "Secrets"
+// granted separately, so the common way to hold a working GitHub token is to
+// hold one that 403s exactly here.
+function repoSyncCaveat(secretName: string, failed: string[]): string {
+  return (
+    `Saved here - but GitHub wouldn't store it on ${failed.join(", ")} as a repo secret, so ` +
+    `workflows scheduled there still can't see it. Usually your GitHub token: a fine-grained ` +
+    `one needs the "Secrets" repository permission (Read and write) as well as "Contents". ` +
+    `Add it to the token on github.com/settings/tokens, then paste this key again. Or store ` +
+    `it yourself: gh secret set ${secretName} --repo ${failed[0]}`
+  );
+}
 
 // Self-host / docker sibling of connectClaudeToken: the owner pastes their
 // `claude setup-token` output on the dashboard's automatic-builds step and it
@@ -1870,7 +1929,12 @@ export async function connectBuilderToken(
   if (!token) return { error: `Paste your ${agent.displayName} credential. ${agent.credential.howToMint}` };
   const verified = await verifyAgentCredential(agent.id, token);
   if ("error" in verified) return { error: verified.error };
-  const enc = await encryptSecret(token);
+  const enc = await tryEncryptSecret(token);
+  if (enc === null) {
+    return {
+      error: `This install is configured through environment variables - set ${agent.credential.envVar} in your .env instead.`,
+    };
+  }
   const { data, error } = await db()
     .from("instance_settings")
     .update({ [agent.credential.instanceSettingsColumn]: enc })
@@ -1894,11 +1958,20 @@ export async function connectBuilderToken(
   // with no App on self-host nothing else copies it across - the gap that
   // turned a wizard paste into a 9-second workflow failure emailing the owner
   // (2026-08-02). Best-effort: the instance store above is the paste's
-  // contract, the repo sync is the bonus, and the result says which happened.
-  const syncedRepos = await syncAgentSecretToRepos(agent.id, token);
+  // contract, the repo sync is the bonus, and the result says which happened -
+  // including when it happened to NOTHING, which used to look identical to
+  // having no repo at all (see repoSyncCaveat).
+  const { synced, failed } = await syncAgentSecretToRepos(agent.id, token);
   revalidatePath("/onboarding");
   revalidatePath("/dashboard");
-  return { ok: true, syncedRepos };
+  return {
+    ok: true,
+    syncedRepos: synced,
+    syncCaveat:
+      synced.length === 0 && failed.length > 0
+        ? repoSyncCaveat(agent.credential.repoSecretName, failed)
+        : undefined,
+  };
 }
 
 // The cloud finale's install trigger (c5): commits the pipeline pack into

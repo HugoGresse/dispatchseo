@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { DispatchMark } from "@/components/logo";
 import { getAllTools } from "@/lib/free-tools";
 
 // Public free-tools index - the site's tools home. Same contract as /blog:
-// no auth, no DB, public by default (no middleware gates it).
+// no auth, no DB. Public on the CLOUD deployment only: it is the hosted
+// product's funnel, so LANDING_ENABLED gates it exactly like / and the agent
+// hubs (proxy allowlist + the redirect below).
 
 export const metadata: Metadata = {
   title: "Free SEO tools - DispatchSEO",
@@ -13,6 +16,10 @@ export const metadata: Metadata = {
 };
 
 export default function FreeToolsIndex() {
+  // Same guard as the agent hubs (agent-landing.tsx): this is the hosted
+  // product's funnel, so a self-hosted install must not serve it from the
+  // owner's own domain. Defense in depth behind the proxy allowlist.
+  if (process.env.LANDING_ENABLED !== "true") redirect("/dashboard");
   const tools = getAllTools();
 
   return (

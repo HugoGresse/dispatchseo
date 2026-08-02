@@ -1,12 +1,16 @@
 "use client";
 
-// The "agent active" heartbeat pill at the top of Home. Only rendered when the
-// automation loop is truly live (the server decides that - pipeline installed
-// AND a builder automation on); this component just picks the right second
-// segment. The countdown targets the daily builder's cron (05:00 UTC, see
-// seo-daily.yml in the pipeline pack) and follows the NextUpdate pattern:
-// nothing clock-derived renders until mounted, so server HTML never carries a
-// time that could mismatch on hydration.
+// "next build in 3h 20m" - the one line on Home that says a specific thing is
+// going to happen at a specific time without anyone doing anything. It used to
+// be the second half of the agent heartbeat pill; the dispatcher's briefing has
+// taken over the heartbeat, so what survives here is the part the briefing
+// can't render: a countdown.
+//
+// It has to be a client component and it has to gate on mount. The countdown
+// targets the daily builder's cron (05:00 UTC, see seo-daily.yml in the
+// pipeline pack), so the text depends on the reader's clock - server HTML that
+// carried a time would mismatch on hydration. Nothing renders until mounted,
+// the same pattern NextUpdate uses.
 
 import { useEffect, useState } from "react";
 
@@ -25,77 +29,22 @@ function countdown(ms: number): string {
   return `next build in ${m}m`;
 }
 
-export function AgentStatus({
-  building,
-  guidesQueued,
-  toolsQueued,
-  alert = null,
-}: {
-  building: boolean;
-  guidesQueued: boolean;
-  toolsQueued: boolean;
-  // Non-null when a background job is failing or overdue (server-derived
-  // from getCronHealth): the pill goes red and shows this summary instead
-  // of the countdown - the banner below carries the full detail.
-  alert?: string | null;
-}) {
+export function NextBuildCountdown() {
   const [now, setNow] = useState<number | null>(null);
-  const needsClock = !building && guidesQueued && !alert;
 
   useEffect(() => {
-    if (!needsClock) return;
     setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(id);
-  }, [needsClock]);
+  }, []);
 
-  if (alert) {
-    return (
-      <div
-        className="inline-flex items-center gap-2.5 text-sm text-red-200"
-        title="Details in the alert box below."
-      >
-        <span
-          className="h-2 w-2 shrink-0 rounded-full bg-red-400 ring-3 ring-red-400/25"
-          aria-hidden="true"
-        />
-        <span>
-          agent needs attention
-          <span className="text-red-300/90"> · {alert}</span>
-        </span>
-      </div>
-    );
-  }
-
-  let detail: string | null = null;
-  let title: string | undefined;
-  if (building) {
-    detail = "building now";
-  } else if (guidesQueued) {
-    if (now != null) {
-      const target = nextBuildUtc(now);
-      detail = countdown(target - now);
-      title = `the daily builder picks up the top approved idea ~${new Date(target).toLocaleString()}`;
-    }
-  } else if (toolsQueued) {
-    detail = "tool build queued";
-  } else {
-    detail = "queue empty · new ideas Monday";
-  }
-
+  if (now == null) return null;
+  const target = nextBuildUtc(now);
   return (
-    <div
-      className="inline-flex items-center gap-2.5 text-sm text-neutral-400"
-      title={title}
+    <span
+      title={`the daily builder picks up the top approved idea ~${new Date(target).toLocaleString()}`}
     >
-      <span
-        className="h-2 w-2 shrink-0 rounded-full bg-emerald-400 ring-3 ring-emerald-400/20"
-        aria-hidden="true"
-      />
-      <span>
-        agent active
-        {detail ? <span className="text-neutral-500"> · {detail}</span> : null}
-      </span>
-    </div>
+      {countdown(target - now)}
+    </span>
   );
 }

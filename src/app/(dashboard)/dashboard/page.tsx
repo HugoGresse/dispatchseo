@@ -25,7 +25,7 @@ import { IdeaCard } from "@/components/idea-card";
 import { TrafficByPage } from "@/components/seo-cards";
 import { TrendScanButton, TrendScanPoller, TrendScanSweep } from "@/components/trend-scan";
 import { sortQueue, type Suggestion, type TrendTopic } from "@/lib/metrics";
-import { EmptyState, GscChart, Mono, PageHeader, ProgressMeter, SectionTitle } from "@/components/ui";
+import { EmptyState, GscChart, Mono, ProgressMeter, SectionTitle } from "@/components/ui";
 import { GlanceSection } from "@/components/glance-stats";
 import { FREE_BACKLINKS, PAID_BACKLINKS } from "@/lib/playbook-data";
 import { getActivityReport, type ActivityLine } from "@/lib/activity";
@@ -61,7 +61,11 @@ import { mcpAddCommand, mcpServerName, setupCommand, setupCommandPS } from "@/li
 import { requestOrigin } from "@/lib/request-origin";
 import { ShellCommandTabs } from "@/components/shell-command-tabs";
 import { PacingLine } from "@/components/pacing-info";
-import { AgentStatus } from "@/components/agent-status";
+import { NextBuildCountdown } from "@/components/agent-status";
+import { DispatcherBriefing } from "@/components/dispatcher-briefing";
+import { computeBriefing } from "@/lib/briefing";
+import { CHANGELOG_COOKIE, unseenRelease } from "@/lib/changelog";
+import { cookies } from "next/headers";
 import { DockerAccessTip } from "@/components/docker-access-tip";
 import { ChromeExtensionTip } from "@/components/chrome-extension-tip";
 import { FirstRunBackground } from "@/components/first-run-background";
@@ -457,16 +461,6 @@ export default async function Home() {
         }
       : null;
 
-  // One-line version of the same trouble for the AgentStatus pill - the
-  // green heartbeat flips red the moment any background job is unhealthy.
-  // Update notices deliberately excluded: the agent is fine, just outdatable.
-  const agentAlert =
-    cronIssues.length === 0
-      ? null
-      : cronIssues.length === 1
-        ? `${cronIssues[0].job} ${cronIssues[0].ok ? "is overdue" : "failed"}`
-        : `${cronIssues.length} background jobs failing`;
-
   const suggestions = (sugRes.data ?? []) as Suggestion[];
 
   // The progress story (journey stage + weekly movers) - derived from the
@@ -475,6 +469,7 @@ export default async function Home() {
     getJourney(project, overview),
     getWeeklyProgress(project, overview),
   ]);
+
 
   // Playbook progress for the summary at the bottom. A missing playbook_status
   // table (migration not applied yet) just means everything reads as todo.
@@ -725,31 +720,105 @@ export default async function Home() {
   // exactly the "looks healthy, does nothing" state with no way to notice.
   const hasCloudSetupCards = isCloudMode() && (needsAppReconnect || (needsGsc && !gscWaiting));
 
+  // The dispatcher's briefing - Home's opening surface, where the agent reports
+  // in the first person instead of the page narrating about it. Built from the
+  // overview/journey/weekly already in hand plus the queue state this function
+  // has loaded, so the card costs no extra query; getBriefing() (the MCP door)
+  // fetches the same three itself. See briefing.ts for why the wins are the
+  // wins, and why an empty list is a real answer rather than a bug.
+  //
+  // "DispatchSEO has been updated" rides in here too: the layout's grey bar is
+  // the right shape on every screen except this one, where an agent is already
+  // mid-sentence about the site, so the bar steps aside on /dashboard and the
+  // dispatcher delivers the news itself.
+  const release = unseenRelease(
+    (await cookies()).get(CHANGELOG_COOKIE)?.value,
+    project.created_at,
+  );
+  const briefing = computeBriefing({
+    overview,
+    journey,
+    weekly,
+    // The same set that drives the red panel below - update notices are
+    // deliberately excluded, because an outdated pipeline is not a failing job
+    // and the dispatcher must not cry wolf about the normal state after a
+    // backend deploy.
+    failingJobs: cronIssues.length,
+    // Pipeline is in, but the first research or the first rank check hasn't
+    // landed yet. Rank tracking is the PAID half, so a free/GSC-only project
+    // has no rank check coming - ever - and waiting on one would park the
+    // dispatcher in "still setting up" permanently, describing work that isn't
+    // pending, it's just not configured.
+    settingUp:
+      pipelineInstalled &&
+      (suggestions.length === 0 ||
+        (dfsCreds != null && !overview.rankings.some((r) => r.checked))),
+    building: inProgress[0]?.title ?? null,
+    queued: approvedUnbuilt.length,
+    pendingDecisions: pendingSugs.length,
+    onDuty: agentActive,
+    // Only Home can know this: "unseen" is a property of THIS browser's
+    // cookie, which is why get_briefing leaves it null.
+    release: release ? { version: release.version, summary: release.summary } : null,
+  });
+
   return (
     <div className="space-y-8">
       <div className="space-y-3">
-        {agentActive ? (
-          <AgentStatus
-            building={inProgress.length > 0}
-            guidesQueued={
-              automations.auto_build_guides && approvedUnbuilt.some((s) => s.type === "guide")
-            }
-            toolsQueued={
-              automations.auto_build_tools && approvedUnbuilt.some((s) => s.type === "tool")
-            }
-            alert={agentAlert}
-          />
-        ) : null}
-        <PageHeader
-          title="Home"
-          hint={`How ${project.domain} is doing, what's running on its own, and what needs you.`}
-        />
         {process.env.POSTGREST_URL ? <DockerAccessTip /> : null}
-        {/* First-run background work (research / rank check) - prominent near
-            the top so a fresh owner sees "it's filling in", not a dead page.
-            Self-hides once the queue and rankings land. */}
+        {/* The dispatcher's briefing. This one card is what the status pill,
+            the "researching in the background" strip and the red job-failure
+            box used to be: three disconnected notices about the same agent,
+            now one panel where that agent speaks. No PageHeader above it - the
+            topbar already names the screen, and "How example.com is doing" is
+            precisely what the dispatcher now says, in better words. */}
+        <DispatcherBriefing
+          briefing={briefing}
+          agentName={projectAgent(project).displayName}
+          // Only when a guide is actually queued for it: a countdown to a build
+          // that has nothing to build is a promise about an empty morning.
+          duty={
+            agentActive &&
+            automations.auto_build_guides &&
+            approvedUnbuilt.some((s) => s.type === "guide") ? (
+              <NextBuildCountdown />
+            ) : null
+          }
+        >
+          {cronIssues.length > 0 ? (
+            <>
+              <ul className="space-y-0.5 text-red-300/90">
+                {cronIssues.map((h) => (
+                  <li key={h.job}>
+                    <span className="break-words font-mono">{h.job}</span>{" "}
+                    {!h.ok
+                      ? `failed on its last run${h.errors[0] ? ` - ${h.errors[0]}` : ""}`
+                      : `hasn't run since ${new Date(h.last_run_at).toUTCString()}`}{" "}
+                    <CronFixedButton job={h.job} />
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <CopyButton text={buildCronFixPrompt(project, cronIssues)} label="Copy fix prompt" />
+                <p className="text-xs text-red-300/70">
+                  Paste it into your coding agent - it inspects the job, fixes it, and clears this
+                  alert over MCP once the fix is verified.
+                </p>
+              </div>
+              <p className="mt-2 text-xs text-red-300/70">
+                Full detail in your Vercel function logs (daily-ranks) and GitHub Actions runs
+                (hourly-gsc, deploy-check, the seo-* workflows, and the secrets canary).
+              </p>
+            </>
+          ) : null}
+        </DispatcherBriefing>
+        {/* Still mounted, now silent: its poll is what fires the first
+            research / rank / GSC runs after the wizard closes, and the
+            briefing above says "still setting up" in the dispatcher's own
+            voice. Only its overdue branch - a promise that was NOT kept, with
+            the command that fixes it - still renders. */}
         {pipelineInstalled ? (
-          <FirstRunBackground slug={project.slug} cloud={isCloudMode()} />
+          <FirstRunBackground slug={project.slug} cloud={isCloudMode()} quiet />
         ) : null}
         {budgetWarning ? (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
@@ -801,36 +870,6 @@ export default async function Home() {
               Hitting this often means the site is producing more than the plan on that account
               covers - upgrading it, or switching to a different agent in Settings, gives the
               builders more room.
-            </p>
-          </div>
-        ) : null}
-        {cronIssues.length > 0 ? (
-          <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm">
-            <p className="font-medium text-red-200">Background jobs need attention</p>
-            <ul className="mt-1 space-y-0.5 text-red-300/90">
-              {cronIssues.map((h) => (
-                <li key={h.job}>
-                  <span className="break-words font-mono">{h.job}</span>{" "}
-                  {!h.ok
-                    ? `failed on its last run${h.errors[0] ? ` - ${h.errors[0]}` : ""}`
-                    : `hasn't run since ${new Date(h.last_run_at).toUTCString()}`}{" "}
-                  <CronFixedButton job={h.job} />
-                </li>
-              ))}
-            </ul>
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <CopyButton
-                text={buildCronFixPrompt(project, cronIssues)}
-                label="Copy fix prompt"
-              />
-              <p className="text-xs text-red-300/70">
-                Paste it into your coding agent - it inspects the job, fixes it, and clears this
-                alert over MCP once the fix is verified.
-              </p>
-            </div>
-            <p className="mt-2 text-xs text-red-300/70">
-              Full detail in your Vercel function logs (daily-ranks) and GitHub Actions runs
-              (hourly-gsc, deploy-check, the seo-* workflows, and the secrets canary).
             </p>
           </div>
         ) : null}

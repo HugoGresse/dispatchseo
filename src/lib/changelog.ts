@@ -73,6 +73,188 @@ export type ChangelogEntry = {
 // this list - it exists so that writing the note down doesn't ping anyone.
 export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
+    kind: "fixed",
+    text:
+      "A red \"something failed\" notice on Home no longer turns itself green when the next run " +
+      "is merely handed out. Being picked up is not the same as succeeding, and the banner - and " +
+      "the answer your agent gets - now say so until something actually finishes.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "Being signed out at random is fixed. Your session is refreshed as you browse; before, the " +
+      "refreshed sign-in was never saved, so sooner or later a normal click landed you back on " +
+      "the login page having done nothing wrong.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "A brief database hiccup no longer looks like \"you have no account\". It now retries and " +
+      "says so plainly if it still can't reach us, instead of showing you an empty product.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "Hitting your coding agent's usage limit no longer looks like a broken product. It's a " +
+      "normal, temporary pause - Home now names it as one and tells you when building resumes.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "A build that failed no longer holds the next attempt for the whole cadence window - it " +
+      "backs off and retries instead of waiting a full day to try again.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "Rankings that had quietly stopped updating, and builds that had died without a trace, now " +
+      "surface on Home instead of looking like everything is fine.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "On the hosted plans, a trial no longer reads as a paid plan, and cancelling now actually " +
+      "takes effect on your account.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "Builds now follow your repo's own Node version - an `.nvmrc` if you have one, otherwise " +
+      "the `engines.node` floor in package.json, otherwise 22. Nothing to edit in the workflow, " +
+      "and because it's decided when the build runs, a pipeline update can't undo it.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "A run that was skipped on purpose - queue empty, a pull request already open, builds " +
+      "paused - no longer reports itself as a finished build. It used to hold off the next one " +
+      "for up to 20 hours, so a guide approved in the morning could sit until the evening.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "An empty queue no longer turns into a \"your builds stopped running\" warning. If there " +
+      "is nothing approved to build, the builder being quiet is the correct behaviour, not a " +
+      "fault - the warning is now reserved for work that really is waiting and not happening.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "Your public sitemap now uses your own domain - self-hosted installs were publishing " +
+      "dispatchseo.com URLs in their sitemap.xml.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "Pasting an agent key now tells you if it couldn't also be stored on your GitHub repo, " +
+      "and which permission is missing. Before, it said \"saved\" either way and your scheduled " +
+      "builds kept failing on a secret that was never written.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "A one-off crashed build no longer leaves a red warning on Home forever. The build is " +
+      "already re-queued and retried automatically, so the notice now clears itself once that " +
+      "has happened.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "An update worth announcing no longer gets buried by the next small release, Search " +
+      "Console stats for a whole window no longer save only partway when one date fails, and a " +
+      "pipeline update can no longer open a surprise second install pull request on your repo.",
+  },
+  {
+    kind: "new",
+    text:
+      "Your agent now greets you at the top of Home and reports on the day in its own words. " +
+      "It says hello, gives you one sentence, and that's it unless you open the full report. " +
+      "The status pill and the stack of coloured banners are gone; the agent tells you if " +
+      "something broke or if it's still setting up, the same way it tells you anything else. " +
+      "Open the report and you get quick wins: SEO shows nothing for the first couple of " +
+      "months, so it reads your Search Console data for the good news that IS there that " +
+      "early. Searches you sit at #12 for and could take with one push. Pages that rank but " +
+      "nobody clicks, where the title is the whole problem. Searches Google has only just " +
+      "started showing you for. It never invents one to fill the space; a quiet week says so. " +
+      "The agent wears your agent's colour, orange on Claude Code and white on Codex, and " +
+      "your coding agent can read the same briefing over MCP with get_briefing.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "The \"researching in the background - running your first rank check\" strip no longer sits " +
+      "there indefinitely. On a free (Search-Console-only) site there was never a rank check " +
+      "coming, so it spun forever; it now finishes once your queue fills. And if you DO have " +
+      "DataForSEO but no rank check has landed a full day after keywords were tracked, it says " +
+      "that plainly instead of claiming it's still working.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "A guide pull request that fell behind your main branch now fixes itself. Every guide edits " +
+      "the same couple of registry files, so a pull request left open while anything else merges " +
+      "used to come back conflicted and sit there red until you rebased it by hand. The merge " +
+      "sweep now updates the branch from main and merges it on the next pass.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "When a pull request genuinely can't be merged, Home now tells you why - conflicts, a " +
+      "branch protection rule, or a branch that's out of date - instead of \"workflow failed\" " +
+      "with a link into the GitHub Actions log, or blaming branch protection for a conflict.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "One unmergeable guide no longer stops the rest of the merge sweep. It used to abort the " +
+      "whole run, so later pull requests and the stuck-tool-check never ran at all.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "Home no longer shows a red \"your builder has never run - check its token\" warning when " +
+      "the truth is simply that you haven't approved anything yet. It only warns when there is " +
+      "genuinely something approved and waiting that the builder hasn't picked up.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "Installs running on a home network or a private address (192.168.x, a Tailscale address, " +
+      "your own machine's name) no longer get a permanent warning telling them to re-run setup " +
+      "because their pipeline \"never reported\". Those installs are unreachable from GitHub by " +
+      "design, which was never a fault to report.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "On a server install with your own domain, research could run twice on the same day - once " +
+      "in the built-in builder and once on GitHub - which meant duplicate ideas and double the " +
+      "DataForSEO spend. Whichever one is actually running now owns the job.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "Tool pull requests now validate on sites that aren't Next.js. The checker used to assume " +
+      "`start` on port 3000, so a Vite, Hugo, Astro or plain-static site failed every tool PR. " +
+      "Put your own command and port in `.dispatchseo/serve` and it uses those - and that file " +
+      "survives pipeline updates.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "Adding an agent from the topbar switcher no longer risks blanking the whole dashboard if " +
+      "the save fails - it shows the reason in the panel. The key you paste there is now also " +
+      "copied to your repo, so scheduled builds on GitHub stop failing seconds in on a missing " +
+      "credential. And if the agent check can't load, the panel says so and offers a retry " +
+      "instead of spinning forever.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "Saving a credential on an install whose password comes from your .env now tells you to " +
+      "set it in .env, instead of failing with a blank error screen.",
+  },
+  {
     kind: "improved",
     text:
       "Every dashboard screen now says \"Loading\" while it loads, with the dispatcher at his " +
@@ -1445,19 +1627,34 @@ export function releaseLabel(version: string): string | null {
 // A version that isn't in the list at all - a hand-edited cookie, or one
 // naming an entry that somehow left - counts as unseen, because announcing
 // once too often is the harmless direction to be wrong in.
+//
+// It looks at every unseen release, not only the newest one. Only checking
+// CHANGELOG[0] meant a quiet release BURIED the announcement before it: cut
+// 1.4.0 with announce, cut a 1.4.1 typo fix the next morning, and the banner
+// the owner was meant to stop and read never appeared for anyone who hadn't
+// opened the dashboard in that one day. Opting in is rare and deliberate, so a
+// patch shipped on top of it must not silently cancel it.
 export function unseenRelease(
   seenVersion: string | undefined,
   projectCreatedAt: string | null | undefined,
 ): ChangelogEntry | null {
-  const latest = LATEST;
-  if (!latest?.announce) return null;
-  if (seenVersion && CHANGELOG.findIndex((e) => e.version === seenVersion) === 0) return null;
+  // Everything newer than what they acknowledged. Position, not string
+  // comparison, for the reason above - and an unrecognised cookie means "seen
+  // nothing", so the whole list is in play.
+  const seenIndex = seenVersion ? CHANGELOG.findIndex((e) => e.version === seenVersion) : -1;
+  const unseen = CHANGELOG.slice(0, seenIndex === -1 ? CHANGELOG.length : seenIndex);
+  // Newest-first, so the first opted-in release in that slice is the newest one
+  // they haven't seen. Dismissing it stores ITS version, which moves the
+  // boundary past it, so this converges instead of re-announcing.
+  const release = unseen.find((e) => e.announce);
+  if (!release) return null;
   if (projectCreatedAt) {
     const created = new Date(projectCreatedAt).getTime();
     // Compare against the end of the release day: an entry dated the same day
-    // the project was created still counts as pre-existing.
-    const released = new Date(`${latest.date}T23:59:59Z`).getTime();
+    // the project was created still counts as pre-existing. No point looking
+    // further down the list either - older entries are older still.
+    const released = new Date(`${release.date}T23:59:59Z`).getTime();
     if (Number.isFinite(created) && created > released) return null;
   }
-  return latest;
+  return release;
 }

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getAllTools, getTool } from "@/lib/free-tools";
 
 // Public tool detail page - the locked funnel every /free-tools/<slug> page
@@ -33,6 +33,8 @@ export async function generateMetadata({
 }
 
 export default async function ToolDetail({ params }: { params: Promise<{ slug: string }> }) {
+  // Cloud-only funnel, same guard as the /free-tools index and the agent hubs.
+  if (process.env.LANDING_ENABLED !== "true") redirect("/dashboard");
   const { slug } = await params;
   const tool = getTool(slug);
   if (!tool) notFound();
@@ -64,7 +66,7 @@ export default async function ToolDetail({ params }: { params: Promise<{ slug: s
           DispatchSEO does this automatically, for every page it builds
         </p>
         <p className="mx-auto mt-1.5 max-w-md text-sm text-neutral-400">
-          Your Claude Code agent researches keywords, writes guides and tools like this one, and wires the
+          Your coding agent researches keywords, writes guides and tools like this one, and wires the
           internal links between them - on a schedule, as pull requests you approve.
         </p>
         <Link

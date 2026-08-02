@@ -34,6 +34,10 @@ export function AgentHeaderSwitch({ current, slug }: { current: string; slug: st
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [statuses, setStatuses] = useState<Record<string, AgentCredentialStatus> | null>(null);
+  // null means "still loading", so a failed fetch needs its own flag - without
+  // it a dropped request is indistinguishable from a slow one and the panel
+  // says "Checking your agents..." forever, with no retry and no Add button.
+  const [statusFailed, setStatusFailed] = useState(false);
   // Monotonic fetch counter: reopening the dropdown refires the status fetch,
   // and an older, slower response must not land on top of a newer one.
   const statusFetch = useRef(0);
@@ -81,12 +85,15 @@ export function AgentHeaderSwitch({ current, slug }: { current: string; slug: st
 
   function fetchStatuses() {
     const seq = ++statusFetch.current;
+    setStatusFailed(false);
     getAgentCredentialStatuses(slug)
       .then((s) => {
         if (seq === statusFetch.current) setStatuses(s);
       })
       .catch(() => {
-        if (seq === statusFetch.current) setStatuses(null);
+        if (seq !== statusFetch.current) return;
+        setStatuses(null);
+        setStatusFailed(true);
       });
   }
 
@@ -136,7 +143,18 @@ export function AgentHeaderSwitch({ current, slug }: { current: string; slug: st
     const id = keyFor;
     setError(null);
     start(async () => {
-      const res = await addAgentKey(id, keyValue, slug);
+      // Catch like choose() does. This component lives in the dashboard
+      // LAYOUT, so an uncaught rejection inside the transition doesn't fail
+      // the form - it replaces every page with the root error boundary. The
+      // reachable throws are ordinary: an invalidated cookie after a password
+      // change, an unresolvable project slug, a missing encryption key.
+      let res: Awaited<ReturnType<typeof addAgentKey>>;
+      try {
+        res = await addAgentKey(id, keyValue, slug);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not save that credential.");
+        return;
+      }
       if ("error" in res) {
         setError(res.error);
         return;
@@ -226,8 +244,20 @@ export function AgentHeaderSwitch({ current, slug }: { current: string; slug: st
               () => choose(a.id),
             ),
           )}
-          {statuses == null ? (
+          {statuses == null && !statusFailed ? (
             <p className="px-2.5 py-1.5 text-xs text-neutral-600">Checking your agents...</p>
+          ) : null}
+          {statusFailed ? (
+            <p className="px-2.5 py-1.5 text-xs text-neutral-500">
+              Could not check your agents.{" "}
+              <button
+                type="button"
+                onClick={fetchStatuses}
+                className="cursor-pointer text-neutral-300 underline underline-offset-2 hover:text-neutral-100"
+              >
+                Retry
+              </button>
+            </p>
           ) : null}
           {addable.length > 0 ? (
             <button

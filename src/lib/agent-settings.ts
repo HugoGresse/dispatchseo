@@ -162,6 +162,17 @@ export async function verifyAgentCredential(
   }
 }
 
+export type AgentSecretSync = {
+  /** Repos the secret verifiably landed on. */
+  synced: string[];
+  /**
+   * Repos that HAVE a GitHub connection and still refused the write. Kept
+   * apart from "no repos at all" because only this list is worth telling the
+   * owner about - see syncAgentSecretToRepos.
+   */
+  failed: string[];
+};
+
 /**
  * Push one agent credential to every connected repo's Actions secrets, so a
  * single paste feeds BOTH build rails: the in-stack builder reads
@@ -173,12 +184,23 @@ export async function verifyAgentCredential(
  *
  * Best-effort per repo and never throws - a repo-less project, a token
  * without secrets access, or a GitHub hiccup must not fail the paste that is
- * this function's reason to run. Returns the repos actually written, so the
- * caller can SAY what happened instead of implying more than it knows.
+ * this function's reason to run.
+ *
+ * Reports BOTH halves, because "nothing to sync" and "every sync was refused"
+ * used to come back as the same empty array and the UI simply said nothing.
+ * The refusal is not exotic: a fine-grained merge PAT needs a separate
+ * "Secrets: read and write" permission that classic `repo` scope includes for
+ * free, so the common way to own a working token is to own one GitHub 403s
+ * here - and the owner then waits on scheduled workflows that keep dying on
+ * the secret they believe they just stored.
  */
-export async function syncAgentSecretToRepos(agentId: string, value: string): Promise<string[]> {
+export async function syncAgentSecretToRepos(
+  agentId: string,
+  value: string,
+): Promise<AgentSecretSync> {
   const agent = agentById(agentId);
   const synced: string[] = [];
+  const failed: string[] = [];
   try {
     const projects = await listProjects();
     await Promise.allSettled(
@@ -186,12 +208,13 @@ export async function syncAgentSecretToRepos(agentId: string, value: string): Pr
         if (!p.github_repo) return;
         const res = await setRepoSecret(p, agent.credential.repoSecretName, value);
         if (res.ok) synced.push(p.github_repo);
+        else failed.push(p.github_repo);
       }),
     );
   } catch {
     /* best-effort, see above */
   }
-  return synced;
+  return { synced, failed };
 }
 
 export type AgentCredentialStatus = "ready" | "needs-key" | "unknown";

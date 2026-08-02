@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { anchorFor } from "@/lib/changelog";
 
@@ -19,11 +19,32 @@ import { anchorFor } from "@/lib/changelog";
 // not guaranteed to survive. Once recorded, it stays gone until the NEXT
 // release. Following the link counts as dismissing: you've seen it.
 
-export function ChangelogBanner({ version, summary }: { version: string; summary: string }) {
+// Two shapes, one dismissal mechanism. "bar" is the original full-width row
+// under the topbar, and stays the right answer on every screen except Home.
+// "inline" is the same news folded into the dispatcher's briefing card, where
+// the agent reports its own upgrade in the same voice it reports everything
+// else - a separate bar from the building management above a card where the
+// agent is talking is one notice too many, and the wrong messenger.
+export function ChangelogBanner({
+  version,
+  summary,
+  variant = "bar",
+}: {
+  version: string;
+  summary: string;
+  variant?: "bar" | "inline";
+}) {
   const [hidden, setHidden] = useState(false);
   const router = useRouter();
+  // The layout mounts the bar on every screen; Home mounts the inline copy
+  // inside the briefing. Without this the two would stack on Home, saying the
+  // same thing twice a few pixels apart. Decided here rather than in the
+  // layout because the layout is a server component with no route to test -
+  // and this component is already a client one for its dismissal.
+  const pathname = usePathname();
 
   if (hidden) return null;
+  if (variant === "bar" && pathname === "/dashboard") return null;
 
   function dismiss() {
     setHidden(true);
@@ -43,8 +64,16 @@ export function ChangelogBanner({ version, summary }: { version: string; summary
   }
 
   return (
-    <div className="border-b border-neutral-800/80 bg-neutral-900/40 px-4 py-2 sm:px-6">
-      <div className="mx-auto flex max-w-6xl items-center gap-3 text-sm">
+    <div
+      className={
+        variant === "inline"
+          ? ""
+          : "border-b border-neutral-800/80 bg-neutral-900/40 px-4 py-2 sm:px-6"
+      }
+    >
+      <div
+        className={`flex items-center gap-3 text-sm${variant === "inline" ? "" : " mx-auto max-w-6xl"}`}
+      >
         <a
           href={`/changelog#${anchorFor(version)}`}
           target="_blank"
@@ -57,7 +86,14 @@ export function ChangelogBanner({ version, summary }: { version: string; summary
             aria-hidden
           />
           <span className="min-w-0 truncate">
-            <b className="font-medium text-neutral-200">DispatchSEO has been updated.</b>{" "}
+            {/* Inline, the dispatcher has already said it got an upgrade in
+                its own words - repeating "DispatchSEO has been updated" a line
+                under that would be the announcement twice, once in each
+                voice. The summary and the way out are the only parts this row
+                still owes. */}
+            {variant === "inline" ? null : (
+              <b className="font-medium text-neutral-200">DispatchSEO has been updated.</b>
+            )}{" "}
             <span className="text-neutral-500">{summary}</span>
           </span>
           <span className="shrink-0 whitespace-nowrap font-medium text-neutral-300 underline-offset-2 group-hover:underline">

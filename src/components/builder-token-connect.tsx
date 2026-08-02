@@ -115,19 +115,29 @@ function BuilderTokenForm({
 
   if (state && "ok" in state) {
     return (
-      <p className="mt-2 text-sm text-emerald-300">
-        Saved - the builder picks it up within a few minutes.
-        {/* Only claim the repo sync when it verifiably happened - the sync is
-            best-effort, and implying a secret exists that doesn't is how the
-            9-second workflow failure this feature fixes came about. */}
-        {state.syncedRepos && state.syncedRepos.length > 0 ? (
-          <>
-            {" "}Also stored on{" "}
-            <b className="font-medium">{state.syncedRepos.join(", ")}</b> as a repo secret, so
-            GitHub-scheduled runs read it too.
-          </>
+      <>
+        <p className="mt-2 text-sm text-emerald-300">
+          Saved - the builder picks it up within a few minutes.
+          {/* Only claim the repo sync when it verifiably happened - the sync is
+              best-effort, and implying a secret exists that doesn't is how the
+              9-second workflow failure this feature fixes came about. */}
+          {state.syncedRepos && state.syncedRepos.length > 0 ? (
+            <>
+              {" "}Also stored on{" "}
+              <b className="font-medium">{state.syncedRepos.join(", ")}</b> as a repo secret, so
+              GitHub-scheduled runs read it too.
+            </>
+          ) : null}
+        </p>
+        {/* The other half of that honesty. When the repo sync was ATTEMPTED and
+            every repo refused, silence reads as "all good" while the repo's
+            scheduled workflows keep dying seconds in on the missing secret -
+            the exact failure the sync exists to prevent. Amber, not red: the
+            credential really was stored, so this is a caveat, not an error. */}
+        {state.syncCaveat ? (
+          <p className="mt-1.5 text-sm text-amber-300/90">{state.syncCaveat}</p>
         ) : null}
-      </p>
+      </>
     );
   }
   return (

@@ -248,6 +248,78 @@ function drawScene(ctx: CanvasRenderingContext2D, t: number, palette: Record<str
   }
 }
 
+// ---------------------------------------------------------------------------
+// Desk: the seated scene, cropped in tight
+// ---------------------------------------------------------------------------
+//
+// The full scene is authored 128 units wide because the character walks in
+// from the left, and almost all of that width is empty floor once it sits
+// down. Rendering the whole thing big enough to see the agent's face would put
+// a 500px strip of nothing across the card.
+//
+// So this crops to the part that has the desk in it: chair, agent, desk,
+// keyboard, monitor and mug, from x 42 to x 92 and y 5 to y 30 in the scene's
+// own canvas space. Same drawScene, same palette resolver, same idle loop
+// (blink, breath, the chart climbing, the steam) - it is a viewport onto the
+// existing scene, not a second drawing of it, so the two can never drift.
+const DESK_X = 42;
+const DESK_Y = 5;
+const DESK_W = 50;
+const DESK_H = 25;
+
+export function PixelDesk({
+  className,
+  variant = "clay",
+}: {
+  className?: string;
+  variant?: MascotVariant;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!ctx || !canvas) return;
+
+    const paint = (t: number) => {
+      // Shift the scene's coordinate space so the crop lands on the canvas.
+      ctx.setTransform(1, 0, 0, 1, -DESK_X, -DESK_Y);
+      // drawScene clears only its own 128x32 rectangle, which no longer covers
+      // the whole canvas once translated - clear the real canvas here or the
+      // right edge keeps the previous frame.
+      ctx.clearRect(DESK_X, DESK_Y, DESK_W, DESK_H);
+      drawScene(ctx, t, paletteFor(canvas, variant));
+    };
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      paint(DROP_END + 36);
+      return;
+    }
+    // Start seated with the headset already on: this is a card that renders on
+    // every visit, and watching the agent walk to its chair on the fiftieth
+    // load is charming exactly zero of those times.
+    let t = DROP_END;
+    paint(t);
+    const id = setInterval(() => {
+      t += 1;
+      paint(t);
+    }, TICK_MS);
+    return () => clearInterval(id);
+  }, [variant]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={DESK_W}
+      height={DESK_H}
+      role="img"
+      aria-label="Pixel art: your SEO agent at its desk, headset on, watching a rank chart climb"
+      translate="no"
+      className={`block h-auto [image-rendering:pixelated] ${className ?? ""}`}
+    />
+  );
+}
+
 // working: start already seated at the desk (skip the ~5s walk-in) and loop
 // the typing/idle animation - the right state for a persistent header or a
 // loading spinner, where the agent is "on the job" rather than arriving.

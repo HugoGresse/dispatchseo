@@ -138,7 +138,7 @@ the opposite on purpose: that's a loud failure naming the billing fix,
 because retrying can't help it.
 
 <Meta>
-<MetaItem label="Runs">Event-driven - the moment any check reports, plus an hourly backstop sweep.</MetaItem>
+<MetaItem label="Runs">Event-driven - the moment any check reports, plus a backstop sweep every 6 hours at :17.</MetaItem>
 <MetaItem label="Needs">Hands-off publishing turned on, an open PR labeled `seo`, every check green, and (for guides) every changed file under your repo's own `.dispatchseo/publish-paths`.</MetaItem>
 <MetaItem label="If it fails">Reports `job=seo-auto-merge`.</MetaItem>
 </Meta>
@@ -268,10 +268,16 @@ make outbound connections. That's what makes a fully-automatic install
 possible on a machine with no public URL at all.
 
 <Meta>
-<MetaItem label="Runs">BusyBox crond, hitting the same three endpoints as the cloud schedule above: daily-ranks at 04:00 UTC, hourly-gsc every 3 hours at :07, serp-collect hourly at :37.</MetaItem>
+<MetaItem label="Runs">BusyBox crond, hitting four endpoints on the same cadences as the cloud schedule above: daily-ranks at 04:00 UTC, hourly-gsc every 3 hours at :07, serp-collect hourly at :37, seo-dispatch every 3 hours at :41. A fifth line, the heartbeat, is covered below.</MetaItem>
 <MetaItem label="Needs">Nothing - always on.</MetaItem>
 <MetaItem label="If it fails">Same banner/email/`get_cron_health` rails as every other job on this page. `docker compose logs cron` shows every hit as it fires.</MetaItem>
 </Meta>
+
+`seo-dispatch` is on that list even on a stack that runs the builder
+container, and costs nothing there: the route stands down for as long as the
+builder's heartbeat is fresh, so the two schedulers can never both claim the
+same job. It's there for the self-host that connected a repo but doesn't run
+the builder - without it, that install's only scheduler would be GitHub's own.
 
 The crontab fires one more job the cloud schedule has no equivalent for:
 a **heartbeat** at 05:23 UTC, the anonymous install ping covered in
