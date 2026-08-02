@@ -75,6 +75,68 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
     kind: "fixed",
     text:
+      "Tool PRs no longer get stuck unreviewed on sites whose home page redirects - an app " +
+      "behind a login, a country/language bounce, anything that doesn't answer with a plain " +
+      "page at the root. The check that waits for your site to start was insisting on a " +
+      "specific answer from the home page, gave up on anything else, and left the tool sitting " +
+      "in a pull request nobody was told about. It now just waits for your site to respond.",
+  },
+  {
+    kind: "new",
+    text:
+      "Self-hosted installs now send one anonymous ping a day so we can tell how many people " +
+      "actually run DispatchSEO - downloads only ever showed how many people tried. It carries " +
+      "two things: a random id made on your own machine, and your version. No domain, no email, " +
+      "no keywords, no site data, no tokens. Set DISPATCHSEO_TELEMETRY=off in your .env to stop " +
+      "it; nothing else changes if you do.",
+  },
+  {
+    kind: "improved",
+    text:
+      "The self-host boot message no longer tells VPS installers to open localhost. It now " +
+      "prints two clearly separate next steps - own computer vs VPS/cloud server - and when " +
+      "you're installing over SSH it leads with the VPS instructions.",
+  },
+  {
+    kind: "improved",
+    text:
+      "The self-host setup wizard now asks which coding agent you use - Claude Code or Codex " +
+      "- and every command it hands you comes pre-adapted to your pick. Codex is a first-class " +
+      "path through setup, not a footnote behind a fold-out.",
+  },
+  {
+    kind: "improved",
+    text:
+      "Wherever a Claude Code credential is asked for, `claude setup-token` is now a copyable " +
+      "box instead of a link to the from-scratch install guide.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "A site pointed at a coding agent nobody gave a key to now shows up as a failed build " +
+      "on Home within its normal schedule, instead of silently never researching or building " +
+      "again. And with GitHub not yet connected, the bundled builder no longer \"claims\" work " +
+      "it can't start - the work just waits, ready the moment you connect.",
+  },
+  {
+    kind: "fixed",
+    text:
+      "The dashboard's \"turn on automatic builds\" reminder comes back if the bundled builder " +
+      "stops checking in for two weeks - it used to switch off forever after the first " +
+      "successful check-in.",
+  },
+  {
+    kind: "improved",
+    text:
+      "start.sh got three guard rails: it checks Docker and the Compose v2 plugin up front " +
+      "(with the real fix named, instead of a cryptic CLI error), it says so when it falls " +
+      "back from downloading prebuilt images to compiling from source (and what that needs), " +
+      "and removing DOMAIN from .env now points the dashboard back at localhost on the next " +
+      "start instead of leaving it aimed at a dead https address.",
+  },
+  {
+    kind: "fixed",
+    text:
       "Cloud setup no longer gets stuck one step from done. The background setup run could " +
       "finish all its work without flipping the final \"installed\" switch, which quietly kept " +
       "research and daily builds from ever starting. The backend now verifies your repo on its " +

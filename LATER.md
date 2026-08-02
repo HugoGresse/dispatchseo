@@ -139,3 +139,30 @@ running without any of them.)*
   (WAF, transient outage) are worse than a stale "live".
 
 - **Project key rotation** - a "rotate key" action on Settings (+ matching MCP tool per the parity rule): generates a new mcp_token, shows the new connect command, old token dies instantly. The revocation story for URL-borne keys (?key= connect form) and for any leaked token; today the only revocation is deleting the project.
+
+- **Proactive "trend radar needs a public URL" callout** (2026-08-02 audit). On a
+  docker install with no DOMAIN, trend-scan/trend-expand can't run (GitHub Actions
+  can't phone home to a loopback APP_URL). trendsUnreachable() already says so
+  honestly - but only after the owner clicks "Scan now". Add a line to the wizard
+  finale / Home so no-domain installs learn the trade-off before they hunt for the
+  feature. Deferred: honest-on-click today, nobody has hit it confused yet.
+
+- **Wizard finale verifies first research landed** (2026-08-02 audit). FirstRunStatus
+  flips "done" on pipeline_installed alone; the install agent says "research lands in
+  ~10-20 min" and ends. Add an ideas_queued (or first cron_runs row) check to the
+  checklist so "installed but first research never ran" is visible on the same screen
+  that promised it. Deferred: builder fail-rows (added same day) now cover the loud
+  half; this is the belt to those suspenders.
+
+- **Repo-wide sweep for compiler-eaten JSX spaces** (2026-08-02). This Next/SWC build
+  drops the leading space of a text node that follows an inline element when the text
+  wraps to the next source line (`<code>gh</code> there.⏎ works` rendered "ghthere" in
+  prod). Fixed at the wizard site with explicit {" "}; every other `</b>`/`</code>`/
+  `</a>` followed by wrapped prose is suspect. Sweep = grep candidates, eyeball the
+  compiled chunks, add {" "} where eaten.
+
+- **Consolidate agent-header-switch's credential hint onto MintLink** (2026-08-02
+  review nit). The popover's how-to-mint block duplicates MintLink's
+  command-vs-link branching with slightly different rendering; one component should
+  own it. Cosmetic, sizes differ (text-xs popover vs text-sm card) - needs a small
+  size prop, not a copy-paste.
