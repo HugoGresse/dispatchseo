@@ -1,3 +1,4 @@
+import pack from "./pipeline-pack.json";
 import { getPipelinePack } from "./pipeline-pack";
 import { installationToken } from "./github-app";
 import { hasRepoSecret, setRepoSecret } from "./github-app-secrets";
@@ -270,4 +271,61 @@ export async function installPipelineToRepo(
     agent_name: agent.displayName,
     actions_pr_permission: actionsPerm,
   };
+}
+
+// Post-deploy pack reconcile: push the current pack to every installed cloud
+// repo whose .dispatchseo/pipeline-version is behind, the moment a deploy
+// carrying a new pack goes live. Before this, a repo only discovered a new
+// pack at its own daily seo-token-check - so a workflow fix shipped at 09:07
+// left every connected repo running the broken pack until its next daily
+// tick, and the first real customer's tool build died at 11:04 on a bug the
+// backend had already fixed two hours earlier (2026-08-02, maxpertise). The
+// daily check stays as the backstop for a repo this sweep can't reach
+// (transient GitHub outage): its "pipeline update available" report still
+// triggers the same per-project update via deploy-check's fail path.
+//
+// Cheap by design: one contents read per project when up to date - the full
+// installPipelineToRepo (which also rewrites the repo secret) runs only on a
+// version mismatch. Failures are per-project isolated and console-only: the
+// github_app_config canary already screams when App auth as a whole is
+// broken, and the daily rail re-raises any repo that stays stale.
+const PACK_VERSION_PATH = ".dispatchseo/pipeline-version";
+let lastPackReconcileAt = 0;
+
+export async function reconcileStalePacks(): Promise<void> {
+  // Debounce repeated check-mode hits (workflow retries, manual curls).
+  if (Date.now() - lastPackReconcileAt < 5 * 60_000) return;
+  lastPackReconcileAt = Date.now();
+
+  const packVersion = ((pack as { version?: string }).version ?? "").trim();
+  if (!packVersion) return;
+
+  const { listProjects } = await import("./projects");
+  const projects = await listProjects();
+  await Promise.allSettled(
+    projects.map(async (p) => {
+      if (!p.github_repo || !p.github_installation_id || !p.pipeline_installed_at) return;
+      try {
+        const token = await installationToken(p.github_installation_id);
+        const res = await gh(
+          token,
+          "GET",
+          `/repos/${p.github_repo}/contents/${encodeURIComponent(PACK_VERSION_PATH)}`,
+        );
+        const installed =
+          res.status === 200 && typeof res.json?.content === "string"
+            ? Buffer.from(res.json.content as string, "base64").toString("utf8").trim()
+            : null;
+        if (installed === packVersion) return;
+        const result = await installPipelineToRepo(p, { dispatchSetup: false });
+        console.log(
+          `[pack-reconcile] ${p.slug}: ${installed ?? "unknown"} -> ${packVersion}: ${
+            result.ok ? result.mode : `FAILED: ${result.error}`
+          }`,
+        );
+      } catch (e) {
+        console.error(`[pack-reconcile] ${p.slug} failed:`, e);
+      }
+    }),
+  );
 }

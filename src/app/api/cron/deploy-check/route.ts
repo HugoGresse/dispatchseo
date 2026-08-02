@@ -326,6 +326,23 @@ export async function GET(req: Request): Promise<Response> {
     checks.github_app_config = "skipped (self-host)";
   }
 
+  // This deploy is live and just self-checked - the exact moment a new
+  // pipeline pack (if this deploy carries one) should reach every installed
+  // repo, instead of each repo discovering it at its own daily version check
+  // up to 24h later while its workflows keep failing on the bug the pack
+  // already fixes (2026-08-02, maxpertise). No-op when every repo is current;
+  // fire-and-forget so the smoke-test response stays instant.
+  if (isCloudMode()) {
+    after(async () => {
+      try {
+        const { reconcileStalePacks } = await import("@/lib/pipeline-install");
+        await reconcileStalePacks();
+      } catch (e) {
+        console.error("[deploy-check] pack reconcile sweep failed:", e);
+      }
+    });
+  }
+
   const result = { sha: liveSha || null, checks };
   console.log("[deploy-check]", JSON.stringify(result));
   await reportCronRun("deploy-check", result, hadError);

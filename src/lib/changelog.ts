@@ -258,6 +258,22 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
       "the exact connect command, and the questions people actually ask about it - and " +
       "the Codex page's dispatcher wears white. Both are linked from the homepage footer.",
   },
+  {
+    kind: "new",
+    text:
+      "dispatchseo.com/free-tools is open - small SEO tools that are free and need no " +
+      "account. The first one takes two or more of your pages and tells you which should " +
+      "link to which, with the anchor text to use, taken word-for-word from the page doing " +
+      "the linking. It all runs in your browser; nothing you paste is sent anywhere.",
+  },
+  {
+    kind: "fix",
+    text:
+      "On cloud, pipeline fixes now reach your repo within minutes of shipping instead of " +
+      "at the next daily check. Every deploy sweeps the connected repos and updates any " +
+      "that run an older pipeline - so a workflow bug we fix stops failing your builds the " +
+      "same hour, not the next day.",
+  },
 ];
 
 // Newest first. The head of this list is what the banner announces.
