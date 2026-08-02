@@ -110,6 +110,15 @@ export type AgentDefinition = {
     /** How the owner obtains one, in their words. */
     howToMint: string;
     /**
+     * The terminal command that mints the credential, when one exists. A
+     * surface that has this renders it as a copyable box and skips the
+     * mintUrl link entirely: sending a Claude owner to the from-scratch
+     * install guide when all they need is this one command buried the
+     * actual instruction (owner call, 2026-08-02). Codex has none - its key
+     * comes from a web page, which is what mintUrl is for.
+     */
+    mintCommand?: string;
+    /**
      * Where they go to get one. Rendered as "grab your key" so nobody has to
      * hunt for the page - the single most common reason a credential step
      * stalls is not understanding the instruction, it is not knowing where to
@@ -162,6 +171,7 @@ const claude: AgentDefinition = {
     // both are visible here before anything is stored.
     looksValid: (v) => v.startsWith("sk-ant-oat") && v.length > 60,
     howToMint: "Run `claude setup-token` in a terminal and copy what it prints.",
+    mintCommand: "claude setup-token",
     mintUrl: "/docs/install-claude-code",
     mintLinkLabel: "how to get your token",
   },

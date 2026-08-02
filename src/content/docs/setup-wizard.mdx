@@ -89,9 +89,15 @@ service before saving them.
 
 ## Step 4 - Coding agent
 
-Nothing to do here - it just explains the division of labor: your coding
-agent is the brain, DispatchSEO is its memory and dashboard. The connection
-itself happens at the finish line.
+One choice: **Claude Code** or **Codex**. Both do the same job here -
+research, writing, pull requests - the difference is who bills you. Claude
+Code runs on a Claude subscription you already pay for; Codex runs on your
+own OpenAI API key, metered per run. DispatchSEO never bills you for agent
+usage either way.
+
+Everything after this adapts to your pick: the finish line's pastes come
+ready for the agent you chose. You can still change your mind on the finish
+screen, or any time later from the dashboard's top bar.
 
 ## Step 5 - Publish mode
 
@@ -146,8 +152,11 @@ The last screen gives you two things to copy:
 
 1. **A terminal command** that connects your coding agent to this project.
    Run it inside your site's repo folder.
-2. **A chat message** to paste into Claude Code itself (open the repo,
-   type `claude`, paste). This one does the actual install.
+2. **A chat message** to paste into the agent itself (open the repo, type
+   `claude` or `codex`, paste). This one does the actual install.
+
+Both come pre-adapted to the agent you picked on step 4, and the same
+screen lets you switch agents if you've changed your mind.
 
 From that second paste, your agent takes over: it writes the automation
 workflow files into your repo, sets the repo secrets, opens one pull
@@ -155,32 +164,38 @@ request with all of it, personalizes the backlink playbook for your
 product, and kicks off your first keyword research. You approve its steps
 in the chat as it goes. It's safe to re-run if anything is interrupted.
 
-Both pastes assume Claude Code and the GitHub CLI (`gh`) are already on
-your computer. If they aren't - or if a command comes back
-`command not found` - [installing both](/docs/install-claude-code) is a
-one-time, five-minute detour.
+Both pastes assume your coding agent and the GitHub CLI (`gh`) are already
+on your computer. If they aren't - or if a command comes back
+`command not found` - it's a one-time detour:
+[Claude Code and gh](/docs/install-claude-code) in about five minutes, or
+[Codex](/docs/install-codex) plus gh from
+[cli.github.com](https://cli.github.com).
 
 Docker installs get one more item on the same screen: **turning on
-automatic builds**. Two pastes - a token created on your own computer
-(`claude setup-token`), then that token pasted into the field on this same
-screen (no terminal on the server needed) - and the wizard's checklist flips
-green when the builder makes its first check-in.
+automatic builds**. One credential, minted for whichever agent you picked -
+`claude setup-token` on your own computer for Claude Code, or an API key
+from [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+for Codex - pasted into the field on this same screen (no terminal on the
+server needed). The wizard's checklist flips green when the builder makes
+its first check-in.
 
 ## Which key is which
 
-Setup hands you four different secrets, and they look alike enough to mix
-up. You never have to memorize or file any of them - the dashboard shows
-each one again wherever it's needed - but when you're staring at a field
-wondering which string goes in it:
+Setup hands you four different secrets (the last one depends on which
+agent you picked), and they look alike enough to mix up. You never have to
+memorize or file any of them - the dashboard shows each one again wherever
+it's needed - but when you're staring at a field wondering which string
+goes in it:
 
 | Key | Starts with | What it's for | Where it comes from |
 | --- | --- | --- | --- |
-| Agent key (MCP token) | a long random string | How your coding agent talks to this dashboard | Generated for you; already inside the `claude mcp add` command the wizard hands you. Also on Settings. |
+| Agent key (MCP token) | a long random string | How your coding agent talks to this dashboard | Generated for you; already inside the connect command the wizard hands you. Also on Settings. |
 | Cron key | a long hex string | Lets the scheduled jobs call your backend | Generated for you; the install sets it as a repo secret. You never paste it by hand. |
 | GitHub token | `ghp_` | Lets the Approve button merge your pull requests | You create it on GitHub in step 6. |
-| Claude token | `sk-ant-oat` | Docker only - lets the bundled builder run Claude Code for you | You create it by running `claude setup-token` on your own computer. |
+| Claude Code token | `sk-ant-oat` | Docker only, if you picked Claude Code - lets the bundled builder run it for you | You create it by running `claude setup-token` on your own computer. |
+| OpenAI API key | `sk-` | Docker only, if you picked Codex - lets the bundled builder run it for you | You create it at [platform.openai.com/api-keys](https://platform.openai.com/api-keys); the account needs credit on it. |
 
-All four are stored encrypted in your own database.
+All of them are stored encrypted in your own database.
 
 ## Live progress, and what "stuck" actually looks like
 

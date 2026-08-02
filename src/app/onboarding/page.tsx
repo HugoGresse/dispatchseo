@@ -71,6 +71,10 @@ async function buildResume(): Promise<WizardResume | null> {
     },
     choice: project.keyword_source === "dataforseo" ? "paid" : "free",
     serpConnected: project.keyword_source === "serpapi",
+    // Through projectAgent() rather than project.agent directly, same as the
+    // cloud resume below: a pre-0044 database reads the column back as
+    // undefined, and the picker needs a real id to check a radio against.
+    agent: projectAgent(project).id,
   };
 }
 

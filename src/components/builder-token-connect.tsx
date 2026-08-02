@@ -14,8 +14,8 @@ import { MintLink } from "@/components/mint-link";
 // installs.
 //
 // The agent tabs are here, not only on Settings, because this card is where a
-// self-hoster first meets the choice: the wizard's agent screen is "just read",
-// and this is the moment a credential is actually needed. Storage is per agent
+// self-hoster's PICK (made on the wizard's agent step) first needs a
+// credential to back it. Storage is per agent
 // (one column each), so pasting a Codex key never overwrites a Claude token -
 // a stack can hold both and run different projects on each.
 //

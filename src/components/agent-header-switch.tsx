@@ -6,6 +6,7 @@ import { addAgentKey, getAgentCredentialStatuses, setAgent } from "@/app/actions
 import type { AgentCredentialStatus } from "@/lib/agent-settings";
 import { availableAgents, agentById, type AgentDefinition } from "@/lib/agents";
 import { AgentMark } from "@/components/agent-mark";
+import { CopyBox } from "@/components/wizard-ui";
 
 // Topbar agent switcher, left of the Semi/Auto pill: the current agent's mark,
 // and a dropdown of the agents this project has ADDED - the one in use plus
@@ -295,16 +296,29 @@ export function AgentHeaderSwitch({ current, slug }: { current: string; slug: st
             <p className="text-sm font-medium text-white">Add {formAgent.displayName}</p>
           </div>
           <p className="mt-1.5 text-xs leading-relaxed text-neutral-400">
-            {formAgent.credential.howToMint}{" "}
-            <a
-              href={formAgent.credential.mintUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-violet-400 underline underline-offset-2 hover:text-violet-300"
-            >
-              {formAgent.credential.mintLinkLabel}
-            </a>
+            {formAgent.credential.howToMint}
+            {/* A mintable-by-command credential gets its command as a copyable
+                box below instead of a link - the link went to the from-scratch
+                install guide, which is not what someone mid-switch needs. */}
+            {formAgent.credential.mintCommand ? null : (
+              <>
+                {" "}
+                <a
+                  href={formAgent.credential.mintUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-violet-400 underline underline-offset-2 hover:text-violet-300"
+                >
+                  {formAgent.credential.mintLinkLabel}
+                </a>
+              </>
+            )}
           </p>
+          {formAgent.credential.mintCommand ? (
+            <div className="mt-2">
+              <CopyBox text={formAgent.credential.mintCommand} />
+            </div>
+          ) : null}
           <form
             onSubmit={(e) => {
               e.preventDefault();

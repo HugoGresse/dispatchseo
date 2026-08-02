@@ -2,13 +2,9 @@
 
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { JOURNEY_STAGES, STAGE_META } from "@/lib/journey-meta";
-import {
-  codexMcpAddCommand,
-  connectCommand,
-  connectCommandPS,
-  mcpAddCommand,
-  mcpServerName,
-} from "@/lib/mcp-connect";
+import { mcpServerName } from "@/lib/mcp-connect";
+import { agentById, type AgentId } from "@/lib/agents";
+import { AgentMark } from "@/components/agent-mark";
 import { ShellCommandTabs } from "./shell-command-tabs";
 import { PixelDispatcher } from "./pixel-dispatcher";
 import { FirstRunStatus } from "@/components/first-run-status";
@@ -20,6 +16,7 @@ import {
   connectGithubToken,
   connectGscServiceAccount,
   connectSerpapi,
+  setAgent,
   setProjectMode,
   setWizardScreen,
   skipPowerup,
@@ -72,7 +69,7 @@ const META: Record<Exclude<Screen, "s5">, { name: string; time: string }> = {
   s2a: { name: "Keyword data", time: "about 3 minutes" },
   s2b_paid: { name: "Keyword data", time: "about 3 minutes" },
   s2b_free: { name: "Keyword data", time: "about 3 minutes" },
-  s3: { name: "Coding agent", time: "just read" },
+  s3: { name: "Coding agent", time: "one choice" },
   s3m: { name: "Publish mode", time: "one choice" },
   s_gh: { name: "Connect GitHub", time: "about 2 minutes" },
   s4b: { name: "What happens next", time: "just read" },
@@ -155,7 +152,55 @@ export type WizardResume = {
   created: { slug: string; name: string; domain: string; mcpToken: string } | null;
   choice: "paid" | "free" | null;
   serpConnected: boolean;
+  agent: AgentId;
 };
+
+// The Claude Code / Codex pick, shared by the agent step (where the choice is
+// made) and the finale (where the commands it decides are pasted - a dropped
+// session resumes straight to s5, so the choice must be changeable there too).
+// Same card markup as the cloud wizard's c2 picker, so the two wizards can't
+// drift on how this decision looks.
+function AgentPicker({
+  value,
+  onPick,
+  saving,
+}: {
+  value: AgentId;
+  onPick: (id: AgentId) => void;
+  saving: boolean;
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+      {(["claude", "codex"] as const).map((id) => (
+        <label
+          key={id}
+          className="flex cursor-pointer flex-col gap-1 rounded-lg border border-neutral-700 p-3.5 transition-colors hover:border-neutral-500 has-[:checked]:border-violet-500 has-[:checked]:bg-[#191521]"
+        >
+          <span className="flex items-center gap-2.5">
+            <input
+              type="radio"
+              name="agent-pick"
+              value={id}
+              checked={value === id}
+              onChange={() => onPick(id)}
+              disabled={saving}
+              className="h-4 w-4 accent-violet-500"
+            />
+            <AgentMark id={id} className="h-[18px] w-[18px] shrink-0" />
+            <span className="text-sm font-semibold text-neutral-100">
+              {agentById(id).displayName}
+            </span>
+          </span>
+          <span className="pl-6 text-[13px] leading-relaxed text-neutral-400">
+            {id === "claude"
+              ? "Needs a Claude subscription · builds cost nothing extra, they run on your plan"
+              : "Needs an OpenAI API key · builds are metered by OpenAI per run"}
+          </span>
+        </label>
+      ))}
+    </div>
+  );
+}
 
 export function OnboardingWizard({
   saEmail,
@@ -186,6 +231,28 @@ export function OnboardingWizard({
   } | null>(resume?.created ?? null);
   const [choice, setChoice] = useState<"paid" | "free" | null>(resume?.choice ?? null);
   const [serpConnected, setSerpConnected] = useState(resume?.serpConnected ?? false);
+  // The coding agent, picked on the agent step and echoed on the finale.
+  // Persisted the moment it is made (fire-and-forget), same as the cloud
+  // wizard: the install instructions and the builders resolve the agent
+  // server-side from projects.agent, so writing it late would hand a Codex
+  // owner Claude's playbook.
+  const [agentChoice, setAgentChoice] = useState<AgentId>(resume?.agent ?? "claude");
+  const agent = agentById(agentChoice);
+  const [agentSaving, startAgentSave] = useTransition();
+  function pickAgent(next: AgentId) {
+    if (next === agentChoice) return;
+    setAgentChoice(next);
+    const slug = created?.slug;
+    if (!slug) return;
+    startAgentSave(async () => {
+      try {
+        await setAgent(next, slug);
+      } catch {
+        // Non-fatal: the finale's commands still render for the picked agent,
+        // and the switch can be re-applied from the header or Settings.
+      }
+    });
+  }
   // Persist every screen change so reloads resume in place (fire-and-forget:
   // resume is a nicety, navigation must never wait on it).
   function setScreen(next: Screen) {
@@ -263,14 +330,12 @@ export function OnboardingWizard({
   }, [serpState]);
 
   const step = RAIL[screen];
-  // The server name is unique per project (dispatchseo-<slug>) so an owner
-  // connecting a second site never collides with or shadows the first one's
-  // token, whatever config scope they add it at. Default (local) scope still
-  // ties the connection to the folder it is run in - which is why the copy
-  // says to run it in the SITE's repo. Pasted prompts name the server
-  // exactly (installCommand above) - agents take the name literally and
-  // refuse on a name they can't find rather than resolving by capability.
-  const mcpCommand = created ? mcpAddCommand(created.slug, origin, created.mcpToken) : "";
+  // The connect commands the finale renders come off the picked agent's
+  // registry entry (agent.connect.*). The server name inside them is unique
+  // per project (dispatchseo-<slug>) so an owner connecting a second site
+  // never collides with or shadows the first one's token, and default
+  // (local) scope ties the connection to the folder it is run in - which is
+  // why the copy says to run it in the SITE's repo.
 
   function skipSerpapi() {
     startSkip(async () => {
@@ -931,7 +996,7 @@ export function OnboardingWizard({
         </section>
       ) : null}
 
-      {/* ============ STEP 4 · Claude Code ============ */}
+      {/* ============ STEP 4 · Coding agent ============ */}
       {screen === "s3" ? (
         <section>
           <StepIcon>
@@ -940,23 +1005,32 @@ export function OnboardingWizard({
               <line x1="12" y1="19" x2="20" y2="19" strokeLinecap="round" />
             </svg>
           </StepIcon>
-          <h2 className="text-2xl font-semibold tracking-tight">Your coding agent does the work</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">Which coding agent does the work?</h2>
           <p className="mb-2.5 text-base text-neutral-400">
-            Claude Code or Codex is the brain. DispatchSEO is its memory and dashboard.
+            Your agent is the brain. DispatchSEO is its memory and dashboard.
           </p>
-          <StepHelp href="/docs/install-claude-code" label="I don't have a coding agent yet" />
+          <StepHelp href={agent.installDocsPath} label={`I don't have ${agent.displayName} yet`} />
           <div className="rounded-xl bg-neutral-900 p-4">
-            <p className="text-sm text-neutral-300">
-              Nothing to do on this step - the last screen gives you a single command that
-              connects your coding agent to this project and sets everything up, checking each
-              value as it goes.
+            {/* The pick, made here rather than discovered on the finale: every
+                command the last screen shows is different per agent, and the
+                old just-read version of this step meant a Codex owner met
+                Claude-flavored pastes with their own path folded away behind a
+                disclosure (owner call, 2026-08-02). Still changeable on the
+                finale - this is a default, not a commitment. */}
+            <p className="mb-1 text-base font-medium text-neutral-200">
+              Both do the same job - research, writing, pull requests. The difference is who
+              bills you.
             </p>
+            <p className="mb-2.5 text-sm text-neutral-400">
+              Nothing is billed by DispatchSEO either way.
+            </p>
+            <AgentPicker value={agentChoice} onPick={pickAgent} saving={agentSaving} />
             <p className="mt-3 text-sm text-neutral-400">
-              It works with the agent you already have - Claude Code on your existing Claude
-              subscription, or Codex on your OpenAI key. Nothing extra to pay us either way:
-              DispatchSEO never bills you for agent usage. Your agent researches
-              keywords, writes the guides, and opens the pull requests; this dashboard is where
-              you watch and approve.
+              That&apos;s the whole step. The last screen gives you two pastes, already adapted
+              to {agent.displayName} - they connect it to this project and set everything up,
+              checking each value as it goes. Your agent researches keywords, writes the
+              guides, and opens the pull requests; this dashboard is where you watch and
+              approve.
             </p>
           </div>
           <div className="mt-5 flex items-center justify-between">
@@ -1263,7 +1337,7 @@ export function OnboardingWizard({
 
           {/* The help slot sits under the intro on every screen, including this
               one - so it lands under whichever of the two intros rendered. */}
-          <StepHelp href="/docs/install-claude-code" label="Walk me through these two pastes" />
+          <StepHelp href={agent.installDocsPath} label="Walk me through these two pastes" />
 
           {agentWorking ? (
             // Steps 1 & 2 already did their job - tuck them into a one-click
@@ -1284,17 +1358,19 @@ export function OnboardingWizard({
                 <div className="space-y-2">
                   <p className="text-sm text-neutral-400">
                     <b className="font-medium text-neutral-200">1.</b>{" "}
-                    Connect Claude Code (in your site&apos;s repo):
+                    Connect {agent.displayName} (in your site&apos;s repo):
                   </p>
                   <ShellCommandTabs
-                    bash={created ? connectCommand(created.slug, origin, created.mcpToken) : ""}
-                    powershell={created ? connectCommandPS(created.slug, origin, created.mcpToken) : ""}
+                    bash={created ? agent.connect.bash(created.slug, origin, created.mcpToken) : ""}
+                    powershell={
+                      created ? agent.connect.powershell(created.slug, origin, created.mcpToken) : ""
+                    }
                   />
                 </div>
                 <div className="space-y-2">
                   <p className="text-sm text-neutral-400">
                     <b className="font-medium text-neutral-200">2.</b>{" "}
-                    Paste into Claude Code:
+                    Paste into {agent.displayName}:
                   </p>
                   <CopyBox text={created ? installCommand(created.slug) : ""} />
                 </div>
@@ -1308,56 +1384,105 @@ export function OnboardingWizard({
                   the reader only meets at the bottom of the screen has already
                   failed at its job. (In the agentWorking branch the tools are
                   demonstrably installed, so this doesn't render there.) */}
+              {/* The pick again, not just an echo: a dropped session resumes
+                  straight to this screen without passing the agent step, and
+                  every paste below is different per agent. */}
+              <div className="mb-5 space-y-2">
+                <p className="text-sm font-medium text-neutral-200">Your coding agent</p>
+                <AgentPicker value={agentChoice} onPick={pickAgent} saving={agentSaving} />
+              </div>
+
               <PrereqCallout
                 title="Two things on your computer first"
                 body={
-                  <>
-                    This needs a coding agent -{" "}
-                    <b className="font-medium text-neutral-200">Claude Code</b> or{" "}
-                    <b className="font-medium text-neutral-200">Codex</b> - and the{" "}
-                    <b className="font-medium text-neutral-200">GitHub CLI</b> (
-                    <code className="font-mono text-neutral-300">gh</code>). Don&apos;t have them
-                    yet? The guide installs both, start to finish, in about 5 minutes.
-                  </>
+                  agentChoice === "claude" ? (
+                    <>
+                      This needs <b className="font-medium text-neutral-200">Claude Code</b>{" "}
+                      and the <b className="font-medium text-neutral-200">GitHub CLI</b> (
+                      <code className="font-mono text-neutral-300">gh</code>). Don&apos;t have
+                      them yet? The guide installs both, start to finish, in about 5 minutes.
+                    </>
+                  ) : (
+                    <>
+                      This needs <b className="font-medium text-neutral-200">Codex</b> and the{" "}
+                      <b className="font-medium text-neutral-200">GitHub CLI</b> (
+                      <code className="font-mono text-neutral-300">gh</code>). The guide covers
+                      Codex; gh installs from{" "}
+                      <a
+                        href="https://cli.github.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-violet-400 underline underline-offset-2 hover:text-violet-300"
+                      >
+                        cli.github.com
+                      </a>{" "}
+                      (then run <code className="font-mono text-neutral-300">gh auth login</code>).
+                    </>
+                  )
                 }
-                href="/docs/install-claude-code"
-                cta="Install your agent and gh"
+                href={agent.installDocsPath}
+                cta={agentChoice === "claude" ? "Install Claude Code and gh" : "Install Codex"}
               />
 
               <div className="mt-5 space-y-2">
                 <p className="text-lg font-semibold tracking-tight text-neutral-100">
                   1. Paste this in a terminal, inside your site&apos;s repo
                 </p>
-                <p className="text-sm text-neutral-400">
-                  Connects Claude Code to this project and lets it run{" "}
-                  <code className="font-mono text-neutral-300">gh</code> there. Any terminal
-                  works - pick your system&apos;s tab.
-                </p>
-                <ShellCommandTabs
-                  bash={created ? connectCommand(created.slug, origin, created.mcpToken) : ""}
-                  powershell={created ? connectCommandPS(created.slug, origin, created.mcpToken) : ""}
-                />
+                {/* {" "} after the inline <code>, never a plain space: the
+                    compiler eats a leading space when the text node wraps to
+                    the next source line - prod shipped "ghthere" for weeks. */}
+                {agentChoice === "claude" ? (
+                  <p className="text-sm text-neutral-400">
+                    Connects Claude Code to this project and lets it run{" "}
+                    <code className="font-mono text-neutral-300">gh</code>
+                    {" "}there. Any terminal works - pick your system&apos;s tab.
+                  </p>
+                ) : (
+                  <p className="text-sm text-neutral-400">
+                    Connects Codex to this project. One command, same in every shell.
+                  </p>
+                )}
+                {agentChoice === "claude" ? (
+                  <ShellCommandTabs
+                    bash={created ? agent.connect.bash(created.slug, origin, created.mcpToken) : ""}
+                    powershell={
+                      created ? agent.connect.powershell(created.slug, origin, created.mcpToken) : ""
+                    }
+                  />
+                ) : (
+                  // Codex's connect is the same string in bash and PowerShell
+                  // (see agents/index.ts), so shell tabs would be two labels
+                  // for one command - render the one box instead.
+                  <CopyBox
+                    text={created ? agent.connect.bash(created.slug, origin, created.mcpToken) : ""}
+                  />
+                )}
                 <p className="text-[13px] text-neutral-500">
                   <b className="font-semibold text-neutral-300">
-                    Restart Claude Code after pasting this - close any open session in that repo
-                    and reopen it.
+                    Restart {agent.displayName} after pasting this - close any open session in
+                    that repo and reopen it.
                   </b>{" "}
-                  Connections load only at startup, so a session that was already open can&apos;t
-                  see the one you just added. Using the VS Code extension and it still can&apos;t
-                  see the server? Do step 2 from a plain terminal instead (open the repo folder,
-                  type <code className="font-mono text-neutral-400">claude</code>) - or fully
-                  reload the VS Code window.
+                  Connections load only at startup, so a session that was already open
+                  can&apos;t see the one you just added.
+                  {agentChoice === "claude" ? (
+                    <>
+                      {" "}Using the VS Code extension and it still can&apos;t see the server? Do
+                      step 2 from a plain terminal instead (open the repo folder, type{" "}
+                      <code className="font-mono text-neutral-400">claude</code>) - or fully
+                      reload the VS Code window.
+                    </>
+                  ) : null}
                 </p>
               </div>
 
               <div className="mt-5 space-y-2">
                 <p className="text-lg font-semibold tracking-tight text-neutral-100">
-                  2. Paste this into Claude Code
+                  2. Paste this into {agent.displayName}
                 </p>
                 <p className="text-sm text-neutral-400">
-                  Open Claude Code in that same repo (type{" "}
-                  <b className="font-medium text-neutral-100">claude</b> in the terminal) and
-                  paste:
+                  Open {agent.displayName} in that same repo (type{" "}
+                  <b className="font-medium text-neutral-100">{agent.cli}</b> in the terminal)
+                  and paste:
                 </p>
                 <CopyBox emphasis text={created ? installCommand(created.slug) : ""} />
               </div>
@@ -1384,42 +1509,9 @@ export function OnboardingWizard({
                 </p>
               </div>
 
-              {/* Codex is a real option here now, but it stays a disclosure
-                  rather than a second card: the screen's job is to get ONE
-                  agent connected, and a fork at the top of it turns a two-paste
-                  step into a decision. Claude Code stays the default because it
-                  is the cheaper story (a subscription people already pay for)
-                  and the more-tested path; Codex is one click away, not one
-                  scroll. */}
-              <details className="group mt-4">
-                <summary className="cursor-pointer list-none text-sm text-neutral-400 hover:text-neutral-200">
-                  Using Codex instead of Claude Code?
-                </summary>
-                <div className="mt-2 space-y-2 rounded-xl bg-neutral-900 px-4 py-3.5 text-sm text-neutral-400">
-                  <p>
-                    Everything works the same on Codex - research, the queue, approvals, and the
-                    scheduled builders. Connect it with this instead of the paste above:
-                  </p>
-                  <CopyBox
-                    text={created ? codexMcpAddCommand(created.slug, origin, created.mcpToken) : ""}
-                  />
-                  <p className="text-[13px] text-neutral-500">
-                    Then switch this project to Codex on Settings, and paste an OpenAI key on
-                    Home&apos;s automatic-builds card. Billing is the real difference: Claude Code
-                    runs on a subscription you already pay for, Codex is metered by OpenAI per
-                    run.{" "}
-                    <a
-                      href="/docs/install-codex"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-violet-400 underline underline-offset-2 hover:text-violet-300"
-                    >
-                      The Codex guide
-                    </a>{" "}
-                    walks through it.
-                  </p>
-                </div>
-              </details>
+              {/* The old "Using Codex instead?" disclosure is gone on purpose:
+                  the picker above adapts every paste on this screen, so the
+                  Codex path IS the screen when picked, not a footnote. */}
             </>
           )}
 
@@ -1444,7 +1536,9 @@ export function OnboardingWizard({
                     Claude Code token" from the very screen whose disclosure
                     above says Codex works identically. Reuse is the fix that
                     stays fixed. */}
-                <BuilderTokenConnect />
+                {/* Keyed by the pick so choosing Codex above flips this card's
+                    tab to Codex too - current only seeds the initial tab. */}
+                <BuilderTokenConnect key={agentChoice} current={agentChoice} />
                 <p className="text-sm text-neutral-500">
                   That&apos;s your coding agent running inside Docker, building on schedule, no
                   public URL needed. Until it&apos;s on, nothing builds automatically - everything
