@@ -65,6 +65,7 @@ jobs:
           open=$(gh pr list --repo "$GITHUB_REPOSITORY" --label seo-tool --state open --json number --jq 'length')
           if [ "$open" != "0" ]; then
             echo "A tool PR is already open - skipping. The suggestion stays approved; the weekly sweep will pick it up once the open PR lands."
+            echo "skip_reason=a tool PR is already open and unmerged" >> "$GITHUB_OUTPUT"
           fi
           # Automation-flag gate: the DispatchSEO dashboard can pause tool
           # builds (auto_build_tools off). 404 = backend without the endpoint
@@ -82,6 +83,7 @@ jobs:
               # attempt and the in-stack builder both cover this window.
               echo "Backend unreachable right now (rebooting?) - deferring to the next scheduled attempt."
               open=defer
+              echo "skip_reason=the backend was unreachable, so this run was deferred" >> "$GITHUB_OUTPUT"
             elif [ "$code" != "200" ] && [ "$code" != "404" ]; then
               echo "::error::project-mode endpoint returned HTTP $code"; exit 1
             fi
@@ -542,9 +544,17 @@ jobs:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           OUTCOME: ${{ job.status }}
+          SKIP_REASON: ${{ steps.guard.outputs.skip_reason }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # names the failed step in the report
         run: |
-          if [ "$OUTCOME" = "success" ]; then
+          if [ -n "$SKIP_REASON" ]; then
+            # A run that was BLOCKED is not a run that succeeded. ok=1 anchored
+            # the cadence window, so one unmerged PR or a single backend reboot
+            # bought a full day of silence behind a green dashboard (2026-08-02).
+            curl -sG --max-time 30 -H "Authorization: Bearer $SEO_MCP_API_KEY" \
+              --data-urlencode "job=seo-tools" --data-urlencode "deferred=$SKIP_REASON" \
+              "{{BACKEND_URL}}/api/cron/deploy-check" || true
+          elif [ "$OUTCOME" = "success" ]; then
             curl -sG --max-time 30 -H "Authorization: Bearer $SEO_MCP_API_KEY" \
               --data-urlencode "job=seo-tools" --data-urlencode "ok=1" \
               "{{BACKEND_URL}}/api/cron/deploy-check" || true
