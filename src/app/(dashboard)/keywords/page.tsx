@@ -69,11 +69,20 @@ export default async function KeywordsPage() {
       .select("keyword_id, position, checked_at")
       .eq("project_id", project.id)
       .gte("checked_at", new Date(Date.now() - 30 * 86400000).toISOString())
-      .order("checked_at", { ascending: true }),
+      // Newest-first + explicit cap so a read past PostgREST's row limit loses
+      // the OLDEST rows rather than the newest (see analytics-data.ts). Sorted
+      // back to ascending below, because deltas() reads the last element as the
+      // current position.
+      .order("checked_at", { ascending: false })
+      .range(0, 19999),
   ]);
 
   const keywords = (kwRes.data ?? []) as Keyword[];
-  const byKw = groupChecks((rcRes.data ?? []) as RankCheck[]);
+  const byKw = groupChecks(
+    ((rcRes.data ?? []) as RankCheck[])
+      .slice()
+      .sort((a, b) => a.checked_at.localeCompare(b.checked_at)),
+  );
 
   // One row per keyword with its series and deltas resolved once, ordered best
   // position first. Both views below render from this - computing deltas twice

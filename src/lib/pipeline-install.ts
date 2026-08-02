@@ -142,27 +142,74 @@ export async function installPipelineToRepo(
     const baseTree = (headCommit.json?.tree as { sha?: string } | undefined)?.sha;
     if (headCommit.status !== 200 || !baseTree) return fail("base tree lookup failed");
 
-    const tree = await gh(token, "POST", `/repos/${repo}/git/trees`, {
-      base_tree: baseTree,
-      tree: files.map((f) => ({ path: f.path, mode: "100644", type: "blob", content: f.content })),
-    });
-    if (tree.status !== 201 || !tree.json?.sha) return fail(`tree create failed: HTTP ${tree.status}`);
+    // Tree + commit on top of a given head, so the race retry below can redo
+    // both against a head that moved under us.
+    const buildCommit = async (
+      parentSha: string,
+      baseTreeSha: string,
+    ): Promise<{ sha: string; treeSha: string } | { error: string }> => {
+      const tree = await gh(token, "POST", `/repos/${repo}/git/trees`, {
+        base_tree: baseTreeSha,
+        tree: files.map((f) => ({ path: f.path, mode: "100644", type: "blob", content: f.content })),
+      });
+      if (tree.status !== 201 || !tree.json?.sha) return { error: `tree create failed: HTTP ${tree.status}` };
+      const commit = await gh(token, "POST", `/repos/${repo}/git/commits`, {
+        message:
+          "Install the DispatchSEO content pipeline\n\nCommitted by the DispatchSEO GitHub App during onboarding.",
+        tree: String(tree.json.sha),
+        parents: [parentSha],
+      });
+      if (commit.status !== 201 || !commit.json?.sha) return { error: `commit create failed: HTTP ${commit.status}` };
+      return { sha: String(commit.json.sha), treeSha: String(tree.json.sha) };
+    };
 
-    const commit = await gh(token, "POST", `/repos/${repo}/git/commits`, {
-      message: "Install the DispatchSEO content pipeline\n\nCommitted by the DispatchSEO GitHub App during onboarding.",
-      tree: tree.json.sha,
-      parents: [headSha],
-    });
-    if (commit.status !== 201 || !commit.json?.sha) return fail(`commit create failed: HTTP ${commit.status}`);
-    const newSha = String(commit.json.sha);
+    const built = await buildCommit(headSha, baseTree);
+    if ("error" in built) return fail(built.error);
+    let newSha = built.sha;
 
-    const refUpdate = await gh(token, "PATCH", `/repos/${repo}/git/refs/${encodeURIComponent(`heads/${branch}`)}`, {
-      sha: newSha,
-      force: false,
-    });
-    if (refUpdate.status !== 200) {
-      // Branch protection (or a race) - open the install PR instead. Create
-      // or fast-forward the install branch, tolerate it already existing.
+    const refPath = `/repos/${repo}/git/refs/${encodeURIComponent(`heads/${branch}`)}`;
+    let refUpdate = await gh(token, "PATCH", refPath, { sha: newSha, force: false });
+
+    // A 422 here is ambiguous: branch protection and a LOST RACE are rejected
+    // the same way ("not a fast forward"). reconcileStalePacks' debounce is
+    // module state, which on Vercel is per-lambda-instance, so two instances
+    // can sweep the same repo concurrently - two deploys landing minutes apart
+    // (2026-08-02) is enough. Reading that race as protection opened a stray
+    // "Install the DispatchSEO content pipeline" PR in a customer repo that
+    // was already current. So: re-read the head. If it moved, the other writer
+    // won - rebuild on top of it and retry the push ONCE. Genuine protection
+    // leaves the head exactly where it was and still falls through to the PR
+    // path (and a retry against it would be refused again anyway).
+    let raceApplied = false;
+    if (refUpdate.status === 422) {
+      const freshRef = await gh(token, "GET", `/repos/${repo}/git/ref/${encodeURIComponent(`heads/${branch}`)}`);
+      const freshHead = (freshRef.json?.object as { sha?: string } | undefined)?.sha;
+      if (freshRef.status === 200 && freshHead && freshHead !== headSha) {
+        const freshCommit = await gh(token, "GET", `/repos/${repo}/git/commits/${freshHead}`);
+        const freshTree = (freshCommit.json?.tree as { sha?: string } | undefined)?.sha;
+        if (freshCommit.status === 200 && freshTree) {
+          const retry = await buildCommit(freshHead, freshTree);
+          if (!("error" in retry)) {
+            if (retry.treeSha === freshTree) {
+              // The writer that won committed this very pack: applying our
+              // files on top of the new head changes nothing. Don't push an
+              // empty commit, and above all don't open a PR - the repo is
+              // already current.
+              raceApplied = true;
+              mode = "up-to-date";
+            } else {
+              newSha = retry.sha;
+              refUpdate = await gh(token, "PATCH", refPath, { sha: newSha, force: false });
+            }
+          }
+        }
+      }
+    }
+
+    if (!raceApplied && refUpdate.status !== 200) {
+      // Branch protection (the race is handled above) - open the install PR
+      // instead. Create or fast-forward the install branch, tolerate it
+      // already existing.
       const branchRef = await gh(token, "POST", `/repos/${repo}/git/refs`, {
         ref: `refs/heads/${INSTALL_BRANCH}`,
         sha: newSha,
@@ -301,10 +348,19 @@ export async function reconcileStalePacks(): Promise<void> {
   if (!packVersion) return;
 
   const { listProjects } = await import("./projects");
+  const { planGate } = await import("./billing");
   const projects = await listProjects();
+  const failures: string[] = [];
+  const awaitingMerge: string[] = [];
   await Promise.allSettled(
     projects.map(async (p) => {
       if (!p.github_repo || !p.github_installation_id || !p.pipeline_installed_at) return;
+      // Don't commit into a cancelled customer's repository. The sweep had no
+      // billing filter at all, so an account that lapsed but left the App
+      // installed kept receiving direct-to-main commits authored by our bot on
+      // every deploy, forever. planGate fails open on self-host and wherever
+      // Polar isn't configured, so this only ever narrows the cloud case.
+      if (!(await planGate(p.id)).allowed) return;
       try {
         const token = await installationToken(p.github_installation_id);
         const res = await gh(
@@ -323,9 +379,54 @@ export async function reconcileStalePacks(): Promise<void> {
             result.ok ? result.mode : `FAILED: ${result.error}`
           }`,
         );
+        if (!result.ok) {
+          failures.push(`${p.slug}: ${result.error}`);
+        } else if (result.mode === "pr") {
+          // Branch protection refused the direct commit, so the pack landed on
+          // a PR and the DEFAULT BRANCH still reads the old version. Nothing
+          // here can change that - only a human merging can - so on every
+          // future deploy this project looks stale again and we force-push the
+          // install branch and re-write its secrets, forever. Report it once
+          // per sweep and let the owner act, instead of churning their repo in
+          // silence.
+          awaitingMerge.push(`${p.slug}: ${result.pr_url ?? "install PR open"}`);
+        }
       } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
         console.error(`[pack-reconcile] ${p.slug} failed:`, e);
+        failures.push(`${p.slug}: ${message}`);
       }
     }),
   );
+
+  // Ride the normal rails. This sweep was console-only, and its stated backstop
+  // - the daily seo-token-check - reports as an update NOTICE, which by design
+  // never emails and is hidden entirely in cloud. Net effect: a repo that
+  // silently stopped receiving pack updates had no surface anywhere, which is
+  // exactly how a customer ends up running workflows we fixed hours earlier.
+  //
+  // Only report when there is something to say: a clean sweep writing an ok row
+  // every deploy would flood the health window it shares with every other job.
+  if (failures.length > 0 || awaitingMerge.length > 0) {
+    const { reportCronRun } = await import("./cron-alerts");
+    await reportCronRun(
+      "pack-reconcile",
+      {
+        ...(failures.length > 0 ? { failed: failures } : {}),
+        ...(awaitingMerge.length > 0
+          ? {
+              failed: [
+                ...failures,
+                ...awaitingMerge.map(
+                  (a) =>
+                    `${a} - branch protection blocked the direct push, so the pack is waiting on a human merge. ` +
+                    `Until it lands, this repo re-syncs on every deploy and its default branch keeps running the old pack.`,
+                ),
+              ],
+            }
+          : {}),
+      },
+      true,
+    );
+  }
 }

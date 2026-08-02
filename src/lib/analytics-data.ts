@@ -119,7 +119,20 @@ export async function getAnalyticsOverview(project: Project): Promise<AnalyticsO
       .select("keyword_id, position, checked_at")
       .eq("project_id", project.id)
       .gte("checked_at", since30)
-      .order("checked_at", { ascending: true }),
+      // NEWEST-first with an explicit cap, the pattern dataforseo-tasks.ts and
+      // ai-visibility.ts already use, and for the reason spelled out there: a
+      // read past PostgREST's row cap is TRUNCATED SILENTLY. Ascending order
+      // meant truncation dropped the newest rows - the only ones every derived
+      // number depends on - so a site tracking a few hundred keywords would
+      // quietly start showing month-old positions as "current", with no error
+      // anywhere. 30 days x 365 keywords is already ~11k rows.
+      // deltas() reads series[length-1] as the CURRENT position, so the array
+      // it finally sees must still be ascending - re-sorted in JS below. Fetch
+      // order decides only WHICH rows survive truncation; sort order decides
+      // what the numbers mean. Getting that backwards would make every
+      // "current rank" a month old, always, instead of occasionally.
+      .order("checked_at", { ascending: false })
+      .range(0, 19999),
     credsForProject(project).then((creds) => getDomainRating(project.id, project.domain, creds)),
     // Fresh data is a nice-to-have; a GSC hiccup must not take down the page.
     // No GSC property connected yet -> no fresh numbers, by definition.
@@ -134,7 +147,11 @@ export async function getAnalyticsOverview(project: Project): Promise<AnalyticsO
   const gsc = ((gscRes.data ?? []) as GscFullRow[]).reverse();
   const gscDaily = (gscDailyRes.data ?? []) as GscRow[];
   const keywords = (kwRes.data ?? []) as Keyword[];
-  const checks = (checksRes.data ?? []) as RankCheck[];
+  // Fetched newest-first so truncation loses the OLDEST rows; restored to
+  // ascending here because deltas() defines "current" as the last element.
+  const checks = ((checksRes.data ?? []) as RankCheck[])
+    .slice()
+    .sort((a, b) => a.checked_at.localeCompare(b.checked_at));
 
   const clicks = sumGsc(gsc, "clicks");
   const impressions = sumGsc(gsc, "impressions");
