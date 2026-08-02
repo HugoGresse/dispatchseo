@@ -33,6 +33,11 @@ type Status = {
   // went through on the agent's word alone (typically no merge/dispatch
   // token to actually check anything against) - see mark_pipeline_installed.
   pipeline_verified: boolean | null;
+  // Owner-facing blockers from the backend's install self-heal (typically the
+  // Actions create-and-approve-PRs toggle the App can't set itself). Absent
+  // or empty = nothing known to block the unlock.
+  install_blocked?: string[] | null;
+  github_repo?: string | null;
 };
 
 type ItemState = "pending" | "active" | "done" | "error";
@@ -336,7 +341,12 @@ export function FirstRunStatus({ slug, cloud }: { slug: string; cloud?: boolean 
   const stSiteFacts = stateAt(5, siteFactsDone);
   const stBacklink = stateAt(6, backlinkDone);
   const stPrMachinery: ItemState = canaryError ? "error" : stateAt(7, prMachineryDone);
-  const stPipelineVerified = stateAt(8, pipelineVerifiedDone);
+  // A blocked unlock is the owner's move, not a spinner: the backend verified
+  // everything else and named what it needs (the App can't fix repo settings
+  // itself). Surface it as an error with the fix, whatever the chain says.
+  const installBlocked =
+    !pipelineDone && (s?.install_blocked?.length ?? 0) > 0 ? (s?.install_blocked ?? null) : null;
+  const stPipelineVerified: ItemState = installBlocked ? "error" : stateAt(8, pipelineVerifiedDone);
   const stResearch = stateAt(9, researchDone);
   // No signal exists for "about to start" here (only the binary
   // builds_active) - no fake progress, so this one never animates.
@@ -513,14 +523,38 @@ export function FirstRunStatus({ slug, cloud }: { slug: string; cloud?: boolean 
           state={stPipelineVerified}
           icon={<IconUnlock />}
           title="Pipeline verified"
+          prominent={Boolean(installBlocked)}
           detail={
-            stPipelineVerified === "done"
-              ? s?.pipeline_verified === false
-                ? "Dashboard unlocked - but not backend-checked (no GitHub token was connected to verify against)"
-                : "Verified - dashboard unlocked"
-              : stPipelineVerified === "active"
-                ? "Verifying the full pipeline"
-                : "Final check before your dashboard unlocks"
+            installBlocked ? (
+              <>
+                <b className="font-semibold text-neutral-100">Your move:</b>{" "}
+                {installBlocked.join("; ")}
+                {s?.github_repo ? (
+                  <>
+                    {" - "}
+                    <a
+                      href={`https://github.com/${s.github_repo}/settings/actions`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-violet-300 underline underline-offset-2 hover:text-violet-200"
+                    >
+                      open your repo&apos;s Actions settings
+                    </a>
+                  </>
+                ) : null}
+                . Re-checked automatically - this row turns green on its own once fixed.
+              </>
+            ) : stPipelineVerified === "done" ? (
+              s?.pipeline_verified === false ? (
+                "Dashboard unlocked - but not backend-checked (no GitHub token was connected to verify against)"
+              ) : (
+                "Verified - dashboard unlocked"
+              )
+            ) : stPipelineVerified === "active" ? (
+              "Verifying the full pipeline"
+            ) : (
+              "Final check before your dashboard unlocks"
+            )
           }
         />
         <ChecklistItem

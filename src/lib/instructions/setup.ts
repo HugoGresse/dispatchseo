@@ -236,4 +236,31 @@ directory submission's prefilled copy and every browser command uses it.
 5. Tell the user: the Playbook tab is now personalized; open it and work top
    to bottom - each item has the copy prefilled and a browser command that
    fills the form.
+
+### Part 5 - verify and unlock (never skip this)
+
+The owner's dashboard stays locked and NO scheduled run - research, guide
+builds, GEO scans - is ever dispatched until this project is stamped
+installed. Ending this run without attempting the stamp strands the owner
+on a dashboard that looks alive and never fills (2026-08-02: the first
+cloud install did exactly that - setup finished green twice, the stamp
+never landed, nothing ran).
+
+1. Call \`mark_pipeline_installed\` - one call, no arguments. Calling it is
+   always safe: the backend re-verifies everything server-side (workflows
+   live on the default branch, labels, the Actions PR permission, this
+   run's saved site profile) and refuses with the exact problems rather
+   than stamping a broken install.
+2. If it refuses, read the problems it names:
+   - Whatever this session can fix (a missing label, a disabled workflow),
+     fix it, then call the tool again.
+   - Repo settings out of your reach - above all GitHub's "Allow GitHub
+     Actions to create and approve pull requests" toggle, which no
+     workflow token may change - are the OWNER's move. Do NOT fail the run
+     over them: name them plainly in your final report and end normally.
+     The owner sees the same list on their dashboard with a link, and the
+     backend re-checks on its own and stamps the moment the setting flips;
+     nothing depends on this session staying alive.
+3. If it succeeds, say so: the dashboard just unlocked, and the first
+   research run follows automatically - no further paste from the owner.
 `;
