@@ -231,6 +231,42 @@ function isMissingColumn(error: { code?: string; message?: string }, column: str
   return known && msg.includes(column);
 }
 
+// Polar does not always carry customer.external_id. Every CANCELLED
+// subscription in the live account has it empty (checked 2026-08-02: 9 of 9),
+// so subscription.canceled / .revoked arrived with no way to name the account
+// and the webhook discarded them - which is why a subscription cancelled on
+// 2026-07-31 still read "active" here two days later, granting a non-paying
+// account full access and platform DataForSEO spend.
+//
+// The ids we already stored at checkout are the way back: provider_subscription_id
+// identifies the exact subscription, provider_customer_id the account. Both are
+// written by applySubscriptionState on the FIRST event (subscription.created
+// always carries externalId), so by the time a cancellation arrives the row is
+// already findable. Subscription id first - it is the narrower key, and a
+// customer can hold more than one subscription over time.
+export async function findUserIdForSubscription(
+  providerSubscriptionId?: string | null,
+  providerCustomerId?: string | null,
+): Promise<string | null> {
+  for (const [column, value] of [
+    ["provider_subscription_id", providerSubscriptionId],
+    ["provider_customer_id", providerCustomerId],
+  ] as const) {
+    if (!value) continue;
+    const { data, error } = await db()
+      .from("subscriptions")
+      .select("user_id")
+      .eq(column, value)
+      .maybeSingle();
+    // A read error is not "no match" - fall through to the next key rather
+    // than reporting a definitive miss off a transient failure.
+    if (error) continue;
+    const userId = (data as { user_id?: string } | null)?.user_id;
+    if (userId) return userId;
+  }
+  return null;
+}
+
 // The webhook's single write path. Missing tier (unknown product) keeps the
 // stored tier; status always updates so a cancellation is never missed.
 export async function applySubscriptionState(state: {

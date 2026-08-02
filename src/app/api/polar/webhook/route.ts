@@ -1,5 +1,5 @@
 import { validateEvent, WebhookVerificationError } from "@polar-sh/sdk/webhooks";
-import { applySubscriptionState, tierForProductId } from "@/lib/billing";
+import { applySubscriptionState, findUserIdForSubscription, tierForProductId } from "@/lib/billing";
 import { reportCronRun } from "@/lib/cron-alerts";
 
 // Polar webhook. Two event families, because neither alone is sufficient:
@@ -111,10 +111,45 @@ export async function POST(req: Request): Promise<Response> {
         return await webhookWriteFailed(e, event.type, userId, sub.status);
       }
     } else {
-      // No externalId means we cannot tell WHICH account this belongs to, so
-      // the event is unusable - but dropping it into a 200 silently is how a
-      // paying customer ends up with no plan and nobody ever knows.
-      console.error(`[polar] ${event.type} ${sub.id} has no customer.externalId - event discarded`);
+      // No externalId. Polar leaves it empty on every cancellation we have seen,
+      // so this is the NORMAL path for subscription.canceled / .revoked, not an
+      // edge case - it silently dropped every cancellation until 2026-08-02.
+      // Fall back to the ids we stored at checkout before giving up.
+      const known = await findUserIdForSubscription(sub.id, sub.customerId);
+      if (known) {
+        try {
+          await applySubscriptionState({
+            userId: known,
+            status: sub.status,
+            tier: tierForProductId(sub.productId),
+            providerCustomerId: sub.customerId ?? null,
+            providerSubscriptionId: sub.id,
+            currentPeriodEnd: sub.currentPeriodEnd
+              ? new Date(sub.currentPeriodEnd).toISOString()
+              : null,
+            cancelAtPeriodEnd: Boolean(sub.cancelAtPeriodEnd),
+          });
+        } catch (e) {
+          return await webhookWriteFailed(e, event.type, known, sub.status);
+        }
+        return Response.json({ ok: true });
+      }
+      // Genuinely unattributable. Never a console line only: a dropped billing
+      // event is money, and the log rolls off long before anyone reads it.
+      // Answer 200 - no retry can conjure an id Polar never sent - but put it
+      // on the banner + email rails so the event can be replayed by hand.
+      await reportCronRun(
+        "polar-webhook",
+        {
+          error:
+            `${event.type} for Polar subscription ${sub.id} (customer ${sub.customerId ?? "unknown"}) ` +
+            `carried no customer.external_id and matches no stored subscription - ` +
+            `status "${sub.status}" was NOT applied. Look the subscription up in Polar and ` +
+            `reconcile the account by hand.`,
+          event: event.type,
+        },
+        true,
+      );
     }
     return Response.json({ ok: true });
   }
@@ -128,7 +163,14 @@ export async function POST(req: Request): Promise<Response> {
       try {
         await applySubscriptionState({
           userId,
-          status: "active",
+          // NEVER invent a status. This branch hardcoded "active", and since it
+          // fires ~2 seconds after subscription.created it silently overwrote
+          // the "trialing" that event had just written correctly - so every
+          // trial has been stored, and displayed, as a paid plan. planBadge()
+          // exists to show "Free trial" precisely because a card is about to be
+          // charged; that badge could never fire (found live 2026-08-02, with
+          // two customers days from their first charge).
+          status: active.status ?? "active",
           tier: tierForProductId(active.productId),
           providerCustomerId: state.id,
           providerSubscriptionId: active.id,
