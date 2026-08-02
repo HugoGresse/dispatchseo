@@ -628,6 +628,7 @@ export default async function LandingPage({
               <a href="/privacy">Privacy policy</a>
               <a href="/terms">Terms of service</a>
               <a href="/google-data">Google data usage</a>
+              <a href="/subprocessors">Subprocessors</a>
               <a href="/login">Log in</a>
             </div>
           </div>

@@ -296,12 +296,23 @@ export default async function PlansPage() {
         {/* Reassurance + the legal line, quiet at the base of the page. */}
         <div className="mt-10 space-y-1 text-center">
           <p className="text-sm text-neutral-500">Cancel anytime &middot; 7-day free trial on Starter</p>
-          <p className="text-sm text-neutral-500">
-            By subscribing you agree to the{" "}
+          {/* The express-consent line required to validly waive the EU/UK
+              14-day withdrawal right on a service that starts immediately.
+              Without an affirmative request to begin performance AND an
+              acknowledgement that the right is lost once performed, the
+              "non-refundable" position in the terms is unenforceable against a
+              consumer no matter what the terms say. It sits at the point of
+              purchase because that is where the law wants it, not buried in
+              the terms page it links to. */}
+          <p className="mx-auto max-w-xl text-sm leading-relaxed text-neutral-500">
+            Your subscription renews automatically until you cancel. By subscribing you agree to
+            the{" "}
             <a className="text-neutral-300 underline underline-offset-2" href="/terms">
               terms of service
             </a>
-            .
+            , and you ask us to start the service straight away - which means that once it has
+            been fully performed you lose the 14-day right of withdrawal you would otherwise
+            have as a consumer. Cancel any time from your billing page.
           </p>
         </div>
       </div>

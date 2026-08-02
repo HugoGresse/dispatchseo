@@ -140,6 +140,12 @@ export async function proxy(req: NextRequest) {
     pathname === "/privacy" ||
     // Terms of service: linked from checkout + billing, read logged-out.
     pathname === "/terms" ||
+    // The subprocessor list and the Art. 28 data processing agreement. Both
+    // are cited BY the privacy policy and the terms, so a logged-out reader
+    // following those links has to be able to land on them - and procurement
+    // reviewers reading them are, by definition, not customers yet.
+    pathname === "/subprocessors" ||
+    pathname === "/dpa" ||
     // Google-data usage page: written for the OAuth branding reviewers, who
     // open it logged-out (linked from the homepage footer + FAQ).
     pathname === "/google-data" ||
