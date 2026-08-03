@@ -28,6 +28,7 @@ import {
 
 function blocksState(prefs: ContentPrefs): GuideBlocksState {
   return {
+    cover: !prefs.disabled_blocks.includes("cover"),
     tldr: !prefs.disabled_blocks.includes("tldr"),
     comparison_table: !prefs.disabled_blocks.includes("comparison_table"),
     visuals: !prefs.disabled_blocks.includes("visuals"),
@@ -112,8 +113,8 @@ export function ContentPrefsEditor({
           onToggleBlock={toggleBlock}
         />
         <p className="mt-2 text-xs text-neutral-400">
-          Click a block - TL;DR, table, visual, FAQ - to include or drop it from every
-          guide.{" "}
+          Click a block - cover, TL;DR, table, visual, FAQ - to include or drop it from
+          every guide.{" "}
           {droppedCount
             ? `${droppedCount} dropped; the next build already knows.`
             : "Ships as a PR - never straight to live."}

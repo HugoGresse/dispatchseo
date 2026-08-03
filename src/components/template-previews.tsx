@@ -178,11 +178,51 @@ type PreviewProps = {
 export type GuideBlocksState = Record<GuideBlock, boolean>;
 
 export const ALL_GUIDE_BLOCKS_ON: GuideBlocksState = {
+  cover: true,
   tldr: true,
   comparison_table: true,
   visuals: true,
   faq: true,
 };
+
+// A miniature of what generate-cover.mjs actually composites: dark field, an
+// off-center glow in the site's accent, a dot grid, and line art of the post's
+// subject. Deliberately dark whatever the site's own background is - the cover
+// base is a dark plate by design, so a light-themed site still sees the truth.
+function CoverPlate({ accent }: { accent: string }) {
+  return (
+    <div className="relative aspect-[16/9] w-full overflow-hidden rounded-md bg-neutral-950">
+      <div
+        className="absolute -left-4 -top-6 h-[140%] w-[70%] rounded-full blur-md"
+        style={{ background: `radial-gradient(closest-side, ${withAlpha(accent, 0.45)}, transparent)` }}
+      />
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage: "radial-gradient(#ffffff1a 0.5px, transparent 0.5px)",
+          backgroundSize: "5px 5px",
+        }}
+      />
+      <svg
+        viewBox="0 0 160 90"
+        className="absolute inset-0 h-full w-full"
+        fill="none"
+        stroke={accent}
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <rect x="26" y="34" width="34" height="22" rx="3" />
+        <rect x="100" y="34" width="34" height="22" rx="3" />
+        <path d="M60 45h40" />
+        <path d="M94 41l6 4-6 4" />
+        <circle cx="80" cy="70" r="6" />
+        <path d="M80 67v3l2 1" />
+      </svg>
+    </div>
+  );
+}
 
 // With an onToggle the block becomes a real button: on = normal (click to
 // drop), off = dimmed ghost (click to bring back). Without one - the static
@@ -262,6 +302,10 @@ export function GuideTemplatePreview({
         <div className="grid grid-cols-[2fr_1fr] gap-3">
           {/* main column */}
           <div className={full ? "space-y-2.5" : "space-y-2"}>
+            <ToggleableBlock on={b.cover} label="Cover image" onToggle={toggle("cover")}>
+              <CoverPlate accent={accent} />
+            </ToggleableBlock>
+
             <div className="space-y-1">
               <h4
                 className="text-[10px] font-bold leading-tight tracking-tight"

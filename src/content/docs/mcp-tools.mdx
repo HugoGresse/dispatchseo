@@ -1254,7 +1254,10 @@ current value.
     `reference`. At least 2 must stay enabled.
   </Field>
   <Field name="disabled_blocks" type="array">
-    Any of `tldr`, `comparison_table`, `visuals`, `faq`.
+    Any of `cover`, `tldr`, `comparison_table`, `visuals`, `faq`. All are
+    on by default - `cover` drops the generated cover image, so guides
+    ship with no `cover` frontmatter and the blog card falls back to its
+    own plate.
   </Field>
 </Fields>
 

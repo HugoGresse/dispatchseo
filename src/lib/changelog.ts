@@ -75,6 +75,14 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
     kind: "new",
     text:
+      "Every guide now ships with its own cover image, drawn by your agent as line art about that " +
+      "post's actual subject - so your blog index stops looking like a wall of identical cards. " +
+      "No image model, no extra bill. It's on by default; the cover block on the Instructions " +
+      "page turns it off for good if you'd rather your own cards.",
+  },
+  {
+    kind: "new",
+    text:
       "Once your first page is live, Home shows one quiet line asking for a GitHub star. It only " +
       "appears after the pipeline has actually published something, and starring or dismissing it " +
       "makes it gone for good - it never asks twice.",

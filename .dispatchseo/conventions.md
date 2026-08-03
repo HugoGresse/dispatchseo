@@ -70,8 +70,9 @@ Capability - what it does, feature by feature:
 - Frontmatter contract: `title` (string), `description` (string, meta
   description length), `date` (YYYY-MM-DD), optional `keyword` (the primary
   keyword targeted), optional `cover` (absolute-from-root image path, e.g.
-  `/blog/covers/<slug>.webp` - generated via `scripts/generate-cover.mjs`,
-  see the playbook's COVER IMAGE step). Nothing else is read.
+  `/blog/covers/<slug>.webp` - generated via
+  `.dispatchseo/generate-cover.mjs`, see the playbook's COVER IMAGE step).
+  Nothing else is read.
 - Rendering: `next-mdx-remote/rsc` with the component map in
   `src/components/blog/registry.tsx` (`src/app/blog/[slug]/page.tsx` is the
   template). The platform renders automatically: canonical URL, OG

@@ -177,6 +177,17 @@ command once to confirm it. The file must contain these sections:
    JSON-LD), which structured data the stack emits (e.g. FAQPage from
    frontmatter), internal-link style, and 2-3 exemplar posts to read before
    drafting.
+   **Include the cover image facts** - every guide build draws its own cover
+   (\`.dispatchseo/generate-cover.mjs\`), so this section must name: the
+   frontmatter field a post's cover goes in (\`cover\` unless this repo calls
+   it something else), the directory those image files live in, and the
+   URL-from-root prefix the site serves them at. Where the blog card renders
+   its own fallback plate for coverless posts, say so AND say that a cover is
+   still expected - "optional" in a type definition describes the fallback,
+   not the policy. If the repo has no cover convention yet, invent the
+   obvious one (a \`cover\` field, files under the static root's
+   \`blog/covers/\`) and write it down as the convention - that is what makes
+   it one.
 4. **Tools** - the public base path tool pages are served at (e.g.
    \`/free-tools/<slug>\`), where the registry and widget components live,
    the registry/wiring steps to ship one, the reference implementation to

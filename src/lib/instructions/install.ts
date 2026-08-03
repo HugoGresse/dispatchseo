@@ -81,7 +81,11 @@ and slash commands.
 3. On an update run (files exist but the version differs), overwrite the pack's
    own files freely - workflows carry no repo-specific truth anymore; everything
    repo-specific lives in \`.dispatchseo/\` files the pack does NOT include
-   (conventions.md, publish-paths), and those must be LEFT ALONE. The one
+   (conventions.md, publish-paths, serve), and those must be LEFT ALONE.
+   **\`.dispatchseo/\` is a mixed directory, not a protected one:** the pack
+   ships files into it too (pipeline-version, generate-cover.mjs). The rule is
+   per-FILE - if the manifest lists it, it is pack-owned and you write it; if
+   the manifest doesn't, it is the repo's and you don't touch it. The one
    exception worth a diff-and-ask: a file the owner visibly hand-edited
    beyond the known adaptation spots (custom steps, extra jobs) - never
    silently discard work like that.

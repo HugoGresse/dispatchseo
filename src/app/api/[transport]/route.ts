@@ -3198,7 +3198,7 @@ const mcpHandler = createMcpHandler(
           "The owner's template controls from the dashboard's Instructions page: " +
           "house_rules (free-text standing instructions injected into every build), " +
           "disabled_archetypes (guide shapes removed from rotation), and " +
-          "disabled_blocks (guide skeleton parts dropped: tldr, comparison_table, " +
+          "disabled_blocks (guide skeleton parts dropped: cover, tldr, comparison_table, " +
           "visuals, faq). Build workflows don't need to call this - the same " +
           "preferences are already rendered into the get_instructions text.",
         inputSchema: {},
@@ -3234,7 +3234,10 @@ const mcpHandler = createMcpHandler(
           disabled_blocks: z
             .array(z.enum(GUIDE_BLOCKS))
             .optional()
-            .describe("Guide skeleton parts to drop from every build: tldr, comparison_table, visuals, faq."),
+            .describe(
+              "Guide skeleton parts to drop from every build: cover, tldr, comparison_table, " +
+                "visuals, faq. All are on by default; `cover` drops the agent-drawn cover image.",
+            ),
         },
       },
       async (patch) => {

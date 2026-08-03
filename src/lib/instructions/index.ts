@@ -40,6 +40,10 @@ import {
   BUILD_GUIDE_STEPS,
   BACKLINKS_STEP_ON,
   BACKLINKS_STEP_OFF,
+  COVER_STEP_ON,
+  COVER_STEP_OFF,
+  COVER_SHIP_CHECK_ON,
+  COVER_SHIP_CHECK_OFF,
 } from "./build-guide";
 import { BUILD_TOOL, BUILD_TOOL_STEPS } from "./build-tool";
 import { REPORT, REPORT_STEPS } from "./report";
@@ -48,7 +52,7 @@ import { TREND_SCAN, TREND_SCAN_STEPS } from "./trend-scan";
 import { TREND_EXPAND, TREND_EXPAND_STEPS } from "./trend-expand";
 import { GEO_SCAN, GEO_SCAN_STEPS } from "./geo-scan";
 
-export const INSTRUCTIONS_VERSION = "2026-08-02.5";
+export const INSTRUCTIONS_VERSION = "2026-08-03.1";
 
 export const WORKFLOWS = [
   "install",
@@ -228,10 +232,18 @@ export async function renderInstructions(workflow: WorkflowName, project: Projec
   const backlinksStep = internalLinkingEnabled(project)
     ? BACKLINKS_STEP_ON
     : BACKLINKS_STEP_OFF;
+  // Covers are a disable-list entry, so ON is what every project gets until
+  // the owner says otherwise (including every row written before the block
+  // existed - absence means "on", which is the whole reason prefs are stored
+  // as disable-lists). OFF swaps the ~45-line cover step for a five-line note,
+  // so an owner who doesn't want covers stops paying for the instructions too.
+  const coversOn = !prefs.disabled_blocks.includes("cover");
   const raw = `${CORE}${CORE_TAIL}\n${BODIES[workflow]}`;
   let markdown = raw
     .replaceAll("{{RESEARCH_QUALITY_BAR}}", researchBar)
     .replaceAll("{{BACKLINKS_STEP}}", backlinksStep)
+    .replaceAll("{{COVER_STEP}}", coversOn ? COVER_STEP_ON : COVER_STEP_OFF)
+    .replaceAll("{{COVER_SHIP_CHECK}}", coversOn ? COVER_SHIP_CHECK_ON : COVER_SHIP_CHECK_OFF)
     .replaceAll("{{SITE_NAME}}", project.name)
     .replaceAll("{{DOMAIN}}", project.domain)
     .replaceAll("{{REPO}}", project.github_repo ?? "the project repo")
@@ -261,6 +273,18 @@ export async function renderInstructions(workflow: WorkflowName, project: Projec
       // `claude` here silently attributed GPT answers to Claude in the
       // AI-visibility chart, with no backfill path.
       .replaceAll("{{AGENT_ENGINE}}", codex ? "chatgpt" : "claude");
+    // The agent-conditional TEXT carries project tokens of its own - both
+    // credential steps end with `gh secret set … --repo {{REPO}}` - and it is
+    // spliced in AFTER the pass above already resolved those. So every install
+    // playbook ever served handed the agent that command with a literal
+    // "{{REPO}}" in it: the single most important secret in the pipeline, set
+    // against a repo name that doesn't exist. Re-resolve the identity tokens
+    // over the freshly-spliced text. Idempotent by construction - a second pass
+    // over already-substituted markdown finds nothing left to match.
+    markdown = markdown
+      .replaceAll("{{SITE_NAME}}", project.name)
+      .replaceAll("{{DOMAIN}}", project.domain)
+      .replaceAll("{{REPO}}", project.github_repo ?? "the project repo");
   }
   if (pacing) {
     markdown = markdown.replaceAll("{{PACING_NOTE}}", pacing.note);

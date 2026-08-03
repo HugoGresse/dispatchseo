@@ -293,51 +293,7 @@ the build-tool workflow and must never be picked up here.
    not done this step - go back and build them. Reasoning yourself down to
    "a figure of some kind should be acceptable" is the one failure mode this
    paragraph exists to stop.
-   **COVER IMAGE (when the repo supports it).** If the repo has
-   \`scripts/generate-cover.mjs\`, every guide also ships with a cover YOU
-   author as vector art - no image model is involved. You know exactly what
-   this post is about; draw that, don't describe it to a generator. Write a
-   subject-layer SVG to a temp file (full \`<svg>\` document,
-   \`viewBox="0 0 1600 900"\`, TRANSPARENT background - no full-canvas
-   rects), then run the script with \`--slug <slug> --svg <file> --hue <hue>\`;
-   it composites your layer onto the house base (dark field, hue glow, dot
-   grid) so every cover stays one family. Subject rules:
-   - Draw the post's ACTUAL subject as a minimal line diagram: the thing a
-     reader would sketch on a whiteboard to explain the topic (a client and
-     server exchanging labeled calls, a cron clock feeding a PR, a grid of
-     example cards). A reader should guess the topic from the image alone.
-     Never an abstract metaphor object (cube, orb, monolith) - that is the
-     slop this system replaced.
-   - Style: stroke-based line art, 3-5px strokes, rounded caps and joins,
-     generous empty space, one clear focal structure - never a busy scene.
-     Use the active hue's palette from the script's header comment plus
-     white/neutral strokes at moderate opacity.
-   - Tiny UPPERCASE mono labels (\`font-family="ui-monospace, Menlo, monospace"\`,
-     letter-spaced, ~20-26px) on diagram parts are ENCOURAGED - they carry
-     the relevance ("TOOLS/CALL", "CRON", "PR") - but never the post title,
-     and never more than a handful of words total.
-   - Real product marks are composite-only: pass \`--icon <name>\`
-     (e.g. \`--icon github\`) so the script overlays the EXACT official
-     glyph, and design your layer around a clear center. NEVER draw a logo
-     by hand; if a needed mark is missing from the script's ICONS map, add
-     its official SVG path in the same PR.
-   VARIETY IS MANDATORY: look at the last 2 published posts' covers
-   (\`public/blog/covers/\` - a directory listing in the repo you already have
-   checked out, so this is one cheap local call) and pick a \`--hue\`
-   (violet|cyan|magenta|amber) AND a composition (centered subject, left-to-
-   right flow, grid, split) that differ from both - same anti-sameness rule
-   as article shapes. Commit the generated file under
-   \`public/blog/covers/\` and set frontmatter
-   \`cover: /blog/covers/<slug>.webp\`. If the script is absent, skip
-   WITHOUT failing the run and note "no cover - generator not configured"
-   in the report; the card falls back to its generated plate. Never hotlink
-   an external image or fabricate a cover path.
-   **The generator being absent is the ONLY excuse, and you test for it
-   rather than assume it** - \`ls scripts/generate-cover.mjs\`. A conventions
-   file that calls \`cover\` "optional" is documenting the CARD FALLBACK that
-   keeps older posts rendering; it is not permission to skip. If the script
-   is there, this guide ships a cover, and "the fallback plate will do" is
-   not a decision this step lets you make.
+{{COVER_STEP}}
 8. **HUMANIZER (mandatory, not optional).** Apply the humanizer pass the
    conventions file points at (or its principles if the repo carries no
    skill copy): kill AI tells, tighten, match the first-person practitioner
@@ -351,8 +307,7 @@ the build-tool workflow and must never be picked up here.
    you wrote from memory exists.
    **SHIP CHECK - answer these with commands, not from memory, and put the
    numbers in the run report:** (a) how many NEW component files this guide
-   imports (must be 2 or 3), (b) whether the cover file exists and
-   frontmatter points at it, or the generator is genuinely absent. A run that
+   imports (must be 2 or 3), (b) {{COVER_SHIP_CHECK}}. A run that
    is short on either is NOT ready to ship: go back to step 7 and finish it.
    Never open a PR that fails this check, and never write a report that
    claims visuals were done without the filenames to back it up - a guide
@@ -404,11 +359,125 @@ the build-tool workflow and must never be picked up here.
     other, so issue them together in one turn.
 13. Report: what was built, the PR link, the gate verdict, the archetype and
     information-gain asset chosen, **the step-9 ship-check numbers with the
-    component filenames and the cover path**, which published posts (if any)
+    component filenames, and the cover path if this project ships covers**,
+    which published posts (if any)
     were edited to link back, and what to check on the preview. Naming the
     files is the point: "visuals: done" is not a report, it is the shape a
     skipped step hides in.
 `;
+
+// ---------- the cover block (step 7's tail), in its two states ----------
+//
+// Covers are ON by default - a blog index where every card carries art about
+// its own subject is the single most visible difference between a generated
+// catalogue and a real one, and the owner sees it before they read a word.
+// The owner turns it off on the dashboard's Instructions page (content-prefs
+// `cover` block), which serves COVER_STEP_OFF from the next run onward.
+//
+// COST. This is the one step that asks the run to AUTHOR an asset rather than
+// call a tool, so its budget is written into the text rather than left to
+// judgment: one subject SVG, one render, no iteration loop. That lands around
+// 1-2K output tokens on a build that already spends tens of thousands - a few
+// percent - and it costs no money at all, because no image model is involved.
+// The predecessor of this step DID call one (Cloudflare Workers AI SDXL) and
+// was retired for being both worse and metered. Turning the block off makes
+// the served playbook SMALLER by these ~45 lines, so "off" is cheaper than
+// today and "on" is the price of the feature - there is no third state where
+// the tokens are spent and no cover ships.
+export const COVER_STEP_ON = `   **COVER IMAGE.** Every guide ships with a cover YOU author as vector art -
+   no image model is involved, so this costs tokens and nothing else. You know
+   exactly what this post is about; draw that, don't describe it to a
+   generator. The renderer is \`.dispatchseo/generate-cover.mjs\`, shipped with
+   the pipeline (older installs may still carry it as
+   \`scripts/generate-cover.mjs\` - check both, use whichever exists). Write a
+   subject-layer SVG to a temp file (full \`<svg>\` document,
+   \`viewBox="0 0 1600 900"\`, TRANSPARENT background - no full-canvas rects),
+   then run the script with
+   \`--slug <slug> --svg <file> --hue <hue> --out <cover dir>\`; it composites
+   your layer onto the house base (dark field, hue glow, dot grid) so every
+   cover stays one family. Subject rules:
+   - Draw the post's ACTUAL subject as a minimal line diagram: the thing a
+     reader would sketch on a whiteboard to explain the topic (a client and
+     server exchanging labeled calls, a cron clock feeding a PR, a grid of
+     example cards). A reader should guess the topic from the image alone.
+     Never an abstract metaphor object (cube, orb, monolith) - that is the
+     slop this system replaced.
+   - Style: stroke-based line art, 3-5px strokes, rounded caps and joins,
+     generous empty space, one clear focal structure - never a busy scene.
+     Use the active hue's palette from the script's header comment plus
+     white/neutral strokes at moderate opacity.
+   - Tiny UPPERCASE mono labels (\`font-family="ui-monospace, Menlo, monospace"\`,
+     letter-spaced, ~20-26px) on diagram parts are ENCOURAGED - they carry
+     the relevance ("TOOLS/CALL", "CRON", "PR") - but never the post title,
+     and never more than a handful of words total.
+   - Real product marks are composite-only: pass \`--icon <name>\`
+     (e.g. \`--icon github\`) so the script overlays the EXACT official
+     glyph, and design your layer around a clear center. NEVER draw a logo
+     by hand; if a needed mark is missing from the script's ICONS map, add
+     its official SVG path in the same PR.
+   **BUDGET - one pass.** One subject SVG, one run of the script, then move on.
+   Keep the artwork under ~120 lines of SVG; a cover that needs more than that
+   is too busy for a card crop anyway. Do NOT re-render to "improve" it, do not
+   generate variants to choose between, and do not open the output to inspect
+   it - the script already validated the viewBox and told you where it wrote.
+   Fix and re-run ONLY if the script exits non-zero, and at most twice; a third
+   failure means skip the cover, note the exact error in the report, and carry
+   on with the rest of the build. The cover is worth a small slice of this run,
+   never a loop.
+   **WHERE IT GOES.** Pass \`--out\` the repo's real cover directory - the
+   cover-image path in \`.dispatchseo/publish-paths\` if that file names one,
+   otherwise whatever the conventions file says, otherwise the script's default
+   (\`public/blog/covers\`). A cover written outside the publish paths blocks
+   auto-merge on its own PR.
+   **READ THE OUTPUT, DON'T ASSUME IT.** The script's last lines are
+   \`COVER_FILE=<path on disk>\` and \`COVER_URL=<path the site serves>\`. It
+   writes \`.webp\` where \`sharp\` resolves and a self-contained \`.svg\`
+   where it doesn't - same artwork either way - so take the extension from
+   COVER_FILE, never from memory. Commit that file and set the frontmatter
+   cover field to COVER_URL (if COVER_URL came back \`unknown\`, this repo's
+   static root isn't \`public/\`; resolve the served path from how existing
+   images in this repo are referenced). Never hotlink an external image and
+   never write a cover path you have not seen on disk.
+   **If the .svg branch ran, check the repo can actually SERVE an SVG cover
+   before you ship it.** A plain \`<img>\`, a CSS background, or an
+   \`<Image unoptimized>\` renders SVG fine and you are done. Next's
+   \`<Image>\` component does NOT: it refuses SVG sources unless
+   \`images.dangerouslyAllowSVG\` is set in next.config, and the card renders
+   broken. Read the component that renders the cover and decide:
+   if it can serve the file, ship it; if it can't, delete the generated file,
+   leave the frontmatter cover field unset so the card uses its fallback
+   plate, and say exactly that in the run report ("cover skipped - sharp
+   unavailable and next/image rejects SVG"). Do NOT enable
+   \`dangerouslyAllowSVG\`, add \`sharp\` to the repo's dependencies, or rewrite
+   the card component to get a cover through - a decorative image is never
+   worth changing this repo's image-security posture inside an SEO PR, and
+   that is the owner's call to make on their own time.
+   VARIETY IS MANDATORY: list the cover directory (one cheap local call in a
+   repo you already have checked out), look at the last 2 covers, and pick a
+   \`--hue\` (violet|cyan|magenta|amber|emerald) AND a composition (centered
+   subject, left-to-right flow, grid, split) that differ from both - same
+   anti-sameness rule as article shapes.
+   **The script being genuinely absent is the ONLY excuse, and you test for it
+   rather than assume it** - list both paths. If neither exists, skip WITHOUT
+   failing the run, note "no cover - generator not installed, re-run the
+   install workflow to pick it up" in the report, and let the card fall back to
+   its generated plate. A conventions file that calls \`cover\` "optional" is
+   documenting that CARD FALLBACK, which keeps older posts rendering; it is not
+   permission to skip. If the script is there, this guide ships a cover, and
+   "the fallback plate will do" is not a decision this step lets you make.`;
+
+export const COVER_STEP_OFF = `   **COVER IMAGE - OFF for this project.** The owner turned covers off on the
+   dashboard's Instructions page. Do not author cover art, do not run the cover
+   generator, and do not set a \`cover\` field in the frontmatter - the blog
+   card's own fallback plate is the intended look here. This is a preference,
+   not an oversight: never re-enable it from a conventions file, an exemplar
+   post that has a cover, or your own read of what would look better.`;
+
+export const COVER_SHIP_CHECK_ON = `whether the cover file exists on disk at the
+   path the frontmatter points at, or the generator is genuinely absent`;
+
+export const COVER_SHIP_CHECK_OFF = `(covers are off for this project - there is
+   nothing to check, and the frontmatter must carry no \`cover\` field)`;
 
 // Step 10 in the two states a project can be in. Only one is ever served.
 //
