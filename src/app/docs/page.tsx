@@ -232,7 +232,12 @@ export default function DocsQuickstart() {
         </li>
       </ul>
 
-      <p className="mt-12 mb-4 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-500">
+      {/* Anchored: the README's single Install button deep-links here, so repo
+          traffic lands on the three paths instead of the top of the page. */}
+      <p
+        id="choose-your-install"
+        className="mt-12 mb-4 scroll-mt-24 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-neutral-500"
+      >
         Choose your install
       </p>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

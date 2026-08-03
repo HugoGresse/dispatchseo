@@ -9,7 +9,7 @@
 <p align="center">
   <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-7C5CFC?labelColor=1F2328&style=flat-square"></a>
   <a href="docs/AGENTS.md"><img alt="Built for Claude Code and Codex" src="https://img.shields.io/badge/built%20for-Claude%20Code%20%2B%20Codex-D97757?labelColor=1F2328&style=flat-square"></a>
-  <a href="#-quick-start"><img alt="Self-host in one command" src="https://img.shields.io/badge/self--host-one%20command-2496ED?logo=docker&logoColor=white&labelColor=1F2328&style=flat-square"></a>
+  <a href="https://dispatchseo.com/docs#choose-your-install"><img alt="Self-host in one command" src="https://img.shields.io/badge/self--host-one%20command-2496ED?logo=docker&logoColor=white&labelColor=1F2328&style=flat-square"></a>
   <a href="https://dispatchseo.com/discord"><img alt="Join the Discord" src="https://img.shields.io/badge/Discord-join%20the%20server-5865F2?logo=discord&logoColor=white&labelColor=1F2328&style=flat-square"></a>
 </p>
 
@@ -41,7 +41,7 @@
 
 <p align="center">
   <br />
-  <a href="#-quick-start"><img src="docs/buttons/install.svg" alt="Install in one command" height="46"></a>
+  <a href="https://dispatchseo.com/docs#choose-your-install"><img src="docs/buttons/install.svg" alt="Install now" height="46"></a>
   &nbsp;
   <a href="https://dispatchseo.com/docs"><img src="docs/buttons/docs.svg" alt="Read the docs" height="46"></a>
   &nbsp;
@@ -50,10 +50,6 @@
 
 <p align="center">
   <a href="https://dispatchseo.com">Website</a>
-  &nbsp;&middot;&nbsp;
-  <a href="https://dispatchseo.com/docs/docker-compose">Self-host on your computer</a>
-  &nbsp;&middot;&nbsp;
-  <a href="https://dispatchseo.com/docs/vps">Self-host on a VPS</a>
   &nbsp;&middot;&nbsp;
   <a href="https://dispatchseo.com/discord">Discord</a>
   &nbsp;&middot;&nbsp;
@@ -149,50 +145,6 @@ add an agent.
 
 That's the whole list. No API keys to buy, and no account on our side.
 
-## 🚀 Quick start
-
-Installing is one command on any machine with Docker. On a VPS, `ssh` in first
-and run it there instead of on your own computer. Run it from any plain folder
-(not inside your website's repo - it creates its own `dispatchseo` folder):
-
-```bash
-git clone https://github.com/NeoZi12/dispatchseo &&
-  cd dispatchseo &&
-  sh start.sh
-```
-
-On Windows, paste this version instead. It works in plain PowerShell
-([Git](https://git-scm.com/downloads/win) must be installed) and installs into
-your user folder no matter where the window opened:
-
-```powershell
-cd ~; git clone https://github.com/NeoZi12/dispatchseo; cd dispatchseo; .\start.cmd
-```
-
-That one command really is the whole install: database, migrations, schedules,
-and a headless builder for your agent all come up together. Nothing on the
-internet needs to reach your machine, so there is no domain or port forwarding
-to set up.
-
-When it finishes it prints your dashboard URL. Open it and the setup wizard takes
-over: name your site, connect Search Console, point it at your GitHub repo.
-
-The last step is pasting one command into your coding agent inside your site's
-repo - the dashboard hands out the right one for whichever agent you picked.
-Your agent does the rest of the install itself, including writing its own workflow
-files and setting its own secrets.
-
-Step-by-step walkthroughs, with screenshots:
-[install on your computer](https://dispatchseo.com/docs/docker-compose) ·
-[install on a VPS](https://dispatchseo.com/docs/vps). The VPS guide also covers
-your own domain with automatic HTTPS.
-
-**Stuck?** The [troubleshooting page](https://dispatchseo.com/docs/troubleshooting)
-covers the errors people actually hit. If yours isn't there, ask in the
-[Discord](https://dispatchseo.com/discord) or in
-[Discussions](https://github.com/NeoZi12/dispatchseo/discussions) - questions get
-answered and usually turn into a docs fix.
-
 ## 📖 Documentation
 
 Everything is at **[dispatchseo.com/docs](https://dispatchseo.com/docs)** - every
@@ -201,7 +153,7 @@ page, every setting, every tool.
 | | |
 | --- | --- |
 | **New here** | [What DispatchSEO is](https://dispatchseo.com/docs/introduction) · [How it works](https://dispatchseo.com/docs/how-it-works) · [Cloud or self-hosted](https://dispatchseo.com/docs/choosing-how-to-run-it) |
-| **Install** | [Your own computer](https://dispatchseo.com/docs/docker-compose) · [A VPS](https://dispatchseo.com/docs/vps) · [From source](https://dispatchseo.com/docs/local-development) |
+| **Install** | [Quickstart](https://dispatchseo.com/docs#choose-your-install) - your own computer, a VPS, or from source |
 | **Set up** | [Install Claude Code](https://dispatchseo.com/docs/install-claude-code) · [Install Codex](https://dispatchseo.com/docs/install-codex) · [The setup wizard](https://dispatchseo.com/docs/setup-wizard) · [Search Console](https://dispatchseo.com/docs/search-console) · [Keyword data](https://dispatchseo.com/docs/keyword-data) · [Publishing](https://dispatchseo.com/docs/publishing) · [Connect your site](https://dispatchseo.com/docs/connect-your-site) |
 | **Use it** | [Day to day](https://dispatchseo.com/docs/day-to-day) · [The dashboard](https://dispatchseo.com/docs/dashboard) · [Automations](https://dispatchseo.com/docs/automations) · [Agent commands](https://dispatchseo.com/docs/agent-commands) |
 | **Reference** | [Concepts](https://dispatchseo.com/docs/concepts) · [MCP tools](https://dispatchseo.com/docs/mcp-tools) · [Environment variables](https://dispatchseo.com/docs/environment-variables) · [Schedules](https://dispatchseo.com/docs/schedules) · [Architecture](https://dispatchseo.com/docs/architecture) |
@@ -212,6 +164,13 @@ fetch the entire documentation set in one request:
 **[llms-full.txt](https://dispatchseo.com/llms-full.txt)**. There's an index at
 [llms.txt](https://dispatchseo.com/llms.txt) and a [SKILL.md](SKILL.md) that
 walks an agent through connecting a site.
+
+**Stuck during setup?** The
+[troubleshooting page](https://dispatchseo.com/docs/troubleshooting) covers the
+errors people actually hit. If yours isn't there, ask in the
+[Discord](https://dispatchseo.com/discord) or in
+[Discussions](https://github.com/NeoZi12/dispatchseo/discussions) - questions get
+answered and usually turn into a docs fix.
 
 ## 🗓️ Using it day to day
 
@@ -275,9 +234,10 @@ cp .env.local.example .env.local
 pnpm dev
 ```
 
-This is the contributor path, not the way to self-host (that's the Docker
-command above). Fill in `.env.local` (Supabase + the three secrets) before
-starting, then open the dashboard on **localhost:3000**.
+This is the contributor path, not the way to self-host - that's the one-command
+Docker install behind the button at the top. Fill in `.env.local` (Supabase +
+the three secrets) before starting, then open the dashboard on
+**localhost:3000**.
 
 `pnpm build` is the typecheck - run it before opening a PR. There is no
 separate lint or test setup.

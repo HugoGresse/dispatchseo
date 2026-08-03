@@ -1,14 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="227" height="46" viewBox="0 0 227 46" role="img" aria-label="Install in one command">
+<svg xmlns="http://www.w3.org/2000/svg" width="146" height="46" viewBox="0 0 146 46" role="img" aria-label="Install now">
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#9B6DFF"/>
       <stop offset="1" stop-color="#6D3EE8"/>
     </linearGradient>
   </defs>
-  <rect x="0.5" y="0.5" width="226" height="45" rx="11" fill="url(#g)" stroke="#5B2FD1"/>
+  <rect x="0.5" y="0.5" width="145" height="45" rx="11" fill="url(#g)" stroke="#5B2FD1"/>
   <g stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.95">
     <path d="M19 17.5 L25.5 23 L19 28.5"/>
     <path d="M28 29.5 L35 29.5"/>
   </g>
-  <text x="46" y="28.6" textLength="163" lengthAdjust="spacingAndGlyphs" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#FFFFFF">Install in one command</text>
+  <text x="46" y="28.6" textLength="82" lengthAdjust="spacingAndGlyphs" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#FFFFFF">Install now</text>
 </svg>
