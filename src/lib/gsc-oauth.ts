@@ -3,6 +3,7 @@ import { google } from "googleapis";
 import { db } from "./db";
 import { authSecret } from "./dashboard-auth";
 import { decryptSecret, encryptSecret } from "./crypto";
+import { isGscPropertyShape } from "./url-guard";
 
 // Google OAuth for Search Console - the "Connect Google Search Console"
 // button (launch plan step 3). Scope is read-only search data, nothing else.
@@ -135,9 +136,19 @@ export async function setTrackedProperty(
   projectId: string,
   siteUrl: string,
 ): Promise<string | null> {
+  // The one chokepoint for a tenant-writable column, so the shape check lives
+  // here rather than in each of its three doors (the /google picker, the
+  // wizard, the set_gsc_property MCP tool). Google names properties in exactly
+  // two forms; anything else is a typo, or an attempt to park arbitrary text -
+  // including an internal address - in a value other code paths hand to an API
+  // client. isGscPropertyShape also refuses private/loopback hosts.
+  const trimmed = siteUrl.trim();
+  if (!isGscPropertyShape(trimmed)) {
+    return "That doesn't look like a Search Console property. Use the exact string Search Console shows - either `sc-domain:example.com` or `https://example.com/`.";
+  }
   const { error } = await db()
     .from("projects")
-    .update({ gsc_site_url: siteUrl })
+    .update({ gsc_site_url: trimmed })
     .eq("id", projectId);
   return error ? error.message : null;
 }

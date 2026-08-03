@@ -48,6 +48,25 @@ const nextConfig: NextConfig = {
           { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          // HSTS. The dashboard cookie is a 30-day bearer credential, so a
+          // single plain-HTTP navigation (typing the domain, an old bookmark,
+          // a link) is enough to hand it to anyone on the network. Browsers
+          // IGNORE this header when it arrives over http://, which is what
+          // makes it safe to send unconditionally - a self-hosted install
+          // reached at http://<lan-ip> is unaffected, while every HTTPS
+          // deployment gets pinned. No preload directive: preload is a
+          // one-way door for a domain, and that is the operator's call.
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=31536000; includeSubDomains",
+          },
+          // Nothing here uses the camera, microphone, geolocation or payment
+          // APIs. Denying them outright means an injected script or a future
+          // embed cannot quietly start asking for them.
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()",
+          },
         ],
       },
     ];

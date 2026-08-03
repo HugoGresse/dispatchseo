@@ -20,6 +20,18 @@ export async function requestOrigin(): Promise<string> {
 // finishes OAuth. /auth/callback is the only route that turns a credential into
 // a session; anywhere else (the Site URL default is "/") renders a normal page
 // and drops the code on the floor.
+//
+// The origin comes from the instance's CANONICAL url, never from request
+// headers. This URL is emailed, and it carries a credential: a spoofed Host /
+// X-Forwarded-Host would put the confirmation link - and the session it
+// establishes - on an attacker's domain. That is the same reset-poisoning class
+// /forgot-password already refuses to be exposed to, and there was no reason
+// for the signup and resend paths to be on the other side of the line.
+// requestOrigin() stays available for callbacks the browser follows within the
+// same request (the Google OAuth redirect_uri), where the visitor's own origin
+// is the right answer and nothing is emailed.
 export async function authCallbackUrl(): Promise<string> {
-  return `${await requestOrigin()}/auth/callback`;
+  if (process.env.NODE_ENV === "development") return "http://localhost:3000/auth/callback";
+  const { backendBaseUrl } = await import("./pipeline-pack");
+  return `${await backendBaseUrl()}/auth/callback`;
 }

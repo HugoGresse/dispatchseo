@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { type EmailOtpType } from "@supabase/supabase-js";
 import { supabaseAuth } from "@/lib/cloud-auth";
 import { captureServer } from "@/lib/posthog-server";
+import { RECOVERY_COOKIE } from "@/lib/recovery-gate";
 
 // Email-link + OAuth landing for CLOUD_MODE (Supabase Auth). Two credential
 // shapes arrive here, both of which establish the session cookies:
@@ -95,7 +96,24 @@ export async function GET(req: NextRequest) {
     const q = next.indexOf("?");
     url.pathname = q === -1 ? next : next.slice(0, q);
     url.search = q === -1 ? "" : next.slice(q);
-    return NextResponse.redirect(url);
+    const res = NextResponse.redirect(url);
+    // Proof that /reset-password was reached through a RECOVERY link, not just
+    // by an already-signed-in browser. Supabase's updateUser({password}) will
+    // change the password of whatever session is present and asks for no
+    // current password, so without this marker the reset form was a
+    // no-reauth account-takeover step for anyone holding a live session -
+    // a borrowed laptop, a stolen cookie. Short-lived and httpOnly; the form
+    // requires it and clears it on use.
+    if (isRecovery && data.user) {
+      res.cookies.set(RECOVERY_COOKIE, "1", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 15 * 60,
+      });
+    }
+    return res;
   } catch {
     return fail();
   }

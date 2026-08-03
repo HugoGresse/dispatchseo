@@ -1,6 +1,8 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { isCloudMode } from "@/lib/cloud";
+import { RECOVERY_COOKIE } from "@/lib/recovery-gate";
 import { supabaseAuth, currentUser } from "@/lib/cloud-auth";
 import { DispatchMark } from "@/components/logo";
 import { AuthShell } from "@/components/auth-shell";
@@ -19,6 +21,14 @@ export const dynamic = "force-dynamic";
 // lingering session is silently upgraded.
 async function updatePassword(formData: FormData) {
   "use server";
+  // A live session is NOT authorization to change the password. Supabase's
+  // updateUser({password}) never asks for the current one, so without this the
+  // form let anyone holding a session - a shared machine, a lifted cookie -
+  // take the account over with no reauthentication at all. The marker is
+  // dropped only on the recovery leg of /auth/callback (see recovery-gate.ts).
+  const jar = await cookies();
+  if (!jar.get(RECOVERY_COOKIE)?.value) redirect("/reset-password?error=expired");
+
   const password = String(formData.get("password") ?? "");
   const confirm = String(formData.get("confirm") ?? "");
   if (password.length < 8) redirect("/reset-password?error=weak");
@@ -32,6 +42,9 @@ async function updatePassword(formData: FormData) {
     const expired = error.message.toLowerCase().includes("session");
     redirect(`/reset-password?error=${expired ? "expired" : "1"}`);
   }
+  // Spend the marker before signing out: one recovery link, one password
+  // change. Otherwise the 15-minute window stayed open for repeat use.
+  jar.delete(RECOVERY_COOKIE);
   await supabase.auth.signOut();
   redirect("/login?reset=1");
 }
@@ -47,8 +60,13 @@ export default async function ResetPasswordPage({
   if (!isCloudMode()) redirect("/login");
   const { error } = await searchParams;
   const user = await currentUser();
+  // Same gate the action enforces, so an ordinary signed-in visitor who lands
+  // here sees the "request a new link" screen rather than a form that will
+  // refuse them. The action is still the real check - this only decides what
+  // to render.
+  const fromRecovery = Boolean((await cookies()).get(RECOVERY_COOKIE)?.value);
 
-  if (!user) {
+  if (!user || !fromRecovery) {
     return (
       <AuthShell>
         <h1 className="flex items-center gap-2.5 text-xl font-semibold text-white">

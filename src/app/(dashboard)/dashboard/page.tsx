@@ -47,7 +47,7 @@ import {
   TIER_BUDGET_MICROUSD,
 } from "@/lib/dataforseo-usage";
 import { DataforseoConnectForm } from "@/components/dataforseo-connect";
-import { gscAccessOk, serviceAccountEmail } from "@/lib/gsc";
+import { gscAccessOk, serviceAccountEmail, serviceAccountProbeAllowed } from "@/lib/gsc";
 import { buildsActive } from "@/lib/builder-status";
 import { isCloudMode } from "@/lib/cloud";
 import {
@@ -644,10 +644,15 @@ export default async function Home() {
   // say "waiting on the first sync" instead of re-explaining the step.
   // Cloud connects via the one-click OAuth instead - a stored refresh token
   // means the owner's side is done, whatever the service account says.
+  // serviceAccountProbeAllowed short-circuits the probe for a cloud TENANT:
+  // gsc_site_url is tenant-writable, so probing it with the shared platform
+  // service account would answer "can the operator read this property?" for
+  // anything a customer cares to type. Their own OAuth token is the only
+  // signal that means anything here anyway. Same boundary as gsc-readiness.ts.
   const gscWaiting =
     needsGsc && project.gsc_site_url
       ? (isCloudMode() && Boolean(project.gsc_oauth_refresh_token)) ||
-        (await gscAccessOk(project.gsc_site_url))
+        (serviceAccountProbeAllowed(project) && (await gscAccessOk(project.gsc_site_url)))
       : false;
   // Docker installs: automatic builds need SOME build path alive - the
   // in-stack builder or the repo's GitHub Actions pipeline. buildsActive()

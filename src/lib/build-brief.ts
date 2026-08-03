@@ -30,7 +30,7 @@
 
 import { db } from "@/lib/db";
 import type { Project } from "@/lib/projects";
-import { isProjectUrl } from "@/lib/url-guard";
+import { fetchProjectUrl } from "@/lib/url-guard";
 import { getPacing } from "@/lib/pacing";
 // The SAME helper get_suggestions uses to compute build order. Importing it
 // rather than re-implementing the sort is the whole point: if the brief named
@@ -200,14 +200,15 @@ export async function buildBrief(
     const fetched = await Promise.all(
       rows.slice(0, FINGERPRINT_COUNT).map(async (r) => {
         // Same SSRF guard as check_sameness: never fetch a stored URL that is
-        // not on this project's own domain.
-        if (!isProjectUrl(r.url, project.domain)) return null;
+        // not on this project's own domain - and re-check every redirect hop,
+        // because this one hands the response BODY back to the agent, so an
+        // off-domain 302 would be a read primitive, not just a probe.
         try {
-          const res = await fetch(r.url, {
-            signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-            headers: { "user-agent": "DispatchSEO-build-brief" },
+          const res = await fetchProjectUrl(r.url, project.domain, {
+            timeoutMs: FETCH_TIMEOUT_MS,
+            userAgent: "DispatchSEO-build-brief",
           });
-          if (!res.ok) return null;
+          if (!res?.ok) return null;
           const html = await res.text();
           const f = extractFromHtml(html, new Set(tokenize(r.primary_keyword ?? "")));
           return {

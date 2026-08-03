@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { isProjectUrl } from "./url-guard";
+import { fetchProjectUrl, isProjectUrl } from "./url-guard";
 import type { Project } from "./projects";
 
 // Truthful "published" state (migration 0033). log_page records a page when
@@ -56,16 +56,16 @@ export async function refreshPageLiveness<T extends LivenessRow>(
     pending.map(async (r) => {
       const checkedAt = new Date().toISOString();
       let liveAt: string | null = null;
-      try {
-        const res = await fetch(r.url, {
-          redirect: "follow",
-          signal: AbortSignal.timeout(6000),
-          headers: { "user-agent": "DispatchSEO-liveness-check" },
-        });
-        if (res.ok) liveAt = checkedAt;
-      } catch {
-        // unreachable = still pending; the stamp below records the attempt
-      }
+      // fetchProjectUrl, not fetch: redirects are followed by hand so a page
+      // that 302s off the project's domain (the tenant owns that domain) can't
+      // walk this probe onto an internal address. Null = refused or
+      // unreachable, both of which mean "still pending"; the stamp below
+      // records the attempt either way.
+      const res = await fetchProjectUrl(r.url, project.domain, {
+        timeoutMs: 6000,
+        userAgent: "DispatchSEO-liveness-check",
+      });
+      if (res?.ok) liveAt = checkedAt;
       const patch = liveAt
         ? { live_at: liveAt, live_checked_at: checkedAt }
         : { live_checked_at: checkedAt };

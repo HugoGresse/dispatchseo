@@ -104,6 +104,16 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
       "hours later. It's now treated as what it is: the build stays in the queue and is retried " +
       "once your limit resets.",
   },
+  {
+    kind: "improved",
+    text:
+      "A security pass tightened a handful of things across the product. Password reset links " +
+      "now have to be the thing that opens the reset form - being signed in is no longer enough " +
+      "to change your password. The checks that fetch your own published pages refuse to follow " +
+      "a redirect off your domain, and the domain you type when adding a site can no longer " +
+      "point at an internal address. Search Console verification stops guessing on hosted " +
+      "accounts, where your own Google connection is the only thing that answers it.",
+  },
 ];
 
 // Newest first. The head of this list is what the banner announces.

@@ -51,7 +51,13 @@ import { placeAtFront, writeQueueOrder } from "@/lib/queue";
 import { duplicateNote, findDuplicateSuggestion, isDuplicateKeyError } from "@/lib/suggestion-dedupe";
 import { requestTrendExpand, requestTrendScan } from "@/lib/trends";
 import { fetchDomainRegistrationDate } from "@/lib/domain-age";
-import { bustGscCredCache, gscAccessProbe, type GscAccessProbe } from "@/lib/gsc";
+import { isPrivateHost } from "@/lib/url-guard";
+import {
+  bustGscCredCache,
+  gscAccessProbe,
+  serviceAccountProbeAllowed,
+  type GscAccessProbe,
+} from "@/lib/gsc";
 import { uninstallPipelineFromRepo, type UninstallResult } from "@/lib/pipeline-uninstall";
 import { REPO_NOTICE_COOKIE, encodeRepoNotice } from "@/lib/repo-notice";
 
@@ -612,6 +618,20 @@ export async function wizardCheckGscAccess(): Promise<GscAccessProbe> {
   const project = await getActiveProject();
   if (!project.gsc_site_url) {
     return { state: "error", why: "no Search Console property is set on this project yet" };
+  }
+  // A cloud tenant connects Search Console through their OWN OAuth, so this
+  // button has nothing to verify for them - and probing anyway would run the
+  // shared platform service account against a property the tenant chose, which
+  // answers "can the operator read this?" for any property they care to name.
+  // Same boundary as gsc-readiness.ts and gscClientForProject; see
+  // serviceAccountProbeAllowed.
+  if (!serviceAccountProbeAllowed(project)) {
+    return project.gsc_oauth_refresh_token
+      ? { state: "ok" }
+      : {
+          state: "pending",
+          why: "connect Google Search Console for this project first - the Connect Google button on this page grants access",
+        };
   }
   const first = await gscAccessProbe(project.gsc_site_url);
   if (first.state !== "pending" || !project.domain) return first;
@@ -1443,11 +1463,22 @@ export type WizardCreateState =
 // repos are the common case and answer 404 publicly, indistinguishable from
 // a typo, and blocking the majority to catch the rarity read as a bug.
 async function domainAnswers(domain: string): Promise<boolean> {
+  // The domain regex above accepts digits, so "127.0.0.1", "10.0.0.5" and
+  // "169.254.169.254" all pass it - and this is the one fetch in the product
+  // whose target is typed by the user in the same request. Unguarded it was a
+  // blind SSRF: any signed-up cloud account could make this server issue
+  // requests into the deployment's own network and read the answer off the
+  // "we could not reach X" error. isPrivateHost is the same predicate the
+  // page-fetch guard uses, so there is one definition of "not a real site".
+  if (isPrivateHost(domain)) return false;
   for (const proto of ["https", "http"] as const) {
     try {
+      // redirect: "manual" - following would hand the same primitive back to
+      // whoever controls the typed domain's first response. A 3xx still proves
+      // DNS resolved and a server answered, which is all this check asks.
       await fetch(`${proto}://${domain}`, {
         method: "GET",
-        redirect: "follow",
+        redirect: "manual",
         signal: AbortSignal.timeout(6000),
       });
       return true; // any HTTP answer counts - even an error page proves DNS + a server

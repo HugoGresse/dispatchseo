@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 
 import { startPostHog } from "@/lib/posthog-client";
+import { scrubSentryEvent } from "@/lib/sentry-scrub";
 
 // Self-host installs leave the token unset - posthog-js has no way to no-op
 // itself, so skip init entirely rather than call it with an empty token.
@@ -23,6 +24,14 @@ if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
     dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
     tracesSampleRate: 0.1,
     environment: process.env.NEXT_PUBLIC_VERCEL_ENV || process.env.NODE_ENV,
+    // Redact credential-bearing query params before anything leaves the
+    // browser. The MCP `?key=` token is a SERVER-side concern (see
+    // sentry-scrub.ts and the note in instrumentation.ts), but the same hook
+    // covers the ones that do reach a browser URL: the OAuth `code` and
+    // `state` on /auth/callback and the Google/GitHub return legs, which are
+    // one-time credentials worth nobody's issue tracker.
+    beforeSend: scrubSentryEvent,
+    beforeSendTransaction: scrubSentryEvent,
   });
 }
 

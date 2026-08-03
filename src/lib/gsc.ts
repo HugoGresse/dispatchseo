@@ -154,6 +154,28 @@ export type GscAccessProbe =
   | { state: "pending"; why: string }
   | { state: "error"; why: string };
 
+// May this project be probed with the SHARED PLATFORM service account?
+//
+// The rule was already written out three times in prose (gsc-readiness.ts,
+// gscClientForProject, the get_site_stats MCP tool) and enforced in those three
+// places - but gscAccessProbe is callable directly, and two callers did exactly
+// that: the wizard's "Verify connection" button and Home's setup card. Both ran
+// the probe against `project.gsc_site_url`, which is TENANT-WRITABLE (the
+// set_gsc_property MCP tool, /google's picker, the wizard). So any cloud
+// customer could name a property they have nothing to do with - the operator's
+// own site, another customer's - press Verify, and read back whether the
+// platform's service account can see it. An access oracle over the operator's
+// Search Console, reachable with an ordinary paid account.
+//
+// One predicate now, so a fourth caller inherits the answer instead of
+// re-deriving it. Self-host is always allowed: one owner, and the service
+// account IS theirs.
+export function serviceAccountProbeAllowed(project: {
+  owner_user_id?: string | null;
+}): boolean {
+  return !(isCloudMode() && project.owner_user_id);
+}
+
 export async function gscAccessProbe(site: string): Promise<GscAccessProbe> {
   let sc: Awaited<ReturnType<typeof searchConsole>>;
   try {

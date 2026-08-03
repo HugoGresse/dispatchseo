@@ -46,7 +46,7 @@ import { setProjectAgent } from "@/lib/agent-settings";
 import { loadSiteProfile } from "@/lib/site-profile";
 import { currentProject, projectStore } from "@/lib/mcp-context";
 import { duplicateNote, findDuplicateSuggestion, isDuplicateKeyError } from "@/lib/suggestion-dedupe";
-import { isProjectUrl } from "@/lib/url-guard";
+import { fetchProjectUrl, isProjectUrl } from "@/lib/url-guard";
 import { isLive, refreshPageLiveness, type LivenessRow } from "@/lib/page-liveness";
 import { AGENT_ENGINES, getAiVisibility, recordAiSnapshots } from "@/lib/ai-visibility";
 import { sortByBestPosition, sortQueue } from "@/lib/metrics";
@@ -735,14 +735,15 @@ const mcpHandler = createMcpHandler(
           await Promise.all(
             rows.map(async (r) => {
               // Belt to log_page's suspenders: never fetch a stored URL that is
-              // not on this project's own domain (pre-guard rows, SSRF).
-              if (!isProjectUrl(r.url, p.domain)) return null;
+              // not on this project's own domain (pre-guard rows, SSRF), and
+              // re-check every redirect hop - the response body is read here,
+              // so an off-domain 302 would turn this into a read primitive.
               try {
-                const res = await fetch(r.url, {
-                  signal: AbortSignal.timeout(8000),
-                  headers: { "user-agent": "DispatchSEO-sameness-gate" },
+                const res = await fetchProjectUrl(r.url, p.domain, {
+                  timeoutMs: 8000,
+                  userAgent: "DispatchSEO-sameness-gate",
                 });
-                if (!res.ok) return null;
+                if (!res?.ok) return null;
                 const html = await res.text();
                 const kw = new Set(tokenize(r.primary_keyword ?? ""));
                 return { ...extractFromHtml(html, kw), label: r.title ?? r.url };

@@ -13,9 +13,13 @@ export async function GET() {
     if (error) throw new Error(error.message);
     return Response.json({ ok: true });
   } catch (e) {
-    return Response.json(
-      { ok: false, error: e instanceof Error ? e.message : String(e) },
-      { status: 503 },
-    );
+    // The reason goes to the server log, NOT to the caller. This endpoint is
+    // unauthenticated by design, and a Supabase/PostgREST error message names
+    // the project ref, the host, the schema and sometimes the failing SQL -
+    // free reconnaissance on a URL anyone can curl. A container healthcheck
+    // only ever reads the status code, and the operator reading `docker
+    // compose logs` gets the full text.
+    console.error("[health] database probe failed:", e instanceof Error ? e.message : e);
+    return Response.json({ ok: false }, { status: 503 });
   }
 }
