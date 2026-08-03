@@ -97,7 +97,11 @@ export function FeatureShowcase() {
         <BrowserFrame>
           <div className="show-stack">
             {SLIDES.map((s, i) => (
-              <div key={s.id} className={`show-slide${active === i ? " active" : ""}`} aria-hidden={active !== i}>
+              <div
+                key={s.id}
+                className={`show-slide${active === i ? " active" : ""}${s.fit === "contain" ? " show-slide-contain" : ""}`}
+                aria-hidden={active !== i}
+              >
                 <Image
                   src={s.image}
                   alt={active === i ? s.alt : ""}

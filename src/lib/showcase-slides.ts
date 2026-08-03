@@ -8,9 +8,22 @@ export type Slide = {
   caption: string;
   image: string;
   alt: string;
+  /** Landing reel only: fit the whole shot inside the stage instead of
+   *  filling it. For screenshots taller than the stage's 3020/1370, the
+   *  default cover crop eats the app's top bar - dark bars at the sides
+   *  read as nothing on a black stage, a sliced top bar reads as broken. */
+  fit?: "contain";
 };
 
 export const SLIDES: Slide[] = [
+  {
+    id: "home",
+    title: "Your site, briefed daily",
+    caption: "What moved, what shipped, what needs you.",
+    image: "/screenshots/home.png",
+    alt: "The dashboard Home page: the agent's daily briefing in plain language, the SEO journey stage, publishing pace, and stat tiles for clicks, impressions, keywords tracked, and guides published",
+    fit: "contain",
+  },
   {
     id: "traffic",
     title: "Watch your traffic grow",

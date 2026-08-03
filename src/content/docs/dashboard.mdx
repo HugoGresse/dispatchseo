@@ -14,12 +14,15 @@ through every one of them, in that order.
 Everything else on it is either a status readout or a decision waiting on
 you.
 
-![The Home page: journey stage, publishing pace, stat row, and the next actions waiting on a decision](/screenshots/home.png)
+![The Home page: the agent's daily briefing, journey stage, publishing pace, stat row, and the next actions waiting on a decision](/screenshots/home.png)
 
 What it shows, top to bottom:
 
 - An agent status pill (building, guides or tools queued, or an alert) once
   the pipeline is wired in and at least one builder automation is on.
+- The dispatcher's briefing - what moved since yesterday, in the agent's own
+  words, with the full report one click away (the same text the
+  [`get_briefing` tool](/docs/mcp-tools) returns).
 - Any banners worth interrupting you for: a failing background job, a
   DataForSEO usage warning, a pipeline update waiting to be applied.
 - The progress story - what stage the site is in and this week's movers.

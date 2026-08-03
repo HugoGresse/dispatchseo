@@ -94,7 +94,7 @@ lives.
 
 <table>
   <tr>
-    <td colspan="2"><img src="docs/screenshots/home.png" alt="The dashboard Home: journey stage, publishing pace, and live Search Console stats for a connected site"></td>
+    <td colspan="2"><img src="docs/screenshots/home.png" alt="The dashboard Home: the agent's daily briefing in plain language, the journey stage, publishing pace, and live Search Console stats for a connected site"></td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/queue.png" alt="The queue: keyword ideas with volume and difficulty, each waiting for approval or set to auto"></td>
