@@ -1,7 +1,7 @@
 name: Post-deploy check
 
-# Smoke-tests the live site after every push to main (Vercel auto-deploys the
-# same push). Polls /api/cron/deploy-check until the new commit is serving,
+# Smoke-tests the live site after every push to main that Vercel actually
+# deploys. Polls /api/cron/deploy-check until the new commit is serving,
 # lets the endpoint verify its own internals (core tables, project resolution,
 # GSC creds), then probes the outside surface: the dashboard login page and
 # the MCP auth gate. Every failure is recorded on the backend, so the
@@ -23,7 +23,39 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need the pre-push tip to diff against
+
+      # Vercel's Ignored Build Step skips pushes that cannot change what is
+      # served (scripts/vercel-ignore-build.mjs). Those pushes produce NO
+      # deployment, so polling for one burned 10 minutes and then painted a
+      # red X on a commit that was fine - on the public repo, where a failed
+      # check reads as a broken project. Ask the same script the same
+      # question rather than keeping a second copy of the inert-path list
+      # here: two lists drift, and the drift shows up as this same false
+      # failure. Anything unclear (manual run, a branch's first push, a git
+      # error) falls through to checking, matching the script's own bias.
+      - name: Will this push even produce a deploy?
+        id: gate
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "${{ github.event_name }}" != "push" ] || [ -z "$BEFORE" ] \
+            || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            echo "No usable push base - running the checks."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if VERCEL_GIT_PREVIOUS_SHA="$BEFORE" node scripts/vercel-ignore-build.mjs; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Vercel skips this push, so there is no new deploy to smoke-test."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Wait for the deploy, then run backend self-checks
+        if: steps.gate.outputs.skip != 'true'
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           URL: ${{ vars.BACKEND_URL || 'https://dispatchseo.com' }}
@@ -62,6 +94,7 @@ jobs:
           exit 1
 
       - name: Probe the outside surface (dashboard + MCP gate)
+        if: steps.gate.outputs.skip != 'true'
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
