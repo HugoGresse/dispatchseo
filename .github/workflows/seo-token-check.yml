@@ -24,6 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # >>> agent-steps: resolve (GENERATED - edit scripts/agent-ci/ and regenerate; never edit between these markers)
       # Which agent's credential to prove. Resolved at RUN time from the
       # dashboard, same as the builders - a health check that tests the wrong
       # credential is worse than none, because it reports green while the thing
@@ -46,7 +47,10 @@ jobs:
           case "$agent" in claude|codex) : ;; *) agent=claude ;; esac
           echo "agent=$agent" >> "$GITHUB_OUTPUT"
           echo "Checking the $agent credential."
+      # <<< agent-steps: resolve
 
+
+      # >>> agent-steps: liveness (GENERATED - edit scripts/agent-ci/ and regenerate; never edit between these markers)
       # One minimal model call. If the token is dead/revoked/limited, this
       # step fails and the failure handler below reports the real reason.
       - name: Claude token liveness
@@ -97,6 +101,8 @@ jobs:
               echo "could not reach OpenAI to check the key (HTTP $code)." > "$RUNNER_TEMP/agent-failure.txt" ;;
           esac
           cat "$RUNNER_TEMP/agent-failure.txt"; exit 1
+      # <<< agent-steps: liveness
+
 
       - name: Report token OK
         if: success()
@@ -107,6 +113,7 @@ jobs:
             --data-urlencode "job=seo-token-check" --data-urlencode "ok=1" \
             "https://dispatchseo.com/api/cron/deploy-check" || true
 
+      # >>> agent-steps: failure-report (GENERATED - edit scripts/agent-ci/ and regenerate; never edit between these markers)
       # Surface the real API error (revoked? usage limit?) and phone it home.
       # Full transcripts stay hidden - only the final result line is read.
       - name: Report token failure with the reason
@@ -138,6 +145,8 @@ jobs:
             --data-urlencode "job=seo-token-check" \
             --data-urlencode "fail=$reason - $fix" \
             "https://dispatchseo.com/api/cron/deploy-check" || true
+      # <<< agent-steps: failure-report
+
 
       # Pipeline staleness: compare this repo's installed pack version stamp
       # against the backend's current one. Stale is not broken - the report

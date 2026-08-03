@@ -89,28 +89,17 @@ jobs:
           # the specific steps that need them.
           persist-credentials: false
 
-      # Which coding agent validates, plus the fail-fast on a broken credential
-      # that used to be a Claude-only preflight here. Both agents get the same
-      # plain-language error rather than dying minutes in on a cryptic
-      # validation failure - the 2026-07-17 dogfood install burned four runs on
-      # exactly that.
-      #
-      # This job holds an AGENT credential and no project secrets, which is the
-      # posture the security note above describes. Worth stating plainly,
-      # because it is a real trade and not an oversight: the job executes the
-      # PR's LLM-authored code, so whichever agent credential is present is
-      # exfiltratable by that code. That was already true of the Claude token;
-      # an OpenAI key is the same exposure with a more direct blast radius,
-      # being metered money rather than a subscription. Accepted for the same
-      # reason as before - these PRs come from this project's own builder on the
-      # same repo, never a fork - and it is why the merge job stays separate
-      # with no checkout.
+      # >>> agent-steps: resolve (GENERATED - edit scripts/agent-ci/ and regenerate; never edit between these markers)
+      # Which coding agent validates, plus the fail-fast on a broken credential.
+      # Both agents get the same plain-language error rather than dying minutes
+      # in on a cryptic validation failure.
       #
       # UNLIKE every other workflow, this one does NOT ask the backend which
       # agent to use. Asking means holding SEO_MCP_API_KEY, and the one thing
-      # this job must never do is acquire a reason to hold the project key. A
-      # secret is only visible to the step that names it, so the leak would not
-      # be direct - but the invariant is worth more than the consistency.
+      # this job must never do is acquire a reason to hold the project key - it
+      # builds and RUNS the PR's (LLM-authored) code. A secret is only visible
+      # to the step that names it, so the leak would not be direct - but the
+      # invariant is worth more than the consistency.
       #
       # The SEO_AGENT repo VARIABLE is the primary answer. Variables (unlike
       # secrets) are readable without holding anything sensitive, and the
@@ -118,12 +107,10 @@ jobs:
       # so this workflow can agree with the dashboard without asking it.
       # Inference from secret presence remains the fallback for repos whose
       # backend predates the variable - but on its own it was NOT just
-      # cosmetic: switching Claude -> Codex leaves the old Claude secret
-      # behind (the switch is deliberately a single column write), the
-      # tie-break below then picks Claude, and if the owner switched because
-      # the Claude subscription lapsed, validation goes red, the
-      # tool-validated label never lands, and every tool PR on the project
-      # strands unmerged.
+      # cosmetic: switching agents leaves the old secret behind (the switch is
+      # deliberately a single column write), the tie-break below then picks the
+      # default, and if the owner switched because that agent's account lapsed,
+      # validation goes red and every tool PR on the project strands unmerged.
       - name: Resolve the coding agent
         id: agent
         env:
@@ -164,6 +151,8 @@ jobs:
           esac
           echo "agent=$agent" >> "$GITHUB_OUTPUT"
           echo "Validating with: $agent"
+      # <<< agent-steps: resolve
+
 
       # Deliberately NOT an INSTALL-ADAPT step. Which package manager this
       # repo uses is resolved at RUN time - packageManager pin first, then
@@ -381,6 +370,7 @@ jobs:
       - name: Install Playwright browser for the MCP
         run: npx -y playwright install --with-deps chromium
 
+      # >>> agent-steps: run (GENERATED - edit scripts/agent-ci/ and regenerate; never edit between these markers)
       # Codex's twin of mcp-validate.json. Written here rather than shipped as a
       # file because this job's MCP surface is one stdio server with no secrets
       # in it - there is nothing to personalize per project, so a file would be
@@ -408,16 +398,20 @@ jobs:
         id: claude
         uses: anthropics/claude-code-action@v1
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
           # Tool PRs are opened and pushed by the builder workflow, so the
           # triggering actor is github-actions[bot]; without this the action
           # refuses to start ("non-human actor") and the PR never gets a
           # verdict. Same-repo + seo-tool label gates above still apply.
           allowed_bots: "github-actions"
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Pass the standard workflow token as an input so the action uses it
+          # directly instead of exchanging OIDC for a Claude GitHub App token
+          # (which would require installing the app on the repo).
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           # Full transcript in the step log - post-hoc debuggability.
           show_full_output: true
-          prompt: "You are the functional validator for an autonomously-built DispatchSEO tool PR. 1) Find the tool under review: run `git diff origin/main...HEAD --name-only` and read the diff of the tools registry (its path is listed in .dispatchseo/conventions.md) to get the NEW tool's slug (the entry added in this PR). 2) Work out the tool's PUBLIC path - never assume /tools/<slug>: take it from the route/page files the PR added, the registry entry's own path field, or the Tools section of .dispatchseo/conventions.md, and cross-check it against the sitemap. (Sites whose /tools route belongs to a logged-in app publish elsewhere, e.g. /free-tools/<slug>; a login redirect or 404 here means you have the wrong path, not a broken tool - re-derive it before judging.) Using the playwright MCP, open ${{ steps.serve.outputs.base }}<path> and validate: the page returns 200 and renders the landing funnel (hero h1, the interactive widget, FAQ section); every primary widget interaction works (fill each input with realistic values, click every action button, verify output actually updates, test the copy action); edge cases do not break it (empty input, nonsense input - the widget must never throw); zero console errors during the whole session (check browser console messages). 3) Verdict: if EVERYTHING passes, run `gh pr edit <pr-number> --add-label tool-validated --remove-label tool-validation-failed || gh pr edit <pr-number> --add-label tool-validated` and post a short PR comment via `gh pr comment` summarizing what you exercised. If ANYTHING fails, run `gh pr edit <pr-number> --add-label tool-validation-failed --remove-label tool-validated || gh pr edit <pr-number> --add-label tool-validation-failed` (removing tool-validated matters: a stale pass from an earlier commit must not authorize a merge) and comment the concrete failures (what you did, what happened, console output). Create missing labels with `gh label create` if needed. The PR number is in the PR_NUMBER environment variable. Never modify code in this run - you are a reviewer only."
+          prompt: |
+            You are the functional validator for an autonomously-built DispatchSEO tool PR. 1) Find the tool under review: run `git diff origin/main...HEAD --name-only` and read the diff of the tools registry (its path is listed in .dispatchseo/conventions.md) to get the NEW tool's slug (the entry added in this PR). 2) Work out the tool's PUBLIC path - never assume /tools/<slug>: take it from the route/page files the PR added, the registry entry's own path field, or the Tools section of .dispatchseo/conventions.md, and cross-check it against the sitemap. (Sites whose /tools route belongs to a logged-in app publish elsewhere, e.g. /free-tools/<slug>; a login redirect or 404 here means you have the wrong path, not a broken tool - re-derive it before judging.) Using the playwright MCP, open ${{ steps.serve.outputs.base }}<path> and validate: the page returns 200 and renders the landing funnel (hero h1, the interactive widget, FAQ section); every primary widget interaction works (fill each input with realistic values, click every action button, verify output actually updates, test the copy action); edge cases do not break it (empty input, nonsense input - the widget must never throw); zero console errors during the whole session (check browser console messages). 3) Verdict: if EVERYTHING passes, run `gh pr edit <pr-number> --add-label tool-validated --remove-label tool-validation-failed || gh pr edit <pr-number> --add-label tool-validated` and post a short PR comment via `gh pr comment` summarizing what you exercised. If ANYTHING fails, run `gh pr edit <pr-number> --add-label tool-validation-failed --remove-label tool-validated || gh pr edit <pr-number> --add-label tool-validation-failed` (removing tool-validated matters: a stale pass from an earlier commit must not authorize a merge) and comment the concrete failures (what you did, what happened, console output). Create missing labels with `gh label create` if needed. The PR number is in the PR_NUMBER environment variable. Never modify code in this run - you are a reviewer only.
           claude_args: |
             --mcp-config ./.github/mcp-validate.json
             --permission-mode bypassPermissions
@@ -428,38 +422,54 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
 
-      # The Codex twin. Same prompt, byte-for-byte - a verdict must not depend
-      # on which agent reached it.
+      # The Codex twin. Same task prompt, generated from the same source -
+      # the agent's behaviour must not depend on which one is holding the
+      # playbook - plus the unattended-environment preamble above it.
       #
-      # No turn budget: Codex has no --max-turns equivalent (OpenAI closed the
-      # request for one as not-planned), so this job's timeout-minutes is the
-      # only ceiling. That is a weaker bound than the 140 above, and the honest
-      # place to note it is here.
+      # Model: gpt-5 by default, overridable with a repo variable because model
+      # availability is per-account, not universal - `gpt-5-codex` 404s on a
+      # pay-as-you-go project key even though it appears in GET /v1/models. Set
+      # SEO_CODEX_MODEL in the repo's Actions variables to change it without
+      # touching this file.
+      #
+      # There is NO turn budget to set. Codex has no --max-turns equivalent and
+      # OpenAI closed the request for one as not-planned, so the job's
+      # timeout-minutes is the only ceiling on a runaway run.
       - name: Validate the tool live (Codex)
         if: steps.agent.outputs.agent == 'codex'
         id: codex
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          # Same rule as the Claude twin's allowed_bots above: this workflow is
-          # reached by a pull_request opened by github-actions[bot], or by
-          # seo-auto-merge's GITHUB_TOKEN dispatch - a bot actor either way.
-          # codex-action's actor gate rejects EVERY bot by default (a bot 404s
-          # the collaborator-permission lookup), so without this line Codex
-          # tool validation never runs at all and tool PRs strand unvalidated.
-          # Every trigger that can reach this step already required repo write
-          # access, so allowing all actors adds nothing an attacker can use.
+          # Same rule as the Claude twin's allowed_bots: this workflow is fired
+          # by a bot actor (the DispatchSEO GitHub App, a schedule, or a
+          # GITHUB_TOKEN dispatch). codex-action's actor gate rejects EVERY bot
+          # by default (a bot 404s the collaborator-permission lookup), so
+          # without this line each unattended Codex run dies before Codex is
+          # even installed - while a manual workflow_dispatch passes, which is
+          # what hides the failure. Every trigger that can reach this step
+          # already required repo write access, so allowing all actors adds
+          # nothing an attacker can use.
           allow-users: "*"
           model: ${{ vars.SEO_CODEX_MODEL || 'gpt-5' }}
           codex-home: ${{ runner.temp }}/codex-home
           sandbox: workspace-write
+          # Strips sudo from the runner user for the rest of the job. Safe here:
+          # everything after this step is curl. It is also more than the Claude
+          # half of this pipeline does, which runs with bypassPermissions and no
+          # sandbox at all.
           safety-strategy: drop-sudo
           output-file: ${{ runner.temp }}/codex-out.txt
-          prompt: "ENVIRONMENT RULE (read first, it overrides habit): you have no apply_patch tool here - only the shell, and you are running UNATTENDED, so there is nobody to answer a question. Write every file with a SINGLE-QUOTED heredoc (cat > path <<'DSEOF' ... DSEOF) or with python3 reading the content from stdin. The quoted delimiter is the whole point: bash expands NOTHING inside it, so the backticks and $ in MDX and TSX survive verbatim. NEVER use an unquoted heredoc, printf or echo to write file content - an unquoted heredoc is what expands backticks and corrupts the file. Pick a delimiter that cannot appear in the content. Verify every write with ls -l and head before moving on, and never let a filename come from an unset shell variable. If you ever find yourself about to ask for approval or a go/no-go, do not: pick the safest option that still completes the task, do it, and say what you chose in the final report. A run that stops to ask a question builds nothing and is a failed run. You are the functional validator for an autonomously-built DispatchSEO tool PR. 1) Find the tool under review: run `git diff origin/main...HEAD --name-only` and read the diff of the tools registry (its path is listed in .dispatchseo/conventions.md) to get the NEW tool's slug (the entry added in this PR). 2) Work out the tool's PUBLIC path - never assume /tools/<slug>: take it from the route/page files the PR added, the registry entry's own path field, or the Tools section of .dispatchseo/conventions.md, and cross-check it against the sitemap. (Sites whose /tools route belongs to a logged-in app publish elsewhere, e.g. /free-tools/<slug>; a login redirect or 404 here means you have the wrong path, not a broken tool - re-derive it before judging.) Using the playwright MCP, open ${{ steps.serve.outputs.base }}<path> and validate: the page returns 200 and renders the landing funnel (hero h1, the interactive widget, FAQ section); every primary widget interaction works (fill each input with realistic values, click every action button, verify output actually updates, test the copy action); edge cases do not break it (empty input, nonsense input - the widget must never throw); zero console errors during the whole session (check browser console messages). 3) Verdict: if EVERYTHING passes, run `gh pr edit <pr-number> --add-label tool-validated --remove-label tool-validation-failed || gh pr edit <pr-number> --add-label tool-validated` and post a short PR comment via `gh pr comment` summarizing what you exercised. If ANYTHING fails, run `gh pr edit <pr-number> --add-label tool-validation-failed --remove-label tool-validated || gh pr edit <pr-number> --add-label tool-validation-failed` (removing tool-validated matters: a stale pass from an earlier commit must not authorize a merge) and comment the concrete failures (what you did, what happened, console output). Create missing labels with `gh label create` if needed. The PR number is in the PR_NUMBER environment variable. Never modify code in this run - you are a reviewer only."
+          prompt: |
+            ENVIRONMENT RULE (read first, it overrides habit): you have no apply_patch tool here - only the shell, and you are running UNATTENDED, so there is nobody to answer a question. Write every file with a SINGLE-QUOTED heredoc (cat > path <<'DSEOF' ... DSEOF) or with python3 reading the content from stdin. The quoted delimiter is the whole point: bash expands NOTHING inside it, so the backticks and $ in MDX and TSX survive verbatim. NEVER use an unquoted heredoc, printf or echo to write file content - an unquoted heredoc is what expands backticks and corrupts the file. Pick a delimiter that cannot appear in the content. Verify every write with ls -l and head before moving on, and never let a filename come from an unset shell variable. If you ever find yourself about to ask for approval or a go/no-go, do not: pick the safest option that still completes the task, do it, and say what you chose in the final report. A run that stops to ask a question builds nothing and is a failed run.
+
+            You are the functional validator for an autonomously-built DispatchSEO tool PR. 1) Find the tool under review: run `git diff origin/main...HEAD --name-only` and read the diff of the tools registry (its path is listed in .dispatchseo/conventions.md) to get the NEW tool's slug (the entry added in this PR). 2) Work out the tool's PUBLIC path - never assume /tools/<slug>: take it from the route/page files the PR added, the registry entry's own path field, or the Tools section of .dispatchseo/conventions.md, and cross-check it against the sitemap. (Sites whose /tools route belongs to a logged-in app publish elsewhere, e.g. /free-tools/<slug>; a login redirect or 404 here means you have the wrong path, not a broken tool - re-derive it before judging.) Using the playwright MCP, open ${{ steps.serve.outputs.base }}<path> and validate: the page returns 200 and renders the landing funnel (hero h1, the interactive widget, FAQ section); every primary widget interaction works (fill each input with realistic values, click every action button, verify output actually updates, test the copy action); edge cases do not break it (empty input, nonsense input - the widget must never throw); zero console errors during the whole session (check browser console messages). 3) Verdict: if EVERYTHING passes, run `gh pr edit <pr-number> --add-label tool-validated --remove-label tool-validation-failed || gh pr edit <pr-number> --add-label tool-validated` and post a short PR comment via `gh pr comment` summarizing what you exercised. If ANYTHING fails, run `gh pr edit <pr-number> --add-label tool-validation-failed --remove-label tool-validated || gh pr edit <pr-number> --add-label tool-validation-failed` (removing tool-validated matters: a stale pass from an earlier commit must not authorize a merge) and comment the concrete failures (what you did, what happened, console output). Create missing labels with `gh label create` if needed. The PR number is in the PR_NUMBER environment variable. Never modify code in this run - you are a reviewer only.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+      # <<< agent-steps: run
+
 
       # NO report step here, on purpose: this job builds and RUNS the PR's
       # (LLM-authored) code, so it must hold no secrets at all - not even the

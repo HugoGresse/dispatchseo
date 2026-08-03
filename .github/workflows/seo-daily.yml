@@ -140,19 +140,18 @@ jobs:
           fi
           echo "open=$open" >> "$GITHUB_OUTPUT"
 
-      # Which coding agent builds this project - resolved at RUN time from the
-      # dashboard, never baked in at install time.
-      #
-      # Same rule as the pnpm pin below, for the same reason: a decision left to
-      # whoever ran the install is a decision someone eventually forgets, and the
+      # >>> agent-steps: resolve (GENERATED - edit scripts/agent-ci/ and regenerate; never edit between these markers)
+      # Which coding agent runs this workflow - resolved at RUN time from the
+      # dashboard, never baked in at install time. A decision left to whoever
+      # ran the install is a decision someone eventually forgets, and the
       # failure mode here is a builder that runs the wrong agent every night.
-      # Asking the backend means switching agent on the dashboard takes effect on
-      # the next scheduled run with nothing to edit in this repo.
+      # Asking the backend means switching agent on the dashboard takes effect
+      # on the next scheduled run with nothing to edit in this repo.
       #
       # The fallback matters as much as the happy path: a repo installed against
       # a backend that predates the `agent` field gets no value here, and must
-      # keep behaving exactly as it did - which is Claude, because Claude was the
-      # only option that ever existed before the field.
+      # keep behaving exactly as it did - which is claude, because Claude was
+      # the only option that ever existed before the field.
       - name: Resolve the coding agent
         id: agent
         if: steps.guard.outputs.open == '0'
@@ -204,6 +203,8 @@ jobs:
           esac
           echo "agent=$agent" >> "$GITHUB_OUTPUT"
           echo "Building with: $agent"
+      # <<< agent-steps: resolve
+
 
       # Fail loudly if the seo-manager MCP is unreachable. Without this, a
       # stale URL in mcp-ci.json makes Claude see an empty toolset and "exit
@@ -361,6 +362,7 @@ jobs:
               } ;;
           esac
 
+      # >>> agent-steps: run (GENERATED - edit scripts/agent-ci/ and regenerate; never edit between these markers)
       # Codex reads its MCP servers from a config.toml inside its own home
       # directory. Two things here are easy to get wrong and both are silent:
       #
@@ -408,6 +410,9 @@ jobs:
       - name: Run the SEO builder
         if: steps.guard.outputs.open == '0' && steps.agent.outputs.agent == 'claude'
         id: claude
+        # Never fail the job at this step: the classify step below reads the
+        # outcome and decides what the run MEANS (transient rate limit vs dead
+        # account), which it can only do if it is reachable.
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
@@ -418,7 +423,8 @@ jobs:
           # directly instead of exchanging OIDC for a Claude GitHub App token
           # (which would require installing the app on the repo).
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          prompt: "FIRST call the seo-manager MCP tool get_instructions with workflow build-guide, then follow the returned markdown exactly - it is the current playbook and overrides any cached knowledge of this pipeline. Also read .dispatchseo/conventions.md for this repo's site facts. In brief: take the oldest approved guide suggestion, mark it in_progress, build the guide MDX through the full pipeline (template, thin-content gate, draft, mandatory visuals, humanizer), run pnpm build to verify, open a PR labeled seo via gh, then update_suggestion to done with the PR url and log_page, and state the instructions version in the run report. Never build tool suggestions - those belong to the seo-build-tool workflow. If get_instructions is unavailable, fail loudly and exit without changes; if there are no approved guide suggestions, exit cleanly without any changes."
+          prompt: |
+            FIRST call the seo-manager MCP tool get_instructions with workflow build-guide, then follow the returned markdown exactly - it is the current playbook and overrides any cached knowledge of this pipeline. Also read .dispatchseo/conventions.md for this repo's site facts. In brief: take the oldest approved guide suggestion, mark it in_progress, build the guide MDX through the full pipeline (template, thin-content gate, draft, mandatory visuals, humanizer), run pnpm build to verify, open a PR labeled seo via gh, then update_suggestion to done with the PR url and log_page, and state the instructions version in the run report. Never build tool suggestions - those belong to the seo-build-tool workflow. If get_instructions is unavailable, fail loudly and exit without changes; if there are no approved guide suggestions, exit cleanly without any changes.
           claude_args: |
             --mcp-config ./.github/mcp-ci.json
             --permission-mode bypassPermissions
@@ -436,9 +442,9 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder-anon-key"
           NEXT_PUBLIC_SITE_URL: "https://dispatchseo.com"
 
-      # The Codex twin. Same prompt, verbatim - the agent's behaviour must not
-      # depend on which one is holding the playbook, and the playbook itself
-      # arrives from get_instructions either way.
+      # The Codex twin. Same task prompt, generated from the same source -
+      # the agent's behaviour must not depend on which one is holding the
+      # playbook - plus the unattended-environment preamble above it.
       #
       # Model: gpt-5 by default, overridable with a repo variable because model
       # availability is per-account, not universal - `gpt-5-codex` 404s on a
@@ -448,23 +454,26 @@ jobs:
       #
       # There is NO turn budget to set. Codex has no --max-turns equivalent and
       # OpenAI closed the request for one as not-planned, so the job's
-      # timeout-minutes above is the only ceiling on a runaway run.
+      # timeout-minutes is the only ceiling on a runaway run.
       - name: Run the SEO builder (Codex)
         if: steps.guard.outputs.open == '0' && steps.agent.outputs.agent == 'codex'
         id: codex
+        # Never fail the job at this step: the classify step below reads the
+        # outcome and decides what the run MEANS (transient rate limit vs dead
+        # account), which it can only do if it is reachable.
         continue-on-error: true
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          # Same rule as the Claude twin's allowed_bots above: cloud fires this
-          # as the DispatchSEO GitHub App (a Bot actor) and scheduled runs are
-          # bot-actored too, because the App authored the workflow commits.
-          # codex-action's actor gate rejects EVERY bot by default (a bot 404s
-          # the collaborator-permission lookup), so without this line each
-          # unattended Codex run dies before Codex is even installed - while a
-          # manual workflow_dispatch passes, which is what hides the failure.
-          # Every trigger that can reach this step already required repo write
-          # access, so allowing all actors adds nothing an attacker can use.
+          # Same rule as the Claude twin's allowed_bots: this workflow is fired
+          # by a bot actor (the DispatchSEO GitHub App, a schedule, or a
+          # GITHUB_TOKEN dispatch). codex-action's actor gate rejects EVERY bot
+          # by default (a bot 404s the collaborator-permission lookup), so
+          # without this line each unattended Codex run dies before Codex is
+          # even installed - while a manual workflow_dispatch passes, which is
+          # what hides the failure. Every trigger that can reach this step
+          # already required repo write access, so allowing all actors adds
+          # nothing an attacker can use.
           allow-users: "*"
           model: ${{ vars.SEO_CODEX_MODEL || 'gpt-5' }}
           codex-home: ${{ runner.temp }}/codex-home
@@ -475,7 +484,10 @@ jobs:
           # sandbox at all.
           safety-strategy: drop-sudo
           output-file: ${{ runner.temp }}/codex-out.txt
-          prompt: "ENVIRONMENT RULE (read first, it overrides habit): you have no apply_patch tool here - only the shell, and you are running UNATTENDED, so there is nobody to answer a question. Write every file with a SINGLE-QUOTED heredoc (cat > path <<'DSEOF' ... DSEOF) or with python3 reading the content from stdin. The quoted delimiter is the whole point: bash expands NOTHING inside it, so the backticks and $ in MDX and TSX survive verbatim. NEVER use an unquoted heredoc, printf or echo to write file content - an unquoted heredoc is what expands backticks and corrupts the file. Pick a delimiter that cannot appear in the content. Verify every write with ls -l and head before moving on, and never let a filename come from an unset shell variable. If you ever find yourself about to ask for approval or a go/no-go, do not: pick the safest option that still completes the task, do it, and say what you chose in the final report. A run that stops to ask a question builds nothing and is a failed run. FIRST call the seo-manager MCP tool get_instructions with workflow build-guide, then follow the returned markdown exactly - it is the current playbook and overrides any cached knowledge of this pipeline. Also read .dispatchseo/conventions.md for this repo's site facts. In brief: take the oldest approved guide suggestion, mark it in_progress, build the guide MDX through the full pipeline (template, thin-content gate, draft, mandatory visuals, humanizer), run pnpm build to verify, open a PR labeled seo via gh, then update_suggestion to done with the PR url and log_page, and state the instructions version in the run report. Never build tool suggestions - those belong to the seo-build-tool workflow. If get_instructions is unavailable, fail loudly and exit without changes; if there are no approved guide suggestions, exit cleanly without any changes."
+          prompt: |
+            ENVIRONMENT RULE (read first, it overrides habit): you have no apply_patch tool here - only the shell, and you are running UNATTENDED, so there is nobody to answer a question. Write every file with a SINGLE-QUOTED heredoc (cat > path <<'DSEOF' ... DSEOF) or with python3 reading the content from stdin. The quoted delimiter is the whole point: bash expands NOTHING inside it, so the backticks and $ in MDX and TSX survive verbatim. NEVER use an unquoted heredoc, printf or echo to write file content - an unquoted heredoc is what expands backticks and corrupts the file. Pick a delimiter that cannot appear in the content. Verify every write with ls -l and head before moving on, and never let a filename come from an unset shell variable. If you ever find yourself about to ask for approval or a go/no-go, do not: pick the safest option that still completes the task, do it, and say what you chose in the final report. A run that stops to ask a question builds nothing and is a failed run.
+
+            FIRST call the seo-manager MCP tool get_instructions with workflow build-guide, then follow the returned markdown exactly - it is the current playbook and overrides any cached knowledge of this pipeline. Also read .dispatchseo/conventions.md for this repo's site facts. In brief: take the oldest approved guide suggestion, mark it in_progress, build the guide MDX through the full pipeline (template, thin-content gate, draft, mandatory visuals, humanizer), run pnpm build to verify, open a PR labeled seo via gh, then update_suggestion to done with the PR url and log_page, and state the instructions version in the run report. Never build tool suggestions - those belong to the seo-build-tool workflow. If get_instructions is unavailable, fail loudly and exit without changes; if there are no approved guide suggestions, exit cleanly without any changes.
         env:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
           DATAFORSEO_LOGIN: ${{ secrets.DATAFORSEO_LOGIN }}
@@ -486,9 +498,6 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder-anon-key"
           NEXT_PUBLIC_SITE_URL: "https://dispatchseo.com"
 
-      # The action hides Claude's transcript (these logs can be public), which
-      # also hides the API error when a run dies on its first call - a dead
-      # token shows only "is_error:true" with no way to tell a revoked token
       # Turn-by-turn detail for tuning the pipeline. The dashboard only ever
       # receives the aggregate outcome, which cannot answer the question that
       # actually matters for cost - WHICH pipeline steps burn the turns. This
@@ -514,27 +523,29 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      # from a usage limit. continue-on-error above keeps this step reachable
-      # either way; read the final result/error message from the execution log
-      # the action saves and decide what the run MEANS: a genuine usage-limit
-      # hit is not a pipeline failure, it is deferred (the dashboard keeps the
-      # job due and re-dispatches within hours) and reported as a GREEN run.
-      # Anything else is reported red with the real reason. GitHub's secret
-      # masking still applies to whatever prints.
+      # Decide what the run MEANS before anything is reported. The agent steps
+      # run with continue-on-error so this step is reachable either way; it
+      # reads the final result/error message the agent left behind: a genuine
+      # usage-limit hit is not a pipeline failure, it is deferred (the dashboard
+      # keeps the job due and re-dispatches within hours) and reported as a
+      # GREEN run. Anything else is reported red with the real reason. GitHub's
+      # secret masking still applies to whatever prints.
       - name: Classify the outcome
         id: classify
         if: steps.guard.outputs.open == '0'
         env:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CODEX_MSG: ${{ steps.codex.outputs.final-message }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AGENT: ${{ steps.agent.outputs.agent }}
           AGENT_OUTCOME: ${{ steps.agent.outputs.agent == 'codex' && steps.codex.outcome || steps.claude.outcome }}
-          CODEX_MSG: ${{ steps.codex.outputs.final-message }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          # Pull whatever the agent left behind. Claude hides its transcript
-          # (these logs can be public) and writes an execution log; Codex hands
-          # back a single final message.
+          # Mirror the per-agent step outcome into an output, so the report
+          # step's condition never has to name agent step ids.
+          echo "agent_outcome=${AGENT_OUTCOME:-}" >> "$GITHUB_OUTPUT"
+          # Pull whatever the agent left behind.
           msg=""
           if [ "$AGENT" = "codex" ]; then
             msg="$CODEX_MSG"
@@ -549,9 +560,9 @@ jobs:
           fi
 
           # A deferral is reported as `deferred`, NOT as ok. The difference
-          # decides whether this guide gets built today at all: the dashboard
+          # decides whether this job's work happens today at all: the dashboard
           # works out what is due by reading these reports, and an `ok` row is a
-          # COMPLETED run - it would start the full daily window over and
+          # COMPLETED run - it would start the full cadence window over and
           # suppress the retry, so an evening usage limit would silently cost a
           # day while the dashboard showed green. `deferred` says "ran, built
           # nothing", which keeps the job due and gets it re-dispatched within
@@ -559,11 +570,11 @@ jobs:
           defer() {
             echo "::notice::$1"
             # Marks the outcome as already-reported. The defer exits 0, so
-            # without this flag the report step two steps down sees every
-            # outcome green and posts ok=1 seconds after this deferred row -
-            # and the LATEST row is what the dashboard's due-ness math reads,
-            # so the ok would reset the full cadence window and suppress the
-            # very retry this deferral exists to preserve.
+            # without this flag the report step below sees every outcome green
+            # and posts ok=1 seconds after this deferred row - and the LATEST
+            # row is what the dashboard's due-ness math reads, so the ok would
+            # reset the full cadence window and suppress the very retry this
+            # deferral exists to preserve.
             echo "reported=1" >> "$GITHUB_OUTPUT"
             curl -sG --max-time 30 -H "Authorization: Bearer $SEO_MCP_API_KEY" \
               --data-urlencode "job=seo-daily" --data-urlencode "deferred=$1" \
@@ -606,7 +617,7 @@ jobs:
 
           if [ "$AGENT" = "claude" ]; then
             # A subscription usage limit is a deferral, not a failure: the
-            # 12:00/19:00 attempts pick it up.
+            # backend keeps the job due and re-dispatches it within hours.
             #
             # Match every wording the subscription actually emits, not just the
             # one we thought of. "You've hit your session limit · resets 1:50pm
@@ -625,45 +636,41 @@ jobs:
             fail "$reason"
           fi
 
-          # --- Codex ---
-          #
-          # Do NOT decide this from the text. Codex collapses every 429 into one
-          # message - "exceeded retry limit, last status: 429 Too Many Requests"
-          # - so grepping it the way the Claude branch above greps its
-          # transcript would read an unfunded, permanently dead account as a
-          # quiet deferral. The builder would then report green every night
-          # while building nothing, which is the single failure mode this
-          # pipeline is least able to afford.
-          #
-          # So on anything 429-shaped, ask OpenAI directly and branch on
-          # error.code, which is authoritative and unaffected by wording
-          # changes. One tiny metered call, fractions of a cent.
-          if ! echo "$msg" | grep -qiE '429|too many requests|exceeded retry limit|usage limit|rate.?limit'; then
-            reason="workflow failed (no error detail captured - an empty message usually means the job hit its time limit)"
-            [ -n "$msg" ] && reason=$(printf '%s' "$msg" | tail -c 400)
-            fail "$reason"
+          if [ "$AGENT" = "codex" ]; then
+            # Never decided from the text: Codex collapses every 429 into one
+            # message, so on anything 429-shaped the step asks OpenAI directly
+            # and branches on error.code - authoritative, and unaffected by
+            # wording changes. One tiny metered call, fractions of a cent.
+            if ! echo "$msg" | grep -qiE '429|too many requests|exceeded retry limit|usage limit|rate.?limit'; then
+              reason="workflow failed (no error detail captured - an empty message usually means the job hit its time limit)"
+              [ -n "$msg" ] && reason=$(printf '%s' "$msg" | tail -c 400)
+              fail "$reason"
+            fi
+            probe=$(curl -s --max-time 30 -o /tmp/probe.json -w "%{http_code}" https://api.openai.com/v1/responses \
+              -H "Authorization: Bearer $OPENAI_API_KEY" -H "Content-Type: application/json" \
+              -d '{"model":"gpt-5-mini","input":"ok","max_output_tokens":16}') || probe=000
+            err=$(jq -r '.error.code // empty' /tmp/probe.json 2>/dev/null)
+            case "$probe:$err" in
+              2*:*)
+                # The key works now, so whatever 429 hit mid-run has cleared.
+                defer "Codex hit a transient rate limit this run - the key tests healthy now, so the dashboard keeps this build due and re-dispatches it within a few hours. Not a failure." ;;
+              429:rate_limit_exceeded)
+                defer "Codex is rate-limited right now - the dashboard keeps this build due and re-dispatches it within a few hours. Not a failure." ;;
+              429:*|402:*)
+                # Every other 429 is a billing state: credit_balance_exhausted,
+                # insufficient_quota, or an org/project spend or usage cap. None
+                # of them clear by waiting, so none of them may report green.
+                fail "your OpenAI account cannot run builds right now (OpenAI said: ${err:-quota exceeded}). This does not fix itself by retrying - add credit or raise the limit at platform.openai.com/settings/organization/billing, then re-run this workflow." ;;
+              401:*|403:*)
+                fail "OpenAI rejected the OPENAI_API_KEY secret on this repo (HTTP $probe). The key was probably revoked or rotated - create a new one at platform.openai.com/api-keys and set it again with 'gh secret set OPENAI_API_KEY'." ;;
+              *)
+                fail "Codex failed and OpenAI could not be reached to find out why (probe HTTP $probe). Last message: $(printf '%s' "$msg" | tail -c 300)" ;;
+            esac
           fi
 
-          probe=$(curl -s --max-time 30 -o /tmp/probe.json -w "%{http_code}" https://api.openai.com/v1/responses \
-            -H "Authorization: Bearer $OPENAI_API_KEY" -H "Content-Type: application/json" \
-            -d '{"model":"gpt-5-mini","input":"ok","max_output_tokens":16}') || probe=000
-          err=$(jq -r '.error.code // empty' /tmp/probe.json 2>/dev/null)
-          case "$probe:$err" in
-            2*:*)
-              # The key works now, so whatever 429 hit mid-run has cleared.
-              defer "Codex hit a transient rate limit this run - the key tests healthy now, so the dashboard keeps this build due and re-dispatches it within a few hours. Not a failure." ;;
-            429:rate_limit_exceeded)
-              defer "Codex is rate-limited right now - the dashboard keeps this build due and re-dispatches it within a few hours. Not a failure." ;;
-            429:*|402:*)
-              # Every other 429 is a billing state: credit_balance_exhausted,
-              # insufficient_quota, or an org/project spend or usage cap. None
-              # of them clear by waiting, so none of them may report green.
-              fail "your OpenAI account cannot run builds right now (OpenAI said: ${err:-quota exceeded}). This does not fix itself by retrying - add credit or raise the limit at platform.openai.com/settings/organization/billing, then re-run this workflow." ;;
-            401:*|403:*)
-              fail "OpenAI rejected the OPENAI_API_KEY secret on this repo (HTTP $probe). The key was probably revoked or rotated - create a new one at platform.openai.com/api-keys and set it again with 'gh secret set OPENAI_API_KEY'." ;;
-            *)
-              fail "Codex failed and OpenAI could not be reached to find out why (probe HTTP $probe). Last message: $(printf '%s' "$msg" | tail -c 300)" ;;
-          esac
+          fail "workflow failed - $RUN_URL"
+      # <<< agent-steps: run
+
 
       # Phone the outcome home: failures land on the DispatchSEO dashboard
       # banner + alert email (same rails as the crons); successes clear any
@@ -678,7 +685,7 @@ jobs:
         # outcome) and deferrals (which exit 0 - the reported flag is the only
         # trace, and without checking it this step would overwrite the
         # deferred row with ok=1 and silently cost the day).
-        if: always() && steps.classify.outputs.reported != '1' && steps.classify.outcome != 'failure' && steps.claude.outcome != 'failure' && steps.codex.outcome != 'failure'
+        if: always() && steps.classify.outputs.reported != '1' && steps.classify.outcome != 'failure' && steps.classify.outputs.agent_outcome != 'failure'
         env:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

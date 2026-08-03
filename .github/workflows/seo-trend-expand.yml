@@ -31,19 +31,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Which coding agent builds this project - resolved at RUN time from the
-      # dashboard, never baked in at install time.
-      #
-      # A decision left to whoever ran the install is a decision someone
-      # eventually forgets, and the failure mode here is a workflow that runs
-      # the wrong agent on every trigger. Asking the backend means switching
-      # agent on the dashboard takes effect on the next run with nothing to
-      # edit in this repo.
+      # >>> agent-steps: resolve (GENERATED - edit scripts/agent-ci/ and regenerate; never edit between these markers)
+      # Which coding agent runs this workflow - resolved at RUN time from the
+      # dashboard, never baked in at install time. A decision left to whoever
+      # ran the install is a decision someone eventually forgets, and the
+      # failure mode here is a builder that runs the wrong agent every night.
+      # Asking the backend means switching agent on the dashboard takes effect
+      # on the next scheduled run with nothing to edit in this repo.
       #
       # The fallback matters as much as the happy path: a repo installed against
       # a backend that predates the `agent` field gets no value here, and must
-      # keep behaving exactly as it did - which is Claude, because Claude was the
-      # only option that ever existed before the field.
+      # keep behaving exactly as it did - which is claude, because Claude was
+      # the only option that ever existed before the field.
       - name: Resolve the coding agent
         id: agent
         env:
@@ -94,6 +93,8 @@ jobs:
           esac
           echo "agent=$agent" >> "$GITHUB_OUTPUT"
           echo "Building with: $agent"
+      # <<< agent-steps: resolve
+
 
       # Same fail-loudly preflight as the scan: an unreachable MCP must never
       # produce a green run that expanded nothing.
@@ -113,6 +114,7 @@ jobs:
           fi
           echo "seo-manager MCP OK ($url)"
 
+      # >>> agent-steps: run (GENERATED - edit scripts/agent-ci/ and regenerate; never edit between these markers)
       # Codex reads its MCP servers from a config.toml inside its own home
       # directory. Two things here are easy to get wrong and both are silent:
       #
@@ -169,7 +171,11 @@ jobs:
           # Cloud fires this as the DispatchSEO GitHub App (a Bot actor), and the App also authored the workflow commits, so scheduled runs are bot-actored too. Every trigger here needs repo write access, so allowing bots is safe; without this claude-code-action aborts with "non-human actor".
           allowed_bots: "*"
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Pass the standard workflow token as an input so the action uses it
+          # directly instead of exchanging OIDC for a Claude GitHub App token
+          # (which would require installing the app on the repo).
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Full transcript in the step log - post-hoc debuggability.
           show_full_output: true
           prompt: |
             FIRST call the seo-manager MCP tool get_instructions with workflow trend-expand, then follow the returned markdown exactly - it is the current playbook and overrides any cached knowledge of this pipeline. Also read .dispatchseo/conventions.md for what this product is.
@@ -188,9 +194,9 @@ jobs:
           DATAFORSEO_PASSWORD: ${{ secrets.DATAFORSEO_PASSWORD }}
           MCP_TIMEOUT: "120000"
 
-      # The Codex twin. Same prompt, verbatim - the agent's behaviour must not
-      # depend on which one is holding the playbook, and the playbook itself
-      # arrives from get_instructions either way.
+      # The Codex twin. Same task prompt, generated from the same source -
+      # the agent's behaviour must not depend on which one is holding the
+      # playbook - plus the unattended-environment preamble above it.
       #
       # Model: gpt-5 by default, overridable with a repo variable because model
       # availability is per-account, not universal - `gpt-5-codex` 404s on a
@@ -200,7 +206,7 @@ jobs:
       #
       # There is NO turn budget to set. Codex has no --max-turns equivalent and
       # OpenAI closed the request for one as not-planned, so the job's
-      # timeout-minutes above is the only ceiling on a runaway run.
+      # timeout-minutes is the only ceiling on a runaway run.
       - name: Expand the picked subject into takes (Codex)
         if: steps.agent.outputs.agent == 'codex'
         id: codex
@@ -211,15 +217,15 @@ jobs:
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          # Same rule as the Claude twin's allowed_bots above: cloud fires this
-          # as the DispatchSEO GitHub App (a Bot actor) and scheduled runs are
-          # bot-actored too, because the App authored the workflow commits.
-          # codex-action's actor gate rejects EVERY bot by default (a bot 404s
-          # the collaborator-permission lookup), so without this line each
-          # unattended Codex run dies before Codex is even installed - while a
-          # manual workflow_dispatch passes, which is what hides the failure.
-          # Every trigger that can reach this step already required repo write
-          # access, so allowing all actors adds nothing an attacker can use.
+          # Same rule as the Claude twin's allowed_bots: this workflow is fired
+          # by a bot actor (the DispatchSEO GitHub App, a schedule, or a
+          # GITHUB_TOKEN dispatch). codex-action's actor gate rejects EVERY bot
+          # by default (a bot 404s the collaborator-permission lookup), so
+          # without this line each unattended Codex run dies before Codex is
+          # even installed - while a manual workflow_dispatch passes, which is
+          # what hides the failure. Every trigger that can reach this step
+          # already required repo write access, so allowing all actors adds
+          # nothing an attacker can use.
           allow-users: "*"
           model: ${{ vars.SEO_CODEX_MODEL || 'gpt-5' }}
           codex-home: ${{ runner.temp }}/codex-home
@@ -244,18 +250,10 @@ jobs:
           DATAFORSEO_PASSWORD: ${{ secrets.DATAFORSEO_PASSWORD }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Phone the outcome home: failures land on the DispatchSEO dashboard
-      # banner + alert email (same rails as the crons); successes clear any
-      # earlier red banner row for this job.
-      # A Codex failure is classified before it is reported. OpenAI's own
-      # error.code distinguishes a transient per-minute rate limit (deferred -
-      # the job stays due and the backend re-dispatches within hours) from an
-      # account that cannot build (loud failure naming the billing fix). The
-      # CLI's text cannot make that distinction - it collapses every 429 into
-      # one message - so the probe asks the API directly. Without this step a
-      # routine OpenAI rate limit was a red banner plus an alert email AND a
-      # full cadence window lost, which on a weekly workflow is the week.
-      # Claude failures keep their existing loud path.
+      # Phone a FAILED outcome home with a classification: transient rate limit
+      # (deferred - the job stays due and the backend re-dispatches) vs an
+      # account that cannot run at all (loud failure naming the fix). A clean
+      # success is reported by the step below instead.
       - name: Classify the outcome
         id: classify
         env:
@@ -265,6 +263,7 @@ jobs:
           AGENT_OUTCOME: ${{ steps.agent.outputs.agent == 'codex' && steps.codex.outcome || steps.claude.outcome }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          echo "agent_outcome=${AGENT_OUTCOME:-}" >> "$GITHUB_OUTPUT"
           [ "$AGENT_OUTCOME" = "failure" ] || exit 0
           # From here this step owns the report; the flag stops the step below
           # writing a second (ok or generic-fail) row on top of this one.
@@ -301,6 +300,8 @@ jobs:
             esac
           fi
           fail "workflow failed - $RUN_URL"
+      # <<< agent-steps: run
+
 
       - name: Report outcome to the dashboard
         if: always() && steps.classify.outputs.reported != '1'
