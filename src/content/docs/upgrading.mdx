@@ -74,15 +74,22 @@ it, so it appears within a day of you upgrading.
 (the folder where you connected the MCP server, not the `dispatchseo`
 folder), and run:
 
+<AgentTabs>
+<AgentTab id="claude">
+
 ```bash
 claude "Call the dispatchseo-yoursite MCP tool get_instructions with workflow install and follow it exactly."
 ```
 
-With Codex, the same sentence:
+</AgentTab>
+<AgentTab id="codex">
 
 ```bash
 codex "Call the dispatchseo-yoursite MCP tool get_instructions with workflow install and follow it exactly."
 ```
+
+</AgentTab>
+</AgentTabs>
 
 Replace `dispatchseo-yoursite` with your project's MCP server name - it's
 `dispatchseo-` followed by your project's slug, and it's the name in the

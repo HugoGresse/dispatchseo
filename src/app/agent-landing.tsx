@@ -5,6 +5,7 @@ import { DispatchMark } from "@/components/logo";
 import { DISCORD_URL } from "@/components/discord-mark";
 import { AgentMark } from "@/components/agent-mark";
 import { PixelDispatcher } from "@/components/pixel-dispatcher";
+import { availableAgents, type AgentId } from "@/lib/agents";
 import { FeatureShowcase } from "./feature-showcase";
 import { DemoVideo } from "./demo-video";
 import { DomainCta } from "./domain-cta";
@@ -39,13 +40,16 @@ const NAV_LINKS = [
   { href: "/blog", label: "Blog" },
 ];
 
-type AgentPageId = "claude" | "codex";
+type AgentPageId = AgentId;
 
+// The hand-written marketing copy per agent - the one part of an agent's
+// landing page that cannot come off the registry, because it is positioning,
+// not fact. Everything derivable (the other agents' names/links, the mascot
+// tint) is read from src/lib/agents/index.ts below, so adding an agent here
+// means: a CONTENT entry, a src/app/<landingPath>/page.tsx wrapper, and a
+// sitemap line - docs/AGENTS.md carries the checklist.
 type Content = {
   name: string;
-  otherId: AgentPageId;
-  otherName: string;
-  otherHref: string;
   sub: string;
   tag: string;
   faq: { q: string; a: ReactNode }[];
@@ -54,9 +58,6 @@ type Content = {
 const CONTENT: Record<AgentPageId, Content> = {
   claude: {
     name: "Claude Code",
-    otherId: "codex",
-    otherName: "Codex",
-    otherHref: "/codex",
     sub: "Claude Code already knows your product - it wrote it. DispatchSEO gives it the rest: research, guides, pull requests.",
     tag: "Runs on the Claude subscription you already have.",
     faq: [
@@ -108,9 +109,6 @@ const CONTENT: Record<AgentPageId, Content> = {
   },
   codex: {
     name: "Codex",
-    otherId: "claude",
-    otherName: "Claude Code",
-    otherHref: "/claude-code",
     sub: "Codex already knows your product - it wrote it. DispatchSEO gives it the rest: research, guides, pull requests.",
     tag: "Runs on your OpenAI account.",
     faq: [
@@ -156,6 +154,9 @@ export function AgentLandingPage({ agentId }: { agentId: AgentPageId }) {
   if (process.env.LANDING_ENABLED !== "true") redirect("/dashboard");
 
   const c = CONTENT[agentId];
+  // Every OTHER supported agent gets a cross-link card - derived from the
+  // registry so a new agent shows up on the existing pages automatically.
+  const others = availableAgents().filter((a) => a.id !== agentId);
 
   return (
     <div className={`ld ${jakarta.variable} ${dmSans.variable}`}>
@@ -185,7 +186,7 @@ export function AgentLandingPage({ agentId }: { agentId: AgentPageId }) {
           "AI agents", one CTA. */}
       <header className="hero">
         <div className="wrap">
-          <PixelDispatcher variant={agentId === "codex" ? "white" : "clay"} />
+          <PixelDispatcher variant={agentId} />
           <h1>Automate your SEO<br className="br-desk" /> with <span className="hl">{c.name}</span></h1>
           <p className="sub">{c.sub}<br className="br-desk" /> {c.tag}</p>
           <div className="cta-row" id="get-started">
@@ -235,16 +236,18 @@ export function AgentLandingPage({ agentId }: { agentId: AgentPageId }) {
       {/* ==================== CROSS-LINK ==================== */}
       <section className="agent-crosslink-sec">
         <div className="wrap">
-          <a className="agent-crosslink" href={c.otherHref}>
-            <AgentMark id={c.otherId} className="agent-crosslink-mark" />
-            <span className="agent-crosslink-text">
-              <b>Also works with {c.otherName}</b>
-              <span>Same server, same tools, including the unattended builder.</span>
-            </span>
-            <svg className="agent-crosslink-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M5 12h14M13 6l6 6-6 6" />
-            </svg>
-          </a>
+          {others.map((other) => (
+            <a key={other.id} className="agent-crosslink" href={other.landingPath}>
+              <AgentMark id={other.id} className="agent-crosslink-mark" />
+              <span className="agent-crosslink-text">
+                <b>Also works with {other.displayName}</b>
+                <span>Same server, same tools, including the unattended builder.</span>
+              </span>
+              <svg className="agent-crosslink-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+            </a>
+          ))}
         </div>
       </section>
 

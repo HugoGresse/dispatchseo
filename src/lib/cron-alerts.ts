@@ -2,6 +2,7 @@ import { db } from "./db";
 import { isTransientErrorMessage } from "./dataforseo";
 import { isCloudMode, isLocalBackendUrl } from "./cloud";
 import { listProjects, effectiveAutomations } from "./projects";
+import { projectAgent } from "./agents";
 
 // Cron failure alerts (LATER.md gap A4). Every cron route calls
 // reportCronRun() with its result JSON right before responding; this module
@@ -989,7 +990,7 @@ async function builderJobHeartbeatAlerts(
             stale: true,
             last_run_at: p.pipeline_installed_at,
             errors: [
-              `${wf} is enabled and has work waiting, but the in-stack builder has never reported a run - check its GitHub/Claude token connection (docker logs dispatchseo-builder-1)`,
+              `${wf} is enabled and has work waiting, but the in-stack builder has never reported a run - check its GitHub connection and its ${projectAgent(p).displayName} credential (docker logs dispatchseo-builder-1)`,
             ],
             update_available: false,
             claimed_only: false,

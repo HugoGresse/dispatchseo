@@ -42,7 +42,8 @@ Your dashboard's Settings screen shows a ready-to-paste connect command
 per agent, with your project's slug, domain, and key already filled in -
 copy that one rather than typing any of these by hand.
 
-**Claude Code:**
+<AgentTabs>
+<AgentTab id="claude">
 
 ```bash
 claude mcp add dispatchseo-<slug> <your-domain>/api/mcp \
@@ -54,7 +55,8 @@ claude mcp add dispatchseo-<slug> <your-domain>/api/mcp \
 a second connected project never leaks into an unrelated repo and starts
 answering for the wrong site.
 
-**Codex:**
+</AgentTab>
+<AgentTab id="codex">
 
 ```bash
 codex mcp add dispatchseo-<slug> --url "<your-domain>/api/mcp?key=<token>"
@@ -63,6 +65,9 @@ codex mcp add dispatchseo-<slug> --url "<your-domain>/api/mcp?key=<token>"
 Identical in PowerShell - there's no header to quote. Codex has no
 `--scope local`; the per-project server name is what keeps two connected
 sites apart. [The Codex guide](/docs/install-codex) covers the rest.
+
+</AgentTab>
+</AgentTabs>
 
 **Anything else** that speaks streamable-HTTP MCP: point it at
 `<your-domain>/api/mcp` with an `Authorization: Bearer <token>` header,

@@ -402,7 +402,7 @@ export function AgentHeaderSwitch({ current, slug }: { current: string; slug: st
               so a mangled paste fails here instead of on tomorrow's build.
               Adding does NOT switch - the agent joins the list, that's all. */}
           <p className="mt-2 border-t border-neutral-800/70 pt-2 text-[11px] leading-relaxed text-neutral-500">
-            Verified with {formAgent.id === "codex" ? "OpenAI" : "a shape check"} before
+            Verified with {formAgent.credential.verifiedWith} before
             it&apos;s stored. Adding doesn&apos;t switch anything - you pick when to switch.
           </p>
         </div>

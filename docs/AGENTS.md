@@ -104,14 +104,47 @@ Agent adapters are the one place in this repo where new surface area is
 actively wanted — `CONTRIBUTING.md` is otherwise blunt about unplanned surface
 being the most expensive thing you can add.
 
-A new agent is a registry entry in `src/lib/agents/index.ts` and nothing else.
-The interface is documented in that file. To get past Tier 3 you need:
+An agent lives in exactly two source files, and everything else derives:
 
-1. The registry entry — one object, documented fields.
+- **`src/lib/agents/index.ts`** — the runtime registry. One object per agent
+  (interface documented in the file): display name, CLI, connect/setup command
+  builders, credential story, capabilities, cost model, landing path, mascot
+  colour. The dashboard, both onboarding wizards, the MCP `set_agent` tool,
+  the instructions placeholders, and the pixel dispatcher all read this — none
+  of them branch on agent ids anymore.
+- **`scripts/agent-ci/<id>.mjs`** — the CI knowledge (only needed for a
+  headless builder, i.e. Tier 1/2). How to validate the credential's shape,
+  write the agent's MCP config on a runner, invoke it from a workflow, and
+  classify a failed run (deferral vs dead account). The agent-specific blocks
+  inside every `templates/pipeline` workflow are GENERATED from these modules
+  by `scripts/generate-agent-steps.mjs` — run it after any agent-ci edit and
+  commit the regenerated workflows; `pr-check` fails on drift, and also fails
+  if the registry and agent-ci disagree on ids or secret names. The pack
+  sweep then carries the new blocks into every installed repo on deploy.
+
+No migration is needed: `projects.agent` stopped being CHECK-constrained in
+migration 0050, and validation lives in the registry alone.
+
+**Connect-only (Tier 3)** is the registry entry with
+`capabilities.headlessBuilder: false` — plus the golden snapshot and a docs
+row. **To get past Tier 3** you need:
+
+1. Both files above (registry entry + agent-ci module), regenerated workflows
+   and pipeline pack committed.
 2. Its commands in the golden snapshot (`scripts/agent-golden.mjs`), so a
    future refactor can't quietly change a paste people rely on.
-3. A canary workflow you ran in your own repo, with the run linked.
-4. A row in this file.
+3. A canary workflow you ran in your own repo, with the run linked (pattern:
+   `.github/workflows/codex-canary.yml`), and a facts file recording the CLI's
+   measured quirks — config format, approval model, turn-budget story, actor
+   gating (pattern: the Codex facts doc those workflow comments cite).
+   For self-host parity, `docker/builder/run.sh` (and its Dockerfile's CLI
+   install line) carries the same knowledge for the in-stack container — its
+   `$agent` branches are the one agent-specific surface not yet generated
+   from `scripts/agent-ci/`, so extend them by hand.
+4. A row in this file, plus the per-agent user surfaces: an install guide
+   (`src/content/docs/install-<id>.mdx`), a landing page wrapper
+   (`src/app/<landingPath>/page.tsx` + a `CONTENT` entry in
+   `src/app/agent-landing.tsx` + a sitemap line), and an `AgentMark` SVG.
 5. **Evidence**: a link to a merged PR on a real site that your agent built.
 
 Requirement 5 is the one that matters. An adapter written by an agent whose

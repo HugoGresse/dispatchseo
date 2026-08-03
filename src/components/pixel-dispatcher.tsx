@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { DEFAULT_AGENT, agentById, isSupportedAgent } from "@/lib/agents";
 
 // Pixel-art hero scene: the agent (a clay-colored blob, our nod to Claude
 // Code's mascot) walks in from the left, hops onto the chair at the dispatch
@@ -33,34 +34,26 @@ const VB_H = 32;
 // headset, the monitor and everything else stays the site's own clay/violet,
 // so recolouring the character never reads as a second theme. "clay" (our
 // nod to Claude Code's rust) is the default and the only palette every
-// existing call site renders, byte-identical to before this variant existed.
-// "white" is Codex/OpenAI's colour: a near-white body with a mid-grey shade
-// for the legs/outline so they still read against the near-black scene -
-// eyes stay the same dark ink in both, per the character's own design.
-export type MascotVariant = "clay" | "white";
+// existing call site renders, byte-identical to before variants existed.
+// Every other agent's body/shade pair comes off its registry entry
+// (src/lib/agents/index.ts `mascot`), so a new agent brings its own colour
+// without this file changing. Eyes stay the same dark ink for everyone, per
+// the character's own design.
+export type MascotVariant = string; // an agent id, or "clay" (the default body)
 
-const PALETTES: Record<MascotVariant, Record<string, string>> = {
-  clay: {
-    c: "#d97757", // clay body
-    C: "#b0563a", // clay shade / legs
-    e: "#1a1a1e", // eyes
-    v: "#8b5cf6", // violet (headset, mug)
-    V: "#6d3fd8", // violet shade
-    m: "#d4d4d8", // mic tip
-  },
-  white: {
-    c: "#f4f4f5", // near-white body
-    C: "#8f8f99", // grey shade / legs
-    e: "#1a1a1e", // eyes
-    v: "#8b5cf6",
-    V: "#6d3fd8",
-    m: "#d4d4d8",
-  },
+const CLAY: Record<string, string> = {
+  c: "#d97757", // clay body
+  C: "#b0563a", // clay shade / legs
+  e: "#1a1a1e", // eyes
+  v: "#8b5cf6", // violet (headset, mug)
+  V: "#6d3fd8", // violet shade
+  m: "#d4d4d8", // mic tip
 };
 
 // Two ways the variant arrives, one resolver:
-//   1. An explicit `variant` prop - the per-agent landing hub pages know
-//      statically which agent they present, and a non-default prop wins.
+//   1. An explicit `variant` prop (an agent id) - the per-agent landing hub
+//      pages know statically which agent they present, and a non-default
+//      agent's registry colour wins.
 //   2. CSS variables (--dispatcher-body / --dispatcher-shade) stamped by the
 //      dashboard layout from the active project's agent - because the
 //      dispatcher also shows on loading screens, which render synchronously
@@ -70,12 +63,15 @@ const PALETTES: Record<MascotVariant, Record<string, string>> = {
 // Anywhere neither applies (landing hero, wizard) the clay default renders,
 // byte-identical to before variants existed.
 function paletteFor(canvas: HTMLCanvasElement, variant: MascotVariant): Record<string, string> {
-  if (variant !== "clay") return PALETTES[variant];
+  if (variant !== "clay" && isSupportedAgent(variant) && variant !== DEFAULT_AGENT) {
+    const m = agentById(variant).mascot;
+    return { ...CLAY, c: m.body, C: m.shade };
+  }
   const cs = getComputedStyle(canvas);
   const body = cs.getPropertyValue("--dispatcher-body").trim();
   const shade = cs.getPropertyValue("--dispatcher-shade").trim();
-  if (!body) return PALETTES.clay;
-  return { ...PALETTES.clay, c: body, C: shade || body };
+  if (!body) return CLAY;
+  return { ...CLAY, c: body, C: shade || body };
 }
 
 // 12 x 11 character grids ('.' = transparent)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition, type JSX } from "react";
+import { useEffect, useRef, useState, useTransition, type JSX, type ReactNode } from "react";
 import { useActionState } from "react";
 import { JOURNEY_STAGES, STAGE_META } from "@/lib/journey-meta";
 import { FirstRunStatus } from "@/components/first-run-status";
@@ -80,6 +80,85 @@ export type CloudWizardResume = {
 };
 
 type PipelineInstallResult = Awaited<ReturnType<typeof runPipelineInstall>>;
+
+// The one-line "who pays" subtitle under each agent's name on the c2 picker.
+// Wizard-specific copy, not a registry field - same reasoning and same text
+// as onboarding-wizard.tsx's AGENT_PICKER_SUBTITLE, kept as a separate
+// colocated map here rather than shared so the two wizards can each change
+// independently. Adding a third agent means adding one entry here.
+const AGENT_PICKER_SUBTITLE: Record<AgentId, string> = {
+  claude: "Needs a Claude subscription · builds cost nothing extra, they run on your plan",
+  codex: "Needs an OpenAI API key · builds are metered by OpenAI per run",
+};
+
+// c2's whole "get your credential" block - prerequisite callout plus the
+// paragraph(s) under it. Not registry data: it's the screen's own explanation
+// of how to obtain and paste the credential, and the two agents' flows aren't
+// even parallel in shape (Claude runs a terminal command first, Codex mints a
+// key on a web page with no CLI step at all), so this holds the entire
+// fragment per agent rather than field-by-field pieces.
+const AGENT_CREDENTIAL_INTRO: Record<AgentId, ReactNode> = {
+  claude: (
+    <>
+      <PrereqCallout
+        title="Never used Claude Code before?"
+        body={
+          <>
+            Install it first - it takes about 2 minutes. Until you do, the command below
+            prints <code className="font-mono text-neutral-300">command not found</code>.
+          </>
+        }
+        href="/docs/install-claude-code"
+        cta="Install Claude Code"
+      />
+      <p className="mb-2 mt-4 text-base font-medium text-neutral-200">
+        Run this in a terminal and copy what it prints
+      </p>
+      <CopyBox text="claude setup-token" />
+      <p className="mt-3 text-sm leading-relaxed text-neutral-400">
+        Open a terminal on your computer — the macOS <b className="font-medium text-neutral-300">Terminal</b> app,
+        or the terminal panel in VS Code — and run the command above. It opens a browser login, then prints a
+        token starting with <code className="font-mono text-neutral-300">sk-ant-oat...</code>. Paste it below.
+      </p>
+    </>
+  ),
+  codex: (
+    <>
+      {/* No command to run: an OpenAI key is minted in a browser, so
+          the Codex CLI is not a prerequisite for THIS screen at all.
+          Saying so matters - telling someone to install a CLI they
+          do not yet need is how a one-minute step becomes ten. */}
+      <PrereqCallout
+        title="You need an OpenAI API key"
+        body={
+          <>
+            Create one at platform.openai.com - it takes about a minute, and the account
+            needs credit on it before a build can run. You do not need the Codex CLI
+            installed for this step.
+          </>
+        }
+        href="https://platform.openai.com/api-keys"
+        cta="Create an API key"
+      />
+      <p className="mt-4 text-sm leading-relaxed text-neutral-400">
+        Copy the key — it starts with{" "}
+        <code className="font-mono text-neutral-300">sk-...</code> and OpenAI only shows
+        it once — and paste it below. We check it against OpenAI before storing it, so a
+        half-copied key or an account with no credit is caught here rather than at 5am.
+      </p>
+    </>
+  ),
+};
+
+// Whether the paste below is verified live or only shape-checked. Wizard
+// prose about THIS screen's behavior, not the registry's `verifiedWith`
+// field (that's a shorter noun phrase - "OpenAI" / "a shape check" - meant
+// for other surfaces, not this sentence).
+const AGENT_VERIFY_NOTE: Record<AgentId, string> = {
+  claude:
+    "Verification happens in the background after setup starts - this screen won't show an instant green check, and that's expected.",
+  codex: "This is checked against OpenAI before it is stored, so it takes a second or two.",
+};
 
 function chevron() {
   return (
@@ -703,9 +782,7 @@ export function CloudOnboardingWizard(props: {
                       </span>
                     </span>
                     <span className="pl-6 text-[13px] leading-relaxed text-neutral-400">
-                      {id === "claude"
-                        ? "Needs a Claude subscription · builds cost nothing extra, they run on your plan"
-                        : "Needs an OpenAI API key · builds are metered by OpenAI per run"}
+                      {AGENT_PICKER_SUBTITLE[id]}
                     </span>
                   </label>
                 ))}
@@ -716,55 +793,7 @@ export function CloudOnboardingWizard(props: {
                 Claude Code installed the command prints "command not found",
                 and a beginner reads that as a broken product rather than a
                 missing tool. This screen is where the funnel used to end. */}
-            {agentChoice === "claude" ? (
-              <>
-                <PrereqCallout
-                  title="Never used Claude Code before?"
-                  body={
-                    <>
-                      Install it first - it takes about 2 minutes. Until you do, the command below
-                      prints <code className="font-mono text-neutral-300">command not found</code>.
-                    </>
-                  }
-                  href="/docs/install-claude-code"
-                  cta="Install Claude Code"
-                />
-                <p className="mb-2 mt-4 text-base font-medium text-neutral-200">
-                  Run this in a terminal and copy what it prints
-                </p>
-                <CopyBox text="claude setup-token" />
-                <p className="mt-3 text-sm leading-relaxed text-neutral-400">
-                  Open a terminal on your computer — the macOS <b className="font-medium text-neutral-300">Terminal</b> app,
-                  or the terminal panel in VS Code — and run the command above. It opens a browser login, then prints a
-                  token starting with <code className="font-mono text-neutral-300">sk-ant-oat...</code>. Paste it below.
-                </p>
-              </>
-            ) : (
-              <>
-                {/* No command to run: an OpenAI key is minted in a browser, so
-                    the Codex CLI is not a prerequisite for THIS screen at all.
-                    Saying so matters - telling someone to install a CLI they
-                    do not yet need is how a one-minute step becomes ten. */}
-                <PrereqCallout
-                  title="You need an OpenAI API key"
-                  body={
-                    <>
-                      Create one at platform.openai.com - it takes about a minute, and the account
-                      needs credit on it before a build can run. You do not need the Codex CLI
-                      installed for this step.
-                    </>
-                  }
-                  href="https://platform.openai.com/api-keys"
-                  cta="Create an API key"
-                />
-                <p className="mt-4 text-sm leading-relaxed text-neutral-400">
-                  Copy the key — it starts with{" "}
-                  <code className="font-mono text-neutral-300">sk-...</code> and OpenAI only shows
-                  it once — and paste it below. We check it against OpenAI before storing it, so a
-                  half-copied key or an account with no credit is caught here rather than at 5am.
-                </p>
-              </>
-            )}
+            {AGENT_CREDENTIAL_INTRO[agentChoice]}
             <form action={claudeAction} className="mt-3.5 space-y-2.5">
               {claudeState && "error" in claudeState ? <ErrorLine msg={claudeState.error} /> : null}
               {/* Name the target project: this writes the pasted token into a
@@ -788,11 +817,7 @@ export function CloudOnboardingWizard(props: {
                   checked here and proven for real by seo-token-check minutes
                   later. An OpenAI key IS checked live before it is stored, and
                   saying otherwise would train people to ignore this screen. */}
-              <p className="text-sm text-neutral-500">
-                {agentChoice === "claude"
-                  ? "Verification happens in the background after setup starts - this screen won't show an instant green check, and that's expected."
-                  : "This is checked against OpenAI before it is stored, so it takes a second or two."}
-              </p>
+              <p className="text-sm text-neutral-500">{AGENT_VERIFY_NOTE[agentChoice]}</p>
               <div className="flex justify-end pt-1">
                 <button
                   type="submit"

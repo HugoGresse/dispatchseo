@@ -1,0 +1,17 @@
+-- Open the agent column to future agents.
+--
+-- 0044 CHECK-constrained projects.agent to ('claude', 'codex'), which made
+-- every new coding agent a migration - and worse, a migration ORDERING trap:
+-- a backend that ships a third agent before a self-host or cloud database has
+-- run the matching migration turns every set_agent call into a constraint
+-- violation. Validation already lives in exactly one app-side place
+-- (isSupportedAgent via the registry in src/lib/agents/index.ts, asserted by
+-- scripts/agent-golden.mjs against prototype-pollution bypasses), and the
+-- column's only writer (setProjectAgent) goes through it - so the database
+-- copy of the allow-list was a second source of truth that could only ever
+-- drift. Dropped rather than widened.
+--
+-- DROP CONSTRAINT IF EXISTS is idempotent, so the docker stack's replay of
+-- the concatenated setup.sql on every boot passes untouched, and vanilla
+-- Postgres needs no guard block.
+alter table projects drop constraint if exists projects_agent_check;

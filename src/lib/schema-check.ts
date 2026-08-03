@@ -147,6 +147,13 @@ export const UNPROBEABLE: Record<string, string> = {
   // backstops the read-then-insert race.
   "0043_suggestion_keyword_unique":
     "partial unique index - artifact is in pg_indexes, not queryable via PostgREST",
+  // DROPS the projects.agent CHECK constraint so new agents need no migration.
+  // Artifact is an absence in pg_constraint - nothing for PostgREST to see.
+  // Unapplied it costs nothing until a THIRD agent exists; at that point a
+  // set_agent to the new agent errors loudly (constraint violation surfaced
+  // by setProjectAgent), never silently.
+  "0050_agent_check_open":
+    "drops a CHECK constraint - artifact is an absence in pg_constraint, not queryable via PostgREST",
 };
 
 async function probeMissing(p: Probe): Promise<boolean> {

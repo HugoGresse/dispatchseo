@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useEffect, useState, useTransition, type ReactNode } from "react";
 import { JOURNEY_STAGES, STAGE_META } from "@/lib/journey-meta";
 import { mcpServerName } from "@/lib/mcp-connect";
 import { agentById, type AgentId } from "@/lib/agents";
@@ -155,6 +155,15 @@ export type WizardResume = {
   agent: AgentId;
 };
 
+// The one-line "who pays" subtitle under each agent's name on the picker.
+// Wizard-specific copy, not a registry field (agent.cost.note says something
+// similar but longer, for the finale prose rather than this compact card) -
+// adding a third agent means adding one entry here.
+const AGENT_PICKER_SUBTITLE: Record<AgentId, string> = {
+  claude: "Needs a Claude subscription · builds cost nothing extra, they run on your plan",
+  codex: "Needs an OpenAI API key · builds are metered by OpenAI per run",
+};
+
 // The Claude Code / Codex pick, shared by the agent step (where the choice is
 // made) and the finale (where the commands it decides are pasted - a dropped
 // session resumes straight to s5, so the choice must be changeable there too).
@@ -192,15 +201,79 @@ function AgentPicker({
             </span>
           </span>
           <span className="pl-6 text-[13px] leading-relaxed text-neutral-400">
-            {id === "claude"
-              ? "Needs a Claude subscription · builds cost nothing extra, they run on your plan"
-              : "Needs an OpenAI API key · builds are metered by OpenAI per run"}
+            {AGENT_PICKER_SUBTITLE[id]}
           </span>
         </label>
       ))}
     </div>
   );
 }
+
+// Finale (s5) copy that differs per agent and has no registry field to read,
+// because it's about how THIS screen explains the prerequisite - not a fact
+// about the agent itself. Adding a third agent means adding one entry here
+// (see docs/AGENTS.md).
+const AGENT_PREREQ_STEP: Record<AgentId, { body: ReactNode; cta: string }> = {
+  claude: {
+    body: (
+      <>
+        This needs <b className="font-medium text-neutral-200">Claude Code</b>{" "}
+        and the <b className="font-medium text-neutral-200">GitHub CLI</b> (
+        <code className="font-mono text-neutral-300">gh</code>). Don&apos;t have
+        them yet? The guide installs both, start to finish, in about 5 minutes.
+      </>
+    ),
+    cta: "Install Claude Code and gh",
+  },
+  codex: {
+    body: (
+      <>
+        This needs <b className="font-medium text-neutral-200">Codex</b> and the{" "}
+        <b className="font-medium text-neutral-200">GitHub CLI</b> (
+        <code className="font-mono text-neutral-300">gh</code>). The guide covers
+        Codex; gh installs from{" "}
+        <a
+          href="https://cli.github.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-violet-400 underline underline-offset-2 hover:text-violet-300"
+        >
+          cli.github.com
+        </a>{" "}
+        (then run <code className="font-mono text-neutral-300">gh auth login</code>).
+      </>
+    ),
+    cta: "Install Codex",
+  },
+};
+
+// The one-liner under step 1's connect command, naming what the paste does.
+// Also wizard-specific prose, same reasoning as AGENT_PREREQ_STEP above.
+const AGENT_CONNECT_BLURB: Record<AgentId, ReactNode> = {
+  claude: (
+    <>
+      Connects Claude Code to this project and lets it run{" "}
+      <code className="font-mono text-neutral-300">gh</code>
+      {" "}there. Any terminal works - pick your system&apos;s tab.
+    </>
+  ),
+  codex: <>Connects Codex to this project. One command, same in every shell.</>,
+};
+
+// The VS Code extension gotcha only applies to Claude Code today - Codex has
+// no equivalent extension integration to fall back from. `null` for an agent
+// that has nothing to add here is a valid entry, same as a string elsewhere.
+const AGENT_RESTART_CAVEAT: Record<AgentId, ReactNode | null> = {
+  claude: (
+    <>
+      {" "}Using the VS Code extension and it still can&apos;t see the server? Do
+      step 2 from a plain terminal instead (open the repo folder, type{" "}
+      <code className="font-mono text-neutral-400">claude</code>) - or fully
+      reload the VS Code window.
+    </>
+  ),
+  codex: null,
+};
 
 export function OnboardingWizard({
   saEmail,
@@ -1394,67 +1467,36 @@ export function OnboardingWizard({
 
               <PrereqCallout
                 title="Two things on your computer first"
-                body={
-                  agentChoice === "claude" ? (
-                    <>
-                      This needs <b className="font-medium text-neutral-200">Claude Code</b>{" "}
-                      and the <b className="font-medium text-neutral-200">GitHub CLI</b> (
-                      <code className="font-mono text-neutral-300">gh</code>). Don&apos;t have
-                      them yet? The guide installs both, start to finish, in about 5 minutes.
-                    </>
-                  ) : (
-                    <>
-                      This needs <b className="font-medium text-neutral-200">Codex</b> and the{" "}
-                      <b className="font-medium text-neutral-200">GitHub CLI</b> (
-                      <code className="font-mono text-neutral-300">gh</code>). The guide covers
-                      Codex; gh installs from{" "}
-                      <a
-                        href="https://cli.github.com"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-medium text-violet-400 underline underline-offset-2 hover:text-violet-300"
-                      >
-                        cli.github.com
-                      </a>{" "}
-                      (then run <code className="font-mono text-neutral-300">gh auth login</code>).
-                    </>
-                  )
-                }
+                body={AGENT_PREREQ_STEP[agentChoice].body}
                 href={agent.installDocsPath}
-                cta={agentChoice === "claude" ? "Install Claude Code and gh" : "Install Codex"}
+                cta={AGENT_PREREQ_STEP[agentChoice].cta}
               />
 
               <div className="mt-5 space-y-2">
                 <p className="text-lg font-semibold tracking-tight text-neutral-100">
                   1. Paste this in a terminal, inside your site&apos;s repo
                 </p>
-                {/* {" "} after the inline <code>, never a plain space: the
-                    compiler eats a leading space when the text node wraps to
-                    the next source line - prod shipped "ghthere" for weeks. */}
-                {agentChoice === "claude" ? (
-                  <p className="text-sm text-neutral-400">
-                    Connects Claude Code to this project and lets it run{" "}
-                    <code className="font-mono text-neutral-300">gh</code>
-                    {" "}there. Any terminal works - pick your system&apos;s tab.
-                  </p>
+                <p className="text-sm text-neutral-400">{AGENT_CONNECT_BLURB[agentChoice]}</p>
+                {/* Two tabs only make sense when the two shells actually
+                    differ - Codex's connect command is byte-identical in bash
+                    and PowerShell (see agents/index.ts), so tabs there would
+                    be two labels for one command. Derived from the agent's
+                    own connect functions (probed with placeholder args, same
+                    idea agent.connect.bash === powershell would test if they
+                    were referentially equal - they aren't, so this compares
+                    output instead) rather than the agent id, so a third agent
+                    gets the right layout automatically without a wizard edit. */}
+                {agent.connect.bash("_", "_", "_") === agent.connect.powershell("_", "_", "_") ? (
+                  // Codex's connect is the same string in bash and PowerShell.
+                  <CopyBox
+                    text={created ? agent.connect.bash(created.slug, origin, created.mcpToken) : ""}
+                  />
                 ) : (
-                  <p className="text-sm text-neutral-400">
-                    Connects Codex to this project. One command, same in every shell.
-                  </p>
-                )}
-                {agentChoice === "claude" ? (
                   <ShellCommandTabs
                     bash={created ? agent.connect.bash(created.slug, origin, created.mcpToken) : ""}
                     powershell={
                       created ? agent.connect.powershell(created.slug, origin, created.mcpToken) : ""
                     }
-                  />
-                ) : (
-                  // Codex's connect is the same string in bash and PowerShell
-                  // (see agents/index.ts), so shell tabs would be two labels
-                  // for one command - render the one box instead.
-                  <CopyBox
-                    text={created ? agent.connect.bash(created.slug, origin, created.mcpToken) : ""}
                   />
                 )}
                 <p className="text-[13px] text-neutral-500">
@@ -1464,14 +1506,7 @@ export function OnboardingWizard({
                   </b>{" "}
                   Connections load only at startup, so a session that was already open
                   can&apos;t see the one you just added.
-                  {agentChoice === "claude" ? (
-                    <>
-                      {" "}Using the VS Code extension and it still can&apos;t see the server? Do
-                      step 2 from a plain terminal instead (open the repo folder, type{" "}
-                      <code className="font-mono text-neutral-400">claude</code>) - or fully
-                      reload the VS Code window.
-                    </>
-                  ) : null}
+                  {AGENT_RESTART_CAVEAT[agentChoice]}
                 </p>
               </div>
 

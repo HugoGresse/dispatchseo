@@ -43,6 +43,20 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
+      # The agent blocks inside the pipeline workflows are GENERATED from
+      # scripts/agent-ci/ (one module per coding agent + per-workflow params).
+      # A hand-edit between the `>>> agent-steps` markers, or an agent-ci edit
+      # without a regenerate, would silently fork the source of truth from what
+      # ships - this catches both. It also asserts scripts/agent-ci/ and
+      # src/lib/agents/index.ts agree on ids and secret names, so an agent
+      # cannot be half-added.
+      - name: Workflow agent blocks match scripts/agent-ci/
+        run: |
+          node --experimental-strip-types --no-warnings scripts/generate-agent-steps.mjs --check || {
+            echo "::error::agent-steps drift - run 'node --experimental-strip-types scripts/generate-agent-steps.mjs' and commit the regenerated workflows alongside the agent-ci edit"
+            exit 1
+          }
+
       # `pnpm build` regenerates the pack itself, which would mask a stale
       # commit - so assert freshness BEFORE the build rewrites it. Editing a
       # file under templates/pipeline/ without committing the regenerated

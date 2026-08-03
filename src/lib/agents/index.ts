@@ -52,6 +52,17 @@ export type AgentDefinition = {
   installDocsPath: string;
   /** Where the vendor's own install instructions live. */
   installUrl: string;
+  /** The public marketing hub page for this agent (src/app/<path>/page.tsx). */
+  landingPath: string;
+
+  /**
+   * The pixel dispatcher's body tint on this agent. The body colour is the
+   * ONLY thing that changes between agents - desk, headset, monitor stay the
+   * site's own clay/violet so a recolour never reads as a second theme. Read
+   * by pixel-dispatcher.tsx (hub pages) and the dashboard layout (CSS vars),
+   * which must dress him identically.
+   */
+  mascot: { body: string; shade: string };
 
   /**
    * What this agent can actually do here TODAY, not what it will do when the
@@ -128,6 +139,13 @@ export type AgentDefinition = {
     mintUrl: string;
     /** Link text, since the two destinations are not the same kind of thing. */
     mintLinkLabel: string;
+    /**
+     * What actually vouched for the credential before it was stored, in the
+     * owner's words - "OpenAI" for a live API probe, "a shape check" when the
+     * vendor offers nothing to probe. Shown wherever a credential is added so
+     * the trust level is honest per agent.
+     */
+    verifiedWith: string;
   };
 
   cost: {
@@ -144,6 +162,9 @@ const claude: AgentDefinition = {
   cli: "claude",
   installDocsPath: "/docs/install-claude-code",
   installUrl: "https://claude.com/claude-code",
+  landingPath: "/claude-code",
+  // Clay - the site's default body, our nod to Claude Code's rust.
+  mascot: { body: "#d97757", shade: "#b0563a" },
   capabilities: {
     mcp: true,
     headlessBuilder: true,
@@ -174,6 +195,10 @@ const claude: AgentDefinition = {
     mintCommand: "claude setup-token",
     mintUrl: "/docs/install-claude-code",
     mintLinkLabel: "how to get your token",
+    // An OAuth token offers nothing to probe without spending a model call,
+    // so storage-time verification is shape-only; the daily token-check run
+    // is what proves it live.
+    verifiedWith: "a shape check",
   },
   cost: {
     model: "subscription",
@@ -192,6 +217,10 @@ const codex: AgentDefinition = {
   cli: "codex",
   installDocsPath: "/docs/install-codex",
   installUrl: "https://developers.openai.com/codex/cli",
+  landingPath: "/codex",
+  // OpenAI's near-white, with a mid-grey shade so legs/outline still read
+  // against the near-black scene.
+  mascot: { body: "#f4f4f5", shade: "#8f8f99" },
   capabilities: {
     mcp: true,
     // True since 2026-07-30. Every seo-* workflow template now carries both
@@ -239,6 +268,7 @@ const codex: AgentDefinition = {
       "Create a key at platform.openai.com/api-keys. A project key is fine; it must belong to an account with credit on it.",
     mintUrl: "https://platform.openai.com/api-keys",
     mintLinkLabel: "grab your key",
+    verifiedWith: "OpenAI",
   },
   cost: {
     model: "metered",
@@ -250,6 +280,13 @@ const REGISTRY: Record<AgentId, AgentDefinition | undefined> = {
   claude,
   codex,
 };
+
+/**
+ * Every agent id, default first, as a non-empty tuple - the shape z.enum and
+ * exhaustive UI loops want. Derived from the registry so a new agent shows up
+ * everywhere this is read without another list to maintain.
+ */
+export const AGENT_IDS = Object.keys(REGISTRY) as [AgentId, ...AgentId[]];
 
 /**
  * The ONE place an untrusted string becomes an agent id.

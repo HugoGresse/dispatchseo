@@ -7,7 +7,7 @@ import { DispatchMark } from "@/components/logo";
 import { ProjectSwitcher } from "@/components/project-switcher";
 import { ModeSwitch } from "@/components/mode-switch";
 import { AgentHeaderSwitch } from "@/components/agent-header-switch";
-import { projectAgent } from "@/lib/agents";
+import { DEFAULT_AGENT, projectAgent } from "@/lib/agents";
 import { getActiveProjectOrNull, scopedProjects } from "@/lib/active-project";
 import { isCloudMode } from "@/lib/cloud";
 import { currentUser } from "@/lib/cloud-auth";
@@ -111,15 +111,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // owner may still need to go switch off.
   const repoNotice = decodeRepoNotice(jar.get(REPO_NOTICE_COOKIE)?.value);
   // The pixel dispatcher's body tint follows the active project's agent:
-  // clay (its default, Claude Code's nod) stays untinted, Codex dresses it in
-  // white. Stamped as CSS variables on the shell so every dispatcher inside -
-  // including loading screens, which render synchronously and can't ask -
-  // picks it up without a prop thread; see paletteFor in pixel-dispatcher.tsx.
+  // clay (its default) stays untinted, every other agent's colour comes off
+  // its registry entry. Stamped as CSS variables on the shell so every
+  // dispatcher inside - including loading screens, which render synchronously
+  // and can't ask - picks it up without a prop thread; see paletteFor in
+  // pixel-dispatcher.tsx.
+  const activeAgent = active ? projectAgent(active) : null;
   const dispatcherTint =
-    active && projectAgent(active).id === "codex"
-      ? // Same pair as PALETTES.white in pixel-dispatcher.tsx - the hub pages
-        // and the dashboard must dress him identically.
-        ({ "--dispatcher-body": "#f4f4f5", "--dispatcher-shade": "#8f8f99" } as React.CSSProperties)
+    activeAgent && activeAgent.id !== DEFAULT_AGENT
+      ? ({
+          "--dispatcher-body": activeAgent.mascot.body,
+          "--dispatcher-shade": activeAgent.mascot.shade,
+        } as React.CSSProperties)
       : undefined;
   return (
     <div className="flex min-h-screen bg-neutral-950 text-neutral-100" style={dispatcherTint}>

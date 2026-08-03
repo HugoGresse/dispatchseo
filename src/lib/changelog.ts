@@ -73,6 +73,14 @@ export type ChangelogEntry = {
 // this list - it exists so that writing the note down doesn't ping anyone.
 export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
+    kind: "fixed",
+    text:
+      "A few dashboard messages assumed Claude Code even when your project runs Codex - the " +
+      "in-stack builder alert now names the agent you actually chose, and the daily secrets " +
+      "check now validates an OpenAI key's shape the same way it always validated Claude's, so " +
+      "a line-wrapped Codex key is flagged before it kills an overnight build.",
+  },
+  {
     kind: "new",
     text:
       "Every guide now ships with its own cover image, drawn by your agent as line art about that " +

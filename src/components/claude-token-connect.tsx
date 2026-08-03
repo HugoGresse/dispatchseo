@@ -179,9 +179,9 @@ function AgentTokenForm({
 
       {showForm ? (
         <div className="space-y-3">
-          {/* Only Claude has a command to run first; an OpenAI key is created
-              in a browser, so a copy box here would be a dead end. */}
-          {agent.id === "claude" ? <CopyBox text="claude setup-token" /> : null}
+          {/* Only agents whose credential is minted by a terminal command get
+              a copy box; a key created in a browser would make it a dead end. */}
+          {agent.credential.mintCommand ? <CopyBox text={agent.credential.mintCommand} /> : null}
           <form action={action} className="flex gap-2.5">
             <input type="hidden" name="slug" value={slug} />
             <input type="hidden" name="agent" value={agent.id} />

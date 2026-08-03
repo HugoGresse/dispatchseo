@@ -63,6 +63,7 @@ import {
   MetaItem,
   Pill,
 } from "@/components/docs/mdx";
+import { AgentTabs, AgentTab } from "@/components/docs/agent-tabs";
 import { slugify } from "@/lib/slugify";
 
 // The components every blog MDX file renders with: typographic defaults that
@@ -155,6 +156,8 @@ export const mdxComponents: MDXComponents = {
   Meta,
   MetaItem,
   Pill,
+  AgentTabs,
+  AgentTab,
   McpAnatomyGrid,
   TransportScorecard,
   McpRequestFlow,

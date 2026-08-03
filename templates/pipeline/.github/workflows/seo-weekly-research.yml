@@ -79,19 +79,18 @@ jobs:
           fi
           echo "skip=$skip" >> "$GITHUB_OUTPUT"
 
-      # Which coding agent builds this project - resolved at RUN time from the
-      # dashboard, never baked in at install time.
-      #
-      # A decision left to whoever ran the install is a decision someone
-      # eventually forgets, and the failure mode here is a workflow that runs
-      # the wrong agent on every trigger. Asking the backend means switching
-      # agent on the dashboard takes effect on the next run with nothing to
-      # edit in this repo.
+      # >>> agent-steps: resolve (GENERATED - edit scripts/agent-ci/ and regenerate; never edit between these markers)
+      # Which coding agent runs this workflow - resolved at RUN time from the
+      # dashboard, never baked in at install time. A decision left to whoever
+      # ran the install is a decision someone eventually forgets, and the
+      # failure mode here is a builder that runs the wrong agent every night.
+      # Asking the backend means switching agent on the dashboard takes effect
+      # on the next scheduled run with nothing to edit in this repo.
       #
       # The fallback matters as much as the happy path: a repo installed against
       # a backend that predates the `agent` field gets no value here, and must
-      # keep behaving exactly as it did - which is Claude, because Claude was the
-      # only option that ever existed before the field.
+      # keep behaving exactly as it did - which is claude, because Claude was
+      # the only option that ever existed before the field.
       - name: Resolve the coding agent
         id: agent
         if: steps.guard.outputs.skip == '0'
@@ -143,6 +142,8 @@ jobs:
           esac
           echo "agent=$agent" >> "$GITHUB_OUTPUT"
           echo "Building with: $agent"
+      # <<< agent-steps: resolve
+
 
       # Fail loudly if the seo-manager MCP is unreachable. Without this, a
       # stale URL in mcp-ci.json makes Claude see an empty toolset and "exit
@@ -164,6 +165,7 @@ jobs:
           fi
           echo "seo-manager MCP OK ($url)"
 
+      # >>> agent-steps: run (GENERATED - edit scripts/agent-ci/ and regenerate; never edit between these markers)
       # Codex reads its MCP servers from a config.toml inside its own home
       # directory. Two things here are easy to get wrong and both are silent:
       #
@@ -220,13 +222,14 @@ jobs:
           # Cloud fires this as the DispatchSEO GitHub App (a Bot actor), and the App also authored the workflow commits, so scheduled runs are bot-actored too. Every trigger here needs repo write access, so allowing bots is safe; without this claude-code-action aborts with "non-human actor".
           allowed_bots: "*"
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Pass the standard workflow token as an input so the action uses it
+          # directly instead of exchanging OIDC for a Claude GitHub App token
+          # (which would require installing the app on the repo).
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          # Print the full execution transcript in the step log, so a run's
-          # summary tables (what was considered, what passed, what was queued)
-          # stay readable after the fact - without this, a "success" that
-          # queued nothing is indistinguishable from one that found gold.
+          # Full transcript in the step log - post-hoc debuggability.
           show_full_output: true
-          prompt: "FIRST call the seo-manager MCP tool get_instructions with workflow research, then follow the returned markdown exactly - it is the current playbook and overrides any cached knowledge of this pipeline. Also read .dispatchseo/conventions.md for this repo's product-surface files. Cover the whole product (no topic filter). In brief: derive keyword candidates from product knowledge, validate them via the dataforseo MCP, track winners via track_keywords, queue suggestions with propose_suggestion, then approve every queued idea - guides AND tools - via update_suggestion. Every run must leave 1-2 TOOL ideas in the queue alongside the guides (top up to 2; skip only if 2 are already waiting) - a run that queues zero tools while the tool queue is empty has failed, and a repo with no tools page yet is not an excuse: the first tool build creates it. (On semi-automatic projects the backend records agent approvals as pending for the owner to decide; the tool response says so and that counts as success, do not retry.) Honor the weekly quota, report the quota status and the instructions version, and output the two summary tables at the end. If get_instructions is unavailable, fail loudly and exit without changes."
+          prompt: |
+            FIRST call the seo-manager MCP tool get_instructions with workflow research, then follow the returned markdown exactly - it is the current playbook and overrides any cached knowledge of this pipeline. Also read .dispatchseo/conventions.md for this repo's product-surface files. Cover the whole product (no topic filter). In brief: derive keyword candidates from product knowledge, validate them via the dataforseo MCP, track winners via track_keywords, queue suggestions with propose_suggestion, then approve every queued idea - guides AND tools - via update_suggestion. Every run must leave 1-2 TOOL ideas in the queue alongside the guides (top up to 2; skip only if 2 are already waiting) - a run that queues zero tools while the tool queue is empty has failed, and a repo with no tools page yet is not an excuse: the first tool build creates it. (On semi-automatic projects the backend records agent approvals as pending for the owner to decide; the tool response says so and that counts as success, do not retry.) Honor the weekly quota, report the quota status and the instructions version, and output the two summary tables at the end. If get_instructions is unavailable, fail loudly and exit without changes.
           claude_args: |
             --mcp-config ./.github/mcp-ci.json
             --permission-mode bypassPermissions
@@ -238,9 +241,9 @@ jobs:
           DATAFORSEO_PASSWORD: ${{ secrets.DATAFORSEO_PASSWORD }}
           MCP_TIMEOUT: "120000"
 
-      # The Codex twin. Same prompt, verbatim - the agent's behaviour must not
-      # depend on which one is holding the playbook, and the playbook itself
-      # arrives from get_instructions either way.
+      # The Codex twin. Same task prompt, generated from the same source -
+      # the agent's behaviour must not depend on which one is holding the
+      # playbook - plus the unattended-environment preamble above it.
       #
       # Model: gpt-5 by default, overridable with a repo variable because model
       # availability is per-account, not universal - `gpt-5-codex` 404s on a
@@ -250,7 +253,7 @@ jobs:
       #
       # There is NO turn budget to set. Codex has no --max-turns equivalent and
       # OpenAI closed the request for one as not-planned, so the job's
-      # timeout-minutes above is the only ceiling on a runaway run.
+      # timeout-minutes is the only ceiling on a runaway run.
       - name: Run the SEO researcher (Codex)
         if: steps.guard.outputs.skip == '0' && steps.agent.outputs.agent == 'codex'
         id: codex
@@ -261,15 +264,15 @@ jobs:
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          # Same rule as the Claude twin's allowed_bots above: cloud fires this
-          # as the DispatchSEO GitHub App (a Bot actor) and scheduled runs are
-          # bot-actored too, because the App authored the workflow commits.
-          # codex-action's actor gate rejects EVERY bot by default (a bot 404s
-          # the collaborator-permission lookup), so without this line each
-          # unattended Codex run dies before Codex is even installed - while a
-          # manual workflow_dispatch passes, which is what hides the failure.
-          # Every trigger that can reach this step already required repo write
-          # access, so allowing all actors adds nothing an attacker can use.
+          # Same rule as the Claude twin's allowed_bots: this workflow is fired
+          # by a bot actor (the DispatchSEO GitHub App, a schedule, or a
+          # GITHUB_TOKEN dispatch). codex-action's actor gate rejects EVERY bot
+          # by default (a bot 404s the collaborator-permission lookup), so
+          # without this line each unattended Codex run dies before Codex is
+          # even installed - while a manual workflow_dispatch passes, which is
+          # what hides the failure. Every trigger that can reach this step
+          # already required repo write access, so allowing all actors adds
+          # nothing an attacker can use.
           allow-users: "*"
           model: ${{ vars.SEO_CODEX_MODEL || 'gpt-5' }}
           codex-home: ${{ runner.temp }}/codex-home
@@ -280,25 +283,20 @@ jobs:
           # sandbox at all.
           safety-strategy: drop-sudo
           output-file: ${{ runner.temp }}/codex-out.txt
-          prompt: "ENVIRONMENT RULE (read first, it overrides habit): you have no apply_patch tool here - only the shell, and you are running UNATTENDED, so there is nobody to answer a question. Write every file with a SINGLE-QUOTED heredoc (cat > path <<'DSEOF' ... DSEOF) or with python3 reading the content from stdin. The quoted delimiter is the whole point: bash expands NOTHING inside it, so the backticks and $ in MDX and TSX survive verbatim. NEVER use an unquoted heredoc, printf or echo to write file content - an unquoted heredoc is what expands backticks and corrupts the file. Pick a delimiter that cannot appear in the content. Verify every write with ls -l and head before moving on, and never let a filename come from an unset shell variable. If you ever find yourself about to ask for approval or a go/no-go, do not: pick the safest option that still completes the task, do it, and say what you chose in the final report. A run that stops to ask a question builds nothing and is a failed run. FIRST call the seo-manager MCP tool get_instructions with workflow research, then follow the returned markdown exactly - it is the current playbook and overrides any cached knowledge of this pipeline. Also read .dispatchseo/conventions.md for this repo's product-surface files. Cover the whole product (no topic filter). In brief: derive keyword candidates from product knowledge, validate them via the dataforseo MCP, track winners via track_keywords, queue suggestions with propose_suggestion, then approve every queued idea - guides AND tools - via update_suggestion. Every run must leave 1-2 TOOL ideas in the queue alongside the guides (top up to 2; skip only if 2 are already waiting) - a run that queues zero tools while the tool queue is empty has failed, and a repo with no tools page yet is not an excuse: the first tool build creates it. (On semi-automatic projects the backend records agent approvals as pending for the owner to decide; the tool response says so and that counts as success, do not retry.) Honor the weekly quota, report the quota status and the instructions version, and output the two summary tables at the end. If get_instructions is unavailable, fail loudly and exit without changes."
+          prompt: |
+            ENVIRONMENT RULE (read first, it overrides habit): you have no apply_patch tool here - only the shell, and you are running UNATTENDED, so there is nobody to answer a question. Write every file with a SINGLE-QUOTED heredoc (cat > path <<'DSEOF' ... DSEOF) or with python3 reading the content from stdin. The quoted delimiter is the whole point: bash expands NOTHING inside it, so the backticks and $ in MDX and TSX survive verbatim. NEVER use an unquoted heredoc, printf or echo to write file content - an unquoted heredoc is what expands backticks and corrupts the file. Pick a delimiter that cannot appear in the content. Verify every write with ls -l and head before moving on, and never let a filename come from an unset shell variable. If you ever find yourself about to ask for approval or a go/no-go, do not: pick the safest option that still completes the task, do it, and say what you chose in the final report. A run that stops to ask a question builds nothing and is a failed run.
+
+            FIRST call the seo-manager MCP tool get_instructions with workflow research, then follow the returned markdown exactly - it is the current playbook and overrides any cached knowledge of this pipeline. Also read .dispatchseo/conventions.md for this repo's product-surface files. Cover the whole product (no topic filter). In brief: derive keyword candidates from product knowledge, validate them via the dataforseo MCP, track winners via track_keywords, queue suggestions with propose_suggestion, then approve every queued idea - guides AND tools - via update_suggestion. Every run must leave 1-2 TOOL ideas in the queue alongside the guides (top up to 2; skip only if 2 are already waiting) - a run that queues zero tools while the tool queue is empty has failed, and a repo with no tools page yet is not an excuse: the first tool build creates it. (On semi-automatic projects the backend records agent approvals as pending for the owner to decide; the tool response says so and that counts as success, do not retry.) Honor the weekly quota, report the quota status and the instructions version, and output the two summary tables at the end. If get_instructions is unavailable, fail loudly and exit without changes.
         env:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
           DATAFORSEO_LOGIN: ${{ secrets.DATAFORSEO_LOGIN }}
           DATAFORSEO_PASSWORD: ${{ secrets.DATAFORSEO_PASSWORD }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Phone the outcome home: failures land on the DispatchSEO dashboard
-      # banner + alert email (same rails as the crons); successes clear any
-      # earlier red banner row for this job.
-      # A Codex failure is classified before it is reported. OpenAI's own
-      # error.code distinguishes a transient per-minute rate limit (deferred -
-      # the job stays due and the backend re-dispatches within hours) from an
-      # account that cannot build (loud failure naming the billing fix). The
-      # CLI's text cannot make that distinction - it collapses every 429 into
-      # one message - so the probe asks the API directly. Without this step a
-      # routine OpenAI rate limit was a red banner plus an alert email AND a
-      # full cadence window lost, which on a weekly workflow is the week.
-      # Claude failures keep their existing loud path.
+      # Phone a FAILED outcome home with a classification: transient rate limit
+      # (deferred - the job stays due and the backend re-dispatches) vs an
+      # account that cannot run at all (loud failure naming the fix). A clean
+      # success is reported by the step below instead.
       - name: Classify the outcome
         id: classify
         if: steps.guard.outputs.skip == '0'
@@ -309,6 +307,7 @@ jobs:
           AGENT_OUTCOME: ${{ steps.agent.outputs.agent == 'codex' && steps.codex.outcome || steps.claude.outcome }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          echo "agent_outcome=${AGENT_OUTCOME:-}" >> "$GITHUB_OUTPUT"
           [ "$AGENT_OUTCOME" = "failure" ] || exit 0
           # From here this step owns the report; the flag stops the step below
           # writing a second (ok or generic-fail) row on top of this one.
@@ -345,6 +344,8 @@ jobs:
             esac
           fi
           fail "workflow failed - $RUN_URL"
+      # <<< agent-steps: run
+
 
       - name: Report outcome to the dashboard
         if: always() && steps.classify.outputs.reported != '1'

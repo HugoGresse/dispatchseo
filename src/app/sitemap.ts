@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { availableAgents } from "@/lib/agents";
 import { getAllPosts } from "@/lib/blog";
 import { getDocSlugs } from "@/lib/docs";
 import { getAllTools } from "@/lib/free-tools";
@@ -46,9 +47,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // to match byte-for-byte what page.tsx emits as its canonical.
     { url: base, changeFrequency: "weekly", priority: 1 },
     // The agent-specific hubs - same commercial intent as the flagship page,
-    // just keyword-first for "dispatchseo claude code" / "dispatchseo codex".
-    { url: `${base}/claude-code`, changeFrequency: "weekly", priority: 0.9 },
-    { url: `${base}/codex`, changeFrequency: "weekly", priority: 0.9 },
+    // just keyword-first ("dispatchseo claude code", "dispatchseo codex").
+    // Derived from the registry so a new agent's hub page is crawlable the
+    // day its landingPath exists.
+    ...availableAgents().map((a) => ({
+      url: `${base}${a.landingPath}`,
+      changeFrequency: "weekly" as const,
+      priority: 0.9,
+    })),
     { url: `${base}/blog`, changeFrequency: "daily" },
     ...getAllPosts().map((post) => ({
       url: `${base}/blog/${post.slug}`,

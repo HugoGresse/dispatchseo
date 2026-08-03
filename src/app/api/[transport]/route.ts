@@ -41,7 +41,7 @@ import { saveContentPrefs } from "@/lib/content-prefs-store";
 import { renderInstructions, WORKFLOWS } from "@/lib/instructions";
 import { getPipelinePack, hasDataforseo } from "@/lib/pipeline-pack";
 import { effectiveAutomations, getProjectByToken, internalLinkingEnabled } from "@/lib/projects";
-import { projectAgent } from "@/lib/agents";
+import { AGENT_IDS, availableAgents, projectAgent } from "@/lib/agents";
 import { setProjectAgent } from "@/lib/agent-settings";
 import { loadSiteProfile } from "@/lib/site-profile";
 import { currentProject, projectStore } from "@/lib/mcp-context";
@@ -2018,8 +2018,8 @@ const mcpHandler = createMcpHandler(
           "OpenAI usage), so this is their call, not yours.",
         inputSchema: {
           agent: z
-            .enum(["claude", "codex"])
-            .describe("claude = Claude Code (runs on a Claude subscription), codex = Codex (metered OpenAI API key)"),
+            .enum(AGENT_IDS)
+            .describe(availableAgents().map((a) => `${a.id} = ${a.displayName} (${a.cost.note})`).join("; ")),
         },
       },
       async ({ agent }) => {

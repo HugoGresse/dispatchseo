@@ -9,6 +9,7 @@ import { DomainCta } from "./domain-cta";
 import { LandingNav } from "./landing-nav";
 import { PixelDispatcher } from "@/components/pixel-dispatcher";
 import { WhyCard } from "@/components/why-card";
+import { availableAgents } from "@/lib/agents";
 import { dashboardAuth, maybeSignedIn } from "@/lib/auth-gate";
 import { hasConfiguredProject } from "@/lib/onboarding-gate";
 import {
@@ -605,8 +606,11 @@ export default async function LandingPage({
               <a href="#features">Features</a>
               <a href="#pricing">Pricing</a>
               <a href="#faq">FAQ</a>
-              <a href="/claude-code">DispatchSEO for Claude Code</a>
-              <a href="/codex">DispatchSEO for Codex</a>
+              {availableAgents().map((a) => (
+                <a key={a.id} href={a.landingPath}>
+                  DispatchSEO for {a.displayName}
+                </a>
+              ))}
             </div>
             <div className="foot-col">
               <h4>Open source</h4>
