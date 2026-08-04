@@ -16,7 +16,15 @@ import { listProjectsChecked, type Project } from "@/lib/projects";
 // Google finalizes it. SERP rank checks stay on the daily cron only - ranks do
 // not move hourly and the SERP calls are the paid part.
 
-export const maxDuration = 60;
+// 300, not the 60 this ran on until 2026-08-04. The inspection sweep below
+// costs a network round trip per unindexed page, so the run time scales with
+// how much each project has published - and once ClockedCode and DispatchSEO
+// crossed ~6 unindexed pages each, a 48s run became a 60s timeout and every
+// scheduled run 504'd. A timeout is the worst possible failure here: it kills
+// the request before reportCronRun(), so the break never reaches cron_runs,
+// the banner or the alert email, and recoverStuckBuilds + refillEmptyGuideQueues
+// below never run either. Headroom is what keeps this loud when it does break.
+export const maxDuration = 300;
 
 // Verified-index sweep: ask the read-only URL Inspection API about pages not
 // yet confirmed indexed and stamp pages.indexed_at on a PASS verdict
@@ -26,6 +34,13 @@ export const maxDuration = 60;
 // (missing 0010 columns, quota, permissions) is reported in the run log but
 // never fails the snapshot half.
 const INSPECT_BUDGET = 10;
+
+// The inspections are independent reads, so running them one after another
+// only made the ceiling scale with page count (see maxDuration above). A small
+// pool keeps the whole batch inside a couple of round trips' time without
+// hammering the URL Inspection quota, which is per-property and per-minute as
+// well as per-day.
+const INSPECT_CONCURRENCY = 4;
 
 async function verifyIndexing(project: Project, sc: GscClient): Promise<Record<string, unknown>> {
   const { data, error } = await db()
@@ -41,25 +56,36 @@ async function verifyIndexing(project: Project, sc: GscClient): Promise<Record<s
 
   let newlyIndexed = 0;
   let failed = 0;
-  for (const row of rows) {
-    const now = new Date().toISOString();
-    try {
-      const result = await inspectIndexStatus(project.gsc_site_url!, row.url, sc);
-      const isIndexed = result.verdict === "PASS";
-      const { error: upErr } = await db()
-        .from("pages")
-        .update(
-          isIndexed
-            ? { indexed_at: now, index_checked_at: now }
-            : { index_checked_at: now },
-        )
-        .eq("id", row.id);
-      if (upErr) throw new Error(upErr.message);
-      if (isIndexed) newlyIndexed += 1;
-    } catch {
-      failed += 1;
+  // Workers pull from one shared cursor rather than being handed fixed slices,
+  // so one slow inspection can't leave the other workers idle. The counters are
+  // safe to share: this is a single-threaded event loop, and each += runs to
+  // completion between awaits.
+  let cursor = 0;
+  const worker = async (): Promise<void> => {
+    for (let i = cursor++; i < rows.length; i = cursor++) {
+      const row = rows[i];
+      const now = new Date().toISOString();
+      try {
+        const result = await inspectIndexStatus(project.gsc_site_url!, row.url, sc);
+        const isIndexed = result.verdict === "PASS";
+        const { error: upErr } = await db()
+          .from("pages")
+          .update(
+            isIndexed
+              ? { indexed_at: now, index_checked_at: now }
+              : { index_checked_at: now },
+          )
+          .eq("id", row.id);
+        if (upErr) throw new Error(upErr.message);
+        if (isIndexed) newlyIndexed += 1;
+      } catch {
+        failed += 1;
+      }
     }
-  }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(INSPECT_CONCURRENCY, rows.length) }, () => worker()),
+  );
   // A single failed inspection is routine (quota edge, transient API hiccup)
   // and must stay best-effort. But every one of the batch failing (lost URL
   // Inspection permission, broken creds) is a systemic break that previously

@@ -75,6 +75,15 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
     kind: "fixed",
     text:
+      "The Search Console refresh stopped keeping up on sites with a few pages waiting to be " +
+      "indexed: it checked them one at a time and eventually ran out of time mid-run, which took " +
+      "your fresh Search Console numbers down with it - silently, because the run died before it " +
+      "could report itself broken. It now checks several pages at once and has far more room to " +
+      "finish, and if it ever does run long you'll hear about it.",
+  },
+  {
+    kind: "fixed",
+    text:
       "A few dashboard messages assumed Claude Code even when your project runs Codex - the " +
       "in-stack builder alert now names the agent you actually chose, and the daily secrets " +
       "check now validates an OpenAI key's shape the same way it always validated Claude's, so " +
