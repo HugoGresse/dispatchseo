@@ -34,6 +34,7 @@ jobs:
         env:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
           CLAUDE_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           agent=""
@@ -42,7 +43,7 @@ jobs:
             https://dispatchseo.com/api/project-mode) || code=unreachable
           [ "$code" = "200" ] && agent=$(jq -r '.agent // empty' /tmp/agent.json 2>/dev/null)
           if [ -z "$agent" ] || [ "$agent" = "null" ]; then
-            if [ -n "$OPENAI_API_KEY" ] && [ -z "$CLAUDE_TOKEN" ]; then agent=codex; else agent=claude; fi
+            if [ -n "$OPENAI_API_KEY" ] && [ -z "$CLAUDE_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ]; then agent=codex; else agent=claude; fi
           fi
           case "$agent" in claude|codex) : ;; *) agent=claude ;; esac
           echo "agent=$agent" >> "$GITHUB_OUTPUT"
@@ -51,7 +52,7 @@ jobs:
 
 
       # >>> agent-steps: liveness (GENERATED - edit scripts/agent-ci/ and regenerate; never edit between these markers)
-      # One minimal model call. If the token is dead/revoked/limited, this
+      # One minimal model call. If the credential is dead/revoked/limited, this
       # step fails and the failure handler below reports the real reason.
       - name: Claude token liveness
         id: liveness
@@ -61,6 +62,7 @@ jobs:
           # Cloud fires this as the DispatchSEO GitHub App (a Bot actor), and the App also authored the workflow commits, so scheduled runs are bot-actored too. Every trigger here needs repo write access, so allowing bots is safe; without this claude-code-action aborts with "non-human actor".
           allowed_bots: "*"
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN == '' && secrets.ANTHROPIC_API_KEY || '' }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: "Reply with exactly: ok"
           claude_args: |
@@ -138,7 +140,22 @@ jobs:
                            | (.result // .error // empty)' "$f" 2>/dev/null | tail -1)
               [ -n "$msg" ] && reason="Claude token check failed: $msg"
             fi
+            if echo "$msg" | grep -qiE 'session limit|usage limit|limit reached|limit .*resets|rate.?limit'; then
+              # The credential WORKS - the account is just out of headroom right
+              # now. The builders already treat that as a quiet deferral, so a
+              # red health banner here would only train owners to ignore it.
+              echo "Claude is usage-limited right now, but the credential itself is alive - treating the check as healthy. Builds defer until the limit resets."
+              curl -sG --max-time 30 -H "Authorization: Bearer $SEO_MCP_API_KEY" \
+                --data-urlencode "job=seo-token-check" --data-urlencode "ok=1" \
+                "https://dispatchseo.com/api/cron/deploy-check" || true
+              exit 0
+            fi
             fix="mint a fresh token (claude setup-token) and re-run the setup command from your DispatchSEO dashboard"
+            if echo "$msg" | grep -qi 'disabled Claude subscription access'; then
+              # oauth_org_not_allowed: a server-side flag on the ACCOUNT, not
+              # the token - re-minting provably does nothing.
+              fix="a fresh token will NOT fix this one - Anthropic has flagged the Claude account itself (oauth_org_not_allowed). On a company Claude plan, ask its admin to enable Claude Code; on a personal plan, check claude.ai billing for a lapsed or duplicate subscription or contact Anthropic support. Or switch the builders to metered API billing: create a key at console.anthropic.com, 'gh secret set ANTHROPIC_API_KEY', then 'gh secret delete CLAUDE_CODE_OAUTH_TOKEN'"
+            fi
           fi
           echo "::error::$reason - $fix."
           curl -sG --max-time 30 -H "Authorization: Bearer $SEO_MCP_API_KEY" \

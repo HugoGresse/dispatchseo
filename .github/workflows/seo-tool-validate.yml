@@ -115,25 +115,32 @@ jobs:
         id: agent
         env:
           CLAUDE_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           AGENT_VAR: ${{ vars.SEO_AGENT }}
         run: |
           case "$AGENT_VAR" in
             claude|codex) agent="$AGENT_VAR" ;;
-            *) if [ -n "$OPENAI_API_KEY" ] && [ -z "$CLAUDE_TOKEN" ]; then agent=codex; else agent=claude; fi ;;
+            *) if [ -n "$OPENAI_API_KEY" ] && [ -z "$CLAUDE_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ]; then agent=codex; else agent=claude; fi ;;
           esac
           case "$agent" in
             claude)
-              if [ -z "$CLAUDE_TOKEN" ]; then
-                echo "::error::This project validates with Claude Code, but the CLAUDE_CODE_OAUTH_TOKEN secret is missing or empty on this repo. Rerun the setup command from your DispatchSEO dashboard (it mints and VERIFIES a fresh token), or set one by hand: run 'claude setup-token', then pipe the token into 'gh secret set CLAUDE_CODE_OAUTH_TOKEN' without any whitespace."
+              if [ -z "$CLAUDE_TOKEN" ] && [ -n "$ANTHROPIC_API_KEY" ]; then
+                echo "No CLAUDE_CODE_OAUTH_TOKEN on this repo - running Claude on the ANTHROPIC_API_KEY secret instead (metered API billing on your Anthropic account)."
+              elif [ -z "$CLAUDE_TOKEN" ]; then
+                echo "::error::This project validates with Claude Code, but the CLAUDE_CODE_OAUTH_TOKEN secret is missing or empty on this repo (and there is no ANTHROPIC_API_KEY secret to fall back on). Rerun the setup command from your DispatchSEO dashboard (it mints and VERIFIES a fresh token), or set one by hand: run 'claude setup-token', then pipe the token into 'gh secret set CLAUDE_CODE_OAUTH_TOKEN' without any whitespace. Or run on metered API billing instead: create a key at console.anthropic.com and pipe it into 'gh secret set ANTHROPIC_API_KEY'."
                 exit 1
-              fi
-              case "$CLAUDE_TOKEN" in
-                sk-ant-oat*) : ;;
-                *)
-                  echo "::error::CLAUDE_CODE_OAUTH_TOKEN does not look like a Claude Code OAuth token (expected it to start with sk-ant-oat). It was probably line-wrapped or the wrong text was pasted when it was saved. Rerun the setup command from your DispatchSEO dashboard to mint and verify a replacement."
-                  exit 1 ;;
-              esac ;;
+              else
+                case "$CLAUDE_TOKEN" in
+                  sk-ant-oat*) : ;;
+                  *)
+                    echo "::error::CLAUDE_CODE_OAUTH_TOKEN does not look like a Claude Code OAuth token (expected it to start with sk-ant-oat). It was probably line-wrapped or the wrong text was pasted when it was saved. Rerun the setup command from your DispatchSEO dashboard to mint and verify a replacement."
+                    exit 1 ;;
+                esac
+                if [ -n "$ANTHROPIC_API_KEY" ]; then
+                  echo "Both CLAUDE_CODE_OAUTH_TOKEN and ANTHROPIC_API_KEY are set - the subscription token takes precedence. To run on the API key instead: gh secret delete CLAUDE_CODE_OAUTH_TOKEN."
+                fi
+              fi ;;
             codex)
               if [ -z "$OPENAI_API_KEY" ]; then
                 echo "::error::This project validates with Codex, but the OPENAI_API_KEY secret is missing or empty on this repo. Add it with 'gh secret set OPENAI_API_KEY', or rerun the setup command from your DispatchSEO dashboard."
@@ -403,7 +410,11 @@ jobs:
           # refuses to start ("non-human actor") and the PR never gets a
           # verdict. Same-repo + seo-tool label gates above still apply.
           allowed_bots: "github-actions"
+          # Subscription token first; the metered ANTHROPIC_API_KEY only reaches
+          # the action when no subscription token exists, so adding a key never
+          # silently switches a working subscription install to per-token billing.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN == '' && secrets.ANTHROPIC_API_KEY || '' }}
           # Pass the standard workflow token as an input so the action uses it
           # directly instead of exchanging OIDC for a Claude GitHub App token
           # (which would require installing the app on the repo).
@@ -418,6 +429,7 @@ jobs:
             --max-turns 140
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN == '' && secrets.ANTHROPIC_API_KEY || '' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
