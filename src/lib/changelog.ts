@@ -75,7 +75,6 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
     kind: "new",
     text:
-<<<<<<< HEAD
       "Your pages get maintained now, not just published. Every night the backend looks for " +
       "published guides sitting at position 5-20 for their own keyword - close enough that a " +
       "refresh beats writing something new - and queues an 'Update existing page' idea (auto-" +
