@@ -121,6 +121,17 @@ const PROBES: Probe[] = [
     column: "install_id",
   },
   { migration: "0051_domain_rating_history", table: "domain_rating_history" },
+  // Nothing reads this column yet - Cursor is registered with
+  // headlessBuilder: false and every builderAgentToken() caller sits behind a
+  // builderAgents() filter. It is probed anyway because the column has to
+  // EXIST before that flag flips, and this probe is what says so out loud
+  // rather than leaving it to be found by a self-host instance whose
+  // credential save quietly writes nowhere.
+  {
+    migration: "0053_builder_cursor_key",
+    table: "instance_settings",
+    column: "builder_cursor_key",
+  },
 ];
 
 // Migrations that genuinely CANNOT be probed through this mechanism, with the

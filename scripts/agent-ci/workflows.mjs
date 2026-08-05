@@ -21,6 +21,7 @@ export const WORKFLOWS = {
       env: {
         claude: ["agentToken", "seoKey", "dataforseo", "githubToken", "mcpTimeout", "placeholders"],
         codex: ["seoKey", "dataforseo", "githubToken", "ghToken", "placeholders"],
+        cursor: ["agentToken", "seoKey", "dataforseo", "githubToken", "ghToken", "placeholders"],
       },
       artifact: true,
       classify: {
@@ -64,6 +65,7 @@ export const WORKFLOWS = {
       env: {
         claude: ["agentToken", "seoKey", "dataforseo", "githubToken", "mcpTimeout", "placeholders"],
         codex: ["seoKey", "dataforseo", "githubToken", "ghToken", "placeholders"],
+        cursor: ["agentToken", "seoKey", "dataforseo", "githubToken", "ghToken", "placeholders"],
       },
       artifact: false,
       classify: {
@@ -96,6 +98,7 @@ export const WORKFLOWS = {
       env: {
         claude: ["agentToken", "seoKey", "mcpTimeout"],
         codex: ["seoKey", "ghToken"],
+        cursor: ["agentToken", "seoKey", "ghToken"],
       },
       artifact: false,
       classify: { kind: "basic" },
@@ -114,6 +117,7 @@ export const WORKFLOWS = {
       env: {
         claude: ["agentToken", "seoKey", "dataforseo", "mcpTimeout"],
         codex: ["seoKey", "dataforseo", "ghTokenCommented"],
+        cursor: ["agentToken", "seoKey", "dataforseo", "ghTokenCommented"],
       },
       artifact: false,
       classify: { kind: "basic" },
@@ -132,6 +136,7 @@ export const WORKFLOWS = {
       env: {
         claude: ["agentToken", "seoKey", "dataforseo", "mcpTimeout"],
         codex: ["seoKey", "dataforseo", "ghToken"],
+        cursor: ["agentToken", "seoKey", "dataforseo", "ghToken"],
       },
       artifact: false,
       classify: { kind: "basic" },
@@ -150,6 +155,7 @@ export const WORKFLOWS = {
       env: {
         claude: ["agentToken", "seoKey", "dataforseo", "mcpTimeout"],
         codex: ["seoKey", "dataforseo", "ghToken"],
+        cursor: ["agentToken", "seoKey", "dataforseo", "ghToken"],
       },
       artifact: false,
       classify: { kind: "basic" },
@@ -168,6 +174,7 @@ export const WORKFLOWS = {
       env: {
         claude: ["agentToken", "seoKey", "dataforseo", "mcpTimeout"],
         codex: ["seoKey", "dataforseo", "ghToken"],
+        cursor: ["agentToken", "seoKey", "dataforseo", "ghToken"],
       },
       artifact: false,
       classify: { kind: "basic" },
@@ -194,6 +201,7 @@ export const WORKFLOWS = {
       env: {
         claude: ["agentToken", "githubToken", "ghToken", "prNumber"],
         codex: ["githubToken", "ghToken", "prNumber"],
+        cursor: ["agentToken", "githubToken", "ghToken", "prNumber"],
       },
       artifact: false,
       classify: null,

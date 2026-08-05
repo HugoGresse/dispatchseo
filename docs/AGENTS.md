@@ -28,13 +28,31 @@ Cursor is the first agent to sit at Tier 3 *with* a registry entry, which is
 what `capabilities.headlessBuilder: false` is for. Connecting is verified end
 to end against the production server on 2026-08-05 — all 61 tools arrive, names
 matching the registry exactly, nothing dropped by its schema validator, on both
-the header and `?key=` auth forms. What is NOT verified is a headless run, and
-the gap is deliberate rather than pending-a-tidy-up: proving one needs a paid
-Cursor credential, and until Cursor's quota and rate-limit failure strings have
-actually been seen, a classify step could only guess at them — which is the
-codex-429 mistake, and it ends with a build reporting green having built
-nothing. `docs-private/CURSOR_FACTS.md` records every measurement and lists
-exactly what closing the gap requires.
+the header and `?key=` auth forms.
+
+The builder is **written but not enabled**. `scripts/agent-ci/cursor.mjs`, the
+generated workflow blocks and the docker branches all exist, and the whole
+chain has been run by hand against production: rendered config, approved
+servers, a headless run that called an MCP tool and returned
+`subtype: success`. What has not happened is a scheduled, unwatched run on a
+real runner, so the flag stays down until `cursor-canary.yml` goes green.
+
+Two Cursor-specific facts that shaped all of it, both measured (the long
+version is in `docs-private/CURSOR_FACTS.md`):
+
+- **`--output-format json` returns `{is_error, subtype, result, usage}`.** The
+  classify step branches on a field rather than grepping warning prose, which
+  is why a Cursor builder was safe to write before its quota strings had ever
+  been observed. Anything unrecognised still falls through to a loud failure.
+- **`.cursor/mcp.json` does not expand `${VAR}`**, and its failure mode is
+  disguised: the server reports "not loaded (needs approval)" while
+  `mcp enable` says it is approved. Credentials are rendered into the file, the
+  same way Codex's TOML renders them.
+
+One consequence for owners rather than contributors: a runner has no browser,
+so the builder needs `CURSOR_API_KEY`, and Cursor issues API keys on paid plans
+only. Connecting is free on any plan; the unattended builder is Pro-gated in a
+way neither Claude Code nor Codex is.
 
 ### What "unattended builder" means, and how a project picks one
 

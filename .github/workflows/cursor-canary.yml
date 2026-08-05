@@ -149,10 +149,15 @@ jobs:
           DOMAIN=<the domain field it returned>
           TOOLS=<the total number of tools the dispatchseo MCP server exposes to you>
           OK=yes" \
-            --output-format text --force --approve-mcps --trust $MODEL_ARG \
-            > /tmp/cursor-out.txt 2> /tmp/cursor-err.txt
+            --output-format json --force --approve-mcps --trust $MODEL_ARG \
+            > /tmp/cursor-out.json 2> /tmp/cursor-err.txt
           echo "exit_code=$?" >> "$GITHUB_OUTPUT"
-          echo "--- stdout ---"; cat /tmp/cursor-out.txt
+          # json, not text: the runner classifies on .is_error/.subtype rather
+          # than on prose, so the canary must exercise the same shape the
+          # builder depends on. .result is the final message.
+          jq -r '.result // empty' /tmp/cursor-out.json 2>/dev/null > /tmp/cursor-out.txt || true
+          echo "--- .result ---"; cat /tmp/cursor-out.txt
+          echo "--- verdict fields ---"; jq -c '{subtype,is_error,duration_ms,usage}' /tmp/cursor-out.json 2>/dev/null || echo "(no parseable JSON)"
           echo "--- stderr ---"; cat /tmp/cursor-err.txt
 
       # Everything below is the payload worth having: raw, verbatim, unsummarised.
@@ -165,7 +170,9 @@ jobs:
           echo "PASTE THIS WHOLE SECTION BACK when writing scripts/agent-ci/cursor.mjs"
           echo "=================================================================="
           echo "--- exit code: ${EXIT_CODE:-unknown}"
-          echo "--- stdout (verbatim) ---"
+          echo "--- raw json (verbatim - this is what the classify step reads) ---"
+          cat /tmp/cursor-out.json 2>/dev/null || echo "(none)"
+          echo "--- .result (verbatim) ---"
           cat /tmp/cursor-out.txt 2>/dev/null || echo "(none)"
           echo "--- stderr (verbatim) ---"
           cat /tmp/cursor-err.txt 2>/dev/null || echo "(none)"

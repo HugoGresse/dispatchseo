@@ -1,0 +1,21 @@
+-- The instance-level credential slot for Cursor's builder.
+--
+-- Same shape and same reasoning as 0044's builder_openai_key: the docker stack
+-- stores one set of credentials per INSTANCE, and /api/builder/jobs resolves
+-- the right one per job from the project's agent, so a stack hosting projects
+-- on different agents never hands one of them the wrong credential.
+--
+-- Lands AHEAD of the feature on purpose. src/lib/agents/index.ts already names
+-- this column (cursor's credential.instanceSettingsColumn) and nothing reads it
+-- yet, because Cursor is registered with headlessBuilder: false and every
+-- caller of builderAgentToken() sits behind a builderAgents() filter. The
+-- ordering only matters in one direction: a backend that starts reading the
+-- column before a database has it is the failure, migrations here are applied
+-- by hand, so the column goes first and waits. Nullable, additive, idempotent -
+-- an instance that never runs Cursor leaves it null, which is what an absent
+-- credential already means everywhere else.
+--
+-- Plain ALTER with IF NOT EXISTS: no Supabase-only objects, so the docker
+-- stack's replay of the concatenated setup.sql on every boot passes untouched
+-- and vanilla Postgres needs no guard block.
+alter table instance_settings add column if not exists builder_cursor_key text;

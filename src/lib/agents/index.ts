@@ -365,7 +365,7 @@ const cursor: AgentDefinition = {
   },
   cost: {
     model: "subscription",
-    note: "Runs on your existing Cursor plan - nothing extra to pay, and nothing is billed by DispatchSEO. Heavy use draws on the plan's monthly usage pool.",
+    note: "Connecting is free and works on any Cursor plan, including the free one - nothing extra to pay, and nothing is billed by DispatchSEO. Heavy use draws on your plan's monthly usage pool.",
   },
 };
 

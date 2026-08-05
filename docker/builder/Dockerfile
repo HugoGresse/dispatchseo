@@ -6,11 +6,12 @@
 # (/api/builder/jobs); this image is a dumb executor on purpose, so cadence
 # and prompt changes never require rebuilding it.
 #
-# BOTH tier-1 agent CLIs are baked in. That costs image size for something most
-# stacks use half of, and it is still the right trade: the agent is a per-PROJECT
-# setting, so one stack can legitimately need both at once, and switching a
-# project's agent on the dashboard has to work without the owner re-pulling an
-# image and reading a migration note to find out why builds stopped.
+# EVERY supported agent CLI is baked in. That costs image size for something
+# most stacks use a third of, and it is still the right trade: the agent is a
+# per-PROJECT setting, so one stack can legitimately need all of them at once,
+# and switching a project's agent on the dashboard has to work without the
+# owner re-pulling an image and reading a migration note to find out why builds
+# stopped.
 FROM node:22-bookworm-slim
 
 # python3: not in node:*-slim, and its absence is not cosmetic. Codex writes
@@ -31,6 +32,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # corepack gives the agent pnpm/yarn shims for whatever stack the site repo
 # uses when the instructions say "run the repo's build to verify".
 RUN npm install -g @anthropic-ai/claude-code @openai/codex && corepack enable
+
+# Cursor ships no npm package - it is a tarball from its own CDN. Pinned to an
+# exact version rather than piping cursor.com/install, which floats to whatever
+# is current and would change the agent under a running stack on a rebuild.
+#
+# The WHOLE package is extracted, not just the executable. `cursor-agent` is a
+# bash launcher, not a static binary, and it loads ~95 sibling files
+# (cursor-agent-svc, the bundled *.index.js) from its own directory - pulling
+# the one file out of the archive produces a command that exists and cannot
+# run. This mirrors what cursor.com/install does: unpack to a versioned
+# directory, symlink the launcher onto PATH.
+ARG CURSOR_CLI_VERSION=2026.07.23-e383d2b
+RUN arch="$(dpkg --print-architecture)" \
+    && case "$arch" in amd64) carch=x64 ;; arm64) carch=arm64 ;; *) echo "unsupported arch $arch" >&2; exit 1 ;; esac \
+    && mkdir -p "/opt/cursor-agent/${CURSOR_CLI_VERSION}" \
+    && curl -fsSL "https://downloads.cursor.com/lab/${CURSOR_CLI_VERSION}/linux/${carch}/agent-cli-package.tar.gz" \
+       | tar -xz --strip-components=1 -C "/opt/cursor-agent/${CURSOR_CLI_VERSION}" \
+    && ln -sf "/opt/cursor-agent/${CURSOR_CLI_VERSION}/cursor-agent" /usr/local/bin/cursor-agent \
+    && cursor-agent --version
 
 COPY run.sh /usr/local/bin/run.sh
 # The command Codex reaches for BY NAME when it wants to write a file. It is

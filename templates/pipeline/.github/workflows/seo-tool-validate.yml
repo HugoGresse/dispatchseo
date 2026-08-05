@@ -117,11 +117,17 @@ jobs:
           CLAUDE_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           AGENT_VAR: ${{ vars.SEO_AGENT }}
         run: |
           case "$AGENT_VAR" in
-            claude|codex) agent="$AGENT_VAR" ;;
-            *) if [ -n "$OPENAI_API_KEY" ] && [ -z "$CLAUDE_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ]; then agent=codex; else agent=claude; fi ;;
+            claude|codex|cursor) agent="$AGENT_VAR" ;;
+            *)
+              if [ -n "$OPENAI_API_KEY" ] && [ -z "$CLAUDE_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ]; then agent=codex
+              elif [ -n "$CURSOR_API_KEY" ] && [ -z "$CLAUDE_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ]; then agent=cursor
+              else agent=claude
+              fi
+              ;;
           esac
           case "$agent" in
             claude)
@@ -151,6 +157,23 @@ jobs:
                 *)
                   echo "::error::OPENAI_API_KEY does not look like an OpenAI key (expected it to start with sk-). It was probably line-wrapped or the wrong text was pasted when it was saved. Create a fresh key at platform.openai.com/api-keys and set it again."
                   exit 1 ;;
+              esac ;;
+            cursor)
+              if [ -z "$CURSOR_API_KEY" ]; then
+                echo "::error::This project validates with Cursor, but the CURSOR_API_KEY secret is missing or empty on this repo. Cursor API keys need a paid Cursor plan - a runner has no browser, so the interactive 'cursor-agent login' is not an option here. Add the key with 'gh secret set CURSOR_API_KEY', or switch this project to Claude Code or Codex on your DispatchSEO dashboard."
+                exit 1
+              fi
+              case "$CURSOR_API_KEY" in
+                sk-ant-*)
+                  echo "::error::CURSOR_API_KEY holds a Claude credential (it starts with sk-ant-). The wrong secret was pasted. Put the Claude token in CLAUDE_CODE_OAUTH_TOKEN and a Cursor API key here."
+                  exit 1 ;;
+                sk-*)
+                  echo "::error::CURSOR_API_KEY holds an OpenAI key (it starts with sk-). The wrong secret was pasted. Put the OpenAI key in OPENAI_API_KEY and a Cursor API key here."
+                  exit 1 ;;
+                *' '*|*'	'*)
+                  echo "::error::CURSOR_API_KEY contains whitespace, which almost always means it was line-wrapped when it was copied. Re-copy the key and set it again with: printf '%s' \"\$KEY\" | tr -d '[:space:]' | gh secret set CURSOR_API_KEY"
+                  exit 1 ;;
+                *) : ;;
               esac ;;
             *)
               echo "::error::The dashboard reported an unknown agent '$agent'. This repo's workflows are older than that setting - re-run the setup command from your DispatchSEO dashboard to update them."
@@ -400,6 +423,60 @@ jobs:
           network_access = true
           TOML
 
+      # Cursor has no GitHub Action, so the CLI is installed here. Pinned to a
+      # known version rather than piping cursor.com/install, which floats.
+      #
+      # Then the MCP config, and this is the part that bites. The pack's
+      # mcp-ci.json is ALREADY Cursor's shape, so copying it looks free - but
+      # Cursor does not expand ${VAR} the way Claude does, and the failure is
+      # disguised: the server reports "not loaded (needs approval)" while
+      # `mcp enable` insists it is approved, so the hunt starts in the approval
+      # system rather than at the credential. Render the values in.
+      #
+      # `mcp enable` is not optional either. An unapproved server is not merely
+      # unreachable, it is absent - the agent runs happily with zero tools.
+      - name: Install Cursor and write its MCP config
+        if: steps.agent.outputs.agent == 'cursor'
+        run: |
+          # The WHOLE package, into a directory of its own. cursor-agent is a
+          # bash launcher rather than a static binary and loads ~95 sibling
+          # files from beside itself, so extracting just the executable gives a
+          # command that exists and cannot run. Its own directory keeps those
+          # 95 files out of $RUNNER_TEMP, which this job also uses for the
+          # prompt and the result.
+          mkdir -p "$RUNNER_TEMP/cursor-cli" "$HOME/.local/bin"
+          curl -fsSL "https://downloads.cursor.com/lab/2026.07.23-e383d2b/linux/x64/agent-cli-package.tar.gz" \
+            | tar -xz --strip-components=1 -C "$RUNNER_TEMP/cursor-cli"
+          ln -sf "$RUNNER_TEMP/cursor-cli/cursor-agent" "$HOME/.local/bin/cursor-agent"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          cursor-agent --version
+
+          # python3, not sed: a credential can contain any character, and this
+          # writes JSON, so the values are JSON-escaped rather than pasted.
+          mkdir -p .cursor
+          python3 - .github/mcp-validate.json .cursor/mcp.json <<'PY'
+          import json, os, sys
+          src, dst = sys.argv[1], sys.argv[2]
+          text = open(src).read()
+          for var in ("SEO_MCP_API_KEY", "DATAFORSEO_LOGIN", "DATAFORSEO_PASSWORD"):
+              # json.dumps then strip the quotes: escapes exactly what JSON
+              # needs escaping and nothing else.
+              val = json.dumps(os.environ.get(var, ""))[1:-1]
+              text = text.replace(" + var + ", val)
+          cfg = json.loads(text)
+          json.dump(cfg, open(dst, "w"), indent=2)
+          print("servers configured:", ", ".join(cfg.get("mcpServers", {})))
+          PY
+
+          # Approve every server the config declares. Per-directory state, so a
+          # fresh checkout has none of it and this runs every time.
+          for s in $(python3 -c "import json;print(' '.join(json.load(open('.cursor/mcp.json')).get('mcpServers',{})))"); do
+            cursor-agent mcp enable "$s"
+          done
+          echo "--- mcp list ---"
+          cursor-agent mcp list
+
       - name: Validate the tool live
         if: steps.agent.outputs.agent == 'claude'
         id: claude
@@ -480,6 +557,54 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+
+      # The Cursor twin. Same task prompt, generated from the same source -
+      # the agent's behaviour must not depend on which one is holding the
+      # playbook - plus the unattended-environment preamble above it.
+      #
+      # A plain run step, because Cursor ships no GitHub Action. The three
+      # flags are each separately required and each was measured: --trust (a
+      # fresh checkout is an untrusted workspace and the run refuses outright),
+      # --force (command approval), --approve-mcps (server approval).
+      #
+      # --output-format json is what makes the classify step below honest: it
+      # returns {is_error, subtype, result, usage}, so a failure is read from a
+      # field rather than guessed at from warning text.
+      #
+      # Model is overridable per repo: availability is per-account, and the
+      # account default ("auto") is the sane fallback. There is NO turn budget
+      # to set - Cursor has no --max-turns equivalent, so the job's
+      # timeout-minutes is the only ceiling on a runaway run, and on Cursor a
+      # runaway also eats the plan's monthly usage pool.
+      - name: Validate the tool live (Cursor)
+        if: steps.agent.outputs.agent == 'cursor'
+        id: cursor
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          cat > "$RUNNER_TEMP/cursor-prompt.txt" <<'DSEOF'
+          ENVIRONMENT RULE (read first, it overrides habit): you are running UNATTENDED on a CI runner. There is nobody here to answer a question, approve a step, or pick between options. If you ever find yourself about to ask for approval or a go/no-go, do not: choose the safest option that still completes the task, do it, and say what you chose in the final report. A run that stops to ask a question builds nothing and is a failed run. Your final message is read by a script, so end with exactly what you were asked to end with and nothing after it.
+
+          You are the functional validator for an autonomously-built {{SITE_NAME}} tool PR. 1) Find the tool under review: run `git diff origin/main...HEAD --name-only` and read the diff of the tools registry (its path is listed in .dispatchseo/conventions.md) to get the NEW tool's slug (the entry added in this PR). 2) Work out the tool's PUBLIC path - never assume /tools/<slug>: take it from the route/page files the PR added, the registry entry's own path field, or the Tools section of .dispatchseo/conventions.md, and cross-check it against the sitemap. (Sites whose /tools route belongs to a logged-in app publish elsewhere, e.g. /free-tools/<slug>; a login redirect or 404 here means you have the wrong path, not a broken tool - re-derive it before judging.) Using the playwright MCP, open ${{ steps.serve.outputs.base }}<path> and validate: the page returns 200 and renders the landing funnel (hero h1, the interactive widget, FAQ section); every primary widget interaction works (fill each input with realistic values, click every action button, verify output actually updates, test the copy action); edge cases do not break it (empty input, nonsense input - the widget must never throw); zero console errors during the whole session (check browser console messages). 3) Verdict: if EVERYTHING passes, run `gh pr edit <pr-number> --add-label tool-validated --remove-label tool-validation-failed || gh pr edit <pr-number> --add-label tool-validated` and post a short PR comment via `gh pr comment` summarizing what you exercised. If ANYTHING fails, run `gh pr edit <pr-number> --add-label tool-validation-failed --remove-label tool-validated || gh pr edit <pr-number> --add-label tool-validation-failed` (removing tool-validated matters: a stale pass from an earlier commit must not authorize a merge) and comment the concrete failures (what you did, what happened, console output). Create missing labels with `gh label create` if needed. The PR number is in the PR_NUMBER environment variable. Never modify code in this run - you are a reviewer only.
+          DSEOF
+          set +e
+          cursor-agent -p "$(cat "$RUNNER_TEMP/cursor-prompt.txt")" \
+            --output-format json --trust --force --approve-mcps \
+            --model "${{ vars.SEO_CURSOR_MODEL || 'auto' }}" \
+            > "$RUNNER_TEMP/cursor-out.json" 2> "$RUNNER_TEMP/cursor-err.txt"
+          code=$?
+          set -e
+          # The final message, for the classify step. jq tolerates a truncated
+          # or absent file, which is what a killed run leaves behind.
+          jq -r '.result // empty' "$RUNNER_TEMP/cursor-out.json" 2>/dev/null > "$RUNNER_TEMP/cursor-msg.txt" || true
+          echo "--- cursor exit $code ---"
+          cat "$RUNNER_TEMP/cursor-msg.txt"
+          [ -s "$RUNNER_TEMP/cursor-err.txt" ] && { echo "--- stderr ---"; cat "$RUNNER_TEMP/cursor-err.txt"; }
+          exit $code
       # <<< agent-steps: run
 
 

@@ -146,13 +146,21 @@ short on the way over.
 
 **Everything connects, but nothing gets built overnight** - that's expected,
 and it's the one row in the table above. Pick Claude Code or Codex under
-**Settings → Coding agent** for the scheduled builds.
+**Settings → Coding agent** for the scheduled builds. You can keep using Cursor
+for everything you do yourself.
 
 ## Will Cursor run the builds later?
 
-That's the plan, and the honest status is: the connection is proven, the
-unattended builder isn't. Running an agent unattended means knowing exactly
-what it prints when a key dies or a quota runs out, so a failed build tells
-you instead of failing quietly. Cursor's CLI has no turn limit either, which
-matters more when nobody's watching. Until those are pinned down, we'd rather
-say "not yet" than ship a night shift that stops working without saying so.
+The code for it is written and the whole chain has been run by hand: Cursor
+drove the MCP server headlessly, called a tool, and came back clean. What it
+hasn't done yet is run that way on a schedule, unwatched, which is a different
+claim and the only one that counts.
+
+One thing to know now, because it decides whether this will ever apply to you:
+a scheduled build runs on a server with no browser, so it can't use the
+`cursor-agent login` you did above. It needs an API key, and those come with a
+paid Cursor plan. Connecting stays free forever; the night shift won't be.
+
+We'll flip it on when it's been proven on a real schedule rather than in a
+one-off test, and not before. A builder that quietly stops working is worse
+than one that isn't offered.

@@ -6,7 +6,8 @@
 // half-supported agent.
 import claude from "./claude.mjs";
 import codex from "./codex.mjs";
+import cursor from "./cursor.mjs";
 
-export const AGENTS = [claude, codex];
+export const AGENTS = [claude, codex, cursor];
 export const DEFAULT_AGENT = AGENTS.find((a) => a.isDefault) ?? AGENTS[0];
 export const NON_DEFAULT_AGENTS = AGENTS.filter((a) => a !== DEFAULT_AGENT);

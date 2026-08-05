@@ -262,6 +262,35 @@ run_job() { # run_job <base64 job json>
         echo 'default_tools_approval_mode = "approve"'
       fi
     } > "$cfg"
+  elif [ "$agent" = "cursor" ]; then
+    # Cursor reads .cursor/mcp.json relative to the directory it runs in -
+    # there is no --mcp-config flag to point elsewhere - so this lands inside
+    # the clone rather than in /data/mcp like the other two.
+    #
+    # LITERAL credentials, for the same reason Codex's TOML holds them: Cursor
+    # does NOT expand ${VAR} in this file (measured 2026-08-05). Its failure
+    # mode is worse than Codex's, though - the server comes back "not loaded
+    # (needs approval)" while `mcp enable` insists it is approved, so the hunt
+    # starts in the approval system instead of at the credential. The file is
+    # deleted right after the run, alongside the other agents' secrets.
+    mkdir -p "$dir/.cursor"
+    cfg="$dir/.cursor/mcp.json"
+    if [ -n "$DATAFORSEO_LOGIN" ]; then
+      jq -n --arg url "$APP/api/mcp" --arg tok "$SEO_MCP_API_KEY" \
+        --arg dfl "$DATAFORSEO_LOGIN" --arg dfp "$DATAFORSEO_PASSWORD" '{mcpServers:{
+        "seo-manager":{type:"http",url:$url,headers:{Authorization:("Bearer " + $tok)}},
+        "dataforseo":{type:"stdio",command:"npx",args:["-y","dataforseo-mcp-server@latest"],
+          env:{DATAFORSEO_USERNAME:$dfl,DATAFORSEO_PASSWORD:$dfp,ENABLED_MODULES:"SERP,DATAFORSEO_LABS,BACKLINKS"}}}}' > "$cfg"
+    else
+      jq -n --arg url "$APP/api/mcp" --arg tok "$SEO_MCP_API_KEY" '{mcpServers:{
+        "seo-manager":{type:"http",url:$url,headers:{Authorization:("Bearer " + $tok)}}}}' > "$cfg"
+    fi
+    # An unapproved server is not merely unreachable, it is ABSENT: the agent
+    # runs happily with zero tools. Approval is per project directory, so this
+    # runs every job rather than once.
+    for s in $(jq -r '.mcpServers | keys[]' "$cfg" 2>/dev/null); do
+      ( cd "$dir" && cursor-agent mcp enable "$s" >/dev/null 2>&1 ) || true
+    done
   elif [ -n "$DATAFORSEO_LOGIN" ]; then
     jq -n --arg url "$APP/api/mcp" '{mcpServers:{
       "seo-manager":{type:"http",url:$url,headers:{Authorization:"Bearer ${SEO_MCP_API_KEY}"}},
@@ -351,6 +380,27 @@ RULEEOF
     rm -f "$codex_home/auth.json" "$cfg"
     msg=$(tail -c 400 "$out.msg" 2>/dev/null)
     [ -n "$msg" ] || msg=$(tail -c 400 "$out.err" 2>/dev/null)
+  elif [ "$agent" = "cursor" ]; then
+    # The key passes through the environment and nothing persists - no on-disk
+    # login step like Codex's auth.json.
+    #
+    # Three flags, each separately required for an unattended run and each
+    # measured: --trust (a clone is an untrusted workspace and the run refuses
+    # outright), --force (command approval), --approve-mcps (server approval).
+    #
+    # No --max-turns equivalent exists, so the timeout is the only ceiling -
+    # the same 90 minutes the other two branches get.
+    ( cd "$dir" && CURSOR_API_KEY="$agent_token" timeout 5400 \
+        cursor-agent -p "$prompt" \
+          --output-format json \
+          --trust --force --approve-mcps \
+          --model "${CURSOR_MODEL:-auto}" > "$out" 2>"$out.err" )
+    rc=$?
+    # The config holds real credentials (no ${VAR} expansion), so it goes as
+    # soon as the run does - same contract as Codex's auth.json above.
+    rm -f "$cfg"
+    msg=$(jq -r '.result // empty' "$out" 2>/dev/null | tail -c 400)
+    [ -n "$msg" ] || msg=$(tail -c 400 "$out.err" 2>/dev/null)
   else
     ( cd "$dir" && MCP_TIMEOUT=120000 CLAUDE_CODE_OAUTH_TOKEN="$agent_token" timeout 5400 \
         claude -p "$prompt" \
@@ -428,6 +478,28 @@ RULEEOF
     [ -n "$msg" ] || msg="codex exited $rc (see $out in the dispatch-builder volume)"
     log "job $key FAILED: $msg"
     report "$key" fail "$msg"
+  elif [ "$agent" = "cursor" ]; then
+    # No API probe needed here, unlike Codex: --output-format json states the
+    # verdict outright in `subtype`, so this branches on a field rather than
+    # guessing from prose. What it must never do is treat an UNRECOGNISED
+    # subtype as transient - a deferral is silent, and a silent deferral on a
+    # real failure is the exact mistake the Codex branch above exists to avoid.
+    # The quota spellings are unobserved as yet, so they are matched loosely
+    # and everything unmatched falls through to a loud failure.
+    sub=$(jq -r '.subtype // empty' "$out" 2>/dev/null)
+    case "$sub" in
+      *rate*limit*|*quota*|*usage*limit*|*too*many*)
+        log "job $key deferred - Cursor usage/rate limit ($sub)"
+        report "$key" deferred "Cursor hit a usage or rate limit this run - retried automatically."
+        return ;;
+      *auth*|*unauthor*|*invalid*key*|*forbidden*)
+        log "job $key FAILED - Cursor rejected the key ($sub)"
+        report "$key" fail "Cursor rejected the API key. Cursor API keys need a paid Cursor plan - paste a fresh one on the dashboard's automatic-builds card, or set CURSOR_API_KEY in .env."
+        return ;;
+    esac
+    [ -n "$msg" ] || msg="cursor-agent exited $rc (see $out in the dispatch-builder volume)"
+    log "job $key FAILED: $msg"
+    report "$key" fail "$msg"
   elif echo "$msg" | grep -qiE 'usage limit|limit reached|rate.?limit'; then
     # A usage-limit hit is a deferral, not a failure - the job stays due and
     # the next poll picks it back up, the same contract the GitHub Actions
@@ -472,6 +544,7 @@ set_git_identity() { # commit as the GH_TOKEN's real user, cached per token
 # never be picked up until a container restart.
 ENV_CLAUDE_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN:-}"
 ENV_OPENAI_KEY="${OPENAI_API_KEY:-}"
+ENV_CURSOR_KEY="${CURSOR_API_KEY:-}"
 
 while :; do
   # A non-claiming poll FIRST: it carries the tokens (gh + claude) and never
@@ -493,6 +566,7 @@ while :; do
   # to get, and the log line told it to go paste the wrong one.
   CLAUDE_TOK="${ENV_CLAUDE_TOKEN:-$(echo "$probe" | jq -r '.claude_token // .agent_tokens.claude // empty')}"
   OPENAI_TOK="${ENV_OPENAI_KEY:-$(echo "$probe" | jq -r '.agent_tokens.codex // empty')}"
+  CURSOR_TOK="${ENV_CURSOR_KEY:-$(echo "$probe" | jq -r '.agent_tokens.cursor // empty')}"
   RESOLVED_CLAUDE_TOKEN="$CLAUDE_TOK"
 
   # A placeholder or a wrong-shaped paste is the common failure, and it must be
@@ -509,6 +583,16 @@ while :; do
     "") : ;;
     sk-*) AGENTS="${AGENTS:+$AGENTS,}codex" ;;
     *) log "that doesn't look like an OpenAI API key (expected sk-...); create one at platform.openai.com/api-keys and paste it again." ;;
+  esac
+  # Cursor has no published key prefix to assert, so the check is what is
+  # safely knowable: not empty, no whitespace (the line-wrapped paste), and not
+  # one of the OTHER agents' credentials pasted into the wrong slot.
+  case "$CURSOR_TOK" in
+    "") : ;;
+    sk-ant-*) log "that is a Claude token, not a Cursor API key - it belongs in the Claude slot." ;;
+    sk-*) log "that is an OpenAI key, not a Cursor API key - it belongs in the Codex slot." ;;
+    *[[:space:]]*) log "the Cursor API key contains whitespace, so it was probably line-wrapped when copied; paste it again." ;;
+    *) AGENTS="${AGENTS:+$AGENTS,}cursor" ;;
   esac
 
   if [ -z "$AGENTS" ]; then
