@@ -160,7 +160,7 @@ jobs:
               esac ;;
             cursor)
               if [ -z "$CURSOR_API_KEY" ]; then
-                echo "::error::This project validates with Cursor, but the CURSOR_API_KEY secret is missing or empty on this repo. Cursor API keys need a paid Cursor plan - a runner has no browser, so the interactive 'cursor-agent login' is not an option here. Add the key with 'gh secret set CURSOR_API_KEY', or switch this project to Claude Code or Codex on your DispatchSEO dashboard."
+                echo "::error::This project validates with Cursor, but the CURSOR_API_KEY secret is missing or empty on this repo. A runner has no browser, so the interactive 'cursor-agent login' is not an option here - only an API key works. Mint one at cursor.com/dashboard/api (open the URL directly; any plan can) and add it with 'gh secret set CURSOR_API_KEY', or switch this project to Claude Code or Codex on your DispatchSEO dashboard."
                 exit 1
               fi
               case "$CURSOR_API_KEY" in

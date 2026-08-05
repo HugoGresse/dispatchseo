@@ -120,7 +120,7 @@ jobs:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
         run: |
           if [ -z "$CURSOR_API_KEY" ]; then
-            echo "This project builds with Cursor, but the CURSOR_API_KEY secret is missing or empty on this repo. Cursor API keys need a paid Cursor plan - a runner has no browser, so 'cursor-agent login' is not an option. Add the key with 'gh secret set CURSOR_API_KEY', or switch this project to Claude Code or Codex on your dashboard." > "$RUNNER_TEMP/agent-failure.txt"
+            echo "This project builds with Cursor, but the CURSOR_API_KEY secret is missing or empty on this repo. A runner has no browser, so 'cursor-agent login' is not an option - only an API key works. Mint one at cursor.com/dashboard/api (any plan can) and add it with 'gh secret set CURSOR_API_KEY', or switch this project to Claude Code or Codex on your dashboard." > "$RUNNER_TEMP/agent-failure.txt"
             cat "$RUNNER_TEMP/agent-failure.txt"; exit 1
           fi
           # Whole package into its own directory - the launcher needs its
@@ -130,7 +130,7 @@ jobs:
             | tar -xz --strip-components=1 -C "$RUNNER_TEMP/cursor-cli"
           out=$("$RUNNER_TEMP/cursor-cli/cursor-agent" models 2>&1) || true
           if printf '%s' "$out" | grep -qi "API key is invalid\|Authentication required\|Unauthorized"; then
-            echo "Cursor rejected the CURSOR_API_KEY secret on this repo. The key was probably revoked, or the paid plan that issued it lapsed - Cursor API keys need one. Create a fresh key and set it again with 'gh secret set CURSOR_API_KEY'." > "$RUNNER_TEMP/agent-failure.txt"
+            echo "Cursor rejected the CURSOR_API_KEY secret on this repo. The key was probably revoked, or the plan's usage pool is exhausted. Mint a fresh key at cursor.com/dashboard/api and set it again with 'gh secret set CURSOR_API_KEY'." > "$RUNNER_TEMP/agent-failure.txt"
             cat "$RUNNER_TEMP/agent-failure.txt"; exit 1
           fi
           if ! printf '%s' "$out" | grep -q "Available models"; then

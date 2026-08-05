@@ -194,7 +194,7 @@ export default function DocsQuickstart() {
               <a href="/docs/install-cursor" className={INLINE_LINK}>
                 Cursor
               </a>{" "}
-              (on a paid Cursor plan)
+              (on your Cursor plan)
             </span>
             <span className="mt-1 block text-sm text-neutral-400">
               Your agent does the actual thinking. Claude Code and Cursor run on plans you

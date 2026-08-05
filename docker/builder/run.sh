@@ -494,7 +494,7 @@ RULEEOF
         return ;;
       *auth*|*unauthor*|*invalid*key*|*forbidden*)
         log "job $key FAILED - Cursor rejected the key ($sub)"
-        report "$key" fail "Cursor rejected the API key. Cursor API keys need a paid Cursor plan - paste a fresh one on the dashboard's automatic-builds card, or set CURSOR_API_KEY in .env."
+        report "$key" fail "Cursor rejected the API key. Mint a fresh one at cursor.com/dashboard/api and paste it on the dashboard's automatic-builds card, or set CURSOR_API_KEY in .env."
         return ;;
     esac
     [ -n "$msg" ] || msg="cursor-agent exited $rc (see $out in the dispatch-builder volume)"

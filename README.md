@@ -117,7 +117,7 @@ with a real answer — including the parts that aren't finished yet.
 |---|---|---|
 | **Claude Code** | ✅ | ✅ |
 | **Codex** | ✅ | ✅ |
-| **Cursor** | ✅ one-paste connect, all 61 tools | ✅ (needs a paid Cursor plan) |
+| **Cursor** | ✅ one-paste connect, all 61 tools | ✅ via its API key (any plan mints one) |
 | Gemini CLI · Copilot · any MCP client | ✅ | ❌ |
 
 Connecting is one paste and gets you the whole tool set: research, the queue,
@@ -128,7 +128,7 @@ and asks the dashboard which to run, so switching agent takes effect on the
 next scheduled run with no repo change.
 
 The honest difference is who pays: Claude Code runs on a subscription you
-already have, Cursor runs on a paid Cursor plan's API key, and Codex is
+already have, Cursor runs on your Cursor plan's API key, and Codex is
 metered by OpenAI per run.
 
 [docs/AGENTS.md](docs/AGENTS.md) has the details, the support tiers, and how to
@@ -141,7 +141,7 @@ add an agent.
 - **A coding agent.** Your agent is the engine. Claude Code runs on the Claude
   subscription you already pay for; Codex and Cursor do everything Claude Code
   does here, including the overnight builder — Codex is metered by OpenAI per
-  run, and Cursor's builder key needs a paid Cursor plan. See the table above.
+  run, and Cursor builds draw on your Cursor plan's included usage. See the table above.
 - **A machine with Docker** (~1 GB RAM). A laptop works for a test drive, but
   a machine that stays on is much better for daily use - a $5 VPS, a Raspberry
   Pi, a desktop that never sleeps. Schedules only run while the machine is awake.

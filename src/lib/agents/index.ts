@@ -297,16 +297,16 @@ const codex: AgentDefinition = {
 // schema validator, proven against the production server). See
 // docs-private/CURSOR_FACTS.md for the runs behind each one.
 //
-// The builder is ON. What it rests on: the whole chain was run by hand against
-// production - rendered config, approved servers, `cursor-agent -p` calling an
-// MCP tool and returning subtype "success" - and the classify path reads
-// `--output-format json`'s is_error/subtype rather than guessing from prose,
-// with every unrecognised subtype falling through to a LOUD failure. That last
-// property is what makes shipping this before a scheduled run is observed
-// defensible: the unknown case alarms, it does not quietly defer.
-//
-// Still unproven, and worth knowing: a scheduled, unwatched run on a real
-// runner. `.github/workflows/cursor-canary.yml` is the thing that proves it.
+// The builder is ON, and the chain is proven end to end. By hand against
+// production first - rendered config, approved servers, `cursor-agent -p`
+// calling an MCP tool and returning subtype "success" - and then, 2026-08-05,
+// by `.github/workflows/cursor-canary.yml` running green on a real GitHub
+// runner with a real key: installed the CLI, approved the server headlessly,
+// called get_project against production, saw all 61 tools, returned
+// `{"subtype":"success","is_error":false}`. The classify path reads that JSON
+// rather than guessing from prose, and every unrecognised subtype falls
+// through to a LOUD failure - the unknown case alarms, it does not quietly
+// defer.
 const cursor: AgentDefinition = {
   id: "cursor",
   displayName: "Cursor",
@@ -341,35 +341,37 @@ const cursor: AgentDefinition = {
     repoSecretName: "CURSOR_API_KEY",
     envVar: "CURSOR_API_KEY",
     instanceSettingsColumn: "builder_cursor_key",
-    placeholder: "your Cursor API key",
-    // Shape only, and deliberately NOT a prefix assertion: no real Cursor key
-    // was ever observed here, so asserting a prefix would be inventing a fact
-    // that could reject every valid key. What IS asserted is what is known -
+    placeholder: "crsr_...",
+    // Shape only, and deliberately NOT a prefix assertion: exactly ONE real
+    // key has been observed (2026-08-05, it started crsr_), and one
+    // observation is not a contract - asserting it could reject valid keys
+    // from another era or account type. What IS asserted is what is known -
     // no whitespace (the line-wrapped-paste failure), enough length, and
     // explicitly not one of the OTHER agents' credentials, which is the
     // cross-paste mistake that has already bitten this repo twice.
     looksValid: (v) =>
       v.length > 20 && !/\s/.test(v) && !v.startsWith("sk-ant-") && !v.startsWith("sk-"),
-    // Where an API key comes from, measured against a real free account on
-    // 2026-08-05: the free plan's dashboard has exactly three sections
-    // (Overview, Settings, Integrations) and none of them mint an API key -
-    // Integrations is third-party connections only (GitHub, Slack, Linear,
-    // Jira, Sentry). A key is a paid-plan feature, and this text must not
-    // send a free-plan owner hunting for a page that isn't there.
+    // Where a key ACTUALLY comes from, corrected 2026-08-05 against a real
+    // free account: cursor.com/dashboard/api mints one on ANY plan - the
+    // earlier "paid plans only" reading was wrong, an artifact of that page
+    // being unlinked from the dashboard's nav (a known, recurring Cursor
+    // dashboard quirk - the URL works even when no tab points at it; Cursor's
+    // own CLI docs name it). The thing that IS plan-gated is capacity, not
+    // access: CLI runs draw from the plan's included usage pool, and the free
+    // pool is small, so a nightly build schedule realistically wants a paid
+    // plan. Say that, not "you can't get a key".
     // Interactive use needs no key at all: `cursor-agent login` does a browser
-    // OAuth and stores credentials locally, which is what the CLI's own error
-    // text recommends first. A key is only needed where no browser exists,
-    // i.e. the builders - which is why every surface that offers Cursor as a
-    // builder leads with the paid-plan fact.
+    // OAuth and stores credentials locally. A key is only needed where no
+    // browser exists, i.e. the builders.
     howToMint:
-      "Create an API key in your Cursor dashboard. Working interactively needs no key at all - `cursor-agent login` is enough - but the builders run where no browser exists, and Cursor issues API keys on paid plans only.",
-    mintUrl: "https://cursor.com/dashboard",
+      "Create an API key at cursor.com/dashboard/api - open that URL directly, the page is often missing from the dashboard's own navigation. Any plan can mint one; builds draw from your plan's included usage, so the free plan's small pool may not sustain a nightly schedule.",
+    mintUrl: "https://cursor.com/dashboard/api",
     mintLinkLabel: "grab your key",
     verifiedWith: "a shape check",
   },
   cost: {
     model: "subscription",
-    note: "Runs on your Cursor plan - nothing is billed by DispatchSEO. Connecting works on any plan including the free one; the overnight builds need an API key, and Cursor issues those on paid plans only.",
+    note: "Runs on your Cursor plan - nothing is billed by DispatchSEO. Any plan can mint the builder's API key; builds draw on the plan's included usage, so the free pool may not last a nightly schedule.",
   },
 };
 

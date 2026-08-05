@@ -546,7 +546,7 @@ export default async function LandingPage({
             </details>
             <details>
               <summary>What do I need to run the free version?</summary>
-              <div className="a">A website that lives in a GitHub repo, an AI agent (Claude Code on your Claude subscription, Codex on an OpenAI key, or Cursor on a paid Cursor plan), free Google Search Console access, and a machine with Docker. Your laptop works for a test drive, but we highly recommend a machine that stays awake for real use - a $5 VPS or a Raspberry Pi - since schedules only run while it&apos;s on. Rank tracking works with a free SerpApi key; search volume data needs a DataForSEO account, which is the main gap the cloud version fills. The <a href={DOCS_URL}>docs</a> walk you through it.</div>
+              <div className="a">A website that lives in a GitHub repo, an AI agent (Claude Code on your Claude subscription, Codex on an OpenAI key, or Cursor on your Cursor plan), free Google Search Console access, and a machine with Docker. Your laptop works for a test drive, but we highly recommend a machine that stays awake for real use - a $5 VPS or a Raspberry Pi - since schedules only run while it&apos;s on. Rank tracking works with a free SerpApi key; search volume data needs a DataForSEO account, which is the main gap the cloud version fills. The <a href={DOCS_URL}>docs</a> walk you through it.</div>
             </details>
             <details>
               <summary>Is this another AI content spammer?</summary>
@@ -558,7 +558,7 @@ export default async function LandingPage({
             </details>
             <details>
               <summary>Does it only work with Claude Code?</summary>
-              <div className="a">No - Codex is fully supported too, including the overnight builders. Every scheduled workflow carries every supported agent and asks the dashboard which one to run, so you can switch on Settings and it takes effect on the next build, no reinstall. The honest difference is billing: Claude Code runs on the subscription you already have, Codex is metered by OpenAI per run. Cursor works too, including the overnight builders - the one difference is that those need a Cursor API key, which comes with a paid Cursor plan, while connecting is free on any plan. Beyond those three, the server speaks standard MCP, so any other client (Gemini CLI, Copilot) can connect to the same tools interactively.</div>
+              <div className="a">No - Codex is fully supported too, including the overnight builders. Every scheduled workflow carries every supported agent and asks the dashboard which one to run, so you can switch on Settings and it takes effect on the next build, no reinstall. The honest difference is billing: Claude Code runs on the subscription you already have, Codex is metered by OpenAI per run. Cursor works too, including the overnight builders - those need a Cursor API key (any plan can mint one), and builds draw on your Cursor plan's included usage. Beyond those three, the server speaks standard MCP, so any other client (Gemini CLI, Copilot) can connect to the same tools interactively.</div>
             </details>
             <details>
               <summary>What does DispatchSEO do with my Google data?</summary>

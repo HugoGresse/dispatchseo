@@ -159,7 +159,7 @@ const CONTENT: Record<AgentPageId, Content> = {
             research, the same guides, the same pull requests waiting for you in the
             morning. One thing to know first: those run on a server with no browser, so
             they need a Cursor API key rather than the login you use day to day, and
-            Cursor issues API keys on paid plans only. Connecting is free on any plan.
+            any Cursor plan can mint one at cursor.com/dashboard/api. Connecting needs no key at all.
             See <a href="/docs/install-cursor">the Cursor guide</a>.
           </>
         ),
@@ -170,7 +170,7 @@ const CONTENT: Record<AgentPageId, Content> = {
       },
       {
         q: "Do I need a Cursor API key?",
-        a: "Not to connect - that's one paste and works on the free plan. You need one for the overnight builds, because they run on a server that can't open a browser to log you in, and Cursor issues API keys on paid plans only. So: free to connect and drive by hand, paid if you want it building while you sleep.",
+        a: "Not to connect - that's one paste and works on any plan. You need one for the overnight builds, because they run on a server that can't open a browser to log you in. Any plan can mint the key (cursor.com/dashboard/api - open the URL directly, it's often unlinked from the dashboard menu); builds draw on your plan's included usage, so the free pool may not last a nightly schedule.",
       },
       {
         q: "How do I connect it?",

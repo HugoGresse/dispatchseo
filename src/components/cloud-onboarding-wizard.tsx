@@ -91,7 +91,7 @@ type PipelineInstallResult = Awaited<ReturnType<typeof runPipelineInstall>>;
 const AGENT_PICKER_SUBTITLE: Record<AgentId, string> = {
   claude: "Needs a Claude subscription · builds cost nothing extra, they run on your plan",
   codex: "Needs an OpenAI API key · builds are metered by OpenAI per run",
-  cursor: "Needs a paid Cursor plan · builds run on its API key, nothing extra is billed",
+  cursor: "Runs on your Cursor plan · builds use its API key, nothing extra is billed",
 };
 
 // c2's whole "get your credential" block - prerequisite callout plus the
@@ -154,22 +154,25 @@ const AGENT_CREDENTIAL_INTRO: Record<AgentId, ReactNode> = {
   cursor: (
     <>
       {/* Like Codex, no CLI is a prerequisite for THIS screen: the key is
-          minted on a web page. The paid-plan fact leads because it is the
-          one thing that stalls this step - the free plan's dashboard has no
-          API-key page at all (measured 2026-08-05), so a free-plan owner
-          would hunt for a page that isn't there. */}
+          minted on a web page. The direct URL leads because it is the one
+          thing that stalls this step - the mint page is often missing from
+          the dashboard's own navigation (measured 2026-08-05: a free
+          account's nav showed no API-key tab, yet the URL minted a working
+          key), so an owner browsing the menu would hunt for a page that
+          seems not to exist. */}
       <PrereqCallout
         title="You need a Cursor API key"
         body={
           <>
-            Create one in your Cursor dashboard - Cursor issues API keys on paid plans
-            only. The overnight builds run where no browser exists, so the login on your
-            own machine does not reach them; only a key does. You do not need the Cursor
-            CLI installed for this step.
+            Create one at cursor.com/dashboard/api - open that link directly; the page
+            is often not in the dashboard&apos;s own menu, but any plan can mint a key
+            there. The overnight builds run where no browser exists, so the login on
+            your own machine does not reach them; only a key does. You do not need the
+            Cursor CLI installed for this step.
           </>
         }
-        href="https://cursor.com/dashboard"
-        cta="Open your Cursor dashboard"
+        href="https://cursor.com/dashboard/api"
+        cta="Open the API keys page"
       />
       <p className="mt-4 text-sm leading-relaxed text-neutral-400">
         Copy the key and paste it below. Watch for line-wrapping if you copy it from a

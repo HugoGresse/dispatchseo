@@ -21,23 +21,26 @@ is where the answer lives — including the parts that aren't finished.
 |---|---|---|---|---|---|
 | [Claude Code](https://claude.com/claude-code) | 1 | ✅ | ✅ | ✅ GitHub Actions + docker builder | 2026-07-30 |
 | [Codex](https://developers.openai.com/codex/cli) | 1 | ✅ | ✅ | ✅ GitHub Actions + docker builder | 2026-07-30 |
-| [Cursor](https://cursor.com/cli) | 2 | ✅ | ✅ | ✅ GitHub Actions + docker builder | 2026-08-05 |
+| [Cursor](https://cursor.com/cli) | 1 | ✅ | ✅ | ✅ GitHub Actions + docker builder | 2026-08-05 |
 | Gemini CLI, Copilot, anything else that speaks MCP | 3 | ✅ | ✅ | ❌ | — |
 
-**Cursor is Tier 2, not Tier 1, and the distinction is the point.** Connecting
-is verified end to end against production — all 61 tools, names matching the
-registry exactly, nothing dropped by its schema validator, on both the header
-and `?key=` auth forms. The builder chain has been run by hand end to end too:
-rendered config, approved servers, `cursor-agent -p` calling an MCP tool and
-returning `subtype: success`. What has NOT happened is a scheduled, unwatched
-run on a real runner. `cursor-canary.yml` is what closes that, and until it has
-run green with a real credential this row does not say Tier 1.
+**Cursor is Tier 1 as of 2026-08-05.** Connecting was verified end to end
+against production — all 61 tools, names matching the registry exactly,
+nothing dropped by its schema validator, on both the header and `?key=` auth
+forms — and the builder chain was proven twice: first by hand (rendered
+config, approved servers, `cursor-agent -p` calling an MCP tool and returning
+`subtype: success`), then unwatched on a real GitHub runner by
+[`cursor-canary.yml` run 31027438152](https://github.com/NeoZi12/dispatchseo/actions/runs/31027438152)
+with a real maintainer-held key: CLI installed from Cursor's tarball, server
+approved headlessly, `get_project` answered from production, 61 tools counted,
+`{"subtype":"success","is_error":false}` returned.
 
-Shipping the builder before that is defensible for one specific reason: the
-classify path reads `--output-format json`'s `is_error`/`subtype` rather than
-guessing from prose, and **every unrecognised subtype falls through to a loud
-failure**. The failure mode this project fears — a build reporting green having
-built nothing — needs a silent deferral, and there is no silent branch to hit.
+The safety property that made shipping the builder ahead of that run
+defensible still holds and still matters: the classify path reads
+`--output-format json`'s `is_error`/`subtype` rather than guessing from prose,
+and **every unrecognised subtype falls through to a loud failure**. The
+failure mode this project fears — a build reporting green having built
+nothing — needs a silent deferral, and there is no silent branch to hit.
 
 Two Cursor-specific facts that shaped all of it, both measured (the long
 version is in `docs-private/CURSOR_FACTS.md`):
@@ -52,9 +55,12 @@ version is in `docs-private/CURSOR_FACTS.md`):
   same way Codex's TOML renders them.
 
 One consequence for owners rather than contributors: a runner has no browser,
-so the builder needs `CURSOR_API_KEY`, and Cursor issues API keys on paid plans
-only. Connecting is free on any plan; the unattended builder is Pro-gated in a
-way neither Claude Code nor Codex is.
+so the builder needs `CURSOR_API_KEY`. Any plan can mint one at
+cursor.com/dashboard/api — open that URL directly; the page is often missing
+from the dashboard's own navigation, which is exactly the trap that briefly
+had this file claiming keys were paid-plan-only. What IS plan-shaped is
+capacity: CLI runs draw from the plan's included usage pool, and the free
+pool is small, so a nightly schedule realistically wants a paid plan.
 
 ### What "unattended builder" means, and how a project picks one
 

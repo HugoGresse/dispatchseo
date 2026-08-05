@@ -38,7 +38,7 @@ function resolveCaseArm(variant) {
   const verb = variant === "validate" ? "validates" : "builds";
   return `            cursor)
               if [ -z "$CURSOR_API_KEY" ]; then
-                echo "::error::This project ${verb} with Cursor, but the CURSOR_API_KEY secret is missing or empty on this repo. Cursor API keys need a paid Cursor plan - a runner has no browser, so the interactive 'cursor-agent login' is not an option here. Add the key with 'gh secret set CURSOR_API_KEY', or switch this project to Claude Code or Codex on your DispatchSEO dashboard."
+                echo "::error::This project ${verb} with Cursor, but the CURSOR_API_KEY secret is missing or empty on this repo. A runner has no browser, so the interactive 'cursor-agent login' is not an option here - only an API key works. Mint one at cursor.com/dashboard/api (open the URL directly; any plan can) and add it with 'gh secret set CURSOR_API_KEY', or switch this project to Claude Code or Codex on your DispatchSEO dashboard."
                 exit 1
               fi
               case "$CURSOR_API_KEY" in
@@ -241,7 +241,7 @@ function classifyBranch() {
                 # Clears by itself. The job stays due and is re-dispatched.
                 defer "Cursor hit a usage or rate limit this run (\\"$sub\\") - the dashboard keeps this build due and re-dispatches it within a few hours. Not a failure." ;;
               *auth*|*unauthor*|*invalid*key*|*forbidden*)
-                fail "Cursor rejected the CURSOR_API_KEY secret on this repo (\\"$sub\\"). The key was probably revoked or the plan lapsed - Cursor API keys need a paid plan. Create a fresh key and set it again with 'gh secret set CURSOR_API_KEY'." ;;
+                fail "Cursor rejected the CURSOR_API_KEY secret on this repo (\\"$sub\\"). The key was probably revoked, or the plan's usage pool is exhausted. Mint a fresh key at cursor.com/dashboard/api and set it again with 'gh secret set CURSOR_API_KEY'." ;;
               "")
                 # No parseable JSON at all: killed, timed out, or died before
                 # it could write a result. Never quiet.
@@ -264,7 +264,7 @@ const basicClassifyBranch = `          if [ "$AGENT" = "cursor" ]; then
               *rate*limit*|*quota*|*usage*limit*|*too*many*)
                 defer "Cursor hit a usage or rate limit this run - it clears by itself, so the job stays due and is retried automatically. Not a failure." ;;
               *auth*|*unauthor*|*invalid*key*|*forbidden*)
-                fail "Cursor rejected the CURSOR_API_KEY secret on this repo. Cursor API keys need a paid plan - create a fresh key and set it again with 'gh secret set CURSOR_API_KEY'." ;;
+                fail "Cursor rejected the CURSOR_API_KEY secret on this repo. Mint a fresh key at cursor.com/dashboard/api and set it again with 'gh secret set CURSOR_API_KEY'." ;;
               *)
                 fail "workflow failed - $RUN_URL" ;;
             esac
@@ -293,7 +293,7 @@ function livenessStep() {
           CURSOR_API_KEY: \${{ secrets.CURSOR_API_KEY }}
         run: |
           if [ -z "$CURSOR_API_KEY" ]; then
-            echo "This project builds with Cursor, but the CURSOR_API_KEY secret is missing or empty on this repo. Cursor API keys need a paid Cursor plan - a runner has no browser, so 'cursor-agent login' is not an option. Add the key with 'gh secret set CURSOR_API_KEY', or switch this project to Claude Code or Codex on your dashboard." > "$RUNNER_TEMP/agent-failure.txt"
+            echo "This project builds with Cursor, but the CURSOR_API_KEY secret is missing or empty on this repo. A runner has no browser, so 'cursor-agent login' is not an option - only an API key works. Mint one at cursor.com/dashboard/api (any plan can) and add it with 'gh secret set CURSOR_API_KEY', or switch this project to Claude Code or Codex on your dashboard." > "$RUNNER_TEMP/agent-failure.txt"
             cat "$RUNNER_TEMP/agent-failure.txt"; exit 1
           fi
           # Whole package into its own directory - the launcher needs its
@@ -303,7 +303,7 @@ function livenessStep() {
             | tar -xz --strip-components=1 -C "$RUNNER_TEMP/cursor-cli"
           out=$("$RUNNER_TEMP/cursor-cli/cursor-agent" models 2>&1) || true
           if printf '%s' "$out" | grep -qi "API key is invalid\\|Authentication required\\|Unauthorized"; then
-            echo "Cursor rejected the CURSOR_API_KEY secret on this repo. The key was probably revoked, or the paid plan that issued it lapsed - Cursor API keys need one. Create a fresh key and set it again with 'gh secret set CURSOR_API_KEY'." > "$RUNNER_TEMP/agent-failure.txt"
+            echo "Cursor rejected the CURSOR_API_KEY secret on this repo. The key was probably revoked, or the plan's usage pool is exhausted. Mint a fresh key at cursor.com/dashboard/api and set it again with 'gh secret set CURSOR_API_KEY'." > "$RUNNER_TEMP/agent-failure.txt"
             cat "$RUNNER_TEMP/agent-failure.txt"; exit 1
           fi
           if ! printf '%s' "$out" | grep -q "Available models"; then

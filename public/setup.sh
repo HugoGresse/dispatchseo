@@ -230,12 +230,12 @@ if [ "$AGENT" = "cursor" ]; then
   if [ "$REPLY" != "y" ] && [ "$REPLY" != "Y" ]; then
     say ""
     say "  The overnight builds run on a server with no browser, so the login"
-    say "  you just used doesn't reach them - they need a Cursor API key, and"
-    say "  Cursor issues those on paid plans only. Nothing is billed by"
-    say "  DispatchSEO."
+    say "  you just used doesn't reach them - they need a Cursor API key."
+    say "  Any plan can mint one, and nothing is billed by DispatchSEO."
     say ""
-    say "  Create one in your Cursor dashboard (cursor.com), paste it here and"
-    say "  press Enter. It won't be shown:"
+    say "  Create one at cursor.com/dashboard/api (open that URL directly -"
+    say "  the page is often missing from the dashboard's own menu), paste it"
+    say "  here and press Enter. It won't be shown:"
     while true; do
       read -r -s CKEY < /dev/tty
       say ""
@@ -264,8 +264,8 @@ if [ "$AGENT" = "cursor" ]; then
       case "$OUT" in
         *"Available models"*) break ;;
         *"API key is invalid"*|*"Authentication required"*|*Unauthorized*)
-          say "  Cursor rejected that key. Create a fresh one in your Cursor"
-          say "  dashboard (an API key needs a paid plan) and paste it again:" ; continue ;;
+          say "  Cursor rejected that key. Create a fresh one at"
+          say "  cursor.com/dashboard/api and paste it again:" ; continue ;;
         *)
           say "  Couldn't check the key - Cursor answered with something"
           say "  unexpected. Paste it again, or Ctrl-C and set it later:" ; continue ;;

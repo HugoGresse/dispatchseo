@@ -165,7 +165,7 @@ export type WizardResume = {
 const AGENT_PICKER_SUBTITLE: Record<AgentId, string> = {
   claude: "Needs a Claude subscription · builds cost nothing extra, they run on your plan",
   codex: "Needs an OpenAI API key · builds are metered by OpenAI per run",
-  cursor: "Needs a paid Cursor plan · builds run on its API key, nothing extra is billed",
+  cursor: "Runs on your Cursor plan · builds use its API key, nothing extra is billed",
 };
 
 // The builder pick, shared by the agent step (where the choice is made) and

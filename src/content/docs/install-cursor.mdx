@@ -21,18 +21,20 @@ works, and the rest of this page is honest about which is which.
 | Approve, reorder, edit the queue | Yes | Yes | **Yes** |
 | Build a guide when you ask for one | Yes | Yes | **Yes** |
 | Backlink prospecting, reports, trend scans | Yes | Yes | **Yes** |
-| The unattended overnight builder | Yes | Yes | **Yes** (needs a paid plan) |
+| The unattended overnight builder | Yes | Yes | **Yes** via its API key |
 
-The capability list is the same. One thing about that last row is not, and
-it's worth knowing before you plan around it: the overnight builds run on a
-server with no browser, so they can't use the login you'll do in step 1. They
-need a Cursor API key, and Cursor issues those on paid plans only.
+The capability list is the same. One thing about that last row is worth
+knowing before you plan around it: the overnight builds run on a server with
+no browser, so they can't use the login you'll do in step 1. They need a
+Cursor API key - any plan can mint one at
+[cursor.com/dashboard/api](https://cursor.com/dashboard/api) (open that URL
+directly; the page is often missing from the dashboard's own menu).
 
-So connecting and driving Cursor by hand is free on any plan. Having it build
-while you sleep is not. If you'd rather not pay for that, pick Claude Code or
-Codex as the builder on **Settings → Coding agent** and keep using Cursor all
-day - the builder setting only decides who runs the scheduled jobs, not who
-you work with.
+Builds draw on your Cursor plan's included usage, and the free plan's pool is
+small - so a nightly schedule realistically wants a paid plan for capacity.
+If you'd rather not pay for that, pick Claude Code or Codex as the builder on
+**Settings → Coding agent** and keep using Cursor all day - the builder
+setting only decides who runs the scheduled jobs, not who you work with.
 
 ## Step 1: install Cursor
 
@@ -158,8 +160,9 @@ Two things, in this order:
 
 1. **Settings → Coding agent → Cursor.** That's one column write; it takes
    effect on the next scheduled run with no repo edit and no reinstall.
-2. **A `CURSOR_API_KEY` secret on your site's repo.** Create the key in your
-   Cursor dashboard (paid plans only), then either re-run the setup command
+2. **A `CURSOR_API_KEY` secret on your site's repo.** Create the key at
+   [cursor.com/dashboard/api](https://cursor.com/dashboard/api) - open the
+   URL directly - then either re-run the setup command
    from your dashboard - it collects the key and checks it with Cursor before
    saving - or set it yourself:
 

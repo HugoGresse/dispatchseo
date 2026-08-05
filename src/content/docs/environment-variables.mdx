@@ -399,11 +399,13 @@ timeout is the only ceiling on a run that goes in circles.
 
 The Cursor equivalent of the two above - lets the in-stack `builder`
 container run Cursor headlessly for any project whose agent is set to
-Cursor. Create the key in your [Cursor
-dashboard](https://cursor.com/dashboard); Cursor issues API keys on paid
-plans only, and the interactive `cursor-agent login` on your own machine
-never reaches the builder container - only a key does. Builds run on your
-Cursor plan, and nothing is billed by DispatchSEO.
+Cursor. Create the key at
+[cursor.com/dashboard/api](https://cursor.com/dashboard/api) - open that
+URL directly, the page is often missing from the dashboard's own menu, but
+any plan can mint one there. The interactive `cursor-agent login` on your
+own machine never reaches the builder container - only a key does. Builds
+draw on your Cursor plan's included usage, and nothing is billed by
+DispatchSEO.
 
 Same two paths as the other credentials: paste it on the dashboard's "Turn
 on automatic builds" step (stored encrypted, no file to edit), or set it

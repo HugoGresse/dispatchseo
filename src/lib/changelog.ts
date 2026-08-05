@@ -104,8 +104,8 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
       "editor and the CLI, or let it run the overnight builds and wake up to a pull request. " +
       "The connect paste merges into any MCP servers you already have rather than replacing " +
       "them. One thing worth knowing before you switch: the overnight builds run on a server " +
-      "that can't open a browser to log you in, so they need a Cursor API key, and Cursor " +
-      "issues those on paid plans only - connecting and driving it by hand is free on any plan. " +
+      "that can't open a browser to log you in, so they need a Cursor API key - any plan mints " +
+      "one at cursor.com/dashboard/api, and builds draw on your plan's included usage. " +
       "Full walkthrough at /docs/install-cursor.",
   },
   {

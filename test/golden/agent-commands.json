@@ -88,8 +88,8 @@
         "repoSecretName": "CURSOR_API_KEY",
         "envVar": "CURSOR_API_KEY",
         "instanceSettingsColumn": "builder_cursor_key",
-        "placeholder": "your Cursor API key",
-        "mintUrl": "https://cursor.com/dashboard"
+        "placeholder": "crsr_...",
+        "mintUrl": "https://cursor.com/dashboard/api"
       },
       "capabilities": {
         "mcp": true,

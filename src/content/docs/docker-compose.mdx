@@ -209,11 +209,13 @@ the same `.env`.
 ### Running Cursor instead
 
 Same two paths again. On the dashboard, the paste box has a Cursor tab -
-create an API key in your [Cursor dashboard](https://cursor.com/dashboard)
-and paste it there. Two Cursor-specific facts worth knowing before you
-start: Cursor issues API keys on **paid plans only**, and the interactive
-`cursor-agent login` on your own machine never reaches the builder
-container - only a key does. Builds run on your Cursor plan; DispatchSEO
+create an API key at
+[cursor.com/dashboard/api](https://cursor.com/dashboard/api) and paste it
+there. Two Cursor-specific facts worth knowing before you start: open that
+URL **directly** (the page is often missing from the dashboard's own menu,
+but any plan can mint a key there), and the interactive `cursor-agent
+login` on your own machine never reaches the builder container - only a
+key does. Builds draw on your Cursor plan's included usage; DispatchSEO
 bills nothing.
 
 The terminal alternative is one line in the same `.env`:

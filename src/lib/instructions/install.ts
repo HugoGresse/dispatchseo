@@ -571,7 +571,8 @@ export const CODEX_CREDENTIAL_BRIEF =
 export const CURSOR_CREDENTIAL_STEP = `2. \`CURSOR_API_KEY\` - what the overnight builders authenticate with. The
    builds run on a server with no browser, so the interactive
    \`cursor-agent login\` the owner already has does NOT reach them - only an
-   API key does, and Cursor issues API keys on paid plans only. Two
+   API key does. Any plan can mint one at cursor.com/dashboard/api (that URL
+   directly - the page is often missing from the dashboard's own menu). Two
    field-proven traps:
    - terminals (VS Code's, tmux) copy a line-wrapped key with a REAL
      newline inside - GitHub then stores a broken key;
@@ -587,8 +588,8 @@ export const CURSOR_CREDENTIAL_STEP = `2. \`CURSOR_API_KEY\` - what the overnigh
 
    \`\`\`bash
    #!/bin/bash
-   echo "STEP 1: Create an API key in your Cursor dashboard (cursor.com -"
-   echo "API keys need a paid plan). Copy the key, then press Enter here."
+   echo "STEP 1: Create an API key at cursor.com/dashboard/api (open that"
+   echo "URL directly). Copy the key, then press Enter here."
    while true; do
      read -r
      KEY=$(pbpaste | tr -d '[:space:]')   # Linux: xclip -o instead of pbpaste
@@ -606,8 +607,8 @@ export const CURSOR_CREDENTIAL_STEP = `2. \`CURSOR_API_KEY\` - what the overnigh
        printf '%s' "$KEY" | gh secret set CURSOR_API_KEY --repo {{REPO}}
        echo "DONE - verified and saved." ;;
      *"API key is invalid"*|*"Authentication required"*|*Unauthorized*)
-       echo "Cursor rejected the key - create a fresh one in the Cursor"
-       echo "dashboard (a paid plan is required) and rerun this script."
+       echo "Cursor rejected the key - create a fresh one at"
+       echo "cursor.com/dashboard/api and rerun this script."
        exit 1 ;;
      *)
        echo "Couldn't check the key - Cursor answered with something"
@@ -627,11 +628,11 @@ export const CODEX_SMOKE_NOTE =
 
 export const CURSOR_CREDENTIAL_BRIEF =
   '"You will create a Cursor API key when we get to secrets - one browser ' +
-  'page, about a minute, and we will VERIFY it works with a real call before ' +
-  'it goes anywhere. Cursor issues API keys on paid plans only - the builds ' +
-  'run where no browser exists, so your interactive login does not reach ' +
-  'them." On a LOCAL backend say instead: "No key step here - your builds run ' +
-  "in the builder container, which gets its key in the wizard's " +
+  'page (cursor.com/dashboard/api), about a minute, and we will VERIFY it ' +
+  'works with a real call before it goes anywhere. The builds run where no ' +
+  'browser exists, so your interactive login does not reach them - only the ' +
+  'key does." On a LOCAL backend say instead: "No key step here - your builds ' +
+  "run in the builder container, which gets its key in the wizard's " +
   'automatic-builds step."';
 
 export const CURSOR_SMOKE_NOTE =
