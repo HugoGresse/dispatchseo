@@ -78,7 +78,7 @@
         "envVar": "CURSOR_API_KEY",
         "instanceSettingsColumn": "builder_cursor_key",
         "placeholder": "your Cursor API key",
-        "mintUrl": "https://cursor.com/dashboard"
+        "mintUrl": "https://cursor.com/pricing"
       },
       "capabilities": {
         "mcp": true,

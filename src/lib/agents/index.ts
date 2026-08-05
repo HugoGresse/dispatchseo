@@ -346,9 +346,21 @@ const cursor: AgentDefinition = {
     // cross-paste mistake that has already bitten this repo twice.
     looksValid: (v) =>
       v.length > 20 && !/\s/.test(v) && !v.startsWith("sk-ant-") && !v.startsWith("sk-"),
-    howToMint: "Create an API key in your Cursor dashboard, under Integrations.",
-    mintUrl: "https://cursor.com/dashboard",
-    mintLinkLabel: "grab your key",
+    // Where an API key comes from is NOT settled. Checked against a real free
+    // account on 2026-08-05: the dashboard has exactly three sections
+    // (Overview, Settings, Integrations) and none of them mint an API key -
+    // Integrations is third-party connections only (GitHub, Slack, Linear,
+    // Jira, Sentry). So a key appears to be a paid-plan feature, and this text
+    // must not send a free-plan owner hunting for a page that isn't there.
+    // Interactive use needs no key at all: `cursor-agent login` does a browser
+    // OAuth and stores credentials locally, which is what the CLI's own error
+    // text recommends first. A key is only needed where no browser exists,
+    // i.e. CI. Pin this down before any surface offers Cursor as a builder.
+    howToMint:
+      "Run `cursor-agent login` for interactive use. A CI key needs a paid Cursor plan.",
+    mintCommand: "cursor-agent login",
+    mintUrl: "https://cursor.com/pricing",
+    mintLinkLabel: "see Cursor's plans",
     verifiedWith: "a shape check",
   },
   cost: {
