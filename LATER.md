@@ -2,6 +2,18 @@
 
 Things that were tempting but deliberately not built. Add here instead of building.
 
+- **ANTHROPIC_API_KEY beyond the Actions pipeline** (queued 2026-08-05, when
+  Anthropic's `oauth_org_not_allowed` flag killed a paying customer's builds and
+  the only escape hatch was Codex). The GitHub-Actions workflows now fall back
+  to an `ANTHROPIC_API_KEY` repo secret when no subscription token exists, and
+  every alert names that path - but it's repo-secret-only. Not built: a
+  dashboard credential box for the key (registry `credential` entry, wizard tab,
+  storage-time live verification like Codex's), the docker in-stack builder
+  (`docker/builder/run.sh` only reads `CLAUDE_CODE_OAUTH_TOKEN`), and an
+  `instance_settings` column for self-host. Build these if more than the one
+  customer hits the flag, or if Anthropic's bug cluster (open since 2026-05)
+  keeps growing.
+
 - **Cross-post shipped guides via Postiz** (idea from Postiz's 2026-07 "AI slop SEO" blog
   post). After a guide merges, chop it into platform posts (X thread, LinkedIn) and
   schedule via Postiz (open source, 28+ platforms) so distribution feeds back into

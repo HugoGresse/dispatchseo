@@ -4,7 +4,9 @@
 // agents' invoke steps are generated from the same text).
 //
 // Env token names resolve against each agent module's ENV_LINES table, in the
-// order listed here.
+// order listed here. `env` is keyed by agent id; the generator throws if a
+// registered agent has no list, so a new agent can never silently inherit
+// another agent's env block.
 
 export const WORKFLOWS = {
   "seo-daily.yml": {
@@ -16,8 +18,10 @@ export const WORKFLOWS = {
       maxTurns: 150,
       showFullOutput: false,
       mcpConfig: "./.github/mcp-ci.json",
-      claudeEnv: ["agentToken", "seoKey", "dataforseo", "githubToken", "mcpTimeout", "placeholders"],
-      codexEnv: ["seoKey", "dataforseo", "githubToken", "ghToken", "placeholders"],
+      env: {
+        claude: ["agentToken", "seoKey", "dataforseo", "githubToken", "mcpTimeout", "placeholders"],
+        codex: ["seoKey", "dataforseo", "githubToken", "ghToken", "placeholders"],
+      },
       artifact: true,
       classify: {
         kind: "full",
@@ -57,8 +61,10 @@ export const WORKFLOWS = {
       maxTurns: 150,
       showFullOutput: true,
       mcpConfig: "./.github/mcp-ci.json",
-      claudeEnv: ["agentToken", "seoKey", "dataforseo", "githubToken", "mcpTimeout", "placeholders"],
-      codexEnv: ["seoKey", "dataforseo", "githubToken", "ghToken", "placeholders"],
+      env: {
+        claude: ["agentToken", "seoKey", "dataforseo", "githubToken", "mcpTimeout", "placeholders"],
+        codex: ["seoKey", "dataforseo", "githubToken", "ghToken", "placeholders"],
+      },
       artifact: false,
       classify: {
         kind: "full",
@@ -87,8 +93,10 @@ export const WORKFLOWS = {
       maxTurns: 120,
       showFullOutput: true,
       mcpConfig: "./.github/mcp-ci.json",
-      claudeEnv: ["agentToken", "seoKey", "mcpTimeout"],
-      codexEnv: ["seoKey", "ghToken"],
+      env: {
+        claude: ["agentToken", "seoKey", "mcpTimeout"],
+        codex: ["seoKey", "ghToken"],
+      },
       artifact: false,
       classify: { kind: "basic" },
     },
@@ -103,8 +111,10 @@ export const WORKFLOWS = {
       maxTurns: 150,
       showFullOutput: true,
       mcpConfig: "./.github/mcp-ci.json",
-      claudeEnv: ["agentToken", "seoKey", "dataforseo", "mcpTimeout"],
-      codexEnv: ["seoKey", "dataforseo", "ghTokenCommented"],
+      env: {
+        claude: ["agentToken", "seoKey", "dataforseo", "mcpTimeout"],
+        codex: ["seoKey", "dataforseo", "ghTokenCommented"],
+      },
       artifact: false,
       classify: { kind: "basic" },
     },
@@ -119,8 +129,10 @@ export const WORKFLOWS = {
       maxTurns: 100,
       showFullOutput: true,
       mcpConfig: "./.github/mcp-ci.json",
-      claudeEnv: ["agentToken", "seoKey", "dataforseo", "mcpTimeout"],
-      codexEnv: ["seoKey", "dataforseo", "ghToken"],
+      env: {
+        claude: ["agentToken", "seoKey", "dataforseo", "mcpTimeout"],
+        codex: ["seoKey", "dataforseo", "ghToken"],
+      },
       artifact: false,
       classify: { kind: "basic" },
     },
@@ -135,8 +147,10 @@ export const WORKFLOWS = {
       maxTurns: 100,
       showFullOutput: true,
       mcpConfig: "./.github/mcp-ci.json",
-      claudeEnv: ["agentToken", "seoKey", "dataforseo", "mcpTimeout"],
-      codexEnv: ["seoKey", "dataforseo", "ghToken"],
+      env: {
+        claude: ["agentToken", "seoKey", "dataforseo", "mcpTimeout"],
+        codex: ["seoKey", "dataforseo", "ghToken"],
+      },
       artifact: false,
       classify: { kind: "basic" },
     },
@@ -151,8 +165,10 @@ export const WORKFLOWS = {
       maxTurns: 120,
       showFullOutput: true,
       mcpConfig: "./.github/mcp-ci.json",
-      claudeEnv: ["agentToken", "seoKey", "dataforseo", "mcpTimeout"],
-      codexEnv: ["seoKey", "dataforseo", "ghToken"],
+      env: {
+        claude: ["agentToken", "seoKey", "dataforseo", "mcpTimeout"],
+        codex: ["seoKey", "dataforseo", "ghToken"],
+      },
       artifact: false,
       classify: { kind: "basic" },
     },
@@ -175,8 +191,10 @@ export const WORKFLOWS = {
         "refuses to start (\"non-human actor\") and the PR never gets a",
         "verdict. Same-repo + seo-tool label gates above still apply.",
       ],
-      claudeEnv: ["agentToken", "githubToken", "ghToken", "prNumber"],
-      codexEnv: ["githubToken", "ghToken", "prNumber"],
+      env: {
+        claude: ["agentToken", "githubToken", "ghToken", "prNumber"],
+        codex: ["githubToken", "ghToken", "prNumber"],
+      },
       artifact: false,
       classify: null,
       continueOnError: false,

@@ -121,16 +121,24 @@ const idAlternation = AGENTS.map((a) => a.id).join("|");
 // non-default agent whose secret exists while the default's is absent wins,
 // else the default - which is what every pre-`agent`-field install ran.
 function inferenceLines() {
+  // "The default agent's credential is absent" means ALL of its credentials
+  // are absent - an ANTHROPIC_API_KEY-only Claude install must not infer codex.
+  const defaultAbsent = [
+    DEFAULT_AGENT.resolveEnvName,
+    ...(DEFAULT_AGENT.extraResolveEnv ?? []).map((e) => e.envName),
+  ]
+    .map((n) => `[ -z "$${n}" ]`)
+    .join(" && ");
   if (NON_DEFAULT_AGENTS.length === 1) {
     const a = NON_DEFAULT_AGENTS[0];
     return [
-      `            if [ -n "$${a.resolveEnvName}" ] && [ -z "$${DEFAULT_AGENT.resolveEnvName}" ]; then agent=${a.id}; else agent=${DEFAULT_AGENT.id}; fi`,
+      `            if [ -n "$${a.resolveEnvName}" ] && ${defaultAbsent}; then agent=${a.id}; else agent=${DEFAULT_AGENT.id}; fi`,
     ];
   }
   const out = [];
   NON_DEFAULT_AGENTS.forEach((a, i) => {
     out.push(
-      `            ${i === 0 ? "if" : "elif"} [ -n "$${a.resolveEnvName}" ] && [ -z "$${DEFAULT_AGENT.resolveEnvName}" ]; then agent=${a.id}`,
+      `            ${i === 0 ? "if" : "elif"} [ -n "$${a.resolveEnvName}" ] && ${defaultAbsent}; then agent=${a.id}`,
     );
   });
   out.push(`            else agent=${DEFAULT_AGENT.id}`);
@@ -139,7 +147,13 @@ function inferenceLines() {
 }
 
 function resolveEnvLines() {
-  return AGENTS.map((a) => `          ${a.resolveEnvName}: \${{ secrets.${a.secretName} }}`);
+  return AGENTS.flatMap((a) => [
+    `          ${a.resolveEnvName}: \${{ secrets.${a.secretName} }}`,
+    // Secondary credentials an agent can run on (e.g. Claude's metered
+    // ANTHROPIC_API_KEY fallback) - the resolve step needs to see them to
+    // decide, and to word its errors honestly.
+    ...(a.extraResolveEnv ?? []).map((e) => `          ${e.envName}: \${{ secrets.${e.secretName} }}`),
+  ]);
 }
 
 const UNKNOWN_ARM = [
@@ -427,15 +441,17 @@ function composeRun(wf, prompt) {
     for (const s of a.configSteps({ guardIf: wf.guardIf, variant: r.variant })) parts.push(s);
   }
   for (const a of AGENTS) {
+    const env = r.env[a.id];
+    if (!env) throw new Error(`${wf.job}: workflows.mjs run.env has no entry for agent "${a.id}"`);
     parts.push(
       a.invokeStep({
-        name: a.isDefault ? r.invokeName : r.invokeName,
+        name: r.invokeName,
         guardIf: wf.guardIf,
         prompt,
         maxTurns: r.maxTurns,
         showFullOutput: r.showFullOutput,
         mcpConfig: r.mcpConfig,
-        env: a.id === "claude" ? r.claudeEnv : r.codexEnv,
+        env,
         allowedBots: r.allowedBots ?? "*",
         allowedBotsCommentLines: r.allowedBotsCommentLines,
         continueOnError,

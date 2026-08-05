@@ -73,6 +73,17 @@ export type ChangelogEntry = {
 // this list - it exists so that writing the note down doesn't ping anyone.
 export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
+    kind: "new",
+    text:
+      "Claude Code projects can now build on an Anthropic API key: add an ANTHROPIC_API_KEY " +
+      "secret to your site repo and the builders use it whenever no subscription token is set. " +
+      "This is the way out when Anthropic refuses your subscription for Claude Code outright " +
+      "(their oauth_org_not_allowed flag) - a state a freshly minted token cannot clear, which " +
+      "is also why the health-check alerts now say what actually fixes it instead of telling " +
+      "you to mint a new token. While they were at it, the alerts stopped going red over a " +
+      "usage limit - a limited account is a working account, and builds already wait it out.",
+  },
+  {
     kind: "fixed",
     text:
       "The Search Console refresh stopped keeping up on sites with a few pages waiting to be " +

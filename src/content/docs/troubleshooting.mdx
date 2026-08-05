@@ -181,6 +181,29 @@ request it opens. Full walkthrough:
    itself once you turn it on.
 </Symptom>
 
+<Symptom error="Your organization has disabled Claude subscription access for Claude Code">
+**What it means.** Anthropic is refusing the Claude *account* behind your
+token (the `oauth_org_not_allowed` flag), not the token itself. Minting a
+fresh `claude setup-token` doesn't help: the new token carries the same flag.
+Despite the "organization" wording, this hits personal Pro/Max accounts too,
+usually after a lapsed or duplicate subscription.
+
+**Fixes:**
+
+1. **On a company Claude plan:** ask the plan's admin to enable Claude Code
+   access. It's a seat/plan setting on their end.
+2. **On a personal plan:** check claude.ai billing for a lapsed or duplicate
+   subscription. If everything looks fine, contact Anthropic support - there's
+   no self-serve fix for this.
+3. **Sidestep subscriptions entirely:** create an API key at
+   console.anthropic.com and add it to your site repo with
+   `gh secret set ANTHROPIC_API_KEY`, then delete the dead token with
+   `gh secret delete CLAUDE_CODE_OAUTH_TOKEN`. The builders use the key
+   automatically whenever no subscription token exists. This runs on metered
+   billing against your Anthropic account.
+4. **Or switch the site to Codex** in Settings.
+</Symptom>
+
 <Symptom error="user cancelled MCP tool call (Codex)">
 **What it means.** Codex asks for per-call approval on MCP tools by default,
 and on a scheduled run there is nobody to approve - so every call comes back

@@ -357,6 +357,15 @@ const CUSTOMER_ACTIONABLE: Array<{ test: RegExp; lead: string }> = [
     lead: "Your coding agent's account has hit its usage limit, so builds are paused until it resets. Upgrading that account, or switching this site to a different agent in Settings, gives the builders more room.",
   },
   {
+    // Anthropic's oauth_org_not_allowed: a server-side flag on the Claude
+    // ACCOUNT, not the token. MUST stay above the generic credential rule -
+    // the message contains "token", and that rule's "re-paste it" advice is
+    // exactly the thing that provably does nothing here (Maxpertise,
+    // 2026-08-04).
+    test: /disabled claude subscription access|oauth_org_not_allowed/i,
+    lead: "Anthropic is refusing your Claude subscription for Claude Code builds (their oauth_org_not_allowed flag) - a fresh token will not fix it. If your Claude account is on a company plan, ask its admin to enable Claude Code access; on a personal plan, check your claude.ai billing for a lapsed or duplicate subscription, or contact Anthropic support. You can also switch the builders to metered API billing (add an ANTHROPIC_API_KEY secret to your repo, then delete CLAUDE_CODE_OAUTH_TOKEN), or switch this site to a different agent in Settings.",
+  },
+  {
     test: /secret|credential|token|unauthorized|forbidden|revoked|\b401\b|\b403\b/i,
     lead: "Your coding agent's credential looks missing, expired or revoked, so the builders cannot run. Re-paste it on the dashboard and they resume on the next scheduled run.",
   },

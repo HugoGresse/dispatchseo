@@ -21,6 +21,19 @@ const id = "claude";
 const resolveEnvName = "CLAUDE_TOKEN";
 const secretName = "CLAUDE_CODE_OAUTH_TOKEN";
 
+// Subscription-first, API-key fallback. CLAUDE_CODE_OAUTH_TOKEN stays the
+// blessed path (runs on the plan the owner already pays for); ANTHROPIC_API_KEY
+// is the metered escape hatch for accounts Anthropic's subscription gate
+// refuses outright - oauth_org_not_allowed, a server-side flag on the ACCOUNT
+// that a freshly minted token provably cannot clear (widely-duplicated
+// claude-code issue since 2026-05; hit a paying customer on 2026-08-04).
+// Precedence is deliberate: when both secrets exist the subscription token
+// wins, so adding a key can never silently move a working install onto
+// per-token billing - switching means deleting the dead token, and every error
+// message that names the key path says exactly that.
+const apiKeySecretName = "ANTHROPIC_API_KEY";
+const extraResolveEnv = [{ envName: apiKeySecretName, secretName: apiKeySecretName }];
+
 // Per-workflow wording for the resolve step's credential errors. The setup
 // workflow cannot say "rerun the setup command" (that IS the setup command),
 // and the validator says "validates" rather than "builds".
@@ -35,16 +48,22 @@ function resolveCaseArm(variant) {
       ? "Reconnect Claude Code from your DispatchSEO dashboard to store a verified replacement."
       : "Rerun the setup command from your DispatchSEO dashboard to mint and verify a replacement.";
   return `            claude)
-              if [ -z "$CLAUDE_TOKEN" ]; then
-                echo "::error::This project ${verb} with Claude Code, but the CLAUDE_CODE_OAUTH_TOKEN secret is missing or empty on this repo. ${missingFix}"
+              if [ -z "$CLAUDE_TOKEN" ] && [ -n "$ANTHROPIC_API_KEY" ]; then
+                echo "No CLAUDE_CODE_OAUTH_TOKEN on this repo - running Claude on the ANTHROPIC_API_KEY secret instead (metered API billing on your Anthropic account)."
+              elif [ -z "$CLAUDE_TOKEN" ]; then
+                echo "::error::This project ${verb} with Claude Code, but the CLAUDE_CODE_OAUTH_TOKEN secret is missing or empty on this repo (and there is no ANTHROPIC_API_KEY secret to fall back on). ${missingFix} Or run on metered API billing instead: create a key at console.anthropic.com and pipe it into 'gh secret set ANTHROPIC_API_KEY'."
                 exit 1
-              fi
-              case "$CLAUDE_TOKEN" in
-                sk-ant-oat*) : ;;
-                *)
-                  echo "::error::CLAUDE_CODE_OAUTH_TOKEN does not look like a Claude Code OAuth token (expected it to start with sk-ant-oat). It was probably line-wrapped or the wrong text was pasted when it was saved. ${shapeFix}"
-                  exit 1 ;;
-              esac ;;`;
+              else
+                case "$CLAUDE_TOKEN" in
+                  sk-ant-oat*) : ;;
+                  *)
+                    echo "::error::CLAUDE_CODE_OAUTH_TOKEN does not look like a Claude Code OAuth token (expected it to start with sk-ant-oat). It was probably line-wrapped or the wrong text was pasted when it was saved. ${shapeFix}"
+                    exit 1 ;;
+                esac
+                if [ -n "$ANTHROPIC_API_KEY" ]; then
+                  echo "Both CLAUDE_CODE_OAUTH_TOKEN and ANTHROPIC_API_KEY are set - the subscription token takes precedence. To run on the API key instead: gh secret delete CLAUDE_CODE_OAUTH_TOKEN."
+                fi
+              fi ;;`;
 }
 
 // Claude needs no config file written at run time: claude-code-action reads
@@ -57,7 +76,8 @@ function configSteps() {
 // Named env line snippets the invoke step can carry, in the exact text the
 // workflows have always shipped. workflows.mjs picks per workflow.
 const ENV_LINES = {
-  agentToken: `          CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}`,
+  agentToken: `          CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ANTHROPIC_API_KEY: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN == '' && secrets.ANTHROPIC_API_KEY || '' }}`,
   seoKey: `          SEO_MCP_API_KEY: \${{ secrets.SEO_MCP_API_KEY }}`,
   dataforseo: `          DATAFORSEO_LOGIN: \${{ secrets.DATAFORSEO_LOGIN }}
           DATAFORSEO_PASSWORD: \${{ secrets.DATAFORSEO_PASSWORD }}`,
@@ -95,7 +115,11 @@ function invokeStep({ name, guardIf, prompt, maxTurns, showFullOutput, mcpConfig
     lines.push(`          # Cloud fires this as the DispatchSEO GitHub App (a Bot actor), and the App also authored the workflow commits, so scheduled runs are bot-actored too. Every trigger here needs repo write access, so allowing bots is safe; without this claude-code-action aborts with "non-human actor".`);
   }
   lines.push(`          allowed_bots: "${allowedBots}"`);
+  lines.push(`          # Subscription token first; the metered ANTHROPIC_API_KEY only reaches`);
+  lines.push(`          # the action when no subscription token exists, so adding a key never`);
+  lines.push(`          # silently switches a working subscription install to per-token billing.`);
   lines.push(`          claude_code_oauth_token: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}`);
+  lines.push(`          anthropic_api_key: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN == '' && secrets.ANTHROPIC_API_KEY || '' }}`);
   lines.push(`          # Pass the standard workflow token as an input so the action uses it`);
   lines.push(`          # directly instead of exchanging OIDC for a Claude GitHub App token`);
   lines.push(`          # (which would require installing the app on the repo).`);
@@ -149,6 +173,13 @@ function classifyBranch() {
             if echo "$msg" | grep -qiE 'session limit|usage limit|limit reached|limit .*resets|rate.?limit'; then
               defer "Claude hit a usage limit this run - the dashboard keeps this build due and re-dispatches it within a few hours. Not a failure."
             fi
+            # oauth_org_not_allowed: Anthropic flags the ACCOUNT, not the token,
+            # so the generic "re-run setup" advice below would send the owner to
+            # re-mint a token that comes back just as blocked. Name the real
+            # ways out instead.
+            if echo "$msg" | grep -qi 'disabled Claude subscription access'; then
+              fail "$msg. A fresh token will NOT fix this - Anthropic has flagged the Claude account itself (oauth_org_not_allowed). On a company Claude plan, ask its admin to enable Claude Code; on a personal plan, check claude.ai billing for a lapsed or duplicate subscription or contact Anthropic support. Or switch the builders to metered API billing: create a key at console.anthropic.com, 'gh secret set ANTHROPIC_API_KEY', then 'gh secret delete CLAUDE_CODE_OAUTH_TOKEN'"
+            fi
             reason="workflow failed (no error detail captured)"
             [ -n "$msg" ] && reason="$msg"
             fail "$reason"
@@ -159,10 +190,13 @@ function classifyBranch() {
 // Claude failure there keeps its existing loud path, deliberately.
 const basicClassifyBranch = null;
 
-// token-check: a Claude OAuth token can only be proven by using it, so
-// liveness is one minimal model call.
+// token-check: a Claude credential can only be proven by using it, so
+// liveness is one minimal model call - on whichever credential the repo
+// actually builds with (subscription token first, ANTHROPIC_API_KEY fallback,
+// same precedence as the builders - a health check that proves the OTHER
+// credential reports green while the one that builds is dead).
 function livenessStep() {
-  return `      # One minimal model call. If the token is dead/revoked/limited, this
+  return `      # One minimal model call. If the credential is dead/revoked/limited, this
       # step fails and the failure handler below reports the real reason.
       - name: Claude token liveness
         id: liveness
@@ -172,6 +206,7 @@ function livenessStep() {
           # Cloud fires this as the DispatchSEO GitHub App (a Bot actor), and the App also authored the workflow commits, so scheduled runs are bot-actored too. Every trigger here needs repo write access, so allowing bots is safe; without this claude-code-action aborts with "non-human actor".
           allowed_bots: "*"
           claude_code_oauth_token: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN == '' && secrets.ANTHROPIC_API_KEY || '' }}
           github_token: \${{ secrets.GITHUB_TOKEN }}
           prompt: "Reply with exactly: ok"
           claude_args: |
@@ -179,6 +214,10 @@ function livenessStep() {
 }
 
 // token-check: how the failure-report step words a dead Claude credential.
+// Classified, not generic: the default advice (mint a fresh token) is actively
+// wrong for two of the states this check can surface, and wrong advice under a
+// red banner is worse than none - it sends the owner to do a thing that
+// provably changes nothing (2026-08-05, Maxpertise).
 const livenessFailureSnippet = `            f="$RUNNER_TEMP/claude-execution-output.json"
             if [ -f "$f" ]; then
               msg=$(jq -r 'if type=="array" then .[] else . end
@@ -186,13 +225,29 @@ const livenessFailureSnippet = `            f="$RUNNER_TEMP/claude-execution-out
                            | (.result // .error // empty)' "$f" 2>/dev/null | tail -1)
               [ -n "$msg" ] && reason="Claude token check failed: $msg"
             fi
-            fix="mint a fresh token (claude setup-token) and re-run the setup command from your DispatchSEO dashboard"`;
+            if echo "$msg" | grep -qiE 'session limit|usage limit|limit reached|limit .*resets|rate.?limit'; then
+              # The credential WORKS - the account is just out of headroom right
+              # now. The builders already treat that as a quiet deferral, so a
+              # red health banner here would only train owners to ignore it.
+              echo "Claude is usage-limited right now, but the credential itself is alive - treating the check as healthy. Builds defer until the limit resets."
+              curl -sG --max-time 30 -H "Authorization: Bearer $SEO_MCP_API_KEY" \\
+                --data-urlencode "job=seo-token-check" --data-urlencode "ok=1" \\
+                "{{BACKEND_URL}}/api/cron/deploy-check" || true
+              exit 0
+            fi
+            fix="mint a fresh token (claude setup-token) and re-run the setup command from your DispatchSEO dashboard"
+            if echo "$msg" | grep -qi 'disabled Claude subscription access'; then
+              # oauth_org_not_allowed: a server-side flag on the ACCOUNT, not
+              # the token - re-minting provably does nothing.
+              fix="a fresh token will NOT fix this one - Anthropic has flagged the Claude account itself (oauth_org_not_allowed). On a company Claude plan, ask its admin to enable Claude Code; on a personal plan, check claude.ai billing for a lapsed or duplicate subscription or contact Anthropic support. Or switch the builders to metered API billing: create a key at console.anthropic.com, 'gh secret set ANTHROPIC_API_KEY', then 'gh secret delete CLAUDE_CODE_OAUTH_TOKEN'"
+            fi`;
 
 export default {
   id,
   isDefault: true,
   secretName,
   resolveEnvName,
+  extraResolveEnv,
   resolveCaseArm,
   configSteps,
   invokeStep,
