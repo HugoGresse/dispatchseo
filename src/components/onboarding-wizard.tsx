@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useState, useTransition, type ReactNode } from "react";
 import { JOURNEY_STAGES, STAGE_META } from "@/lib/journey-meta";
 import { mcpServerName } from "@/lib/mcp-connect";
-import { agentById, type AgentId } from "@/lib/agents";
+import { agentById, builderAgents, type AgentId } from "@/lib/agents";
 import { AgentMark } from "@/components/agent-mark";
 import { ShellCommandTabs } from "./shell-command-tabs";
 import { PixelDispatcher } from "./pixel-dispatcher";
@@ -170,11 +170,18 @@ const AGENT_PICKER_SUBTITLE: Record<AgentId, string> = {
   cursor: "Connects to everything · does not run the scheduled builds yet",
 };
 
-// The Claude Code / Codex pick, shared by the agent step (where the choice is
-// made) and the finale (where the commands it decides are pasted - a dropped
-// session resumes straight to s5, so the choice must be changeable there too).
-// Same card markup as the cloud wizard's c2 picker, so the two wizards can't
-// drift on how this decision looks.
+// The builder pick, shared by the agent step (where the choice is made) and
+// the finale (where the commands it decides are pasted - a dropped session
+// resumes straight to s5, so the choice must be changeable there too). Same
+// card markup as the cloud wizard's c2 picker, so the two wizards can't drift
+// on how this decision looks.
+//
+// Derived from builderAgents(), not a hardcoded pair. This choice writes
+// projects.agent, so it must offer exactly the agents that can run a scheduled
+// build - and it has to stay right in BOTH directions. A hardcoded list keeps
+// a connect-only agent out today by luck, and then silently fails to offer a
+// new builder on the day one is promoted, which is the harder failure to spot:
+// the flag flips, everything reports success, and onboarding never mentions it.
 function AgentPicker({
   value,
   onPick,
@@ -186,7 +193,7 @@ function AgentPicker({
 }) {
   return (
     <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-      {(["claude", "codex"] as const).map((id) => (
+      {builderAgents().map(({ id }) => (
         <label
           key={id}
           className="flex cursor-pointer flex-col gap-1 rounded-lg border border-neutral-700 p-3.5 transition-colors hover:border-neutral-500 has-[:checked]:border-violet-500 has-[:checked]:bg-[#191521]"

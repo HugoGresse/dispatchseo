@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition, type JSX, type ReactNode } 
 import { useActionState } from "react";
 import { JOURNEY_STAGES, STAGE_META } from "@/lib/journey-meta";
 import { FirstRunStatus } from "@/components/first-run-status";
-import { agentById, type AgentId } from "@/lib/agents";
+import { agentById, builderAgents, type AgentId } from "@/lib/agents";
 import { AgentMark } from "@/components/agent-mark";
 import {
   chooseGithubRepo,
@@ -785,8 +785,11 @@ export function CloudOnboardingWizard(props: {
                 Both do the same job here - research, writing, pull requests. The difference is who
                 bills you.
               </p>
+              {/* builderAgents(), not a hardcoded pair - see the same picker
+                  in onboarding-wizard.tsx for why it has to be right in both
+                  directions. */}
               <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                {(["claude", "codex"] as const).map((id) => (
+                {builderAgents().map(({ id }) => (
                   <label
                     key={id}
                     className="flex cursor-pointer flex-col gap-1 rounded-lg border border-neutral-700 p-3.5 transition-colors hover:border-neutral-500 has-[:checked]:border-violet-500 has-[:checked]:bg-[#191521]"
