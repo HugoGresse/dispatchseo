@@ -71,125 +71,137 @@ export type ChangelogEntry = {
 // Shipped, but not yet announced. Append here as the work lands; empty this
 // into a new CHANGELOG entry when it's time to cut a release. Nothing reads
 // this list - it exists so that writing the note down doesn't ping anyone.
-export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
-  {
-    kind: "new",
-    text:
-      "Your pages get maintained now, not just published. Every night the backend looks for " +
-      "published guides sitting at position 5-20 for their own keyword - close enough that a " +
-      "refresh beats writing something new - and queues an 'Update existing page' idea (auto-" +
-      "approved on Auto projects, your call on Semi). The builder then refreshes that page in " +
-      "its normal daily slot: closes the gaps against the current page 1, re-verifies stale " +
-      "facts against fresh docs, sharpens the title for clicks - same URL, same PR review flow. " +
-      "At most two refreshes in flight, and a refreshed page rests 45 days before it can be " +
-      "flagged again.",
-  },
-  {
-    kind: "new",
-    text:
-      "The dispatcher now watches your backlinks, not just your pages. Referring domains get a " +
-      "history (weekly snapshots), so the briefing can tell you the one link move worth ten " +
-      "minutes today - a specific free listing from the playbook, raised only while the profile " +
-      "is thin or stalled, silent while it's healthy. The weekly strip counts new referring " +
-      "domains, the journey gains a 'First 5 referring domains' milestone, and every first-ever " +
-      "moment now comes with its real base rate - a first top-10 ranking tells you fewer than 2 " +
-      "in 100 pages get there in a year, so you know it's a win, not a checkbox. Agents get the " +
-      "same read over MCP: get_briefing carries the day's move, get_next_actions a backlink_move.",
-  },
-  {
-    kind: "new",
-    text:
-      "Cursor is now a supported agent, end to end. Pick it on Settings and it does everything " +
-      "Claude Code and Codex do here: connect in one paste and get all 61 tools in both the " +
-      "editor and the CLI, or let it run the overnight builds and wake up to a pull request. " +
-      "The connect paste merges into any MCP servers you already have rather than replacing " +
-      "them. One thing worth knowing before you switch: the overnight builds run on a server " +
-      "that can't open a browser to log you in, so they need a Cursor API key - any plan mints " +
-      "one at cursor.com/dashboard/api, and builds draw on your plan's included usage. " +
-      "Full walkthrough at /docs/install-cursor.",
-  },
-  {
-    kind: "new",
-    text:
-      "Claude Code projects can now build on an Anthropic API key: add an ANTHROPIC_API_KEY " +
-      "secret to your site repo and the builders use it whenever no subscription token is set. " +
-      "This is the way out when Anthropic refuses your subscription for Claude Code outright " +
-      "(their oauth_org_not_allowed flag) - a state a freshly minted token cannot clear, which " +
-      "is also why the health-check alerts now say what actually fixes it instead of telling " +
-      "you to mint a new token. While they were at it, the alerts stopped going red over a " +
-      "usage limit - a limited account is a working account, and builds already wait it out.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "The Search Console refresh stopped keeping up on sites with a few pages waiting to be " +
-      "indexed: it checked them one at a time and eventually ran out of time mid-run, which took " +
-      "your fresh Search Console numbers down with it - silently, because the run died before it " +
-      "could report itself broken. It now checks several pages at once and has far more room to " +
-      "finish, and if it ever does run long you'll hear about it.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "A few dashboard messages assumed Claude Code even when your project runs Codex - the " +
-      "in-stack builder alert now names the agent you actually chose, and the daily secrets " +
-      "check now validates an OpenAI key's shape the same way it always validated Claude's, so " +
-      "a line-wrapped Codex key is flagged before it kills an overnight build.",
-  },
-  {
-    kind: "new",
-    text:
-      "Every guide now ships with its own cover image, drawn by your agent as line art about that " +
-      "post's actual subject - so your blog index stops looking like a wall of identical cards. " +
-      "No image model, no extra bill. It's on by default; the cover block on the Instructions " +
-      "page turns it off for good if you'd rather your own cards.",
-  },
-  {
-    kind: "new",
-    text:
-      "Once your first page is live, Home shows one quiet line asking for a GitHub star. It only " +
-      "appears after the pipeline has actually published something, and starring or dismissing it " +
-      "makes it gone for good - it never asks twice.",
-  },
-  {
-    kind: "new",
-    text:
-      "Analytics now ask before they run. On your first visit one quiet bar offers to accept or " +
-      "decline product analytics and session recording - decline and none of it loads, and " +
-      "nothing else about the product changes.",
-  },
-  {
-    kind: "improved",
-    text:
-      "The privacy policy and terms of service have been rewritten, and there is now a " +
-      "subprocessor list and a data processing agreement you can hand to a procurement team. " +
-      "The privacy policy names every vendor that touches your data, says how long each thing is " +
-      "kept, and describes the delete-account button that was already in Settings.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "Your coding agent running out of hours no longer looks like a broken build. Claude says " +
-      "\"you've hit your session limit\" when a subscription is spent, and DispatchSEO didn't " +
-      "recognise that particular wording - so a pause that clears by itself arrived as a failed " +
-      "build, a red warning and an alert email, and the build sat stuck until a sweep freed it " +
-      "hours later. It's now treated as what it is: the build stays in the queue and is retried " +
-      "once your limit resets.",
-  },
-  {
-    kind: "improved",
-    text:
-      "A security pass tightened a handful of things across the product. Password reset links " +
-      "now have to be the thing that opens the reset form - being signed in is no longer enough " +
-      "to change your password. The checks that fetch your own published pages refuse to follow " +
-      "a redirect off your domain, and the domain you type when adding a site can no longer " +
-      "point at an internal address. Search Console verification stops guessing on hosted " +
-      "accounts, where your own Google connection is the only thing that answers it.",
-  },
-];
+export const UNRELEASED: { kind: ChangeKind; text: string }[] = [];
 
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.2.0",
+    date: "2026-08-05",
+    title: "Cursor joins the lineup - and your pages get maintained, not just published",
+    summary:
+      "Cursor is now a full coding agent here, overnight builds included, alongside Claude " +
+      "Code and Codex. Published guides sitting just off page 1 get refreshed automatically, " +
+      "the dispatcher watches your backlinks and names the one link move worth today, every " +
+      "guide ships with its own cover art, and Claude Code projects can build on an Anthropic " +
+      "API key when a subscription won't do.",
+    changes: [
+      {
+        kind: "new",
+        text:
+          "Cursor is now a supported agent, end to end. Pick it on Settings and it does everything " +
+          "Claude Code and Codex do here: connect in one paste and get all 61 tools in both the " +
+          "editor and the CLI, or let it run the overnight builds and wake up to a pull request. " +
+          "The connect paste merges into any MCP servers you already have rather than replacing " +
+          "them. One thing worth knowing before you switch: the overnight builds run on a server " +
+          "that can't open a browser to log you in, so they need a Cursor API key - any plan mints " +
+          "one at cursor.com/dashboard/api, and builds draw on your plan's included usage. " +
+          "Full walkthrough at /docs/install-cursor.",
+      },
+      {
+        kind: "new",
+        text:
+          "Your pages get maintained now, not just published. Every night the backend looks for " +
+          "published guides sitting at position 5-20 for their own keyword - close enough that a " +
+          "refresh beats writing something new - and queues an 'Update existing page' idea (auto-" +
+          "approved on Auto projects, your call on Semi). The builder then refreshes that page in " +
+          "its normal daily slot: closes the gaps against the current page 1, re-verifies stale " +
+          "facts against fresh docs, sharpens the title for clicks - same URL, same PR review flow. " +
+          "At most two refreshes in flight, and a refreshed page rests 45 days before it can be " +
+          "flagged again.",
+      },
+      {
+        kind: "new",
+        text:
+          "The dispatcher now watches your backlinks, not just your pages. Referring domains get a " +
+          "history (weekly snapshots), so the briefing can tell you the one link move worth ten " +
+          "minutes today - a specific free listing from the playbook, raised only while the profile " +
+          "is thin or stalled, silent while it's healthy. The weekly strip counts new referring " +
+          "domains, the journey gains a 'First 5 referring domains' milestone, and every first-ever " +
+          "moment now comes with its real base rate - a first top-10 ranking tells you fewer than 2 " +
+          "in 100 pages get there in a year, so you know it's a win, not a checkbox. Agents get the " +
+          "same read over MCP: get_briefing carries the day's move, get_next_actions a backlink_move.",
+      },
+      {
+        kind: "new",
+        text:
+          "Claude Code projects can now build on an Anthropic API key: add an ANTHROPIC_API_KEY " +
+          "secret to your site repo and the builders use it whenever no subscription token is set. " +
+          "This is the way out when Anthropic refuses your subscription for Claude Code outright " +
+          "(their oauth_org_not_allowed flag) - a state a freshly minted token cannot clear, which " +
+          "is also why the health-check alerts now say what actually fixes it instead of telling " +
+          "you to mint a new token. While they were at it, the alerts stopped going red over a " +
+          "usage limit - a limited account is a working account, and builds already wait it out.",
+      },
+      {
+        kind: "new",
+        text:
+          "Every guide now ships with its own cover image, drawn by your agent as line art about that " +
+          "post's actual subject - so your blog index stops looking like a wall of identical cards. " +
+          "No image model, no extra bill. It's on by default; the cover block on the Instructions " +
+          "page turns it off for good if you'd rather your own cards.",
+      },
+      {
+        kind: "new",
+        text:
+          "Once your first page is live, Home shows one quiet line asking for a GitHub star. It only " +
+          "appears after the pipeline has actually published something, and starring or dismissing it " +
+          "makes it gone for good - it never asks twice.",
+      },
+      {
+        kind: "new",
+        text:
+          "Analytics now ask before they run. On your first visit one quiet bar offers to accept or " +
+          "decline product analytics and session recording - decline and none of it loads, and " +
+          "nothing else about the product changes.",
+      },
+      {
+        kind: "improved",
+        text:
+          "The privacy policy and terms of service have been rewritten, and there is now a " +
+          "subprocessor list and a data processing agreement you can hand to a procurement team. " +
+          "The privacy policy names every vendor that touches your data, says how long each thing is " +
+          "kept, and describes the delete-account button that was already in Settings.",
+      },
+      {
+        kind: "improved",
+        text:
+          "A security pass tightened a handful of things across the product. Password reset links " +
+          "now have to be the thing that opens the reset form - being signed in is no longer enough " +
+          "to change your password. The checks that fetch your own published pages refuse to follow " +
+          "a redirect off your domain, and the domain you type when adding a site can no longer " +
+          "point at an internal address. Search Console verification stops guessing on hosted " +
+          "accounts, where your own Google connection is the only thing that answers it.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "The Search Console refresh stopped keeping up on sites with a few pages waiting to be " +
+          "indexed: it checked them one at a time and eventually ran out of time mid-run, which took " +
+          "your fresh Search Console numbers down with it - silently, because the run died before it " +
+          "could report itself broken. It now checks several pages at once and has far more room to " +
+          "finish, and if it ever does run long you'll hear about it.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "A few dashboard messages assumed Claude Code even when your project runs Codex - the " +
+          "in-stack builder alert now names the agent you actually chose, and the daily secrets " +
+          "check now validates an OpenAI key's shape the same way it always validated Claude's, so " +
+          "a line-wrapped Codex key is flagged before it kills an overnight build.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Your coding agent running out of hours no longer looks like a broken build. Claude says " +
+          "\"you've hit your session limit\" when a subscription is spent, and DispatchSEO didn't " +
+          "recognise that particular wording - so a pause that clears by itself arrived as a failed " +
+          "build, a red warning and an alert email, and the build sat stuck until a sweep freed it " +
+          "hours later. It's now treated as what it is: the build stays in the queue and is retried " +
+          "once your limit resets.",
+      },
+    ],
+  },
   {
     version: "1.1.0",
     date: "2026-08-02",
