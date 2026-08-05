@@ -36,6 +36,7 @@ jobs:
           CLAUDE_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
         run: |
           agent=""
           code=$(curl -s -o /tmp/agent.json -w "%{http_code}" --max-time 30 \
@@ -43,9 +44,12 @@ jobs:
             https://dispatchseo.com/api/project-mode) || code=unreachable
           [ "$code" = "200" ] && agent=$(jq -r '.agent // empty' /tmp/agent.json 2>/dev/null)
           if [ -z "$agent" ] || [ "$agent" = "null" ]; then
-            if [ -n "$OPENAI_API_KEY" ] && [ -z "$CLAUDE_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ]; then agent=codex; else agent=claude; fi
+            if [ -n "$OPENAI_API_KEY" ] && [ -z "$CLAUDE_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ]; then agent=codex
+            elif [ -n "$CURSOR_API_KEY" ] && [ -z "$CLAUDE_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ]; then agent=cursor
+            else agent=claude
+            fi
           fi
-          case "$agent" in claude|codex) : ;; *) agent=claude ;; esac
+          case "$agent" in claude|codex|cursor) : ;; *) agent=claude ;; esac
           echo "agent=$agent" >> "$GITHUB_OUTPUT"
           echo "Checking the $agent credential."
       # <<< agent-steps: resolve
@@ -103,6 +107,37 @@ jobs:
               echo "could not reach OpenAI to check the key (HTTP $code)." > "$RUNNER_TEMP/agent-failure.txt" ;;
           esac
           cat "$RUNNER_TEMP/agent-failure.txt"; exit 1
+
+      # Measured trap, and the reason this looks paranoid: `cursor-agent models`
+      # exits 0 even when the API key is invalid, and `cursor-agent status`
+      # ignores CURSOR_API_KEY altogether (it reports the interactive login,
+      # which a runner does not have). Both obvious checks therefore pass for
+      # every broken key that will ever exist. This one reads the text.
+      - name: Cursor key liveness
+        id: liveness_cursor
+        if: steps.agent.outputs.agent == 'cursor'
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+        run: |
+          if [ -z "$CURSOR_API_KEY" ]; then
+            echo "This project builds with Cursor, but the CURSOR_API_KEY secret is missing or empty on this repo. Cursor API keys need a paid Cursor plan - a runner has no browser, so 'cursor-agent login' is not an option. Add the key with 'gh secret set CURSOR_API_KEY', or switch this project to Claude Code or Codex on your dashboard." > "$RUNNER_TEMP/agent-failure.txt"
+            cat "$RUNNER_TEMP/agent-failure.txt"; exit 1
+          fi
+          # Whole package into its own directory - the launcher needs its
+          # siblings; see the config step for the long version.
+          mkdir -p "$RUNNER_TEMP/cursor-cli"
+          curl -fsSL "https://downloads.cursor.com/lab/2026.07.23-e383d2b/linux/x64/agent-cli-package.tar.gz" \
+            | tar -xz --strip-components=1 -C "$RUNNER_TEMP/cursor-cli"
+          out=$("$RUNNER_TEMP/cursor-cli/cursor-agent" models 2>&1) || true
+          if printf '%s' "$out" | grep -qi "API key is invalid\|Authentication required\|Unauthorized"; then
+            echo "Cursor rejected the CURSOR_API_KEY secret on this repo. The key was probably revoked, or the paid plan that issued it lapsed - Cursor API keys need one. Create a fresh key and set it again with 'gh secret set CURSOR_API_KEY'." > "$RUNNER_TEMP/agent-failure.txt"
+            cat "$RUNNER_TEMP/agent-failure.txt"; exit 1
+          fi
+          if ! printf '%s' "$out" | grep -q "Available models"; then
+            echo "Could not check the Cursor key - the CLI answered with something unrecognised: $(printf '%s' "$out" | tail -c 300)" > "$RUNNER_TEMP/agent-failure.txt"
+            cat "$RUNNER_TEMP/agent-failure.txt"; exit 1
+          fi
+          echo "Cursor key is live."
       # <<< agent-steps: liveness
 
 
@@ -132,6 +167,11 @@ jobs:
             # flattening it back into a generic message.
             msg=$(cat "$RUNNER_TEMP/agent-failure.txt" 2>/dev/null)
             [ -n "$msg" ] && reason="Codex credential check failed: $msg"
+          elif [ "$AGENT" = "cursor" ]; then
+            # The Cursor branch already resolved this into a sentence naming the
+            # actual fix, so pass that through rather than flattening it.
+            msg=$(cat "$RUNNER_TEMP/agent-failure.txt" 2>/dev/null)
+            [ -n "$msg" ] && reason="Cursor credential check failed: $msg"
           else
             f="$RUNNER_TEMP/claude-execution-output.json"
             if [ -f "$f" ]; then

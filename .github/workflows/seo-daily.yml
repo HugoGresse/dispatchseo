@@ -160,6 +160,7 @@ jobs:
           CLAUDE_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
         run: |
           agent=""
           code=$(curl -s -o /tmp/agent.json -w "%{http_code}" --max-time 30 \
@@ -169,7 +170,10 @@ jobs:
           if [ -z "$agent" ] || [ "$agent" = "null" ]; then
             # No answer from the backend. Infer from which secret exists, and
             # tie-break to claude - see the note above.
-            if [ -n "$OPENAI_API_KEY" ] && [ -z "$CLAUDE_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ]; then agent=codex; else agent=claude; fi
+            if [ -n "$OPENAI_API_KEY" ] && [ -z "$CLAUDE_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ]; then agent=codex
+            elif [ -n "$CURSOR_API_KEY" ] && [ -z "$CLAUDE_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ]; then agent=cursor
+            else agent=claude
+            fi
             echo "Backend did not name an agent (HTTP $code) - inferred '$agent' from the secrets on this repo."
           fi
           # Fail here, in plain language, rather than letting the agent's own
@@ -203,6 +207,26 @@ jobs:
                 *)
                   echo "::error::OPENAI_API_KEY does not look like an OpenAI key (expected it to start with sk-). It was probably line-wrapped or the wrong text was pasted when it was saved. Create a fresh key at platform.openai.com/api-keys and set it again."
                   exit 1 ;;
+              esac ;;
+            cursor)
+              if [ -z "$CURSOR_API_KEY" ]; then
+                echo "::error::This project builds with Cursor, but the CURSOR_API_KEY secret is missing or empty on this repo. Cursor API keys need a paid Cursor plan - a runner has no browser, so the interactive 'cursor-agent login' is not an option here. Add the key with 'gh secret set CURSOR_API_KEY', or switch this project to Claude Code or Codex on your DispatchSEO dashboard."
+                exit 1
+              fi
+              case "$CURSOR_API_KEY" in
+                sk-ant-*)
+                  echo "::error::CURSOR_API_KEY holds a Claude credential (it starts with sk-ant-). The wrong secret was pasted. Put the Claude token in CLAUDE_CODE_OAUTH_TOKEN and a Cursor API key here."
+                  exit 1 ;;
+                sk-*)
+                  echo "::error::CURSOR_API_KEY holds an OpenAI key (it starts with sk-). The wrong secret was pasted. Put the OpenAI key in OPENAI_API_KEY and a Cursor API key here."
+                  exit 1 ;;
+                *[[:space:]]*)
+                  # [[:space:]], never a literal tab in the pattern: a tab
+                  # character in generated YAML is invalid indentation, and
+                  # pipeline-pack-lint fails the build on it.
+                  echo "::error::CURSOR_API_KEY contains whitespace, which almost always means it was line-wrapped when it was copied. Re-copy the key and set it again with: printf '%s' \"\$KEY\" | tr -d '[:space:]' | gh secret set CURSOR_API_KEY"
+                  exit 1 ;;
+                *) : ;;
               esac ;;
             *)
               echo "::error::The dashboard reported an unknown agent '$agent'. This repo's workflows are older than that setting - re-run the setup command from your DispatchSEO dashboard to update them."
@@ -414,6 +438,64 @@ jobs:
           echo "Codex home prepared. Servers configured:"
           grep -E '^\[mcp_servers\.' "$RUNNER_TEMP/codex-home/config.toml"
 
+      # Cursor has no GitHub Action, so the CLI is installed here. Pinned to a
+      # known version rather than piping cursor.com/install, which floats.
+      #
+      # Then the MCP config, and this is the part that bites. The pack's
+      # mcp-ci.json is ALREADY Cursor's shape, so copying it looks free - but
+      # Cursor does not expand ${VAR} the way Claude does, and the failure is
+      # disguised: the server reports "not loaded (needs approval)" while
+      # `mcp enable` insists it is approved, so the hunt starts in the approval
+      # system rather than at the credential. Render the values in.
+      #
+      # `mcp enable` is not optional either. An unapproved server is not merely
+      # unreachable, it is absent - the agent runs happily with zero tools.
+      - name: Install Cursor and write its MCP config
+        if: steps.guard.outputs.open == '0' && steps.agent.outputs.agent == 'cursor'
+        env:
+          SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
+          DATAFORSEO_LOGIN: ${{ secrets.DATAFORSEO_LOGIN }}
+          DATAFORSEO_PASSWORD: ${{ secrets.DATAFORSEO_PASSWORD }}
+        run: |
+          # The WHOLE package, into a directory of its own. cursor-agent is a
+          # bash launcher rather than a static binary and loads ~95 sibling
+          # files from beside itself, so extracting just the executable gives a
+          # command that exists and cannot run. Its own directory keeps those
+          # 95 files out of $RUNNER_TEMP, which this job also uses for the
+          # prompt and the result.
+          mkdir -p "$RUNNER_TEMP/cursor-cli" "$HOME/.local/bin"
+          curl -fsSL "https://downloads.cursor.com/lab/2026.07.23-e383d2b/linux/x64/agent-cli-package.tar.gz" \
+            | tar -xz --strip-components=1 -C "$RUNNER_TEMP/cursor-cli"
+          ln -sf "$RUNNER_TEMP/cursor-cli/cursor-agent" "$HOME/.local/bin/cursor-agent"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          cursor-agent --version
+
+          # python3, not sed: a credential can contain any character, and this
+          # writes JSON, so the values are JSON-escaped rather than pasted.
+          mkdir -p .cursor
+          python3 - .github/mcp-ci.json .cursor/mcp.json <<'PY'
+          import json, os, sys
+          src, dst = sys.argv[1], sys.argv[2]
+          text = open(src).read()
+          for var in ("SEO_MCP_API_KEY", "DATAFORSEO_LOGIN", "DATAFORSEO_PASSWORD"):
+              # json.dumps then strip the quotes: escapes exactly what JSON
+              # needs escaping and nothing else.
+              val = json.dumps(os.environ.get(var, ""))[1:-1]
+              text = text.replace(" + var + ", val)
+          cfg = json.loads(text)
+          json.dump(cfg, open(dst, "w"), indent=2)
+          print("servers configured:", ", ".join(cfg.get("mcpServers", {})))
+          PY
+
+          # Approve every server the config declares. Per-directory state, so a
+          # fresh checkout has none of it and this runs every time.
+          for s in $(python3 -c "import json;print(' '.join(json.load(open('.cursor/mcp.json')).get('mcpServers',{})))"); do
+            cursor-agent mcp enable "$s"
+          done
+          echo "--- mcp list ---"
+          cursor-agent mcp list
+
       - name: Run the SEO builder
         if: steps.guard.outputs.open == '0' && steps.agent.outputs.agent == 'claude'
         id: claude
@@ -510,6 +592,63 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder-anon-key"
           NEXT_PUBLIC_SITE_URL: "https://dispatchseo.com"
 
+      # The Cursor twin. Same task prompt, generated from the same source -
+      # the agent's behaviour must not depend on which one is holding the
+      # playbook - plus the unattended-environment preamble above it.
+      #
+      # A plain run step, because Cursor ships no GitHub Action. The three
+      # flags are each separately required and each was measured: --trust (a
+      # fresh checkout is an untrusted workspace and the run refuses outright),
+      # --force (command approval), --approve-mcps (server approval).
+      #
+      # --output-format json is what makes the classify step below honest: it
+      # returns {is_error, subtype, result, usage}, so a failure is read from a
+      # field rather than guessed at from warning text.
+      #
+      # Model is overridable per repo: availability is per-account, and the
+      # account default ("auto") is the sane fallback. There is NO turn budget
+      # to set - Cursor has no --max-turns equivalent, so the job's
+      # timeout-minutes is the only ceiling on a runaway run, and on Cursor a
+      # runaway also eats the plan's monthly usage pool.
+      - name: Run the SEO builder (Cursor)
+        if: steps.guard.outputs.open == '0' && steps.agent.outputs.agent == 'cursor'
+        id: cursor
+        # Never fail the job at this step: the classify step below reads the
+        # outcome and decides what the run MEANS (transient limit vs dead
+        # account), which it can only do if it is reachable.
+        continue-on-error: true
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
+          DATAFORSEO_LOGIN: ${{ secrets.DATAFORSEO_LOGIN }}
+          DATAFORSEO_PASSWORD: ${{ secrets.DATAFORSEO_PASSWORD }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEXT_PUBLIC_SUPABASE_URL: "https://placeholder.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder-anon-key"
+          NEXT_PUBLIC_SITE_URL: "https://dispatchseo.com"
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          cat > "$RUNNER_TEMP/cursor-prompt.txt" <<'DSEOF'
+          ENVIRONMENT RULE (read first, it overrides habit): you are running UNATTENDED on a CI runner. There is nobody here to answer a question, approve a step, or pick between options. If you ever find yourself about to ask for approval or a go/no-go, do not: choose the safest option that still completes the task, do it, and say what you chose in the final report. A run that stops to ask a question builds nothing and is a failed run. Your final message is read by a script, so end with exactly what you were asked to end with and nothing after it.
+
+          FIRST call the seo-manager MCP tool get_instructions with workflow build-guide, then follow the returned markdown exactly - it is the current playbook and overrides any cached knowledge of this pipeline. Also read .dispatchseo/conventions.md for this repo's site facts. In brief: take the oldest approved guide suggestion, mark it in_progress, build the guide MDX through the full pipeline (template, thin-content gate, draft, mandatory visuals, humanizer), run pnpm build to verify, open a PR labeled seo via gh, then update_suggestion to done with the PR url and log_page, and state the instructions version in the run report. Never build tool suggestions - those belong to the seo-build-tool workflow. If get_instructions is unavailable, fail loudly and exit without changes; if there are no approved guide suggestions, exit cleanly without any changes.
+          DSEOF
+          set +e
+          cursor-agent -p "$(cat "$RUNNER_TEMP/cursor-prompt.txt")" \
+            --output-format json --trust --force --approve-mcps \
+            --model "${{ vars.SEO_CURSOR_MODEL || 'auto' }}" \
+            > "$RUNNER_TEMP/cursor-out.json" 2> "$RUNNER_TEMP/cursor-err.txt"
+          code=$?
+          set -e
+          # The final message, for the classify step. jq tolerates a truncated
+          # or absent file, which is what a killed run leaves behind.
+          jq -r '.result // empty' "$RUNNER_TEMP/cursor-out.json" 2>/dev/null > "$RUNNER_TEMP/cursor-msg.txt" || true
+          echo "--- cursor exit $code ---"
+          cat "$RUNNER_TEMP/cursor-msg.txt"
+          [ -s "$RUNNER_TEMP/cursor-err.txt" ] && { echo "--- stderr ---"; cat "$RUNNER_TEMP/cursor-err.txt"; }
+          exit $code
+
       # Turn-by-turn detail for tuning the pipeline. The dashboard only ever
       # receives the aggregate outcome, which cannot answer the question that
       # actually matters for cost - WHICH pipeline steps burn the turns. This
@@ -532,6 +671,7 @@ jobs:
           path: |
             ${{ runner.temp }}/claude-execution-output.json
             ${{ runner.temp }}/codex-out.txt
+            ${{ runner.temp }}/cursor-out.json
           retention-days: 7
           if-no-files-found: ignore
 
@@ -549,9 +689,10 @@ jobs:
           SEO_MCP_API_KEY: ${{ secrets.SEO_MCP_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           CODEX_MSG: ${{ steps.codex.outputs.final-message }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AGENT: ${{ steps.agent.outputs.agent }}
-          AGENT_OUTCOME: ${{ steps.agent.outputs.agent == 'codex' && steps.codex.outcome || steps.claude.outcome }}
+          AGENT_OUTCOME: ${{ steps.agent.outputs.agent == 'codex' && steps.codex.outcome || steps.agent.outputs.agent == 'cursor' && steps.cursor.outcome || steps.claude.outcome }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           # Mirror the per-agent step outcome into an output, so the report
@@ -562,6 +703,9 @@ jobs:
           if [ "$AGENT" = "codex" ]; then
             msg="$CODEX_MSG"
             [ -n "$msg" ] || msg=$(cat "$RUNNER_TEMP/codex-out.txt" 2>/dev/null)
+          elif [ "$AGENT" = "cursor" ]; then
+            msg=$(cat "$RUNNER_TEMP/cursor-msg.txt" 2>/dev/null)
+            [ -n "$msg" ] || msg=$(jq -r '.result // empty' "$RUNNER_TEMP/cursor-out.json" 2>/dev/null)
           else
             f="$RUNNER_TEMP/claude-execution-output.json"
             if [ -f "$f" ]; then
@@ -684,6 +828,31 @@ jobs:
                 fail "OpenAI rejected the OPENAI_API_KEY secret on this repo (HTTP $probe). The key was probably revoked or rotated - create a new one at platform.openai.com/api-keys and set it again with 'gh secret set OPENAI_API_KEY'." ;;
               *)
                 fail "Codex failed and OpenAI could not be reached to find out why (probe HTTP $probe). Last message: $(printf '%s' "$msg" | tail -c 300)" ;;
+            esac
+          fi
+
+          if [ "$AGENT" = "cursor" ]; then
+            sub=$(jq -r '.subtype // empty' "$RUNNER_TEMP/cursor-out.json" 2>/dev/null)
+            iserr=$(jq -r '.is_error // empty' "$RUNNER_TEMP/cursor-out.json" 2>/dev/null)
+            err=$(tail -c 400 "$RUNNER_TEMP/cursor-err.txt" 2>/dev/null)
+            case "$sub" in
+              *rate*limit*|*quota*|*usage*limit*|*too*many*)
+                # Clears by itself. The job stays due and is re-dispatched.
+                defer "Cursor hit a usage or rate limit this run (\"$sub\") - the dashboard keeps this build due and re-dispatches it within a few hours. Not a failure." ;;
+              *auth*|*unauthor*|*invalid*key*|*forbidden*)
+                fail "Cursor rejected the CURSOR_API_KEY secret on this repo (\"$sub\"). The key was probably revoked or the plan lapsed - Cursor API keys need a paid plan. Create a fresh key and set it again with 'gh secret set CURSOR_API_KEY'." ;;
+              "")
+                # No parseable JSON at all: killed, timed out, or died before
+                # it could write a result. Never quiet.
+                reason="Cursor produced no result (the job most likely hit its time limit)"
+                [ -n "$err" ] && reason="Cursor failed before producing a result: $err"
+                fail "$reason" ;;
+              *)
+                # Recognised as an error but not as one that clears by waiting.
+                reason="Cursor failed (\"$sub\", is_error=${iserr:-unknown})"
+                [ -n "$msg" ] && reason="$reason. Last message: $(printf '%s' "$msg" | tail -c 300)"
+                [ -n "$err" ] && reason="$reason. stderr: $err"
+                fail "$reason" ;;
             esac
           fi
 
