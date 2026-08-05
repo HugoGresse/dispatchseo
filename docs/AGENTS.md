@@ -21,21 +21,23 @@ is where the answer lives — including the parts that aren't finished.
 |---|---|---|---|---|---|
 | [Claude Code](https://claude.com/claude-code) | 1 | ✅ | ✅ | ✅ GitHub Actions + docker builder | 2026-07-30 |
 | [Codex](https://developers.openai.com/codex/cli) | 1 | ✅ | ✅ | ✅ GitHub Actions + docker builder | 2026-07-30 |
-| [Cursor](https://cursor.com/cli) | 3 | ✅ registry entry + one-paste connect | ✅ | ❌ not yet | 2026-08-05 |
+| [Cursor](https://cursor.com/cli) | 2 | ✅ | ✅ | ✅ GitHub Actions + docker builder | 2026-08-05 |
 | Gemini CLI, Copilot, anything else that speaks MCP | 3 | ✅ | ✅ | ❌ | — |
 
-Cursor is the first agent to sit at Tier 3 *with* a registry entry, which is
-what `capabilities.headlessBuilder: false` is for. Connecting is verified end
-to end against the production server on 2026-08-05 — all 61 tools arrive, names
-matching the registry exactly, nothing dropped by its schema validator, on both
-the header and `?key=` auth forms.
+**Cursor is Tier 2, not Tier 1, and the distinction is the point.** Connecting
+is verified end to end against production — all 61 tools, names matching the
+registry exactly, nothing dropped by its schema validator, on both the header
+and `?key=` auth forms. The builder chain has been run by hand end to end too:
+rendered config, approved servers, `cursor-agent -p` calling an MCP tool and
+returning `subtype: success`. What has NOT happened is a scheduled, unwatched
+run on a real runner. `cursor-canary.yml` is what closes that, and until it has
+run green with a real credential this row does not say Tier 1.
 
-The builder is **written but not enabled**. `scripts/agent-ci/cursor.mjs`, the
-generated workflow blocks and the docker branches all exist, and the whole
-chain has been run by hand against production: rendered config, approved
-servers, a headless run that called an MCP tool and returned
-`subtype: success`. What has not happened is a scheduled, unwatched run on a
-real runner, so the flag stays down until `cursor-canary.yml` goes green.
+Shipping the builder before that is defensible for one specific reason: the
+classify path reads `--output-format json`'s `is_error`/`subtype` rather than
+guessing from prose, and **every unrecognised subtype falls through to a loud
+failure**. The failure mode this project fears — a build reporting green having
+built nothing — needs a silent deferral, and there is no silent branch to hit.
 
 Two Cursor-specific facts that shaped all of it, both measured (the long
 version is in `docs-private/CURSOR_FACTS.md`):

@@ -680,16 +680,26 @@ export default async function Home() {
   // site never collides with or silently shadows the first one's token.
   const hdrs = await headers();
   const dashOrigin = requestOrigin(hdrs);
-  const connectCommand = mcpToken ? mcpAddCommand(project.slug, dashOrigin, mcpToken) : null;
+  // Built from THIS project's agent, not from Claude's builders. Before this
+  // they called mcpAddCommand/setupCommand directly, so a Codex or Cursor
+  // project was handed `claude mcp add` and a setup.sh invocation that would
+  // connect the wrong agent - the card told every owner to run Claude
+  // regardless of what they had chosen.
+  const cardAgent = projectAgent(project);
+  const connectCommand = mcpToken
+    ? cardAgent.connect.mcpAddBash(project.slug, dashOrigin, mcpToken)
+    : null;
   // The one-command onboarding (public/setup.sh): connect + verified secrets
   // + agent hand-off, run inside the site's repo. Cloud projects skip the
   // script's DataForSEO question - the platform bundles it server-side.
-  const setupCmd = mcpToken
-    ? setupCommand(project.slug, dashOrigin, mcpToken, isCloudMode())
-    : null;
-  const setupCmdPs = mcpToken
-    ? setupCommandPS(project.slug, dashOrigin, mcpToken, isCloudMode())
-    : null;
+  const setupCmd =
+    mcpToken && cardAgent.setup
+      ? cardAgent.setup.bash(project.slug, dashOrigin, mcpToken, isCloudMode())
+      : null;
+  const setupCmdPs =
+    mcpToken && cardAgent.setup
+      ? cardAgent.setup.powershell(project.slug, dashOrigin, mcpToken, isCloudMode())
+      : null;
 
   // The funding card is the better surface for a low balance, so suppress the
   // amber nudge in Next actions whenever it shows.

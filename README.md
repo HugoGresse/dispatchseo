@@ -115,7 +115,7 @@ with a real answer — including the parts that aren't finished yet.
 |---|---|---|
 | **Claude Code** | ✅ | ✅ |
 | **Codex** | ✅ | ✅ |
-| **Cursor** | ✅ one-paste connect, all 61 tools | ❌ not yet |
+| **Cursor** | ✅ one-paste connect, all 61 tools | ✅ (needs a paid Cursor plan) |
 | Gemini CLI · Copilot · any MCP client | ✅ | ❌ |
 
 Connecting is one paste and gets you the whole tool set: research, the queue,

@@ -109,7 +109,10 @@ jobs:
                 sk-*)
                   echo "::error::CURSOR_API_KEY holds an OpenAI key (it starts with sk-). The wrong secret was pasted. Put the OpenAI key in OPENAI_API_KEY and a Cursor API key here."
                   exit 1 ;;
-                *' '*|*'	'*)
+                *[[:space:]]*)
+                  # [[:space:]], never a literal tab in the pattern: a tab
+                  # character in generated YAML is invalid indentation, and
+                  # pipeline-pack-lint fails the build on it.
                   echo "::error::CURSOR_API_KEY contains whitespace, which almost always means it was line-wrapped when it was copied. Re-copy the key and set it again with: printf '%s' \"\$KEY\" | tr -d '[:space:]' | gh secret set CURSOR_API_KEY"
                   exit 1 ;;
                 *) : ;;

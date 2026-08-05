@@ -558,7 +558,7 @@ export default async function LandingPage({
             </details>
             <details>
               <summary>Does it only work with Claude Code?</summary>
-              <div className="a">No - Codex is fully supported too, including the overnight builders. Every scheduled workflow carries both agents and asks the dashboard which one to run, so you can switch on Settings and it takes effect on the next build, no reinstall. The honest difference is billing: Claude Code runs on the subscription you already have, Codex is metered by OpenAI per run. Cursor connects in one paste and gets the same complete tool set, though it doesn&apos;t run the unattended builders yet. Beyond those three, the server speaks standard MCP, so any other client (Gemini CLI, Copilot) can connect to the same tools interactively.</div>
+              <div className="a">No - Codex is fully supported too, including the overnight builders. Every scheduled workflow carries both agents and asks the dashboard which one to run, so you can switch on Settings and it takes effect on the next build, no reinstall. The honest difference is billing: Claude Code runs on the subscription you already have, Codex is metered by OpenAI per run. Cursor works too, including the overnight builders - the one difference is that those need a Cursor API key, which comes with a paid Cursor plan, while connecting is free on any plan. Beyond those three, the server speaks standard MCP, so any other client (Gemini CLI, Copilot) can connect to the same tools interactively.</div>
             </details>
             <details>
               <summary>What does DispatchSEO do with my Google data?</summary>

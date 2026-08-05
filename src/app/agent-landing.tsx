@@ -153,13 +153,12 @@ const CONTENT: Record<AgentPageId, Content> = {
         q: "Does Cursor run the overnight builds?",
         a: (
           <>
-            Not yet, and we&apos;d rather say so than find out at 5am. Cursor connects to
-            everything and runs any workflow you start yourself. The scheduled builds -
-            the ones that open a pull request while you sleep - run on Claude Code or
-            Codex today, and that&apos;s a separate setting on the dashboard. You can use
-            Cursor all day and still have one of those doing the night shift. See{" "}
-            <a href="/docs/install-cursor">the Cursor guide</a> for how the two fit
-            together.
+            Yes. Pick Cursor on Settings and the scheduled jobs run it - the same
+            research, the same guides, the same pull requests waiting for you in the
+            morning. One thing to know first: those run on a server with no browser, so
+            they need a Cursor API key rather than the login you use day to day, and
+            Cursor issues API keys on paid plans only. Connecting is free on any plan.
+            See <a href="/docs/install-cursor">the Cursor guide</a>.
           </>
         ),
       },
@@ -169,7 +168,7 @@ const CONTENT: Record<AgentPageId, Content> = {
       },
       {
         q: "Do I need a Cursor API key?",
-        a: "Not to connect. Connecting is one paste that writes your project into .cursor/mcp.json and approves it, and none of that touches your Cursor account or costs you anything. An API key only matters for running Cursor headlessly in CI, which isn't part of this yet.",
+        a: "Not to connect - that's one paste and works on the free plan. You need one for the overnight builds, because they run on a server that can't open a browser to log you in, and Cursor issues API keys on paid plans only. So: free to connect and drive by hand, paid if you want it building while you sleep.",
       },
       {
         q: "How do I connect it?",

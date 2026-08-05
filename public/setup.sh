@@ -27,9 +27,10 @@ BUNDLED="${4:-0}"
 AGENT="${5:-claude}"
 
 case "$AGENT" in
-  claude) AGENT_CLI="claude"; AGENT_NAME="Claude Code" ;;
-  codex)  AGENT_CLI="codex";  AGENT_NAME="Codex" ;;
-  *) printf '\n!! Unknown agent "%s". Supported: claude, codex.\n\n' "$AGENT"; exit 1 ;;
+  claude) AGENT_CLI="claude";       AGENT_NAME="Claude Code" ;;
+  codex)  AGENT_CLI="codex";        AGENT_NAME="Codex" ;;
+  cursor) AGENT_CLI="cursor-agent"; AGENT_NAME="Cursor" ;;
+  *) printf '\n!! Unknown agent "%s". Supported: claude, codex, cursor.\n\n' "$AGENT"; exit 1 ;;
 esac
 
 say() { printf '%s\n' "$*"; }
@@ -66,6 +67,7 @@ if ! command -v "$AGENT_CLI" >/dev/null 2>&1; then
   case "$AGENT" in
     claude) die "Claude Code isn't installed. Install it first (https://claude.com/claude-code), then rerun." ;;
     codex)  die "Codex isn't installed. Install it first (npm i -g @openai/codex, or see https://developers.openai.com/codex/cli), then rerun." ;;
+    cursor) die "Cursor's CLI isn't installed. Install it first (curl https://cursor.com/install -fsS | bash), make sure ~/.local/bin is on your PATH, then rerun." ;;
   esac
 fi
 command -v gh >/dev/null 2>&1 || \
@@ -79,10 +81,13 @@ say ""
 # "in this folder" is Claude's line and stays exactly as it was - it is true
 # because of --scope local. Codex must NOT claim it: its config is global, and
 # the per-project server name is what keeps two sites apart.
-if [ "$AGENT" = "claude" ]; then
-  say "Step 3 of 5 - connecting $AGENT_NAME in this folder to your project."
-else
+# Cursor joins Claude on the "in this folder" line: its config is
+# .cursor/mcp.json, read relative to the directory the agent runs in, so it is
+# genuinely folder-scoped. Only Codex has to omit the claim.
+if [ "$AGENT" = "codex" ]; then
   say "Step 3 of 5 - connecting $AGENT_NAME to your project."
+else
+  say "Step 3 of 5 - connecting $AGENT_NAME in this folder to your project."
 fi
 code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 -X POST "$BASE/api/mcp" \
   -H "Authorization: Bearer $TOKEN" \
@@ -108,7 +113,7 @@ if [ "$AGENT" = "claude" ]; then
   claude mcp add "$NAME" "$BASE/api/mcp" --transport http --scope local \
     --header "Authorization: Bearer $TOKEN" >/dev/null 2>&1 || \
     die "Could not add the connection to Claude Code (claude mcp add failed)."
-else
+elif [ "$AGENT" = "codex" ]; then
   # Codex has no scope flag at all - `codex mcp add` always writes the config
   # Codex calls global. The per-project server NAME is what keeps two projects
   # from shadowing each other, and every prompt we hand the agent names its
@@ -121,6 +126,27 @@ else
   # fails at tool-call time with nothing pointing at the cause.
   codex mcp add "$NAME" --url "$BASE/api/mcp?key=$TOKEN" >/dev/null 2>&1 || \
     die "Could not add the connection to Codex (codex mcp add failed). Check 'codex --version' - the mcp subcommand needs a recent build."
+elif [ "$AGENT" = "cursor" ]; then
+  # Cursor has NO `mcp add` command - its whole mcp surface is
+  # login/list/list-tools/enable/disable, so connecting means writing the
+  # config file. Merged rather than overwritten: .cursor/mcp.json is the
+  # owner's file and may already hold other servers.
+  mkdir -p .cursor
+  command -v node >/dev/null 2>&1 || \
+    die "node isn't installed, and Cursor's connection is a JSON file this script edits with it. Install Node (https://nodejs.org), then rerun."
+  CURSOR_NAME="$NAME" CURSOR_URL="$BASE/api/mcp" CURSOR_TOKEN="$TOKEN" node -e '
+    const fs=require("fs"),f=".cursor/mcp.json";
+    const c=fs.existsSync(f)?JSON.parse(fs.readFileSync(f,"utf8")):{};
+    c.mcpServers=c.mcpServers||{};
+    c.mcpServers[process.env.CURSOR_NAME]={url:process.env.CURSOR_URL,headers:{Authorization:"Bearer "+process.env.CURSOR_TOKEN}};
+    fs.writeFileSync(f,JSON.stringify(c,null,2)+"\n");
+  ' >/dev/null 2>&1 || \
+    die "Could not write .cursor/mcp.json - check the folder is writable and any existing .cursor/mcp.json is valid JSON."
+  # Approval is part of connecting, not an afterthought: an unapproved server
+  # is not merely unreachable, it is ABSENT - Cursor starts with zero tools and
+  # says "not loaded (needs approval)".
+  cursor-agent mcp enable "$NAME" >/dev/null 2>&1 || \
+    die "Wrote the connection but could not approve it (cursor-agent mcp enable failed). Run 'cursor-agent mcp enable $NAME' in this folder and rerun."
 fi
 say "  Connected (key verified against the server)."
 [ "$AGENT" = "codex" ] && \
@@ -145,6 +171,8 @@ say "  Connected (key verified against the server)."
 # read one would be a comforting no-op.
 SETTINGS=".claude/settings.local.json"
 GH_RULE='Bash(gh *)'
+# Only Claude Code has a pre-grantable allowlist file. Codex and Cursor both
+# ask at the moment they want to run something, and the owner answers.
 [ "$AGENT" = "claude" ] && mkdir -p .claude 2>/dev/null
 if [ "$AGENT" != "claude" ]; then
   say "  $AGENT_NAME asks before it runs a command - approve the gh ones when it does."
@@ -186,11 +214,68 @@ printf '%s' "$TOKEN" | gh secret set SEO_MCP_API_KEY --repo "$REPO" || \
   die "Could not save a secret to $REPO - does your GitHub login have admin access to it?"
 say "  Project key saved."
 
-# The builder credential, per agent. Both are VERIFIED against the real
-# provider before they are stored - the rule everywhere in this script - because
+# The builder credential, per agent. Every one is VERIFIED against the real
+# provider before it is stored - the rule everywhere in this script - because
 # a saved-but-broken credential reads as "automatic builds are set up" and only
 # announces itself as a failed run at 05:13 the next morning.
-if [ "$AGENT" = "codex" ]; then
+if [ "$AGENT" = "cursor" ]; then
+  say ""
+  if gh secret list --repo "$REPO" 2>/dev/null | grep -q "^CURSOR_API_KEY"; then
+    say "  A Cursor API key is already saved for this repo."
+    say "  Keep it? [y = keep / n = replace with a different one]"
+    ask
+  else
+    REPLY="n"
+  fi
+  if [ "$REPLY" != "y" ] && [ "$REPLY" != "Y" ]; then
+    say ""
+    say "  The overnight builds run on a server with no browser, so the login"
+    say "  you just used doesn't reach them - they need a Cursor API key, and"
+    say "  Cursor issues those on paid plans only. Nothing is billed by"
+    say "  DispatchSEO."
+    say ""
+    say "  Create one in your Cursor dashboard (cursor.com), paste it here and"
+    say "  press Enter. It won't be shown:"
+    while true; do
+      read -r -s CKEY < /dev/tty
+      say ""
+      CKEY=$(printf '%s' "$CKEY" | tr -d '[:space:]')
+      case "$CKEY" in
+        "")
+          say "  Nothing pasted. Paste the key, or press Ctrl-C to stop and set it later:" ; continue ;;
+        sk-ant-*)
+          say "  That's a Claude token, not a Cursor key. Paste the Cursor one:" ; continue ;;
+        sk-*)
+          say "  That's an OpenAI key, not a Cursor key. Paste the Cursor one:" ; continue ;;
+      esac
+      if [ "${#CKEY}" -lt 20 ]; then
+        say "  That looks too short to be a whole key. Copy all of it and paste again:" ; continue
+      fi
+      # VERIFIED, not just shape-checked. Two measured details make this
+      # trustworthy where the obvious version would not be:
+      #   - `cursor-agent models` EXITS 0 even when the key is invalid, so the
+      #     text is what gets checked, never $?.
+      #   - a key set here beats any interactive login already on this machine
+      #     (the CLI says so: "The API key was loaded from the CURSOR_API_KEY
+      #     environment variable"), so this cannot pass on the owner's own
+      #     session the way an unguarded Claude token check can.
+      say "  Checking the key with Cursor..."
+      OUT=$(CURSOR_API_KEY="$CKEY" cursor-agent models 2>&1)
+      case "$OUT" in
+        *"Available models"*) break ;;
+        *"API key is invalid"*|*"Authentication required"*|*Unauthorized*)
+          say "  Cursor rejected that key. Create a fresh one in your Cursor"
+          say "  dashboard (an API key needs a paid plan) and paste it again:" ; continue ;;
+        *)
+          say "  Couldn't check the key - Cursor answered with something"
+          say "  unexpected. Paste it again, or Ctrl-C and set it later:" ; continue ;;
+      esac
+    done
+    printf '%s' "$CKEY" | gh secret set CURSOR_API_KEY --repo "$REPO" >/dev/null 2>&1 || \
+      die "Could not save CURSOR_API_KEY to $REPO - does your GitHub login have admin access to it?"
+    say "  Cursor key verified and saved."
+  fi
+elif [ "$AGENT" = "codex" ]; then
   say ""
   if gh secret list --repo "$REPO" 2>/dev/null | grep -q "^OPENAI_API_KEY"; then
     say "  An OpenAI key is already saved for this repo."

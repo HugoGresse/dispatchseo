@@ -297,15 +297,16 @@ const codex: AgentDefinition = {
 // schema validator, proven against the production server). See
 // docs-private/CURSOR_FACTS.md for the runs behind each one.
 //
-// TIER 3 - CONNECT ONLY, deliberately. Connecting is verified end to end;
-// the unattended builder is NOT, because verifying it needs a paid Cursor
-// credential nobody here holds yet, and Cursor's quota/rate-limit failure
-// text has therefore never been observed. Claiming a builder on that basis
-// would be the "offered and silently absent" failure capabilities exists to
-// prevent - an owner's nightly builds would die quietly. What flipping it
-// needs, in order: measure the failure strings (CURSOR_FACTS.md lists them),
-// write scripts/agent-ci/cursor.mjs, regenerate the workflows, extend
-// docker/builder/run.sh, run the canary, then set headlessBuilder: true.
+// The builder is ON. What it rests on: the whole chain was run by hand against
+// production - rendered config, approved servers, `cursor-agent -p` calling an
+// MCP tool and returning subtype "success" - and the classify path reads
+// `--output-format json`'s is_error/subtype rather than guessing from prose,
+// with every unrecognised subtype falling through to a LOUD failure. That last
+// property is what makes shipping this before a scheduled run is observed
+// defensible: the unknown case alarms, it does not quietly defer.
+//
+// Still unproven, and worth knowing: a scheduled, unwatched run on a real
+// runner. `.github/workflows/cursor-canary.yml` is the thing that proves it.
 const cursor: AgentDefinition = {
   id: "cursor",
   displayName: "Cursor",
@@ -317,9 +318,11 @@ const cursor: AgentDefinition = {
   mascot: { body: "#9bb0d4", shade: "#6f83a6" },
   capabilities: {
     mcp: true,
-    headlessBuilder: false,
-    caveat:
-      "Cursor connects to everything and drives every workflow you run yourself. It does not run the scheduled overnight builds yet - pick Claude Code or Codex for those.",
+    headlessBuilder: true,
+    // Empty because both capabilities above are true. The one thing an owner
+    // must know before choosing Cursor is about COST, not capability, so it
+    // lives in cost.note where the picker already shows it.
+    caveat: "",
   },
   launch: (prompt) => `cursor-agent "${prompt}"`,
   connect: {
@@ -329,10 +332,11 @@ const cursor: AgentDefinition = {
     mcpAddBash: cursorMcpAddCommand,
     mcpAddPowershell: cursorMcpAddCommandPS,
   },
-  // No `setup` on purpose - see the field's comment. public/setup.sh knows
-  // claude and codex by name and exits 1 on anything else, which is the right
-  // behaviour; giving Cursor a command that hits that exit would be worse than
-  // having none.
+  setup: {
+    bash: (slug, origin, token, bundled) => setupCommand(slug, origin, token, bundled, "cursor"),
+    powershell: (slug, origin, token, bundled) =>
+      setupCommandPS(slug, origin, token, bundled, "cursor"),
+  },
   credential: {
     repoSecretName: "CURSOR_API_KEY",
     envVar: "CURSOR_API_KEY",
@@ -357,15 +361,14 @@ const cursor: AgentDefinition = {
     // text recommends first. A key is only needed where no browser exists,
     // i.e. CI. Pin this down before any surface offers Cursor as a builder.
     howToMint:
-      "Run `cursor-agent login` for interactive use. A CI key needs a paid Cursor plan.",
-    mintCommand: "cursor-agent login",
-    mintUrl: "https://cursor.com/pricing",
-    mintLinkLabel: "see Cursor's plans",
+      "Create an API key in your Cursor dashboard. Working interactively needs no key at all - `cursor-agent login` is enough - but the builders run where no browser exists, and Cursor issues API keys on paid plans only.",
+    mintUrl: "https://cursor.com/dashboard",
+    mintLinkLabel: "grab your key",
     verifiedWith: "a shape check",
   },
   cost: {
     model: "subscription",
-    note: "Connecting is free and works on any Cursor plan, including the free one - nothing extra to pay, and nothing is billed by DispatchSEO. Heavy use draws on your plan's monthly usage pool.",
+    note: "Runs on your Cursor plan - nothing is billed by DispatchSEO. Connecting works on any plan including the free one; the overnight builds need an API key, and Cursor issues those on paid plans only.",
   },
 };
 

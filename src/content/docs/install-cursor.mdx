@@ -21,14 +21,17 @@ works, and the rest of this page is honest about which is which.
 | Approve, reorder, edit the queue | Yes | Yes | **Yes** |
 | Build a guide when you ask for one | Yes | Yes | **Yes** |
 | Backlink prospecting, reports, trend scans | Yes | Yes | **Yes** |
-| The unattended overnight builder | Yes | Yes | **Not yet** |
+| The unattended overnight builder | Yes | Yes | **Yes** (needs a paid plan) |
 
-That last row is the whole difference. Anything you ask for, Cursor does.
-The thing that happens at 4am while you sleep needs Claude Code or Codex.
+The capability list is the same. One thing about that last row is not, and
+it's worth knowing before you plan around it: the overnight builds run on a
+server with no browser, so they can't use the login you'll do in step 1. They
+need a Cursor API key, and Cursor issues those on paid plans only.
 
-Those two settings are separate, which is the useful part: pick Claude Code
-or Codex as the builder on **Settings → Coding agent**, and keep using Cursor
-all day. The builder setting only decides who runs the scheduled jobs, not who
+So connecting and driving Cursor by hand is free on any plan. Having it build
+while you sleep is not. If you'd rather not pay for that, pick Claude Code or
+Codex as the builder on **Settings → Coding agent** and keep using Cursor all
+day - the builder setting only decides who runs the scheduled jobs, not who
 you work with.
 
 ## Step 1: install Cursor
@@ -144,23 +147,32 @@ opens the folder. Close the window and reopen the repo.
 from **Settings → Project key**; the most common cause is a key that got cut
 short on the way over.
 
-**Everything connects, but nothing gets built overnight** - that's expected,
-and it's the one row in the table above. Pick Claude Code or Codex under
-**Settings → Coding agent** for the scheduled builds. You can keep using Cursor
-for everything you do yourself.
+**Everything connects, but nothing gets built overnight** - check two things.
+Cursor has to be selected under **Settings → Coding agent**, and your site's
+repo needs a `CURSOR_API_KEY` secret (the login on your laptop doesn't reach a
+build server). The setup command collects and verifies that key for you.
 
-## Will Cursor run the builds later?
+## Turning on the overnight builds
 
-The code for it is written and the whole chain has been run by hand: Cursor
-drove the MCP server headlessly, called a tool, and came back clean. What it
-hasn't done yet is run that way on a schedule, unwatched, which is a different
-claim and the only one that counts.
+Two things, in this order:
 
-One thing to know now, because it decides whether this will ever apply to you:
-a scheduled build runs on a server with no browser, so it can't use the
-`cursor-agent login` you did above. It needs an API key, and those come with a
-paid Cursor plan. Connecting stays free forever; the night shift won't be.
+1. **Settings → Coding agent → Cursor.** That's one column write; it takes
+   effect on the next scheduled run with no repo edit and no reinstall.
+2. **A `CURSOR_API_KEY` secret on your site's repo.** Create the key in your
+   Cursor dashboard (paid plans only), then either re-run the setup command
+   from your dashboard - it collects the key and checks it with Cursor before
+   saving - or set it yourself:
 
-We'll flip it on when it's been proven on a real schedule rather than in a
-one-off test, and not before. A builder that quietly stops working is worse
-than one that isn't offered.
+```bash
+printf '%s' "<your-key>" | tr -d '[:space:]' | gh secret set CURSOR_API_KEY --repo <you>/<your-repo>
+```
+
+The `tr -d` is not fussiness: terminals paste long keys with a real newline
+inside them, and GitHub will happily store the broken version.
+
+One honest note on how new this is. Cursor is the newest of the three builders
+here, and while the whole chain has been run against the real server, it has
+had less time on a schedule than Claude Code and Codex. If a run fails you'll
+hear about it - a failure that isn't recognised as a temporary limit is
+reported loudly rather than quietly retried - but if you'd rather your night
+shift be the most-travelled path, Claude Code is it.

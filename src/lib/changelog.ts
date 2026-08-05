@@ -99,12 +99,14 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
     kind: "new",
     text:
-      "Cursor is now a supported agent. Connect it in one paste from Settings -> Project key and " +
-      "it gets the complete tool set - all 61 tools, the same ones the dashboard has - in both " +
-      "the Cursor editor and the cursor-agent CLI. The paste merges into any MCP servers you " +
-      "already have rather than replacing them. One honest limit: Cursor doesn't run the " +
-      "scheduled overnight builds yet, so keep Claude Code or Codex selected as your builder " +
-      "and use Cursor for everything you drive yourself. There's a guide at /docs/install-cursor.",
+      "Cursor is now a supported agent, end to end. Pick it on Settings and it does everything " +
+      "Claude Code and Codex do here: connect in one paste and get all 61 tools in both the " +
+      "editor and the CLI, or let it run the overnight builds and wake up to a pull request. " +
+      "The connect paste merges into any MCP servers you already have rather than replacing " +
+      "them. One thing worth knowing before you switch: the overnight builds run on a server " +
+      "that can't open a browser to log you in, so they need a Cursor API key, and Cursor " +
+      "issues those on paid plans only - connecting and driving it by hand is free on any plan. " +
+      "Full walkthrough at /docs/install-cursor.",
   },
   {
     kind: "new",
