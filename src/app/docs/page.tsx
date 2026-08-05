@@ -186,15 +186,20 @@ export default function DocsQuickstart() {
               >
                 Claude Code
               </a>{" "}
-              (on a Claude subscription) or{" "}
+              (on a Claude subscription),{" "}
               <a href="/docs/install-codex" className={INLINE_LINK}>
                 Codex
               </a>{" "}
-              (on an OpenAI key)
+              (on an OpenAI key), or{" "}
+              <a href="/docs/install-cursor" className={INLINE_LINK}>
+                Cursor
+              </a>{" "}
+              (on a paid Cursor plan)
             </span>
             <span className="mt-1 block text-sm text-neutral-400">
-              Your agent does the actual thinking. Claude Code runs on the plan you already pay
-              for; Codex is metered by OpenAI per run. DispatchSEO never bills you for either.
+              Your agent does the actual thinking. Claude Code and Cursor run on plans you
+              already pay for; Codex is metered by OpenAI per run. DispatchSEO never bills you
+              for any of them.
             </span>
           </span>
         </li>

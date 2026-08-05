@@ -104,16 +104,17 @@ services:
       DATAFORSEO_LOGIN: ${DATAFORSEO_LOGIN:-}
       DATAFORSEO_PASSWORD: ${DATAFORSEO_PASSWORD:-}
       GH_MERGE_TOKEN: ${GH_MERGE_TOKEN:-}
-      # The two builder credentials, on the APP as well as the builder.
-      # /api/builder/jobs is what resolves a token per job and hands it to
-      # the container, so the app is the process that has to be able to see
-      # them. With them only on the builder, a stack configured the way
+      # The builder credentials (one per agent), on the APP as well as the
+      # builder. /api/builder/jobs is what resolves a token per job and hands
+      # it to the container, so the app is the process that has to be able to
+      # see them. With them only on the builder, a stack configured the way
       # .env.docker.example documents came up advertising an agent it was
       # never handed work for: the container reported `?agents=codex`, the
       # feed resolved no codex credential and emitted no codex job, and
       # nothing anywhere said so. Silent stall, forever.
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CURSOR_API_KEY: ${CURSOR_API_KEY:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       ALERT_EMAIL: ${ALERT_EMAIL:-}
       ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-}
@@ -169,10 +170,11 @@ services:
       CRON_SECRET: "${CRON_SECRET:?set CRON_SECRET in .env (generate one with openssl rand -hex 24)}"
       APP_INTERNAL_URL: http://app:3000
       CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
-      # Both optional, and both are checked: the builder runs whichever agent
+      # All optional, and all are checked: the builder runs whichever agent
       # each project asks for, so a stack needs a credential per agent it
       # actually hosts - not one blessed credential for the whole instance.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CURSOR_API_KEY: ${CURSOR_API_KEY:-}
       # Which model Codex builds run on. Model availability is per-account
       # (gpt-5-codex 404s on a plain pay-as-you-go project key), so an account
       # that cannot serve the default needs this override - the same knob the
@@ -180,6 +182,9 @@ services:
       # always read it; without this line the .env value never reached the
       # container and the knob silently did nothing.
       CODEX_MODEL: ${CODEX_MODEL:-}
+      # Cursor's twin of CODEX_MODEL - run.sh reads it; empty means Cursor's
+      # own "auto" pick.
+      CURSOR_MODEL: ${CURSOR_MODEL:-}
       BUILDER_GH_TOKEN: ${BUILDER_GH_TOKEN:-}
       BUILDER_POLL_SECONDS: ${BUILDER_POLL_SECONDS:-600}
     volumes:

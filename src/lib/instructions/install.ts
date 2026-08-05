@@ -568,48 +568,96 @@ export const CODEX_CREDENTIAL_BRIEF =
   'step here - your builds run in the builder container, which gets its key ' +
   'in the wizard\'s automatic-builds step."';
 
+export const CURSOR_CREDENTIAL_STEP = `2. \`CURSOR_API_KEY\` - what the overnight builders authenticate with. The
+   builds run on a server with no browser, so the interactive
+   \`cursor-agent login\` the owner already has does NOT reach them - only an
+   API key does, and Cursor issues API keys on paid plans only. Two
+   field-proven traps:
+   - terminals (VS Code's, tmux) copy a line-wrapped key with a REAL
+     newline inside - GitHub then stores a broken key;
+   - \`cursor-agent models\` EXITS 0 even when the key is invalid, so a
+     naive "did the command succeed" check passes on garbage. The OUTPUT
+     is what proves the key, never the exit code.
+   One thing works FOR us here: a key in \`CURSOR_API_KEY\` beats any
+   interactive login on the machine (the CLI states the source it used), so
+   unlike a Claude token this check cannot false-positive off the owner's
+   own session. Write this guided script to a temp file and have them run
+   \`bash <path>\` - it prompts, validates the clipboard itself, makes one
+   real call to Cursor, and only stores a key it has genuinely verified:
+
+   \`\`\`bash
+   #!/bin/bash
+   echo "STEP 1: Create an API key in your Cursor dashboard (cursor.com -"
+   echo "API keys need a paid plan). Copy the key, then press Enter here."
+   while true; do
+     read -r
+     KEY=$(pbpaste | tr -d '[:space:]')   # Linux: xclip -o instead of pbpaste
+     case "$KEY" in
+       sk-ant-*) echo "That's a Claude token, not a Cursor key - copy the Cursor one, press Enter." ;;
+       sk-*) echo "That's an OpenAI key, not a Cursor key - copy the Cursor one, press Enter." ;;
+       *) [ \${#KEY} -gt 20 ] && break; echo "Too short - copy the WHOLE key, press Enter." ;;
+     esac
+   done
+   echo "STEP 2: verifying for real (the output is the check - the exit"
+   echo "code lies)..."
+   OUT=$(CURSOR_API_KEY="$KEY" cursor-agent models 2>&1)
+   case "$OUT" in
+     *"Available models"*)
+       printf '%s' "$KEY" | gh secret set CURSOR_API_KEY --repo {{REPO}}
+       echo "DONE - verified and saved." ;;
+     *"API key is invalid"*|*"Authentication required"*|*Unauthorized*)
+       echo "Cursor rejected the key - create a fresh one in the Cursor"
+       echo "dashboard (a paid plan is required) and rerun this script."
+       exit 1 ;;
+     *)
+       echo "Couldn't check the key - Cursor answered with something"
+       echo "unexpected. Rerun this script; if it keeps failing, is"
+       echo "cursor-agent installed and up to date?"
+       exit 1 ;;
+   esac
+   \`\`\`
+
+   Never store a key that failed the live verification.`;
+
 export const CLAUDE_SMOKE_NOTE =
   "A bad\n   Claude token fails within ~20 seconds with \\`authentication_failed\\`;";
 
 export const CODEX_SMOKE_NOTE =
   "A bad\n   OpenAI key fails within ~20 seconds at the resolve-the-agent step,\n   which names the broken secret outright;";
 
+export const CURSOR_CREDENTIAL_BRIEF =
+  '"You will create a Cursor API key when we get to secrets - one browser ' +
+  'page, about a minute, and we will VERIFY it works with a real call before ' +
+  'it goes anywhere. Cursor issues API keys on paid plans only - the builds ' +
+  'run where no browser exists, so your interactive login does not reach ' +
+  'them." On a LOCAL backend say instead: "No key step here - your builds run ' +
+  "in the builder container, which gets its key in the wizard's " +
+  'automatic-builds step."';
+
+export const CURSOR_SMOKE_NOTE =
+  "A missing or\n   cross-pasted Cursor key fails at the resolve-the-agent step, which\n   names CURSOR_API_KEY outright; a revoked one is rejected by Cursor on\n   the first call and classified loudly;";
+
 // Keyed lookups over the per-agent halves above. Record<AgentId, …> makes a
 // new agent a compile error here until its install text exists - the
 // `codex ? X : Y` ternaries these replaced would have silently handed a
-// third agent one of these two texts.
-// A connect-only agent never becomes projects.agent, so its entries below are
-// unreachable today. They say so rather than inventing a credential flow that
-// has never been run: an install playbook that walks an owner through minting a
-// key no builder will ever read is worse than one that stops and says why.
-const CONNECT_ONLY_CREDENTIAL_STEP = `2. This project's agent does not run the unattended builders, so there is
-   NO agent credential to set here. Stop and tell the owner: the scheduled
-   builds need Claude Code or Codex selected on the dashboard's Settings
-   page, and that choice decides which credential this step collects.`;
-
-const CONNECT_ONLY_CREDENTIAL_BRIEF =
-  '"Your agent connects to everything and runs any workflow you start yourself, ' +
-  'but it does not run the overnight builds - so there is no key to create in ' +
-  'this run. Pick Claude Code or Codex on the Settings page when you want ' +
-  'those."';
-
-const CONNECT_ONLY_SMOKE_NOTE =
-  "This\n   project's agent does not run the builders, so a scheduled run fails at\n   the resolve-the-agent step until one that does is selected;";
-
+// third agent one of these two texts. All three registered agents run the
+// builders today; a future connect-only agent must get entries that SAY so
+// (stop and point at Settings) rather than inventing a credential flow no
+// builder will ever read.
 export const AGENT_CREDENTIAL_STEP: Record<AgentId, string> = {
   claude: CLAUDE_CREDENTIAL_STEP,
   codex: CODEX_CREDENTIAL_STEP,
-  cursor: CONNECT_ONLY_CREDENTIAL_STEP,
+  cursor: CURSOR_CREDENTIAL_STEP,
 };
 
 export const AGENT_CREDENTIAL_BRIEF: Record<AgentId, string> = {
   claude: CLAUDE_CREDENTIAL_BRIEF,
   codex: CODEX_CREDENTIAL_BRIEF,
-  cursor: CONNECT_ONLY_CREDENTIAL_BRIEF,
+  cursor: CURSOR_CREDENTIAL_BRIEF,
 };
 
 export const AGENT_SMOKE_NOTE: Record<AgentId, string> = {
   claude: CLAUDE_SMOKE_NOTE,
   codex: CODEX_SMOKE_NOTE,
-  cursor: CONNECT_ONLY_SMOKE_NOTE,
+  cursor: CURSOR_SMOKE_NOTE,
 };

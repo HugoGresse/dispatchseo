@@ -886,16 +886,18 @@ the scheduled GitHub Actions, or the in-stack container on a self-hosted
 install. It does not change which agent *you* are: whatever agent is
 connected over MCP right now keeps driving everything interactively
 regardless of this setting. It takes effect on the next scheduled run
-with no repo change, because the workflow files carry both agents and
+with no repo change, because the workflow files carry every agent and
 ask which to use at run time. The reply names anything the owner still
 has to do - chiefly adding the new agent's credential where the builders
-run. Ask the owner before switching: the two agents bill differently (a
-Claude subscription vs metered OpenAI usage), so it's their call.
+run. Ask the owner before switching: the agents bill differently (a
+Claude or Cursor subscription vs metered OpenAI usage), so it's their
+call.
 
 <Fields>
   <Field name="agent" type="string" required="true">
-    `claude` (Claude Code, runs on a Claude subscription) or `codex`
-    (Codex, metered against an OpenAI API key).
+    `claude` (Claude Code, runs on a Claude subscription), `codex`
+    (Codex, metered against an OpenAI API key), or `cursor` (Cursor,
+    runs on a paid Cursor plan's API key).
   </Field>
 </Fields>
 

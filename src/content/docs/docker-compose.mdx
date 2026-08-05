@@ -121,7 +121,7 @@ recommendation above is purely about uptime, not reachability.
 | `postgrest` | REST layer between app and database, internal network only |
 | `migrate` | One-shot schema apply on every boot (idempotent, exits when done) |
 | `cron` | Triggers rank checks, GSC snapshots, and weekly research on schedule |
-| `builder` | Your coding agent, headless (Claude Code or Codex) - builds guides and tools, runs research (below) |
+| `builder` | Your coding agent, headless (Claude Code, Codex, or Cursor) - builds guides and tools, runs research (below) |
 
 Check on it any time - these (and every command below) run inside the
 `dispatchseo` folder the install created:
@@ -135,17 +135,17 @@ docker compose logs builder
 ## The builder: automatic content, no public URL
 
 The `builder` container is your own coding agent running headlessly inside
-the stack - Claude Code or Codex, per project, whichever each site's
-Settings names. Every 10 minutes it asks the backend what's due and runs it:
-the daily guide build, weekly keyword research, approved tool builds, the
-weekly AI-visibility scan - and on auto-mode projects it merges green guide
-PRs. It only makes outbound connections (to GitHub and its agent's API -
-Anthropic or OpenAI), which is why a localhost install is fully automatic
-with no tunnel or domain.
+the stack - Claude Code, Codex, or Cursor, per project, whichever each
+site's Settings names. Every 10 minutes it asks the backend what's due and
+runs it: the daily guide build, weekly keyword research, approved tool
+builds, the weekly AI-visibility scan - and on auto-mode projects it merges
+green guide PRs. It only makes outbound connections (to GitHub and its
+agent's API), which is why a localhost install is fully automatic with no
+tunnel or domain.
 
 Turning it on is one credential, and there are two ways to hand it over.
-Both agents work the same way; the examples below show Claude Code, and the
-Codex differences are one block further down.
+Every agent works the same way; the examples below show Claude Code, and
+the Codex and Cursor differences are one block further down.
 
 **Easiest - paste it on the dashboard.** On the wizard's final screen (or the
 Home "Turn on automatic builds" card any time later), run `claude setup-token`
@@ -204,6 +204,28 @@ Then switch the project to Codex on the dashboard's Settings page. The
 agent is per-project, so one stack can run a Claude site and a Codex site
 side by side - the builder is handed the right credential per job. Builds
 default to `gpt-5`; if your account can't serve it, set `CODEX_MODEL=` in
+the same `.env`.
+
+### Running Cursor instead
+
+Same two paths again. On the dashboard, the paste box has a Cursor tab -
+create an API key in your [Cursor dashboard](https://cursor.com/dashboard)
+and paste it there. Two Cursor-specific facts worth knowing before you
+start: Cursor issues API keys on **paid plans only**, and the interactive
+`cursor-agent login` on your own machine never reaches the builder
+container - only a key does. Builds run on your Cursor plan; DispatchSEO
+bills nothing.
+
+The terminal alternative is one line in the same `.env`:
+
+```bash
+[ -f start.sh ] &&
+  echo "CURSOR_API_KEY=PASTE-YOUR-KEY-HERE" >> .env ||
+  echo "Wrong folder - run this inside the dispatchseo folder"
+```
+
+Then switch the project to Cursor on the dashboard's Settings page. Builds
+default to Cursor's own `auto` model pick; pin one with `CURSOR_MODEL=` in
 the same `.env`.
 
 ## Configuration

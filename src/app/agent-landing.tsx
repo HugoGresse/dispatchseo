@@ -93,11 +93,12 @@ const CONTENT: Record<AgentPageId, Content> = {
         ),
       },
       {
-        q: "Can I use Codex instead?",
+        q: "Can I use Codex or Cursor instead?",
         a: (
           <>
-            Yes - Codex is fully supported too, including the unattended overnight
-            builder. See <a href="/codex">DispatchSEO for Codex</a>.
+            Yes - both are fully supported, including the unattended overnight
+            builder. See <a href="/codex">DispatchSEO for Codex</a> and{" "}
+            <a href="/cursor">DispatchSEO for Cursor</a>.
           </>
         ),
       },
@@ -117,12 +118,13 @@ const CONTENT: Record<AgentPageId, Content> = {
         a: "Either works for the interactive side - a ChatGPT Plus, Pro, Business, or Enterprise plan, or an API key billed per use. The unattended overnight builder is the exception: it runs headless, so it specifically needs an API key with credit on the account, stored as a secret.",
       },
       {
-        q: "Can I use Claude Code instead?",
+        q: "Can I use Claude Code or Cursor instead?",
         a: (
           <>
-            Yes - Claude Code is fully supported too, including the unattended builder,
-            and it runs on the subscription you already pay for instead of a metered
-            key. See <a href="/claude-code">DispatchSEO for Claude Code</a>.
+            Yes - both are fully supported, including the unattended builder, and both
+            run on a subscription instead of a metered key. See{" "}
+            <a href="/claude-code">DispatchSEO for Claude Code</a> and{" "}
+            <a href="/cursor">DispatchSEO for Cursor</a>.
           </>
         ),
       },

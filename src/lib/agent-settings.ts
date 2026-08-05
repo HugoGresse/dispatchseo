@@ -9,7 +9,13 @@
 
 import { db } from "@/lib/db";
 import { isCloudMode } from "@/lib/cloud";
-import { agentById, builderAgents, isBuilderAgent, type AgentDefinition } from "@/lib/agents";
+import {
+  agentById,
+  builderAgents,
+  isBuilderAgent,
+  type AgentDefinition,
+  type AgentId,
+} from "@/lib/agents";
 import { checkRepoSecret, setRepoSecret } from "@/lib/github-app-secrets";
 import { listProjects } from "@/lib/projects";
 import { builderAgentToken, setRepoActionsVariable } from "@/lib/github";
@@ -37,7 +43,7 @@ export type AgentSwitchResult = {
 /**
  * Point a project's unattended builders at a different coding agent.
  *
- * Deliberately does NOT touch the repo. The workflow files carry both agents
+ * Deliberately does NOT touch the repo. The workflow files carry every agent
  * and resolve which to run at run time from /api/project-mode, so switching is
  * a single column write and takes effect on the next scheduled run - no
  * reinstall, no PR, nothing for the owner to remember. That property is the
@@ -92,16 +98,34 @@ export async function setProjectAgent(
 }
 
 /**
+ * The shape-check failure message, per agent. Owner-facing prose, not a
+ * registry field: it names the fix, not just the mismatch, and the fix is
+ * different in kind per agent (a terminal command / a web page / a web page
+ * plus a paid plan). Record<AgentId, …> so a new agent is a compile error
+ * here - the `claude ? X : Y` ternary this replaced told a Cursor owner
+ * their key "doesn't look like an OpenAI API key".
+ */
+const SHAPE_ERROR: Record<AgentId, string> = {
+  claude:
+    "That doesn't look like a Claude Code token (they start with sk-ant-oat). Run `claude setup-token` and copy its whole output.",
+  codex:
+    "That doesn't look like an OpenAI API key (they start with sk-). Copy it again from platform.openai.com/api-keys - a key is only shown once, so a half-copied one is the usual cause.",
+  cursor:
+    "That doesn't look like a Cursor API key - the usual causes are pasting one of the other agents' credentials, or a line-wrapped copy that carried a newline. Copy it again from your Cursor dashboard.",
+};
+
+/**
  * Prove a pasted credential actually works, before anything stores it.
  *
- * The two agents are not equally checkable, and pretending otherwise would be
+ * The agents are not equally checkable, and pretending otherwise would be
  * worse than the asymmetry. A Claude Code OAuth token can only be validated by
  * running Claude, which does not exist on this server - so that path stays a
  * shape check, and the pack's seo-token-check workflow does the real proving
- * shortly after. An OpenAI key CAN be checked here, in one metered call costing
- * a fraction of a cent, so it is - a key that is real but sits on an account
- * with no credit passes every shape check ever written and then fails on the
- * first scheduled build.
+ * shortly after; a Cursor key is in the same boat (its `cursor-agent models`
+ * probe needs the CLI, which this server doesn't ship). An OpenAI key CAN be
+ * checked here, in one metered call costing a fraction of a cent, so it is - a
+ * key that is real but sits on an account with no credit passes every shape
+ * check ever written and then fails on the first scheduled build.
  */
 export async function verifyAgentCredential(
   agentId: string,
@@ -109,12 +133,7 @@ export async function verifyAgentCredential(
 ): Promise<{ ok: true } | { error: string }> {
   const agent = agentById(agentId);
   if (!agent.credential.looksValid(value)) {
-    return {
-      error:
-        agent.id === "claude"
-          ? "That doesn't look like a Claude Code token (they start with sk-ant-oat). Run `claude setup-token` and copy its whole output."
-          : "That doesn't look like an OpenAI API key (they start with sk-). Copy it again from platform.openai.com/api-keys - a key is only shown once, so a half-copied one is the usual cause.",
-    };
+    return { error: SHAPE_ERROR[agent.id] };
   }
   if (agent.id !== "codex") return { ok: true };
 

@@ -2014,12 +2014,13 @@ const mcpHandler = createMcpHandler(
           "self-hosted install. This does NOT change which agent you are: any " +
           "agent connected over MCP can drive everything interactively " +
           "regardless of this setting. It takes effect on the next scheduled " +
-          "run with no repo change, because the workflow files carry both " +
-          "agents and ask which to use at run time. The reply names anything " +
+          "run with no repo change, because the workflow files carry every " +
+          "agent and ask which to use at run time. The reply names anything " +
           "the owner still has to do - chiefly adding the new agent's API " +
           "credential where the builders run. Ask the owner before switching; " +
-          "the two agents bill differently (a Claude subscription vs metered " +
-          "OpenAI usage), so this is their call, not yours.",
+          "the agents bill differently (a Claude or Cursor subscription vs " +
+          "metered OpenAI usage - see each option's note), so this is their " +
+          "call, not yours.",
         inputSchema: {
           // BUILDER_AGENT_IDS, not AGENT_IDS: this writes projects.agent, which
           // decides who runs the scheduled builds. An agent that speaks MCP but
@@ -2602,7 +2603,7 @@ const mcpHandler = createMcpHandler(
         description:
           "The project this token belongs to and how it's set up: domain, mode " +
           "(semi/auto) with the effective auto_approve / auto_approve_tools flags, " +
-          "which coding agent runs the builders (agent: claude|codex - read it " +
+          `which coding agent runs the builders (agent: ${BUILDER_AGENT_IDS.join("|")} - read it ` +
           "before calling set_agent), " +
           "keyword source (dataforseo/serpapi/gsc), whether a SERP " +
           "provider and Search Console are connected, whether THIS repo has its own " +

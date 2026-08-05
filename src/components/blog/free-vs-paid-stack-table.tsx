@@ -18,7 +18,7 @@ const ROWS = [
   {
     piece: "Content pipeline (research → draft → PR)",
     cost: "Free",
-    why: "Runs on the Claude Code or Codex subscription you already pay for - no separate generation fee",
+    why: "Runs on the coding-agent plan you already pay for (Claude Code, Codex, or Cursor) - no separate generation fee",
   },
   {
     piece: "Hosting (Vercel Hobby + Supabase + GitHub)",

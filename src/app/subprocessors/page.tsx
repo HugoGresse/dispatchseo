@@ -143,7 +143,7 @@ export default function SubprocessorsPage() {
       <section className="space-y-3 border-t border-neutral-800 pt-6 text-sm leading-relaxed">
         <h2 className="text-lg font-medium text-white">The one that is not on this list</h2>
         <p>
-          Your coding agent - Claude Code or Codex - drafts the content, but it is{" "}
+          Your coding agent - Claude Code, Codex, or Cursor - drafts the content, but it is{" "}
           <strong className="text-neutral-100">your</strong> subscription running under{" "}
           <strong className="text-neutral-100">your</strong> account with that provider, not a
           vendor we engage on your behalf. That relationship is directly between you and them,

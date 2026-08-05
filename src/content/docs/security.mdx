@@ -165,8 +165,9 @@ own OAuth reviewers.
 | GitHub token | Encrypted in your database; connected from the dashboard Home's **Connect GitHub** card | Clones your repo, opens and merges pull requests | Generate a new one on GitHub, paste it into the same card |
 | Claude Code token (builder) | Encrypted in your database, or `CLAUDE_CODE_OAUTH_TOKEN` in `.env` (env always wins) | Runs your own Claude Code headlessly to build content | Run `claude setup-token` again and paste it into the credential box on Settings |
 | `OPENAI_API_KEY` (builder, Codex projects) | Encrypted in your database, or in `.env` (env always wins) | Runs Codex headlessly - and it is a **live metered billing credential**, the one on this list that spends money directly | Revoke it at platform.openai.com/api-keys, create a fresh one, paste it into the same box |
+| `CURSOR_API_KEY` (builder, Cursor projects) | Encrypted in your database, or in `.env` (env always wins) | Runs Cursor headlessly on your paid Cursor plan | Revoke it in your Cursor dashboard, create a fresh one, paste it into the same box |
 
-Treat all five as equal-weight, full access to their surface - none of
+Treat all six as equal-weight, full access to their surface - none of
 them is safe to paste into a chat, a screenshot, or a public issue. The
 OpenAI key deserves one extra habit: when you stop using a project, revoke
 the key at the provider too, not just here.

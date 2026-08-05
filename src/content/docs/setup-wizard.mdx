@@ -17,14 +17,14 @@ platform does the installing for you:
 2. **Connect GitHub** - one click installs the DispatchSEO GitHub App on
    your site's repo. The platform then commits the pipeline into the repo
    and manages PRs through the App - no tokens to create or paste.
-3. **Connect your coding agent** - pick Claude Code or Codex, then paste
-   the credential it asks for (`claude setup-token` for Claude Code, an
-   OpenAI API key for Codex). It's stored as a secret on **your repo**,
-   never on our side, and builds run on your own subscription or key.
-   Don't have either yet? Install
-   [Claude Code](/docs/install-claude-code) or
-   [Codex](/docs/install-codex) first - about five minutes, and this
-   step won't work until you have.
+3. **Connect your coding agent** - pick Claude Code, Codex, or Cursor,
+   then paste the credential it asks for (`claude setup-token` for Claude
+   Code, an OpenAI API key for Codex, a Cursor API key - paid plans only -
+   for Cursor). It's stored as a secret on **your repo**, never on our
+   side, and builds run on your own subscription or key. Don't have one
+   yet? Install [Claude Code](/docs/install-claude-code),
+   [Codex](/docs/install-codex), or [Cursor](/docs/install-cursor) first -
+   about five minutes, and this step won't work until you have.
 4. **Connect Google Search Console** - one click, sign in with the Google
    account that has access to your property, pick the property. Read-only,
    revocable any time. No service account needed.
@@ -97,11 +97,12 @@ service before saving them.
 
 ## Step 4 - Coding agent
 
-One choice: **Claude Code** or **Codex**. Both do the same job here -
-research, writing, pull requests - the difference is who bills you. Claude
-Code runs on a Claude subscription you already pay for; Codex runs on your
-own OpenAI API key, metered per run. DispatchSEO never bills you for agent
-usage either way.
+One choice: **Claude Code**, **Codex**, or **Cursor**. All three do the
+same job here - research, writing, pull requests - the difference is who
+bills you. Claude Code runs on a Claude subscription you already pay for;
+Codex runs on your own OpenAI API key, metered per run; Cursor runs on a
+paid Cursor plan's API key. DispatchSEO never bills you for agent usage in
+any case.
 
 Everything after this adapts to your pick: the finish line's pastes come
 ready for the agent you chose. You can still change your mind on the finish

@@ -78,7 +78,7 @@ for (const id of NOT_AGENTS) {
     process.exit(1);
   }
 }
-for (const id of ["claude", "codex"]) {
+for (const id of ["claude", "codex", "cursor"]) {
   if (!agents.isSupportedAgent(id) || agents.agentById(id).id !== id) {
     console.error(`Registry regression: ${id} is no longer resolvable by id.`);
     process.exit(1);
@@ -123,6 +123,23 @@ const snapshot = {
     setupBundled: mcp.setupCommand(SLUG, ORIGIN, TOKEN, true, "codex"),
     setupPowershell: mcp.setupCommandPS(SLUG, ORIGIN, TOKEN, false, "codex"),
     setupPowershellBundled: mcp.setupCommandPS(SLUG, ORIGIN, TOKEN, true, "codex"),
+  },
+  // Cursor's pastes are the longest and most fragile of the three: the bash
+  // form embeds a node one-liner that must merge .cursor/mcp.json rather than
+  // clobber it, and the PowerShell form rebuilds the same merge in
+  // ConvertFrom/To-Json. A refactor that "simplifies" either into a blind
+  // write is silent data loss on an owner's config - exactly the class of
+  // change this snapshot exists to surface.
+  cursor: {
+    serverName: mcp.mcpServerName(SLUG),
+    mcpAdd: mcp.cursorMcpAddCommand(SLUG, ORIGIN, TOKEN),
+    mcpAddPowershell: mcp.cursorMcpAddCommandPS(SLUG, ORIGIN, TOKEN),
+    connect: mcp.cursorConnectCommand(SLUG, ORIGIN, TOKEN),
+    connectPowershell: mcp.cursorConnectCommandPS(SLUG, ORIGIN, TOKEN),
+    setup: mcp.setupCommand(SLUG, ORIGIN, TOKEN, false, "cursor"),
+    setupBundled: mcp.setupCommand(SLUG, ORIGIN, TOKEN, true, "cursor"),
+    setupPowershell: mcp.setupCommandPS(SLUG, ORIGIN, TOKEN, false, "cursor"),
+    setupPowershellBundled: mcp.setupCommandPS(SLUG, ORIGIN, TOKEN, true, "cursor"),
   },
   // The raw details handed to any other MCP client. No command to get wrong,
   // but the URL shape and the header spelling are still things a client will

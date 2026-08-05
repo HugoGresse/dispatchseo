@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-7C5CFC?labelColor=1F2328&style=flat-square"></a>
-  <a href="docs/AGENTS.md"><img alt="Built for Claude Code and Codex" src="https://img.shields.io/badge/built%20for-Claude%20Code%20%2B%20Codex-D97757?labelColor=1F2328&style=flat-square"></a>
+  <a href="docs/AGENTS.md"><img alt="Built for Claude Code, Codex, and Cursor" src="https://img.shields.io/badge/built%20for-Claude%20Code%20%2B%20Codex%20%2B%20Cursor-D97757?labelColor=1F2328&style=flat-square"></a>
   <a href="https://dispatchseo.com/docs#choose-your-install"><img alt="Self-host in one command" src="https://img.shields.io/badge/self--host-one%20command-2496ED?logo=docker&logoColor=white&labelColor=1F2328&style=flat-square"></a>
   <a href="https://dispatchseo.com/discord"><img alt="Join the Discord" src="https://img.shields.io/badge/Discord-join%20the%20server-5865F2?logo=discord&logoColor=white&labelColor=1F2328&style=flat-square"></a>
 </p>
@@ -18,7 +18,7 @@
   <h2>Turn your AI agent into your SEO manager</h2><br />
   <a href="https://dispatchseo.com">DispatchSEO</a>: an open-source alternative to SEObot and Outrank.<br /><br />
   </strong>
-  Works today with <b>Claude Code</b> and <b>Codex</b> - both first-class, including the unattended overnight builder.<br /><br />
+  Works today with <b>Claude Code</b>, <b>Codex</b>, and <b>Cursor</b> - all first-class, including the unattended overnight builder.<br /><br />
   Other SEO tools learn about your product by crawling your homepage. Your agent already knows it,<br />so DispatchSEO gives that agent the missing half: keyword research, content that ships as pull requests, and rank tracking.
 </div>
 
@@ -27,6 +27,8 @@
   <img alt="Claude Code" src="docs/brand/icons/claude.svg" width="32">
   &nbsp;
   <img alt="Codex" src="docs/brand/icons/openai.svg" width="32">
+  &nbsp;
+  <img alt="Cursor" src="docs/brand/icons/cursor.svg" width="32">
   &nbsp;
   <img alt="MCP" src="docs/brand/icons/mcp.svg" width="32">
   &nbsp;
@@ -72,7 +74,7 @@
 
 ## ⚡ How it works
 
-1. **Your agent researches.** Claude Code or Codex connects to DispatchSEO over MCP,
+1. **Your agent researches.** Claude Code, Codex, or Cursor connects to DispatchSEO over MCP,
    reads the served playbook, and mines keywords from your Search Console
    data, Google Autocomplete, and what it already knows about your product.
    Ideas land in a queue with the reasoning attached.
@@ -121,12 +123,13 @@ with a real answer — including the parts that aren't finished yet.
 Connecting is one paste and gets you the whole tool set: research, the queue,
 approvals, backlinks, reports, and building a guide when you ask for one. The
 overnight builder is the separate thing — scheduled jobs that run an agent with
-nobody watching — and both Claude Code and Codex do that too. Every workflow
-carries both and asks the dashboard which to run, so switching agent takes
-effect on the next scheduled run with no repo change.
+nobody watching — and all three do that. Every workflow carries every agent
+and asks the dashboard which to run, so switching agent takes effect on the
+next scheduled run with no repo change.
 
 The honest difference is who pays: Claude Code runs on a subscription you
-already have, while Codex is metered by OpenAI per run.
+already have, Cursor runs on a paid Cursor plan's API key, and Codex is
+metered by OpenAI per run.
 
 [docs/AGENTS.md](docs/AGENTS.md) has the details, the support tiers, and how to
 add an agent.
@@ -136,9 +139,9 @@ add an agent.
 - **Your site's source in a GitHub repo.** The pipeline ships content as pull
   requests, so git-based sites only - WordPress won't work.
 - **A coding agent.** Your agent is the engine. Claude Code runs on the Claude
-  subscription you already pay for; Codex does everything Claude Code does
-  here, including the overnight builder, but OpenAI meters it per run — see the
-  table above.
+  subscription you already pay for; Codex and Cursor do everything Claude Code
+  does here, including the overnight builder — Codex is metered by OpenAI per
+  run, and Cursor's builder key needs a paid Cursor plan. See the table above.
 - **A machine with Docker** (~1 GB RAM). A laptop works for a test drive, but
   a machine that stays on is much better for daily use - a $5 VPS, a Raspberry
   Pi, a desktop that never sleeps. Schedules only run while the machine is awake.
@@ -155,7 +158,7 @@ page, every setting, every tool.
 | --- | --- |
 | **New here** | [What DispatchSEO is](https://dispatchseo.com/docs/introduction) · [How it works](https://dispatchseo.com/docs/how-it-works) · [Cloud or self-hosted](https://dispatchseo.com/docs/choosing-how-to-run-it) |
 | **Install** | [Quickstart](https://dispatchseo.com/docs#choose-your-install) - your own computer, a VPS, or from source |
-| **Set up** | [Install Claude Code](https://dispatchseo.com/docs/install-claude-code) · [Install Codex](https://dispatchseo.com/docs/install-codex) · [The setup wizard](https://dispatchseo.com/docs/setup-wizard) · [Search Console](https://dispatchseo.com/docs/search-console) · [Keyword data](https://dispatchseo.com/docs/keyword-data) · [Publishing](https://dispatchseo.com/docs/publishing) · [Connect your site](https://dispatchseo.com/docs/connect-your-site) |
+| **Set up** | [Install Claude Code](https://dispatchseo.com/docs/install-claude-code) · [Install Codex](https://dispatchseo.com/docs/install-codex) · [Install Cursor](https://dispatchseo.com/docs/install-cursor) · [The setup wizard](https://dispatchseo.com/docs/setup-wizard) · [Search Console](https://dispatchseo.com/docs/search-console) · [Keyword data](https://dispatchseo.com/docs/keyword-data) · [Publishing](https://dispatchseo.com/docs/publishing) · [Connect your site](https://dispatchseo.com/docs/connect-your-site) |
 | **Use it** | [Day to day](https://dispatchseo.com/docs/day-to-day) · [The dashboard](https://dispatchseo.com/docs/dashboard) · [Automations](https://dispatchseo.com/docs/automations) · [Agent commands](https://dispatchseo.com/docs/agent-commands) |
 | **Reference** | [Concepts](https://dispatchseo.com/docs/concepts) · [MCP tools](https://dispatchseo.com/docs/mcp-tools) · [Environment variables](https://dispatchseo.com/docs/environment-variables) · [Schedules](https://dispatchseo.com/docs/schedules) · [Architecture](https://dispatchseo.com/docs/architecture) |
 | **Help** | [Troubleshooting](https://dispatchseo.com/docs/troubleshooting) · [Common questions](https://dispatchseo.com/docs/faq) · [Security](https://dispatchseo.com/docs/security) · [Upgrading](https://dispatchseo.com/docs/upgrading) |

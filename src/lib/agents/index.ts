@@ -120,7 +120,7 @@ export type AgentDefinition = {
     repoSecretName: string;
     /**
      * The process env var the docker stack can supply instead of the stored
-     * value. Spelled the same as repoSecretName for both agents today, but kept
+     * value. Spelled the same as repoSecretName for every agent today, but kept
      * separate on purpose: they answer different questions (what GitHub calls
      * it vs what the container reads), and collapsing them would make a future
      * divergence a silent wrong-credential bug rather than a type error.
@@ -350,16 +350,17 @@ const cursor: AgentDefinition = {
     // cross-paste mistake that has already bitten this repo twice.
     looksValid: (v) =>
       v.length > 20 && !/\s/.test(v) && !v.startsWith("sk-ant-") && !v.startsWith("sk-"),
-    // Where an API key comes from is NOT settled. Checked against a real free
-    // account on 2026-08-05: the dashboard has exactly three sections
+    // Where an API key comes from, measured against a real free account on
+    // 2026-08-05: the free plan's dashboard has exactly three sections
     // (Overview, Settings, Integrations) and none of them mint an API key -
     // Integrations is third-party connections only (GitHub, Slack, Linear,
-    // Jira, Sentry). So a key appears to be a paid-plan feature, and this text
-    // must not send a free-plan owner hunting for a page that isn't there.
+    // Jira, Sentry). A key is a paid-plan feature, and this text must not
+    // send a free-plan owner hunting for a page that isn't there.
     // Interactive use needs no key at all: `cursor-agent login` does a browser
     // OAuth and stores credentials locally, which is what the CLI's own error
     // text recommends first. A key is only needed where no browser exists,
-    // i.e. CI. Pin this down before any surface offers Cursor as a builder.
+    // i.e. the builders - which is why every surface that offers Cursor as a
+    // builder leads with the paid-plan fact.
     howToMint:
       "Create an API key in your Cursor dashboard. Working interactively needs no key at all - `cursor-agent login` is enough - but the builders run where no browser exists, and Cursor issues API keys on paid plans only.",
     mintUrl: "https://cursor.com/dashboard",

@@ -158,16 +158,14 @@ export type WizardResume = {
 // The one-line "who pays" subtitle under each agent's name on the picker.
 // Wizard-specific copy, not a registry field (agent.cost.note says something
 // similar but longer, for the finale prose rather than this compact card) -
-// adding a third agent means adding one entry here.
-// cursor is unreachable from every picker below - they all iterate
-// builderAgents(), and Cursor does not run the builders yet. The entries exist
-// because the map is exhaustive over AgentId on purpose: that is what turns
-// "Cursor became a builder" into a compile error listing the copy still to
-// write, instead of a silently missing subtitle.
+// adding a third agent means adding one entry here. The map is exhaustive
+// over AgentId on purpose: that is what turns "an agent became a builder"
+// into a compile error listing the copy still to write, instead of a
+// silently missing subtitle.
 const AGENT_PICKER_SUBTITLE: Record<AgentId, string> = {
   claude: "Needs a Claude subscription · builds cost nothing extra, they run on your plan",
   codex: "Needs an OpenAI API key · builds are metered by OpenAI per run",
-  cursor: "Connects to everything · does not run the scheduled builds yet",
+  cursor: "Needs a paid Cursor plan · builds run on its API key, nothing extra is billed",
 };
 
 // The builder pick, shared by the agent step (where the choice is made) and
@@ -261,11 +259,20 @@ const AGENT_PREREQ_STEP: Record<AgentId, { body: ReactNode; cta: string }> = {
   cursor: {
     body: (
       <>
-        This needs <b className="font-medium text-neutral-200">Cursor</b> and the{" "}
-        <b className="font-medium text-neutral-200">GitHub CLI</b> (
-        <code className="font-mono text-neutral-300">gh</code>). Cursor connects
-        to everything here, but it does not run the scheduled builds - pick
-        Claude Code or Codex for those.
+        This needs the <b className="font-medium text-neutral-200">Cursor CLI</b>{" "}
+        (<code className="font-mono text-neutral-300">cursor-agent</code>) and
+        the <b className="font-medium text-neutral-200">GitHub CLI</b> (
+        <code className="font-mono text-neutral-300">gh</code>). The guide
+        covers Cursor; gh installs from{" "}
+        <a
+          href="https://cli.github.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-violet-400 underline underline-offset-2 hover:text-violet-300"
+        >
+          cli.github.com
+        </a>{" "}
+        (then run <code className="font-mono text-neutral-300">gh auth login</code>).
       </>
     ),
     cta: "Install Cursor",
@@ -1610,8 +1617,9 @@ export function OnboardingWizard({
                   That&apos;s your coding agent running inside Docker, building on schedule, no
                   public URL needed. Until it&apos;s on, nothing builds automatically - everything
                   else still works. (Prefer the terminal? Add{" "}
-                  <code className="font-mono text-neutral-400">CLAUDE_CODE_OAUTH_TOKEN</code> or{" "}
-                  <code className="font-mono text-neutral-400">OPENAI_API_KEY</code> to the
+                  <code className="font-mono text-neutral-400">CLAUDE_CODE_OAUTH_TOKEN</code>,{" "}
+                  <code className="font-mono text-neutral-400">OPENAI_API_KEY</code> or{" "}
+                  <code className="font-mono text-neutral-400">CURSOR_API_KEY</code> to the
                   install folder&apos;s <code className="font-mono text-neutral-400">.env</code>{" "}
                   instead - env always wins.)
                 </p>

@@ -102,7 +102,7 @@ export function AgentConnectTabs({
           <Box text={generic.urlWithKey} />
           <p className="text-xs text-neutral-500">
             Connecting gets you every tool. The unattended overnight builder is a separate thing an
-            agent has to be wired into - Claude Code and Codex both run it; anything else here
+            agent has to be wired into - Claude Code, Codex, and Cursor all run it; anything else here
             drives DispatchSEO by hand.
           </p>
         </div>

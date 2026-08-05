@@ -45,9 +45,9 @@ in this run.
    when a page on it is among the sources that actually support the answer -
    not when it merely appeared somewhere in search results.
 3. **Record everything in one call**: \`record_ai_citations\` with one entry
-   per question - engine \`{{AGENT_ENGINE}}\` (the model family actually
-   answering: this run's own agent, so the dashboard's AI-visibility chart
-   attributes answers to the engine that produced them), the query,
+   per question - engine {{AGENT_ENGINE}} (the model family actually
+   answering, so the dashboard's AI-visibility chart attributes answers to
+   the engine that produced them), the query,
    \`has_ai_answer\` (false only
    if the question produced no meaningful answer), \`cited\`, \`cited_url\`
    when applicable, a 1-2 sentence verbatim \`answer_excerpt\`, and the full

@@ -1715,7 +1715,7 @@ export async function addAgentKey(
       .select("id");
     if (error) {
       return {
-        error: /builder_claude_token|builder_openai_key|column/i.test(error.message)
+        error: /builder_claude_token|builder_openai_key|builder_cursor_key|column/i.test(error.message)
           ? "This install predates the migration that added builder credentials - re-run start.sh once to apply it, then try again."
           : error.message,
       };
@@ -1975,7 +1975,7 @@ export async function connectBuilderToken(
     .select("id");
   if (error) {
     return {
-      error: /builder_claude_token|builder_openai_key|column/i.test(error.message)
+      error: /builder_claude_token|builder_openai_key|builder_cursor_key|column/i.test(error.message)
         ? "This install predates the migration that added builder credentials - re-run start.sh once to apply it, then try again."
         : error.message,
     };

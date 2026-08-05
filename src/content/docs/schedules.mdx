@@ -205,10 +205,10 @@ that auto-merge requires.
 
 **SEO health check** (`seo-token-check.yml`) proves your agent credential
 still works before the day's build attempts depend on it - one minimal
-model call on Claude Code, or a direct API probe on Codex (cheaper and more
+model call on Claude Code, a direct API probe on Codex (cheaper and more
 precise there: OpenAI's own error code says whether a key is throttled,
-broke, or revoked) - and checks whether your installed pipeline is a
-version behind.
+broke, or revoked), or a `cursor-agent models` liveness call on Cursor -
+and checks whether your installed pipeline is a version behind.
 Because it runs every day without fail, its own silence over time is a
 useful signal too - see the pipeline heartbeat note below.
 

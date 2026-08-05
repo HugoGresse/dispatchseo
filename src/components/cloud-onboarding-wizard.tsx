@@ -85,22 +85,21 @@ type PipelineInstallResult = Awaited<ReturnType<typeof runPipelineInstall>>;
 // Wizard-specific copy, not a registry field - same reasoning and same text
 // as onboarding-wizard.tsx's AGENT_PICKER_SUBTITLE, kept as a separate
 // colocated map here rather than shared so the two wizards can each change
-// independently. Adding a third agent means adding one entry here.
-// cursor is unreachable here - every picker iterates builderAgents() and
-// Cursor does not run the builders yet. Kept exhaustive over AgentId so that
-// promoting it to a builder is a compile error listing the copy still to write.
+// independently. Adding a new agent means adding one entry here; the map is
+// exhaustive over AgentId so a missing one is a compile error, not a
+// silently absent subtitle.
 const AGENT_PICKER_SUBTITLE: Record<AgentId, string> = {
   claude: "Needs a Claude subscription · builds cost nothing extra, they run on your plan",
   codex: "Needs an OpenAI API key · builds are metered by OpenAI per run",
-  cursor: "Connects to everything · does not run the scheduled builds yet",
+  cursor: "Needs a paid Cursor plan · builds run on its API key, nothing extra is billed",
 };
 
 // c2's whole "get your credential" block - prerequisite callout plus the
 // paragraph(s) under it. Not registry data: it's the screen's own explanation
-// of how to obtain and paste the credential, and the two agents' flows aren't
-// even parallel in shape (Claude runs a terminal command first, Codex mints a
-// key on a web page with no CLI step at all), so this holds the entire
-// fragment per agent rather than field-by-field pieces.
+// of how to obtain and paste the credential, and the agents' flows aren't
+// even parallel in shape (Claude runs a terminal command first; Codex and
+// Cursor mint a key on a web page with no CLI step at all), so this holds the
+// entire fragment per agent rather than field-by-field pieces.
 const AGENT_CREDENTIAL_INTRO: Record<AgentId, ReactNode> = {
   claude: (
     <>
@@ -154,22 +153,29 @@ const AGENT_CREDENTIAL_INTRO: Record<AgentId, ReactNode> = {
   ),
   cursor: (
     <>
-      {/* Unreachable today (this screen only offers builderAgents()), and
-          deliberately not a credential flow: Cursor has no builder credential
-          to collect, so inventing a paste box for one would be the screen
-          lying about what it does. */}
+      {/* Like Codex, no CLI is a prerequisite for THIS screen: the key is
+          minted on a web page. The paid-plan fact leads because it is the
+          one thing that stalls this step - the free plan's dashboard has no
+          API-key page at all (measured 2026-08-05), so a free-plan owner
+          would hunt for a page that isn't there. */}
       <PrereqCallout
-        title="Cursor does not run the scheduled builds"
+        title="You need a Cursor API key"
         body={
           <>
-            Cursor connects to your project and drives every workflow you start yourself,
-            but the overnight builds need Claude Code or Codex. Pick one of those here -
-            you can still use Cursor day to day.
+            Create one in your Cursor dashboard - Cursor issues API keys on paid plans
+            only. The overnight builds run where no browser exists, so the login on your
+            own machine does not reach them; only a key does. You do not need the Cursor
+            CLI installed for this step.
           </>
         }
-        href="/docs/install-cursor"
-        cta="How Cursor fits in"
+        href="https://cursor.com/dashboard"
+        cta="Open your Cursor dashboard"
       />
+      <p className="mt-4 text-sm leading-relaxed text-neutral-400">
+        Copy the key and paste it below. Watch for line-wrapping if you copy it from a
+        terminal — the paste is checked for whitespace and for the other agents&apos;
+        credentials before it is stored.
+      </p>
     </>
   ),
 };
@@ -182,7 +188,8 @@ const AGENT_VERIFY_NOTE: Record<AgentId, string> = {
   claude:
     "Verification happens in the background after setup starts - this screen won't show an instant green check, and that's expected.",
   codex: "This is checked against OpenAI before it is stored, so it takes a second or two.",
-  cursor: "Cursor has no builder credential to store - there is nothing to verify on this screen.",
+  cursor:
+    "This is shape-checked before it is stored - Cursor offers nothing to probe without a browser login, so the pipeline's token-check run does the real proving shortly after.",
 };
 
 function chevron() {

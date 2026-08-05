@@ -1,4 +1,4 @@
-// The two agents brand marks, inlined.
+// The agents' brand marks, inlined.
 //
 // Downloaded from the vendors own published assets (via Wikimedia Commons,
 // which mirrors the files Anthropic and OpenAI publish) and pasted here

@@ -31,19 +31,22 @@ import {
 } from "./install";
 import { projectAgent, type AgentId } from "@/lib/agents";
 
-// geo-scan attribution: AGENT_ENGINES' name for each agent's model family.
-// Keyed by AgentId so a new agent must decide its engine at compile time.
-//
-// cursor is PROVISIONAL and currently unreachable - a connect-only agent never
-// becomes projects.agent, so nothing renders it. It cannot be answered from the
-// agent id alone either: Cursor is model-agnostic (`--model gpt-5` and
-// `--model sonnet-4-thinking` are both normal), so the honest value depends on
-// the model a run is configured with. Decide it from that model, not from this
-// map, on the day Cursor becomes a builder.
+// geo-scan attribution: what the agent passes as record_ai_citations' engine.
+// Keyed by AgentId so a new agent must decide its engine at compile time. The
+// values are INSTRUCTION TEXT spliced into the geo-scan playbook, not bare
+// enum members - which is what lets Cursor's entry be honest: Cursor is
+// model-agnostic (`--model gpt-5` and `--model sonnet-4-thinking` are both
+// normal), so no fixed value can be right, and a hardcoded one would silently
+// misattribute every Cursor project's AI-visibility data. Its entry tells the
+// running agent to answer from the model it is actually using - the one fact
+// only the run itself knows.
 const AGENT_ENGINE: Record<AgentId, string> = {
-  claude: "claude",
-  codex: "chatgpt",
-  cursor: "chatgpt",
+  claude: "`claude`",
+  codex: "`chatgpt`",
+  cursor:
+    "`claude`, `chatgpt`, or `gemini` - whichever family the model THIS run " +
+    "is executing on belongs to (Cursor is model-agnostic, so answer from " +
+    "your own model, not from the agent's name)",
 };
 import { SETUP, SETUP_STEPS } from "./setup";
 import { RESEARCH, RESEARCH_STEPS } from "./research";
@@ -64,7 +67,7 @@ import { TREND_SCAN, TREND_SCAN_STEPS } from "./trend-scan";
 import { TREND_EXPAND, TREND_EXPAND_STEPS } from "./trend-expand";
 import { GEO_SCAN, GEO_SCAN_STEPS } from "./geo-scan";
 
-export const INSTRUCTIONS_VERSION = "2026-08-05.3";
+export const INSTRUCTIONS_VERSION = "2026-08-05.4";
 
 export const WORKFLOWS = [
   "install",
@@ -279,10 +282,11 @@ export async function renderInstructions(workflow: WorkflowName, project: Projec
       .replaceAll("{{AGENT_CREDENTIAL_STEP}}", AGENT_CREDENTIAL_STEP[agent.id])
       .replaceAll("{{AGENT_CREDENTIAL_BRIEF}}", AGENT_CREDENTIAL_BRIEF[agent.id])
       .replaceAll("{{AGENT_SMOKE_NOTE}}", AGENT_SMOKE_NOTE[agent.id])
-      // geo-scan attribution: "chatgpt" is AGENT_ENGINES' name for the GPT
+      // geo-scan attribution: `chatgpt` is AGENT_ENGINES' name for the GPT
       // family, which is what a Codex run's answers actually are. Hardcoding
       // `claude` here silently attributed GPT answers to Claude in the
-      // AI-visibility chart, with no backfill path.
+      // AI-visibility chart, with no backfill path. Cursor's value is a
+      // decide-from-your-model instruction, not a fixed engine - see the map.
       .replaceAll("{{AGENT_ENGINE}}", AGENT_ENGINE[agent.id]);
     // The agent-conditional TEXT carries project tokens of its own - both
     // credential steps end with `gh secret set … --repo {{REPO}}` - and it is

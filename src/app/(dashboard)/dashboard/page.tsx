@@ -1231,7 +1231,7 @@ export default async function Home() {
                 // when the wizard was closed - so it links out like the
                 // wizard's own Claude Code screens do.
                 <>
-                  Needs: a coding agent (Claude Code or Codex) and the GitHub CLI (gh, logged in). The script tells you
+                  Needs: a coding agent (Claude Code, Codex, or Cursor) and the GitHub CLI (gh, logged in). The script tells you
                   exactly what&apos;s missing if anything is - and{" "}
                   <Link
                     href="/docs/install-claude-code"

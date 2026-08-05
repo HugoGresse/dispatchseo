@@ -78,7 +78,7 @@ Reference, once you want the details:
 - **Your website's code in a GitHub repo.** Content ships as pull
   requests, so git-based sites only; WordPress and other database-backed
   CMSes won't work.
-- **A coding agent - Claude Code or Codex.** Your own agent does the
+- **A coding agent - Claude Code, Codex, or Cursor.** Your own agent does the
   research and the writing, and it also runs the in-stack builder that works
   while you're away. Claude Code runs on the Claude subscription you already
   pay for; Codex runs on your own OpenAI API key, which OpenAI meters per

@@ -69,7 +69,7 @@ validator, and it works from a GitHub Actions runner as well as a laptop.
 **The unattended builder** is the set of GitHub Actions in your site's repo
 (and, on self-host, the docker builder container) that wake up on a schedule
 and run an agent with nobody watching. Every `seo-*` workflow template carries
-both agents and resolves which to run at run time, by asking the backend
+every builder agent and resolves which to run at run time, by asking the backend
 (`/api/project-mode` returns `agent`); the docker builder takes the agent per
 job off its poll feed. Switching agent on the dashboard's Settings page is
 therefore one column write and takes effect on the next scheduled run — no
@@ -83,7 +83,7 @@ regression on that property would show up.
 
 ### What still differs between the two
 
-Capability parity is real, but the two agents are not interchangeable in every
+Capability parity is real, but the agents are not interchangeable in every
 respect, and saying so is cheaper than letting somebody find out from a bill.
 
 - **Who pays.** Claude Code runs on a subscription the owner already has, so
