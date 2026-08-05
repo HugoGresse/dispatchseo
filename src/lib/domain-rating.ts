@@ -122,7 +122,78 @@ export async function refreshDomainRating(
     fetched_at: fetchedAt,
   });
 
+  // Append the same snapshot to the history series (migration 0051) - the
+  // single-row cache above has no yesterday, and the authority surfaces need
+  // one ("referring domains +2 this month", the 5-referring-domains
+  // milestone). Errors are ignored on purpose: before the migration runs this
+  // insert fails, and history must never be a reason a refresh fails.
+  await db().from("domain_rating_history").insert({
+    project_id: projectId,
+    dr: fresh.dr,
+    rank: fresh.rank,
+    referring_domains: fresh.referringDomains,
+    backlinks: fresh.backlinks,
+    spam_score: fresh.spamScore,
+    fetched_at: fetchedAt,
+  });
+
   return { ...fresh, fetchedAt };
+}
+
+// ---------------------------------------------------------------------------
+// History reads (migration 0051)
+// ---------------------------------------------------------------------------
+
+export type DomainRatingPoint = {
+  dr: number | null;
+  referringDomains: number | null;
+  fetchedAt: string;
+};
+
+// Oldest-first points since `sinceMs` ago. Tolerant like everything else in
+// this file: a missing table (migration pending) or query error reads as an
+// empty series, never a dead page.
+export async function getDomainRatingHistory(
+  projectId: string,
+  sinceMs: number,
+): Promise<DomainRatingPoint[]> {
+  const since = new Date(Date.now() - sinceMs).toISOString();
+  const { data, error } = await db()
+    .from("domain_rating_history")
+    .select("dr, referring_domains, fetched_at")
+    .eq("project_id", projectId)
+    .gte("fetched_at", since)
+    .order("fetched_at", { ascending: true });
+  if (error || !data) return [];
+  return (data as Array<{ dr: number | null; referring_domains: number | null; fetched_at: string }>).map(
+    (r) => ({ dr: r.dr, referringDomains: r.referring_domains, fetchedAt: r.fetched_at }),
+  );
+}
+
+// Earliest moment the site provably had `n`+ referring domains - the
+// 5-referring-domains journey milestone. Falls back to the current cache row
+// for sites already past the bar before history existed: "first observed" is
+// the honest reading either way.
+export async function firstReferringDomainsAt(
+  projectId: string,
+  n: number,
+): Promise<string | null> {
+  const { data } = await db()
+    .from("domain_rating_history")
+    .select("fetched_at")
+    .eq("project_id", projectId)
+    .gte("referring_domains", n)
+    .order("fetched_at", { ascending: true })
+    .limit(1);
+  if (data?.[0]) return (data[0] as { fetched_at: string }).fetched_at;
+  const { data: cur } = await db()
+    .from("domain_ratings")
+    .select("referring_domains, fetched_at")
+    .eq("project_id", projectId)
+    .maybeSingle();
+  const row = cur as { referring_domains: number | null; fetched_at: string } | null;
+  if (row?.referring_domains != null && row.referring_domains >= n) return row.fetched_at;
+  return null;
 }
 
 // Read-through weekly cache keyed by project. Reads the stored snapshot; if it

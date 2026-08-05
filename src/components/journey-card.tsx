@@ -24,6 +24,7 @@ const SHORT_MILESTONE: Record<string, string> = {
   first_page_indexed: "Indexed",
   first_impression: "Seen on Google",
   first_click: "First click",
+  ref_domains_5: "5 linking sites",
   first_top10: "Top-10 rank",
   click_100: "100 clicks",
 };
@@ -240,6 +241,10 @@ export function JourneyCard({
     journey.fresh_milestones.length > 0
       ? `🎉 ${journey.fresh_milestones.map((m) => m.label).join(" · ")} - this week`
       : null;
+  // Milestones are ordered rarest-last, so the LAST fresh one with a
+  // benchmark is the biggest deal of the week.
+  const freshBenchmark =
+    [...journey.fresh_milestones].reverse().find((m) => m.benchmark)?.benchmark ?? null;
 
   // The setup nag is already tiny - no collapse, just the honest state.
   if (isSetup) {
@@ -334,8 +339,19 @@ export function JourneyCard({
         </p>
       )}
 
-      {/* first-time moments in full, the expanded counterpart of the teaser */}
-      {celebration ? <p className="text-base text-emerald-400">{celebration}</p> : null}
+      {/* first-time moments in full, the expanded counterpart of the teaser.
+          The benchmark line under it is what makes the celebration land: the
+          real base rate ("fewer than 2 in 100 pages...") sizes the win instead
+          of leaving it a checkbox. One line only - the rarest fresh first
+          speaks, the rest stay in the strip above. */}
+      {celebration ? (
+        <div className="space-y-1">
+          <p className="text-base text-emerald-400">{celebration}</p>
+          {freshBenchmark ? (
+            <p className="max-w-3xl text-sm leading-relaxed text-neutral-400">{freshBenchmark}</p>
+          ) : null}
+        </div>
+      ) : null}
     </CollapsibleCard>
   );
 }

@@ -71,6 +71,7 @@ import {
   recordCheckSerpCall,
 } from "@/lib/dataforseo-usage";
 import { getDomainRating } from "@/lib/domain-rating";
+import { getAuthority, needsLinkMove } from "@/lib/authority";
 
 // The seo-manager MCP server. It is mostly a door to the Supabase state - the
 // suggestions queue, tracked keywords, published pages, GSC stats, and backlink
@@ -1925,7 +1926,10 @@ const mcpHandler = createMcpHandler(
           "use (striking-distance queries at position 8-20, page-one queries " +
           "that rank but don't get clicked, high-impression zero-click " +
           "queries, rising queries, searches the site newly appears for, and " +
-          "first-ever milestones). Use this when the owner asks 'what should I " +
+          "first-ever milestones with their real-world base rates). `action` " +
+          "carries today's one hands-on move (usually the next backlink " +
+          "playbook listing) when one is genuinely due, null otherwise. " +
+          "Use this when the owner asks 'what should I " +
           "do about SEO today' or 'anything worth acting on' - it is the " +
           "shortlist. get_overview is the full picture behind it; " +
           "get_next_actions is the queue of decisions waiting on the owner. " +
@@ -2205,6 +2209,10 @@ const mcpHandler = createMcpHandler(
           "(merge with merge_pr once checks are green), and pages waiting for a " +
           "Search Console 'Request indexing' click (comes with a paste-ready " +
           "@browser command; report the outcome via mark_indexing_requested). " +
+          "When the site's backlink profile is thin (under ~5 referring " +
+          "domains) or measured-flat for a month, `backlink_move` carries the " +
+          "one free playbook listing to action next - relay it to the owner " +
+          "and mark it with set_playbook_status once actually submitted. " +
           "On a project with auto-approval ON for a type, pending items of that " +
           "type are NOT owner decisions - they come back under `held` instead of " +
           "`awaiting_approval`, because the owner delegated the call. Never ask " +
@@ -2215,7 +2223,7 @@ const mcpHandler = createMcpHandler(
       async () => {
         const p = currentProject();
         const client = db();
-        const [sugRes, pagesRes, prs] = await Promise.all([
+        const [sugRes, pagesRes, prs, authority] = await Promise.all([
           client
             .from("suggestions")
             .select(
@@ -2230,6 +2238,8 @@ const mcpHandler = createMcpHandler(
             .eq("project_id", p.id)
             .order("created_at", { ascending: false }),
           openSeoPrs(p),
+          // Cache-row + history reads only; failure degrades to no nudge.
+          getAuthority(p).catch(() => null),
         ]);
         if (sugRes.error) return fail(sugRes.error.message);
         const sugs = sugRes.data ?? [];
@@ -2259,6 +2269,21 @@ const mcpHandler = createMcpHandler(
                 ? indexingBrowserCommand(p, queue.map((q) => q.url))
                 : null,
           },
+          // The links half of the job, kept specific: null when the profile
+          // is healthy-and-growing, unmeasured, or the free playbook is
+          // exhausted - never a vague "build backlinks".
+          backlink_move:
+            authority && needsLinkMove(authority)
+              ? {
+                  referring_domains: authority.referring_domains,
+                  gained_recent: authority.gained_recent,
+                  next: authority.next_move,
+                  free_listings_done: authority.free_done,
+                  free_listings_total: authority.free_total,
+                  note:
+                    "Referring domains are what young pages stall without. Walk the owner through this listing (the copy is prefilled on the dashboard's Playbook page), then set_playbook_status when it is actually submitted.",
+                }
+              : null,
         });
       },
     );

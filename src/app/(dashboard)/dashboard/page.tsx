@@ -64,6 +64,7 @@ import { PacingLine } from "@/components/pacing-info";
 import { NextBuildCountdown } from "@/components/agent-status";
 import { DispatcherBriefing } from "@/components/dispatcher-briefing";
 import { computeBriefing } from "@/lib/briefing";
+import { getAuthority } from "@/lib/authority";
 import { CHANGELOG_COOKIE, unseenRelease } from "@/lib/changelog";
 import { STAR_COOKIE, shouldAskForStar } from "@/lib/star-prompt";
 import { StarPrompt } from "@/components/star-prompt";
@@ -466,10 +467,13 @@ export default async function Home() {
   const suggestions = (sugRes.data ?? []) as Suggestion[];
 
   // The progress story (journey stage + weekly movers) - derived from the
-  // overview already fetched above, plus one cheap query each.
-  const [journey, weekly] = await Promise.all([
+  // overview already fetched above, plus one cheap query each. The authority
+  // read rides along for the briefing's "today's move" nudge; cache-row +
+  // history reads only, and a failure degrades to no nudge.
+  const [journey, weekly, authority] = await Promise.all([
     getJourney(project, overview),
     getWeeklyProgress(project, overview),
+    getAuthority(project).catch(() => null),
   ]);
 
 
@@ -766,6 +770,7 @@ export default async function Home() {
     queued: approvedUnbuilt.length,
     pendingDecisions: pendingSugs.length,
     onDuty: agentActive,
+    authority,
     // Only Home can know this: "unseen" is a property of THIS browser's
     // cookie, which is why get_briefing leaves it null.
     release: release ? { version: release.version, summary: release.summary } : null,

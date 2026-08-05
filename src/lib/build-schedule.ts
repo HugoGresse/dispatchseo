@@ -174,12 +174,12 @@ async function consecutiveFailures(jobKeys: string[]): Promise<Map<string, numbe
   return out;
 }
 
-async function approvedCount(projectId: string, type: "guide" | "tool"): Promise<number> {
+async function approvedCount(projectId: string, types: string[]): Promise<number> {
   const { count } = await db()
     .from("suggestions")
     .select("id", { count: "exact", head: true })
     .eq("project_id", projectId)
-    .eq("type", type)
+    .in("type", types)
     .eq("status", "approved");
   return count ?? 0;
 }
@@ -261,10 +261,16 @@ export async function dueBuildWork(
   // this is what replaces a runner minute with a database count: an empty
   // queue used to be discovered by a guard step that had already cost a full
   // billed minute to reach.
-  if (flags.auto_build_guides && due("build-guide") && (await approvedCount(p.id, "guide")) > 0) {
+  // Updates (refresh-detect) count as buildable guide work - they ride the
+  // same workflow and daily slot via build-guide's UPDATE MODE.
+  if (
+    flags.auto_build_guides &&
+    due("build-guide") &&
+    (await approvedCount(p.id, ["guide", "update"])) > 0
+  ) {
     wanted.push("build-guide");
   }
-  if (flags.auto_build_tools && due("build-tool") && (await approvedCount(p.id, "tool")) > 0) {
+  if (flags.auto_build_tools && due("build-tool") && (await approvedCount(p.id, ["tool"])) > 0) {
     wanted.push("build-tool");
   }
   if (due("geo-scan")) wanted.push("geo-scan");

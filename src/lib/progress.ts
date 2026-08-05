@@ -1,6 +1,7 @@
 import { db } from "./db";
 import type { Project } from "./projects";
 import type { AnalyticsOverview } from "./analytics-data";
+import { getDomainRatingHistory } from "./domain-rating";
 
 // The weekly strip (docs-private/DASHBOARD_PROGRESS.md): leading indicators with real
 // week-over-week deltas, composed into plain-English pieces HERE so the Home
@@ -8,14 +9,18 @@ import type { AnalyticsOverview } from "./analytics-data";
 // appears only when it genuinely moved - an empty `lines` means a quiet week,
 // and the UI says so instead of padding.
 //
-// Two deliberate absences:
-// - DR movement ("DR 12 -> 13"). domain_ratings stores only the latest
-//   snapshot (it's a 24h cache, not a history), so the delta cannot be
-//   derived honestly yet.
+// One deliberate absence:
 // - Calendar weeks for GSC numbers. GSC data lags 2-3 days, so "last 7
 //   calendar days vs prior" would always undercount the recent week and
 //   manufacture a permanent downtrend. We compare the newest 14 DATA days
 //   split in half instead - equal windows, honest delta.
+//
+// Referring-domain movement joined the strip with migration 0051: the
+// domain_rating_history series finally gives the single-row cache a
+// yesterday, so "+N referring domains" can be a real diff between the two
+// newest snapshots (weekly cadence) instead of a guess. The line appears only
+// when the newest snapshot landed this week AND rose - a quiet week stays
+// quiet.
 
 export type WeeklyProgress = {
   guides_shipped: number;
@@ -25,6 +30,9 @@ export type WeeklyProgress = {
   impressions: { last7: number; prior7: number };
   clicks: { last7: number; prior7: number };
   has_comparison: boolean; // false until 14 days of GSC data exist
+  // Referring domains gained per the newest weekly snapshot, when it landed
+  // this week. Null = no fresh snapshot or no history yet, 0 = measured flat.
+  ref_domains_gained: number | null;
   // Ready-to-render plain-English pieces, movers only. Empty = quiet week.
   lines: string[];
 };
@@ -45,6 +53,7 @@ const pctLine = (name: string, last7: number, prior7: number): string | null => 
 export function computeWeeklyProgress(
   overview: AnalyticsOverview,
   keywordsAdded: number,
+  refDomainsGained: number | null = null,
 ): WeeklyProgress {
   const weekAgo = Date.now() - 7 * 86400000;
   const inLast7 = (iso: string | null | undefined) =>
@@ -76,6 +85,11 @@ export function computeWeeklyProgress(
   }
   if (newlyIndexed > 0) lines.push(`${plural(newlyIndexed, "page")} newly indexed`);
   if (keywordsAdded > 0) lines.push(`${plural(keywordsAdded, "new keyword")} tracked`);
+  // Referring domains are the week's rarest mover, and the one the owner
+  // personally caused - so a gain earns its line.
+  if (refDomainsGained != null && refDomainsGained > 0) {
+    lines.push(`${plural(refDomainsGained, "new referring domain")}`);
+  }
 
   return {
     guides_shipped: guidesShipped,
@@ -85,6 +99,7 @@ export function computeWeeklyProgress(
     impressions,
     clicks,
     has_comparison: hasComparison,
+    ref_domains_gained: refDomainsGained,
     lines,
   };
 }
@@ -97,10 +112,26 @@ export async function getWeeklyProgress(
   // doesn't carry (its keyword rows omit created_at). Error-tolerant: a
   // failed count reads as 0, never a dead page.
   const since = new Date(Date.now() - 7 * 86400000).toISOString();
-  const { count, error } = await db()
-    .from("keywords")
-    .select("id", { count: "exact", head: true })
-    .eq("project_id", project.id)
-    .gte("created_at", since);
-  return computeWeeklyProgress(overview, error ? 0 : (count ?? 0));
+  const [{ count, error }, history] = await Promise.all([
+    db()
+      .from("keywords")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", project.id)
+      .gte("created_at", since),
+    getDomainRatingHistory(project.id, 35 * 86400000).catch(() => []),
+  ]);
+
+  // Diff of the two newest snapshots, counted only when the newest one landed
+  // this week - the weekly refresh cadence means at most one fresh point per
+  // strip, and an old diff re-reported every day would be manufactured
+  // movement.
+  let refDomainsGained: number | null = null;
+  const points = history.filter((h) => h.referringDomains != null);
+  const last = points[points.length - 1];
+  const prev = points[points.length - 2];
+  if (last && prev && Date.parse(last.fetchedAt) >= Date.now() - 7 * 86400000) {
+    refDomainsGained = (last.referringDomains as number) - (prev.referringDomains as number);
+  }
+
+  return computeWeeklyProgress(overview, error ? 0 : (count ?? 0), refDomainsGained);
 }

@@ -120,6 +120,7 @@ const PROBES: Probe[] = [
     table: "instance_settings",
     column: "install_id",
   },
+  { migration: "0051_domain_rating_history", table: "domain_rating_history" },
 ];
 
 // Migrations that genuinely CANNOT be probed through this mechanism, with the
@@ -154,6 +155,8 @@ export const UNPROBEABLE: Record<string, string> = {
   // by setProjectAgent), never silently.
   "0050_agent_check_open":
     "drops a CHECK constraint - artifact is an absence in pg_constraint, not queryable via PostgREST",
+  "0052_refresh_source":
+    "widens the suggestions_source_check CHECK constraint - constraints are not queryable via PostgREST",
 };
 
 async function probeMissing(p: Probe): Promise<boolean> {

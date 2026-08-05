@@ -15,6 +15,7 @@ import {
   type AiSnapshotInput,
 } from "@/lib/ai-visibility";
 import { reportCronRun } from "@/lib/cron-alerts";
+import { detectRefreshCandidates } from "@/lib/refresh-detect";
 import { listProjectsChecked, type Project } from "@/lib/projects";
 import { isCloudMode } from "@/lib/cloud";
 import { platformBalanceAlert } from "@/lib/dataforseo-balance";
@@ -40,6 +41,10 @@ import { platformBalanceAlert } from "@/lib/dataforseo-balance";
 //  3. Domain Rating: refresh the domain_ratings snapshot when it has aged past
 //     the weekly TTL, so the dashboard reads it without ever paying for the
 //     DataForSEO call on render. DataForSEO-only - free modes skip.
+//  4. Refresh detection: fold the stored GSC queries and flag published guides
+//     sitting at position 5-20 for their primary keyword as type:"update"
+//     suggestions (refresh-detect.ts) - the supply half of the builder's
+//     UPDATE MODE. Free (no API calls), capped, cooldown-guarded.
 // 300s: task posting is fast, but the SerpApi Monday path still chains live
 // calls and the GSC halves can be slow on big properties; the route bills
 // nothing for idle wall clock.
@@ -295,6 +300,18 @@ async function runProject(project: Project): Promise<Record<string, unknown>> {
       result.hadError = true;
       result.dr = { error: e instanceof Error ? e.message : String(e) };
     }
+  }
+
+  // --- 4. Refresh detection: guides at position 5-20 for their primary
+  // keyword become type:"update" suggestions for the builder's UPDATE MODE.
+  // Reads only stored gsc_stats rows (no live GSC call), so it needs no
+  // readiness gate - a project without data reads as {skipped}, and the
+  // detector's own caps keep it from ever flooding a queue.
+  try {
+    result.refresh = await detectRefreshCandidates(project);
+  } catch (e) {
+    result.hadError = true;
+    result.refresh = { error: e instanceof Error ? e.message : String(e) };
   }
 
   return result;

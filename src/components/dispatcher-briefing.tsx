@@ -472,6 +472,33 @@ export function DispatcherBriefing({
             </p>
           ) : null}
 
+          {/* Today's one hands-on move - almost always the links nudge, since
+              links are the half of the job the agent can't do alone. A panel,
+              not a warning: no amber, no urgency theatre, and most days it
+              isn't here at all (a healthy profile renders nothing). The whole
+              block is the link, because the ask ends on a page where the copy
+              is already prefilled. */}
+          {briefing.action ? (
+            <Link
+              href={briefing.action.href}
+              className="group/action mt-6 block rounded-lg border border-neutral-800 bg-neutral-900/60 p-4 transition-colors hover:border-neutral-700"
+            >
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-neutral-600">
+                Your move today
+              </p>
+              <p className="mt-1.5 text-[15px] font-medium leading-snug text-neutral-100">
+                {briefing.action.headline}
+              </p>
+              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-neutral-400">
+                {briefing.action.detail}
+              </p>
+              <span className="mt-2 inline-flex items-center gap-1 text-sm text-neutral-300 transition-colors group-hover/action:text-neutral-100">
+                Open the playbook
+                <span aria-hidden="true">&rarr;</span>
+              </span>
+            </Link>
+          ) : null}
+
           {/* Product news, delivered by the same voice as everything else on
               this card. It used to arrive as a separate grey bar under the
               topbar - the right shape everywhere except here, where an agent

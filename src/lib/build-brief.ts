@@ -122,7 +122,10 @@ export async function buildBrief(
       .from("suggestions")
       .select("*")
       .eq("project_id", project.id)
-      .eq("type", "guide")
+      // Updates (refresh-detect's flagged pages) ride the guide queue: same
+      // builder, same daily slot, same ordering rules. build-guide's UPDATE
+      // MODE branches on queue_head.type.
+      .in("type", ["guide", "update"])
       .eq("status", "approved")
       .order("created_at", { ascending: true }),
     getPacing(project),

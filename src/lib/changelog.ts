@@ -75,6 +75,30 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
     kind: "new",
     text:
+      "Your pages get maintained now, not just published. Every night the backend looks for " +
+      "published guides sitting at position 5-20 for their own keyword - close enough that a " +
+      "refresh beats writing something new - and queues an 'Update existing page' idea (auto-" +
+      "approved on Auto projects, your call on Semi). The builder then refreshes that page in " +
+      "its normal daily slot: closes the gaps against the current page 1, re-verifies stale " +
+      "facts against fresh docs, sharpens the title for clicks - same URL, same PR review flow. " +
+      "At most two refreshes in flight, and a refreshed page rests 45 days before it can be " +
+      "flagged again.",
+  },
+  {
+    kind: "new",
+    text:
+      "The dispatcher now watches your backlinks, not just your pages. Referring domains get a " +
+      "history (weekly snapshots), so the briefing can tell you the one link move worth ten " +
+      "minutes today - a specific free listing from the playbook, raised only while the profile " +
+      "is thin or stalled, silent while it's healthy. The weekly strip counts new referring " +
+      "domains, the journey gains a 'First 5 referring domains' milestone, and every first-ever " +
+      "moment now comes with its real base rate - a first top-10 ranking tells you fewer than 2 " +
+      "in 100 pages get there in a year, so you know it's a win, not a checkbox. Agents get the " +
+      "same read over MCP: get_briefing carries the day's move, get_next_actions a backlink_move.",
+  },
+  {
+    kind: "new",
+    text:
       "Claude Code projects can now build on an Anthropic API key: add an ANTHROPIC_API_KEY " +
       "secret to your site repo and the builders use it whenever no subscription token is set. " +
       "This is the way out when Anthropic refuses your subscription for Claude Code outright " +

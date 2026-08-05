@@ -7,6 +7,7 @@ import { isCloudMode } from "./cloud";
 import { hasDataforseo } from "./pipeline-pack";
 import { effectiveAutomations, type Project } from "./projects";
 import type { GscFullRow, GscQueryStat, Suggestion } from "./metrics";
+import { getAuthority, needsLinkMove, HEALTHY_REF_DOMAINS, type Authority } from "./authority";
 
 // The dispatcher's briefing - Home's top surface, where the agent reports to
 // the owner in the first person instead of the page narrating about it.
@@ -70,6 +71,17 @@ export type QuickWin = {
   href: string | null;
 };
 
+// The one thing worth the owner's hands today, when there is one. Today this
+// is always the authority nudge - links are the half of SEO the pipeline
+// can't do alone (see authority.ts) - but the shape is deliberately generic.
+// Null most days: a healthy profile produces no nudge, and inventing a chore
+// to fill the slot would break the same honesty rule as padding `wins`.
+export type BriefingAction = {
+  headline: string;
+  detail: string;
+  href: string;
+};
+
 export type BriefingNumbers = {
   clicks: number;
   impressions: number;
@@ -114,6 +126,8 @@ export type Briefing = {
   // working is the exact silent-failure this product refuses to ship.
   onDuty: boolean;
   wins: QuickWin[];
+  // Today's one hands-on move, or null. See BriefingAction.
+  action: BriefingAction | null;
   // Why the wins list is thin, in the agent's voice. Set only when there is
   // something honest to say about the wait - never used to pad `wins`.
   patience: string | null;
@@ -233,7 +247,10 @@ function findWins(
       key: `milestone:${m.key}`,
       kind: "milestone",
       headline: `${m.label}. That one only happens once.`,
-      detail: null,
+      // The base rate behind the first, where one exists (journey.ts
+      // BENCHMARKS) - "fewer than 2 in 100 pages get there in a year" is what
+      // turns the checkbox into a win the owner can size.
+      detail: m.benchmark,
       href: "/analytics",
     });
   }
@@ -399,6 +416,49 @@ function findWins(
 }
 
 // ---------------------------------------------------------------------------
+// Today's action
+// ---------------------------------------------------------------------------
+
+// Links are the one input the dispatcher cannot produce - it can only keep
+// the ask specific. Two honest triggers, in priority order:
+//   1. Thin profile (< HEALTHY_REF_DOMAINS referring domains) with a free
+//      playbook listing still open.
+//   2. Healthy but stalled: a measured month with zero new referring domains,
+//      free listings still open.
+// Everything else - unmeasured (no DataForSEO), exhausted playbook, healthy
+// and growing - is silence. During an alert or setup the action stays null
+// too: the card must not stack a chore on top of a fire.
+function pickAction(authority: Authority | null, muted: boolean): BriefingAction | null {
+  if (!authority || muted || !needsLinkMove(authority)) return null;
+  // needsLinkMove guarantees both of these.
+  const rd = authority.referring_domains as number;
+  const move = authority.next_move as NonNullable<Authority["next_move"]>;
+
+  const moveLine = (lead: string) =>
+    `${lead} Today's ${move.effortMins}-minute move: get us listed on ${move.name} - the copy is prefilled on the Playbook page.`;
+
+  if (rd < HEALTHY_REF_DOMAINS) {
+    return {
+      headline:
+        rd === 0
+          ? "The thin part of our game is links: no sites link to us yet."
+          : `The thin part of our game is links: ${plural(rd, "site")} link${rd === 1 ? "s" : ""} to us so far.`,
+      detail: moveLine(
+        `I write the pages; the links have to come from you. Google starts trusting a young domain around ${HEALTHY_REF_DOMAINS} referring domains, and until then even good pages sit deep in the results.`,
+      ),
+      href: "/playbook",
+    };
+  }
+  return {
+    headline: "No new sites linked to us in the last month.",
+    detail: moveLine(
+      "The profile is healthy, but rankings compound off links and the graph went flat.",
+    ),
+    href: "/playbook",
+  };
+}
+
+// ---------------------------------------------------------------------------
 // The briefing
 // ---------------------------------------------------------------------------
 
@@ -454,6 +514,9 @@ export type BriefingInput = {
   // Pipeline wired into the repo AND a builder automation switched on. See
   // Briefing.onDuty for why this is not folded into `tone`.
   onDuty: boolean;
+  // The authority read (authority.ts) behind today's action. Null/omitted
+  // degrades to no action - a caller without the data never invents a nudge.
+  authority?: Authority | null;
   // The newest release this browser hasn't acknowledged, if any. Home reads it
   // from the same cookie the layout banner used to; get_briefing leaves it
   // null, because "unseen" is a property of a browser and an agent doesn't
@@ -467,6 +530,7 @@ export function computeBriefing(input: BriefingInput): Briefing {
 
   const numbers = pickNumbers(overview);
   const wins = findWins(overview, journey, weekly);
+  const action = pickAction(input.authority ?? null, failingJobs > 0 || settingUp);
 
   // What it is actually doing. Order is "closest to shipping" first.
   const doing: string[] = [];
@@ -573,6 +637,7 @@ export function computeBriefing(input: BriefingInput): Briefing {
     numbers,
     doing,
     wins,
+    action,
     patience,
     release,
     onDuty: input.onDuty,
@@ -594,15 +659,19 @@ export async function gatherPipelineState(
 ): Promise<
   Pick<
     BriefingInput,
-    "failingJobs" | "settingUp" | "building" | "queued" | "pendingDecisions" | "onDuty"
+    "failingJobs" | "settingUp" | "building" | "queued" | "pendingDecisions" | "onDuty" | "authority"
   >
 > {
   const client = db();
-  const [sugRes, health] = await Promise.all([
+  const [sugRes, health, authority] = await Promise.all([
     client.from("suggestions").select("*").eq("project_id", project.id),
     // Same scoping as Home: a cloud tenant sees only its own project's jobs,
     // never the deployment-wide ones that belong to us as the operator.
     getCronHealth(isCloudMode() ? project.slug : undefined),
+    // The authority read behind today's action - cache-row + history only,
+    // never a paid call. Failure degrades to no nudge, same as every other
+    // enhancement here.
+    getAuthority(project).catch(() => null),
   ]);
   const suggestions = (sugRes.data ?? []) as Suggestion[];
 
@@ -639,6 +708,7 @@ export async function gatherPipelineState(
     pendingDecisions: suggestions.filter((s) => s.status === "pending").length,
     onDuty:
       pipelineInstalled && (automations.auto_build_guides || automations.auto_build_tools),
+    authority,
   };
 }
 

@@ -27,6 +27,7 @@ import {
 } from "./journey-meta";
 import { gscCronReadiness } from "./gsc-readiness";
 import { isCloudMode } from "./cloud";
+import { firstReferringDomainsAt } from "./domain-rating";
 
 export { JOURNEY_STAGES, STAGE_META, type JourneyStageKey };
 
@@ -34,6 +35,28 @@ export type Milestone = {
   key: string;
   label: string;
   achieved_at: string | null; // ISO timestamp or YYYY-MM-DD (GSC dates)
+  // Why this first matters, with the real base rate where one exists - the
+  // line that turns "First top-10 ranking" from a checkbox into a win the
+  // owner can size. Null on routine firsts (a page going live needs no
+  // framing). Shown when the milestone is fresh; carried by get_overview and
+  // the briefing's milestone win alike.
+  benchmark: string | null;
+};
+
+// The base rates come from the strongest public data available (Ahrefs'
+// 1M-page ranking-timeline study; the practitioner referring-domains health
+// bar) - real numbers, stated once here so every surface says the same thing.
+const BENCHMARKS: Record<string, string> = {
+  first_impression:
+    "Google is now putting the site in front of real searches - the gate everything else waits behind.",
+  first_click:
+    "Most young sites wait until month 2-3 for this. Clicks follow rankings, and rankings follow trust.",
+  ref_domains_5:
+    "Five referring domains early on is the health bar experienced SEOs use for a young site - Google now has outside reasons to trust the domain.",
+  first_top10:
+    "Fewer than 2 in 100 pages published reach Google's top 10 within a year of going live (Ahrefs' data). This site just beat those odds.",
+  click_100:
+    "A hundred clicks means Google sends this site traffic on purpose, repeatedly. Compounding starts here.",
 };
 
 export type Journey = {
@@ -73,6 +96,9 @@ export function computeJourney(
   project: Project,
   overview: AnalyticsOverview,
   firstTop10At: string | null,
+  // Earliest evidence of 5+ referring domains (domain_rating_history, with a
+  // current-snapshot fallback) - null until achieved or while unmeasured.
+  refDomains5At: string | null = null,
 ): Journey {
   const pages = [...overview.guides, ...overview.tools];
   const daily = overview.gscDaily; // ascending by date
@@ -114,13 +140,23 @@ export function computeJourney(
       ? "foundation"
       : "setup";
 
+  // ref_domains_5 sits between the click firsts and the ranking firsts on
+  // purpose: links are the input a young site controls, rankings are the
+  // output - the order tells the owner which lever comes next.
+  const mk = (key: string, label: string, achieved_at: string | null): Milestone => ({
+    key,
+    label,
+    achieved_at,
+    benchmark: BENCHMARKS[key] ?? null,
+  });
   const milestones: Milestone[] = [
-    { key: "first_page_live", label: "First page live", achieved_at: firstLive },
-    { key: "first_page_indexed", label: "First page indexed by Google", achieved_at: firstIndexed },
-    { key: "first_impression", label: "First appearance in Google results", achieved_at: firstImpression },
-    { key: "first_click", label: "First click from Google", achieved_at: firstClick },
-    { key: "first_top10", label: "First top-10 ranking", achieved_at: firstTop10At },
-    { key: "click_100", label: "100th click from Google", achieved_at: click100 },
+    mk("first_page_live", "First page live", firstLive),
+    mk("first_page_indexed", "First page indexed by Google", firstIndexed),
+    mk("first_impression", "First appearance in Google results", firstImpression),
+    mk("first_click", "First click from Google", firstClick),
+    mk("ref_domains_5", "First 5 referring domains", refDomains5At),
+    mk("first_top10", "First top-10 ranking", firstTop10At),
+    mk("click_100", "100th click from Google", click100),
   ];
 
   const weekAgo = Date.now() - 7 * 86400000;
@@ -161,15 +197,21 @@ export async function getJourney(
   // First-ever top-10 rank. Tolerant like projects.ts: a query error just
   // means the milestone shows unachieved, never a dead page.
   let firstTop10: string | null = null;
-  const { data, error } = await db()
-    .from("rank_checks")
-    .select("checked_at")
-    .eq("project_id", project.id)
-    .lte("position", 10)
-    .order("checked_at", { ascending: true })
-    .limit(1);
+  const [top10Res, refDomains5At] = await Promise.all([
+    db()
+      .from("rank_checks")
+      .select("checked_at")
+      .eq("project_id", project.id)
+      .lte("position", 10)
+      .order("checked_at", { ascending: true })
+      .limit(1),
+    // Same tolerance: an error (or the 0051 table not existing yet) reads as
+    // not-achieved, never a dead page.
+    firstReferringDomainsAt(project.id, 5).catch(() => null),
+  ]);
+  const { data, error } = top10Res;
   if (!error && data?.[0]) firstTop10 = (data[0] as { checked_at: string }).checked_at;
-  const journey = computeJourney(project, overview, firstTop10);
+  const journey = computeJourney(project, overview, firstTop10, refDomains5At);
 
   // "Setup" covers both not-connected and connected-but-Google-has-nothing.
   // The readiness probe (same one the crons gate on) tells them apart; the

@@ -260,7 +260,8 @@ guide (explaining the front-of-queue placement instead).
 
 The guide build's opening call - the build-guide playbook says to make it
 **first**, before anything else. One response carries what a run used to
-collect over a dozen serial calls: the queue head (the approved guide to
+collect over a dozen serial calls: the queue head (the approved guide - or
+refresh-detector `update` - to
 build, in the owner's exact build order, sorted by the same helper
 `get_suggestions` uses so the two can't name different items), how deep that
 queue is, the live pacing verdict, structural fingerprints of the last few
@@ -929,7 +930,11 @@ using the signals the big SEO tools lead with - striking-distance queries
 (position 8-20, one push from page one), page-one queries that rank but
 don't get clicked, high-impression zero-click queries, rising queries,
 searches the site has newly started appearing for, and first-ever
-milestones. Call it for "what should I do about SEO today". An empty
+milestones (each carrying its real-world base rate, so a first top-10
+can be sized, not just checked off). `action` is today's one hands-on
+move - usually the next free backlink playbook listing, raised only when
+the profile is genuinely thin or stalled - and is `null` most days.
+Call it for "what should I do about SEO today". An empty
 `wins` list is a real answer on a young site; `patience` says why, and
 inventing a win to fill the gap defeats the point of the tool.
 
@@ -979,9 +984,14 @@ ready to merge, and pages waiting for a Search Console "Request
 indexing" click. Takes no parameters.
 
 Returns `{ awaiting_approval, approved_waiting_build, building_now,
-open_seo_prs, indexing_queue }` - the indexing queue comes with a
-paste-ready `@browser` command; report the outcome with
-`mark_indexing_requested`.
+open_seo_prs, indexing_queue, backlink_move }` - the indexing queue comes
+with a paste-ready `@browser` command; report the outcome with
+`mark_indexing_requested`. `backlink_move` is the links half of the job
+kept specific: when the site's backlink profile is thin (under ~5
+referring domains) or measured-flat for a month, it names the one free
+playbook listing to action next (mark it with `set_playbook_status` once
+actually submitted); it is `null` while the profile is healthy and
+growing.
 
 ### `merge_pr`
 

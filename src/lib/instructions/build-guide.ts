@@ -86,6 +86,49 @@ the build-tool workflow and must never be picked up here.
    ideas the step-4 gate is ADVISORY, not a veto: the owner asked for this
    one by name, so build it either way and note in the run report if page 1
    looks hard to beat.
+1b. **UPDATE MODE - when the queue head's \`type\` is "update".** The item is
+   not a new page: it is a published guide the nightly detector found sitting
+   at position 5-20 for its own primary keyword - \`spec.page_url\`,
+   \`spec.target_query\` and \`spec.current_position\` carry the evidence. A
+   page at #12 already holds Google's partial trust; the job is to push it
+   onto page one, never to re-roll it. Updates ride the same queue and the
+   same one-a-day slot as new guides (an update IS the day's build; if the
+   brief is degraded, the fallback queue read must include \`type:"update"\`
+   rows - they share the build order). Steps 0-2 apply unchanged; from there
+   the pipeline bends:
+   - **Keep the page's identity.** Same URL/slug, same primary keyword, same
+     title promise (sharpen its wording for click-through, never re-aim it),
+     same archetype. The ranking is attached to the URL and its history -
+     changing the page's identity forfeits the trust the refresh exists to
+     harvest.
+   - **The step-4 gate becomes a GAP LIST.** Re-pull the SERP top 5 for the
+     target query as usual, but the question changes from "can we beat page
+     1" to "what does page 1 cover that OUR page doesn't". Locate the page's
+     source file in the repo (match the slug in \`spec.page_url\`), read it
+     in full, and write the delta into the run report: missing subtopics,
+     stale facts and versions (re-verify every load-bearing claim against
+     freshly fetched official docs), commands whose pasted output should be
+     re-run, sections a page-1 result does deeper.
+   - **Close the gaps, then add ONE new step-5 information-gain asset** the
+     page did not have before. And because position 5-20 lives off the
+     snippet as much as the content: rework the answer-first opening and the
+     meta title/description as part of the edit.
+   - **Visuals (step 7) is already satisfied** if the page carries its 2-3
+     components - add or upgrade one only where the gap list calls for it,
+     never to re-hit a file count.
+   - **Internal links**: per the step-6 link rules, link out to 2-3 guides
+     published since this page shipped where natural.
+   - **Skip what cannot apply to an existing page**: archetype rotation, the
+     5b outline probe and the step-9 sameness gate (this draft IS one of the
+     published pages - it always collides with itself), the cover step (keep
+     the existing cover), and \`log_page\` (the page row exists;
+     \`update_suggestion(id, status="done", result_pr_url=...)\` alone closes
+     it out).
+   - **Everything else applies in full**: fresh-docs sourcing and tested
+     commands, the humanizer pass over every section touched, step-9's
+     VERIFY build, and the PR discipline - branch \`seo/refresh-<slug>\`,
+     body opening with "REFRESH of <url>: currently ~#N for '<query>'"
+     followed by the gap list, and the step-13 report naming what changed.
 2. \`update_suggestion(id, status="in_progress")\`.
 3. **TEMPLATE.** Before drafting, read the living template: 2 recent exemplar
    posts from the guides directory (pick ones closest in shape to this topic)
