@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { availableAgents } from "@/lib/agents";
 
 // Next 16 proxy (the middleware.ts successor). Gates the dashboard behind the
 // password cookie. /api/* is excluded - the MCP route and crons carry their
@@ -12,6 +13,12 @@ import { createServerClient } from "@supabase/ssr";
 // /blog + sitemap must stay reachable or Google can't crawl the content the
 // whole pipeline exists to publish; /setup.sh is the onboarding script the
 // dashboard tells new users to curl.
+// Derived from the registry, not spelled out: a hardcoded list here is a
+// second source of truth that only ever drifts, and its failure mode is a
+// public marketing page 307ing to /login in production while every local check
+// passes (self-host never sets LANDING_ENABLED, so it never notices).
+const AGENT_LANDING_PATHS = new Set(availableAgents().map((a) => a.landingPath));
+
 const PUBLIC_FILES = new Set([
   "/sitemap.xml",
   "/robots.txt",
@@ -162,7 +169,7 @@ export async function proxy(req: NextRequest) {
     // deployment only. Self-hosted installs never set LANDING_ENABLED, so
     // theirs stay gated (the pages themselves also redirect to /dashboard as
     // defense in depth).
-    ((pathname === "/" || pathname === "/claude-code" || pathname === "/codex") &&
+    ((pathname === "/" || AGENT_LANDING_PATHS.has(pathname)) &&
       process.env.LANDING_ENABLED === "true")
   ) {
     return NextResponse.next();

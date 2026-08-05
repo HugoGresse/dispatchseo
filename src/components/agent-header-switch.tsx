@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addAgentKey, getAgentCredentialStatuses, setAgent } from "@/app/actions";
 import type { AgentCredentialStatus } from "@/lib/agent-settings";
-import { availableAgents, agentById, type AgentDefinition } from "@/lib/agents";
+import { builderAgents, agentById, type AgentDefinition } from "@/lib/agents";
 import { AgentMark } from "@/components/agent-mark";
 import { CopyBox } from "@/components/wizard-ui";
 
@@ -29,7 +29,7 @@ import { CopyBox } from "@/components/wizard-ui";
 // component mounts on every dashboard page. The layout keys this component by
 // project slug, so no state survives a project switch.
 export function AgentHeaderSwitch({ current, slug }: { current: string; slug: string }) {
-  const agents = availableAgents();
+  const agents = builderAgents();
   const router = useRouter();
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);

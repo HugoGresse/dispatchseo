@@ -142,12 +142,96 @@ export function codexConnectCommandPS(slug: string, origin: string, token: strin
 }
 
 // ---------------------------------------------------------------------------
+// Cursor
+// ---------------------------------------------------------------------------
+
+/**
+ * Cursor has NO `mcp add` command. Its entire `cursor-agent mcp` surface is
+ * login / list / list-tools / enable / disable - measured against
+ * cursor-agent 2026.07.23-e383d2b, not read off documentation, which is
+ * exactly why: an `mcp add` paste would have failed for every owner who ran
+ * it. Connecting means writing `.cursor/mcp.json` yourself.
+ *
+ * Two consequences shape the commands below.
+ *
+ * 1. **The write MUST merge.** `.cursor/mcp.json` is the owner's file and may
+ *    already hold other MCP servers; a blind write is silent data loss on
+ *    someone else's config. Both shells read-modify-write instead.
+ * 2. **A written server is not a connected server.** Cursor holds an approval
+ *    list, and a fresh entry reports `not loaded (needs approval)` until it is
+ *    approved - the same class of trap as Codex's approval mode. `mcp enable`
+ *    is therefore part of connecting, not an afterthought, and it is what
+ *    makes `cursor-agent mcp list` say `ready`.
+ *
+ * Unlike Codex, the config is genuinely PROJECT-scoped (`.cursor/mcp.json`
+ * relative to the folder the agent runs in), so Cursor gets the folder
+ * isolation `--scope local` gives Claude, with no global write and no
+ * CURSOR_HOME dance.
+ */
+export function cursorMcpAddCommand(slug: string, origin: string, token: string): string {
+  const name = mcpServerName(slug);
+  // node, not jq: every repo this pipeline installs into is a Node project, and
+  // jq is not on a stock macOS or Windows box. Single-quoted so the shell hands
+  // the script to node untouched; the script itself uses only double quotes.
+  const script =
+    `const fs=require("fs"),f=".cursor/mcp.json";` +
+    `const c=fs.existsSync(f)?JSON.parse(fs.readFileSync(f,"utf8")):{};` +
+    `c.mcpServers=c.mcpServers||{};` +
+    `c.mcpServers["${name}"]={url:"${origin}/api/mcp",headers:{Authorization:"Bearer ${token}"}};` +
+    `fs.writeFileSync(f,JSON.stringify(c,null,2)+"\\n")`;
+  return `mkdir -p .cursor && node -e '${script}' && cursor-agent mcp enable ${name}`;
+}
+
+/**
+ * PowerShell twin. Same merge, same approval, two deliberate differences:
+ *
+ * - the key rides in the URL (`?key=`) rather than a header, for the reason
+ *   Claude's Windows variant does it - nested quoting is the #1 casualty when
+ *   PowerShell hands arguments to a native executable, and our gate treats
+ *   `?key=` as a first-class equivalent (route.ts authed());
+ * - the JSON is built with PowerShell's own ConvertTo-Json rather than by
+ *   shelling into node, which would reintroduce exactly that quoting problem.
+ *
+ * Add-Member -Force is the 5.1-compatible way to add or replace a property on
+ * the parsed object, so re-running overwrites this project's entry and leaves
+ * every other server alone. Set-Content, not Out-File: Out-File emits UTF-16,
+ * which JSON readers reject - the same trap connectCommandPS documents.
+ */
+export function cursorMcpAddCommandPS(slug: string, origin: string, token: string): string {
+  const name = mcpServerName(slug);
+  return (
+    `New-Item -ItemType Directory -Force .cursor | Out-Null; ` +
+    `$f = ".cursor/mcp.json"; ` +
+    `$c = if (Test-Path $f) { Get-Content $f -Raw | ConvertFrom-Json } else { New-Object PSObject }; ` +
+    `if (-not $c.mcpServers) { $c | Add-Member -Force -MemberType NoteProperty -Name mcpServers -Value (New-Object PSObject) }; ` +
+    `$c.mcpServers | Add-Member -Force -MemberType NoteProperty -Name "${name}" ` +
+    `-Value ([pscustomobject]@{ url = "${mcpUrlWithKey(origin, token)}" }); ` +
+    `$c | ConvertTo-Json -Depth 10 | Set-Content $f; ` +
+    `cursor-agent mcp enable ${name}`
+  );
+}
+
+/**
+ * Cursor's connect paste. Like Codex and unlike Claude, there is no gh
+ * permission file to pre-grant: Cursor asks for approval when it wants to run
+ * something and the owner answers, so the connect really is just the write and
+ * the approval.
+ */
+export function cursorConnectCommand(slug: string, origin: string, token: string): string {
+  return cursorMcpAddCommand(slug, origin, token);
+}
+
+export function cursorConnectCommandPS(slug: string, origin: string, token: string): string {
+  return cursorMcpAddCommandPS(slug, origin, token);
+}
+
+// ---------------------------------------------------------------------------
 // Any other MCP client
 // ---------------------------------------------------------------------------
 
 /**
- * The raw connection details, for a client we have no command for - Cursor,
- * Gemini CLI, Copilot, an editor plugin, something that hasn't shipped yet.
+ * The raw connection details, for a client we have no command for - Gemini
+ * CLI, Copilot, an editor plugin, something that hasn't shipped yet.
  *
  * This is what makes "works with your agent" true without a per-agent
  * integration: the server is the same server, the tools are the same tools, and

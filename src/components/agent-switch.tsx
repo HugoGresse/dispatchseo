@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { setAgent } from "@/app/actions";
-import { availableAgents, agentById } from "@/lib/agents";
+import { builderAgents, agentById } from "@/lib/agents";
 import { AgentMark } from "@/components/agent-mark";
 
 // Which coding agent runs this project's unattended builders.
@@ -13,7 +13,7 @@ import { AgentMark } from "@/components/agent-mark";
 // think switching here is required before they can use Codex at all, and it
 // isn't.
 export function AgentSwitch({ current, slug }: { current: string; slug: string }) {
-  const agents = availableAgents();
+  const agents = builderAgents();
   const [selected, setSelected] = useState(current);
   const [todo, setTodo] = useState<string | null>(null);
   const [needsCredential, setNeedsCredential] = useState(false);

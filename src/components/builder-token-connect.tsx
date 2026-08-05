@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { connectBuilderToken, type ConnectBuilderTokenState } from "@/app/actions";
-import { availableAgents, agentById } from "@/lib/agents";
+import { builderAgents, agentById } from "@/lib/agents";
 import { AgentMark } from "@/components/agent-mark";
 import { MintLink } from "@/components/mint-link";
 
@@ -40,7 +40,7 @@ export function BuilderTokenConnect({
   connected?: Record<string, boolean | "unknown">;
   cta?: string;
 }) {
-  const agents = availableAgents();
+  const agents = builderAgents();
   const [agentId, setAgentId] = useState(agentById(current).id);
 
   return (

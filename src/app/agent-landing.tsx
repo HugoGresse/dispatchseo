@@ -144,6 +144,54 @@ const CONTENT: Record<AgentPageId, Content> = {
       },
     ],
   },
+  cursor: {
+    name: "Cursor",
+    sub: "Cursor already knows your product - it wrote it. DispatchSEO gives it the rest: research, guides, pull requests.",
+    tag: "Runs on the Cursor plan you already have.",
+    faq: [
+      {
+        q: "Does Cursor run the overnight builds?",
+        a: (
+          <>
+            Not yet, and we&apos;d rather say so than find out at 5am. Cursor connects to
+            everything and runs any workflow you start yourself. The scheduled builds -
+            the ones that open a pull request while you sleep - run on Claude Code or
+            Codex today, and that&apos;s a separate setting on the dashboard. You can use
+            Cursor all day and still have one of those doing the night shift. See{" "}
+            <a href="/docs/install-cursor">the Cursor guide</a> for how the two fit
+            together.
+          </>
+        ),
+      },
+      {
+        q: "Which tools does Cursor get?",
+        a: "All 61 of them - the same set the dashboard has, checked one by one against what Cursor actually resolves rather than assumed. Some agents' MCP clients quietly drop tools their schema validator doesn't like; Cursor drops none.",
+      },
+      {
+        q: "Do I need a Cursor API key?",
+        a: "Not to connect. Connecting is one paste that writes your project into .cursor/mcp.json and approves it, and none of that touches your Cursor account or costs you anything. An API key only matters for running Cursor headlessly in CI, which isn't part of this yet.",
+      },
+      {
+        q: "How do I connect it?",
+        a: (
+          <>
+            One paste in your site&apos;s repo folder. The dashboard fills your project
+            key in for you, and it merges into any MCP servers you already have rather
+            than overwriting them. Full walkthrough in{" "}
+            <a href="/docs/install-cursor">the Cursor guide</a>.
+          </>
+        ),
+      },
+      {
+        q: "Does this work with the Cursor editor, or just the CLI?",
+        a: "Both - it's the same config file. The editor and cursor-agent read .cursor/mcp.json alike, so connecting once covers you either way.",
+      },
+      {
+        q: "Will DispatchSEO bill me for my Cursor usage?",
+        a: "No. Whatever you run goes through your own Cursor plan, and DispatchSEO never adds a markup or a second bill.",
+      },
+    ],
+  },
 };
 
 export function AgentLandingPage({ agentId }: { agentId: AgentPageId }) {
@@ -241,7 +289,17 @@ export function AgentLandingPage({ agentId }: { agentId: AgentPageId }) {
               <AgentMark id={other.id} className="agent-crosslink-mark" />
               <span className="agent-crosslink-text">
                 <b>Also works with {other.displayName}</b>
-                <span>Same server, same tools, including the unattended builder.</span>
+                {/* Reads the other agent's capabilities rather than asserting
+                    parity. This line used to end "including the unattended
+                    builder" for everyone, which the moment a connect-only agent
+                    was registered would have made this page advertise a builder
+                    that agent does not have - on the marketing page, in our own
+                    words. */}
+                <span>
+                  {other.capabilities.headlessBuilder
+                    ? "Same server, same tools, including the unattended builder."
+                    : "Same server, same tools. It doesn't run the scheduled builds yet."}
+                </span>
               </span>
               <svg className="agent-crosslink-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M5 12h14M13 6l6 6-6 6" />
@@ -280,8 +338,9 @@ export function AgentLandingPage({ agentId }: { agentId: AgentPageId }) {
               <a href="/#demo">Demo</a>
               <a href="/#features">Features</a>
               <a href="/#pricing">Pricing</a>
-              <a href="/claude-code">DispatchSEO for Claude Code</a>
-              <a href="/codex">DispatchSEO for Codex</a>
+              {availableAgents().map((a) => (
+                <a key={a.id} href={a.landingPath}>DispatchSEO for {a.displayName}</a>
+              ))}
             </div>
             <div className="foot-col">
               <h4>Open source</h4>

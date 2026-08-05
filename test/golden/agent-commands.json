@@ -70,6 +70,24 @@
       "connectServerName": "dispatchseo-goldensite",
       "connectBash": "codex mcp add dispatchseo-goldensite --url \"https://backend.example.test/api/mcp?key=fixture-token-do-not-use\"",
       "mcpAddBash": "codex mcp add dispatchseo-goldensite --url \"https://backend.example.test/api/mcp?key=fixture-token-do-not-use\""
+    },
+    "cursor": {
+      "displayName": "Cursor",
+      "credential": {
+        "repoSecretName": "CURSOR_API_KEY",
+        "envVar": "CURSOR_API_KEY",
+        "instanceSettingsColumn": "builder_cursor_key",
+        "placeholder": "your Cursor API key",
+        "mintUrl": "https://cursor.com/dashboard"
+      },
+      "capabilities": {
+        "mcp": true,
+        "headlessBuilder": false,
+        "caveat": "Cursor connects to everything and drives every workflow you run yourself. It does not run the scheduled overnight builds yet - pick Claude Code or Codex for those."
+      },
+      "connectServerName": "dispatchseo-goldensite",
+      "connectBash": "mkdir -p .cursor && node -e 'const fs=require(\"fs\"),f=\".cursor/mcp.json\";const c=fs.existsSync(f)?JSON.parse(fs.readFileSync(f,\"utf8\")):{};c.mcpServers=c.mcpServers||{};c.mcpServers[\"dispatchseo-goldensite\"]={url:\"https://backend.example.test/api/mcp\",headers:{Authorization:\"Bearer fixture-token-do-not-use\"}};fs.writeFileSync(f,JSON.stringify(c,null,2)+\"\\n\")' && cursor-agent mcp enable dispatchseo-goldensite",
+      "mcpAddBash": "mkdir -p .cursor && node -e 'const fs=require(\"fs\"),f=\".cursor/mcp.json\";const c=fs.existsSync(f)?JSON.parse(fs.readFileSync(f,\"utf8\")):{};c.mcpServers=c.mcpServers||{};c.mcpServers[\"dispatchseo-goldensite\"]={url:\"https://backend.example.test/api/mcp\",headers:{Authorization:\"Bearer fixture-token-do-not-use\"}};fs.writeFileSync(f,JSON.stringify(c,null,2)+\"\\n\")' && cursor-agent mcp enable dispatchseo-goldensite"
     }
   }
 }

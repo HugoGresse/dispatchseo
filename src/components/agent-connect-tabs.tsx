@@ -14,7 +14,12 @@ import { genericMcpConfig } from "@/lib/mcp-connect";
 // is a single line of shell, and the honest note about what that agent can do
 // here today. So: an outer tab per agent, the existing OS tabs inside it, and a
 // third tab holding the raw connection details for a client nobody has written
-// a command for yet (Cursor, Gemini CLI, Copilot, whatever ships next month).
+// a command for yet (Gemini CLI, Copilot, whatever ships next month).
+//
+// Every REGISTERED agent gets a tab, builder or not: this tab strip is about
+// connecting, and a connect-only agent connects exactly as completely as a
+// builder does. The capability difference belongs in that agent's own note,
+// not in whether it appears here.
 //
 // Commands are built HERE from plain strings rather than passed down, because
 // the registry's connect entries are functions and functions do not cross the

@@ -781,8 +781,10 @@ export async function connectGithubToken(
   try {
     const { builderAgentToken } = await import("@/lib/github");
     const { setRepoSecret } = await import("@/lib/github-app-secrets");
-    const { availableAgents } = await import("@/lib/agents");
-    for (const a of availableAgents()) {
+    // Builders only: a connect-only agent has no credential to mirror into the
+    // repo, and no workflow that would read one.
+    const { builderAgents } = await import("@/lib/agents");
+    for (const a of builderAgents()) {
       const stored = await builderAgentToken(a.id);
       if (stored) await setRepoSecret(project, a.credential.repoSecretName, stored);
     }

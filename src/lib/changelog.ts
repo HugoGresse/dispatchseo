@@ -75,6 +75,7 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
     kind: "new",
     text:
+<<<<<<< HEAD
       "Your pages get maintained now, not just published. Every night the backend looks for " +
       "published guides sitting at position 5-20 for their own keyword - close enough that a " +
       "refresh beats writing something new - and queues an 'Update existing page' idea (auto-" +
@@ -95,6 +96,16 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
       "moment now comes with its real base rate - a first top-10 ranking tells you fewer than 2 " +
       "in 100 pages get there in a year, so you know it's a win, not a checkbox. Agents get the " +
       "same read over MCP: get_briefing carries the day's move, get_next_actions a backlink_move.",
+  },
+  {
+    kind: "new",
+    text:
+      "Cursor is now a supported agent. Connect it in one paste from Settings -> Project key and " +
+      "it gets the complete tool set - all 61 tools, the same ones the dashboard has - in both " +
+      "the Cursor editor and the cursor-agent CLI. The paste merges into any MCP servers you " +
+      "already have rather than replacing them. One honest limit: Cursor doesn't run the " +
+      "scheduled overnight builds yet, so keep Claude Code or Codex selected as your builder " +
+      "and use Cursor for everything you drive yourself. There's a guide at /docs/install-cursor.",
   },
   {
     kind: "new",

@@ -113,10 +113,20 @@ export async function builderAgentToken(agent: AgentId): Promise<string | null> 
   }
 }
 
-/** Which agents this instance holds a usable credential for, cheapest first. */
+/**
+ * Which agents this instance holds a usable credential for, cheapest first.
+ *
+ * Every registered agent appears, so the map stays a complete Record and any
+ * caller can index it by a project's agent - but a connect-only agent is null
+ * without a lookup, because it has no builder credential to store and no
+ * instance_settings column to read.
+ */
 export async function builderAgentTokens(): Promise<Record<AgentId, string | null>> {
   const entries = await Promise.all(
-    availableAgents().map(async (a) => [a.id, await builderAgentToken(a.id)] as const),
+    availableAgents().map(
+      async (a) =>
+        [a.id, a.capabilities.headlessBuilder ? await builderAgentToken(a.id) : null] as const,
+    ),
   );
   return Object.fromEntries(entries) as Record<AgentId, string | null>;
 }

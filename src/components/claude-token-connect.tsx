@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useActionState } from "react";
 import { connectClaudeToken, type ConnectClaudeState } from "@/app/actions";
 import { CopyBox, ErrorLine, inputClass } from "@/components/wizard-ui";
-import { availableAgents, agentById } from "@/lib/agents";
+import { builderAgents, agentById } from "@/lib/agents";
 import { AgentMark } from "@/components/agent-mark";
 import { MintLink } from "@/components/mint-link";
 
@@ -42,7 +42,7 @@ export function ClaudeTokenConnect({
   connected?: Record<string, boolean | "unknown">;
   slug: string;
 }) {
-  const agents = availableAgents();
+  const agents = builderAgents();
   const [agentId, setAgentId] = useState(agentById(initialAgent).id);
 
   return (

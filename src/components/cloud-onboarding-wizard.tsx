@@ -86,9 +86,13 @@ type PipelineInstallResult = Awaited<ReturnType<typeof runPipelineInstall>>;
 // as onboarding-wizard.tsx's AGENT_PICKER_SUBTITLE, kept as a separate
 // colocated map here rather than shared so the two wizards can each change
 // independently. Adding a third agent means adding one entry here.
+// cursor is unreachable here - every picker iterates builderAgents() and
+// Cursor does not run the builders yet. Kept exhaustive over AgentId so that
+// promoting it to a builder is a compile error listing the copy still to write.
 const AGENT_PICKER_SUBTITLE: Record<AgentId, string> = {
   claude: "Needs a Claude subscription · builds cost nothing extra, they run on your plan",
   codex: "Needs an OpenAI API key · builds are metered by OpenAI per run",
+  cursor: "Connects to everything · does not run the scheduled builds yet",
 };
 
 // c2's whole "get your credential" block - prerequisite callout plus the
@@ -148,6 +152,26 @@ const AGENT_CREDENTIAL_INTRO: Record<AgentId, ReactNode> = {
       </p>
     </>
   ),
+  cursor: (
+    <>
+      {/* Unreachable today (this screen only offers builderAgents()), and
+          deliberately not a credential flow: Cursor has no builder credential
+          to collect, so inventing a paste box for one would be the screen
+          lying about what it does. */}
+      <PrereqCallout
+        title="Cursor does not run the scheduled builds"
+        body={
+          <>
+            Cursor connects to your project and drives every workflow you start yourself,
+            but the overnight builds need Claude Code or Codex. Pick one of those here -
+            you can still use Cursor day to day.
+          </>
+        }
+        href="/docs/install-cursor"
+        cta="How Cursor fits in"
+      />
+    </>
+  ),
 };
 
 // Whether the paste below is verified live or only shape-checked. Wizard
@@ -158,6 +182,7 @@ const AGENT_VERIFY_NOTE: Record<AgentId, string> = {
   claude:
     "Verification happens in the background after setup starts - this screen won't show an instant green check, and that's expected.",
   codex: "This is checked against OpenAI before it is stored, so it takes a second or two.",
+  cursor: "Cursor has no builder credential to store - there is nothing to verify on this screen.",
 };
 
 function chevron() {

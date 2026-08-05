@@ -41,7 +41,7 @@ import { saveContentPrefs } from "@/lib/content-prefs-store";
 import { renderInstructions, WORKFLOWS } from "@/lib/instructions";
 import { getPipelinePack, hasDataforseo } from "@/lib/pipeline-pack";
 import { effectiveAutomations, getProjectByToken, internalLinkingEnabled } from "@/lib/projects";
-import { AGENT_IDS, availableAgents, projectAgent } from "@/lib/agents";
+import { BUILDER_AGENT_IDS, builderAgents, projectAgent } from "@/lib/agents";
 import { setProjectAgent } from "@/lib/agent-settings";
 import { loadSiteProfile } from "@/lib/site-profile";
 import { currentProject, projectStore } from "@/lib/mcp-context";
@@ -2021,9 +2021,13 @@ const mcpHandler = createMcpHandler(
           "the two agents bill differently (a Claude subscription vs metered " +
           "OpenAI usage), so this is their call, not yours.",
         inputSchema: {
+          // BUILDER_AGENT_IDS, not AGENT_IDS: this writes projects.agent, which
+          // decides who runs the scheduled builds. An agent that speaks MCP but
+          // that no workflow can invoke has no business in this enum - offering
+          // it would let the agent set a builder that silently never runs.
           agent: z
-            .enum(AGENT_IDS)
-            .describe(availableAgents().map((a) => `${a.id} = ${a.displayName} (${a.cost.note})`).join("; ")),
+            .enum(BUILDER_AGENT_IDS)
+            .describe(builderAgents().map((a) => `${a.id} = ${a.displayName} (${a.cost.note})`).join("; ")),
         },
       },
       async ({ agent }) => {

@@ -4,7 +4,7 @@ import { instanceCronSecret } from "@/lib/dashboard-auth";
 import { requestOrigin } from "@/lib/request-origin";
 import { AgentConnectTabs } from "@/components/agent-connect-tabs";
 import { AgentSwitch } from "@/components/agent-switch";
-import { agentById, availableAgents, isSupportedAgent, projectAgent } from "@/lib/agents";
+import { agentById, builderAgents, isBuilderAgent, projectAgent } from "@/lib/agents";
 import { getActiveProjectOrNull } from "@/lib/active-project";
 import { credsForProject } from "@/lib/dataforseo";
 import { DEFAULT_PROJECT_ID, fetchProjectToken } from "@/lib/projects";
@@ -169,7 +169,9 @@ export default async function SettingsPage({
   // that moment would ask them to paste a Codex key into a form labeled
   // Claude.
   const { credential: credentialParam } = await searchParams;
-  const credentialAgent = isSupportedAgent(credentialParam) ? agentById(credentialParam) : agent;
+  // isBuilderAgent: this picks which BUILDER credential box to show, and a
+  // connect-only agent has no builder credential to collect.
+  const credentialAgent = isBuilderAgent(credentialParam) ? agentById(credentialParam) : agent;
   // Whether each agent already has its credential stored, so the box can say
   // "already saved - this replaces it" per tab instead of looking like a
   // required first-time setup for a key the owner pasted weeks ago. Three
@@ -178,7 +180,7 @@ export default async function SettingsPage({
   // false is how a stored key gets presented as missing.
   const agentCredentialSet: Record<string, boolean | "unknown"> = Object.fromEntries(
     await Promise.all(
-      availableAgents().map(async (a) => {
+      builderAgents().map(async (a) => {
         if (isCloudMode()) {
           return [
             a.id,

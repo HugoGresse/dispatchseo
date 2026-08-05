@@ -1,0 +1,158 @@
+---
+title: Use Cursor
+description: Connect Cursor to DispatchSEO over MCP in one paste - all 61 tools, in the editor and the CLI. Here is the setup, what Cursor does not do yet, and the two things that surprise people.
+---
+
+DispatchSEO is a backend with an MCP server on the front of it. Any coding
+agent that speaks MCP can drive it, and Cursor speaks MCP. If Cursor is the
+editor you already live in, you don't have to switch to use this.
+
+One thing up front, because finding it out later would cost you a night:
+**Cursor does not run the scheduled overnight builds yet.** Everything else
+works, and the rest of this page is honest about which is which.
+
+## What you get
+
+| | Claude Code | Codex | Cursor |
+|---|---|---|---|
+| Connect over MCP | Yes | Yes | **Yes** |
+| Every tool the dashboard has | Yes | Yes | **Yes - all 61, verified** |
+| Research keywords, fill the queue | Yes | Yes | **Yes** |
+| Approve, reorder, edit the queue | Yes | Yes | **Yes** |
+| Build a guide when you ask for one | Yes | Yes | **Yes** |
+| Backlink prospecting, reports, trend scans | Yes | Yes | **Yes** |
+| The unattended overnight builder | Yes | Yes | **Not yet** |
+
+That last row is the whole difference. Anything you ask for, Cursor does.
+The thing that happens at 4am while you sleep needs Claude Code or Codex.
+
+Those two settings are separate, which is the useful part: pick Claude Code
+or Codex as the builder on **Settings → Coding agent**, and keep using Cursor
+all day. The builder setting only decides who runs the scheduled jobs, not who
+you work with.
+
+## Step 1: install Cursor
+
+If you already use the Cursor editor, you have what you need for the editor
+half and can skip to step 2.
+
+For the command line, run this:
+
+```bash
+curl https://cursor.com/install -fsS | bash
+```
+
+That installs `cursor-agent` into `~/.local/bin`. If your shell can't find it
+afterwards, that directory isn't on your `PATH` - add it:
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
+```
+
+Check it worked:
+
+```bash
+cursor-agent --version
+```
+
+## Step 2: connect your project
+
+Open a terminal **in your site's repo folder** - the same folder you'd open in
+Cursor - and paste the command from your dashboard: **Settings → Project key**,
+Cursor tab. It already has your project's key filled in.
+
+It looks like this:
+
+```bash
+mkdir -p .cursor && node -e '...' && cursor-agent mcp enable dispatchseo-yoursite
+```
+
+Two things it does, both on purpose:
+
+- **It writes `.cursor/mcp.json` in this folder**, merging into that file
+  rather than replacing it. Any MCP servers you already had are left alone.
+- **It approves the server.** Cursor won't load an MCP server it hasn't been
+  told to trust, so writing the config isn't enough on its own. This is the
+  step people miss when they wire it up by hand.
+
+## Step 3: check it actually connected
+
+```bash
+cursor-agent mcp list
+```
+
+You want to see exactly this:
+
+```
+dispatchseo-yoursite: ready
+```
+
+`ready` means Cursor reached the server and authenticated. Two other answers
+you might get:
+
+- `not loaded (needs approval)` - the config is there but the approval isn't.
+  Run `cursor-agent mcp enable dispatchseo-yoursite`.
+- `Error: Connection failed` - the server was reached but rejected the key.
+  Copy the command from your dashboard again; the key is probably truncated.
+
+To see the tools themselves:
+
+```bash
+cursor-agent mcp list-tools dispatchseo-yoursite
+```
+
+That prints all 61, with their arguments.
+
+## Step 4: use it
+
+There are no slash commands - those are a Claude Code file convention. With
+Cursor you name what you want in a normal prompt:
+
+> Use the dispatchseo tools. Call get_instructions with workflow "research",
+> then follow it.
+
+Or just ask for something and let it find the tool:
+
+> Using dispatchseo, show me my current keyword queue and what's ranking.
+
+The same works in the Cursor editor's chat, since the editor and the CLI read
+the same `.cursor/mcp.json`.
+
+## Two things that surprise people
+
+**A written config is not a connected server.** Cursor keeps an approval list,
+and a server it hasn't approved shows as `not loaded` and hands the agent no
+tools at all. The connect command above handles this. If you ever edit
+`.cursor/mcp.json` by hand, re-run `cursor-agent mcp enable <name>` after -
+changing the config invalidates the old approval.
+
+**The connection belongs to the folder, not to you.** `.cursor/mcp.json` sits
+in the repo, so each site you manage gets its own connection and its own key,
+and they can't shadow each other. Open a different project's folder and you get
+that project's tools. This is what you want, and it's worth knowing before you
+wonder why the tools vanished in an unrelated repo.
+
+## Something's wrong
+
+**`command not found: cursor-agent`** - `~/.local/bin` isn't on your `PATH`.
+See the export line in step 1.
+
+**The tools don't show up in the editor** - Cursor reads the config when it
+opens the folder. Close the window and reopen the repo.
+
+**`Connection failed`** - the key is wrong or incomplete. Re-copy the command
+from **Settings → Project key**; the most common cause is a key that got cut
+short on the way over.
+
+**Everything connects, but nothing gets built overnight** - that's expected,
+and it's the one row in the table above. Pick Claude Code or Codex under
+**Settings → Coding agent** for the scheduled builds.
+
+## Will Cursor run the builds later?
+
+That's the plan, and the honest status is: the connection is proven, the
+unattended builder isn't. Running an agent unattended means knowing exactly
+what it prints when a key dies or a quota runs out, so a failed build tells
+you instead of failing quietly. Cursor's CLI has no turn limit either, which
+matters more when nobody's watching. Until those are pinned down, we'd rather
+say "not yet" than ship a night shift that stops working without saying so.

@@ -159,9 +159,15 @@ export type WizardResume = {
 // Wizard-specific copy, not a registry field (agent.cost.note says something
 // similar but longer, for the finale prose rather than this compact card) -
 // adding a third agent means adding one entry here.
+// cursor is unreachable from every picker below - they all iterate
+// builderAgents(), and Cursor does not run the builders yet. The entries exist
+// because the map is exhaustive over AgentId on purpose: that is what turns
+// "Cursor became a builder" into a compile error listing the copy still to
+// write, instead of a silently missing subtitle.
 const AGENT_PICKER_SUBTITLE: Record<AgentId, string> = {
   claude: "Needs a Claude subscription · builds cost nothing extra, they run on your plan",
   codex: "Needs an OpenAI API key · builds are metered by OpenAI per run",
+  cursor: "Connects to everything · does not run the scheduled builds yet",
 };
 
 // The Claude Code / Codex pick, shared by the agent step (where the choice is
@@ -245,6 +251,18 @@ const AGENT_PREREQ_STEP: Record<AgentId, { body: ReactNode; cta: string }> = {
     ),
     cta: "Install Codex",
   },
+  cursor: {
+    body: (
+      <>
+        This needs <b className="font-medium text-neutral-200">Cursor</b> and the{" "}
+        <b className="font-medium text-neutral-200">GitHub CLI</b> (
+        <code className="font-mono text-neutral-300">gh</code>). Cursor connects
+        to everything here, but it does not run the scheduled builds - pick
+        Claude Code or Codex for those.
+      </>
+    ),
+    cta: "Install Cursor",
+  },
 };
 
 // The one-liner under step 1's connect command, naming what the paste does.
@@ -258,6 +276,12 @@ const AGENT_CONNECT_BLURB: Record<AgentId, ReactNode> = {
     </>
   ),
   codex: <>Connects Codex to this project. One command, same in every shell.</>,
+  cursor: (
+    <>
+      Writes this project into <code className="font-mono text-neutral-300">.cursor/mcp.json</code>{" "}
+      and approves it, so Cursor can see the tools.
+    </>
+  ),
 };
 
 // The VS Code extension gotcha only applies to Claude Code today - Codex has
@@ -273,6 +297,7 @@ const AGENT_RESTART_CAVEAT: Record<AgentId, ReactNode | null> = {
     </>
   ),
   codex: null,
+  cursor: null,
 };
 
 export function OnboardingWizard({

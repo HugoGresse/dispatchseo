@@ -29,6 +29,10 @@ import {
   codexMcpAddCommand,
   connectCommand,
   connectCommandPS,
+  cursorConnectCommand,
+  cursorConnectCommandPS,
+  cursorMcpAddCommand,
+  cursorMcpAddCommandPS,
   mcpAddCommand,
   mcpAddCommandPS,
   mcpServerName,
@@ -36,7 +40,7 @@ import {
   setupCommandPS,
 } from "@/lib/mcp-connect";
 
-export type AgentId = "claude" | "codex";
+export type AgentId = "claude" | "codex" | "cursor";
 
 // The default for every project that has never chosen. Also what a row reads as
 // on a database that hasn't run migration 0044 yet - see projectAgent().
@@ -95,8 +99,18 @@ export type AgentDefinition = {
     mcpAddPowershell: (slug: string, origin: string, token: string) => string;
   };
 
-  /** The one-command installer, per shell. */
-  setup: {
+  /**
+   * The one-command installer, per shell.
+   *
+   * Optional, because it only means something for an agent that runs the
+   * builders: setup.sh connects the agent AND stores the builder credential
+   * AND hands off to install the pipeline. A connect-only agent has no builder
+   * credential to store, and public/setup.sh rejects an agent it does not know
+   * by name, so the honest representation of "no one-command install exists
+   * for this agent" is the absence of the field rather than a command that
+   * exits 1.
+   */
+  setup?: {
     bash: (slug: string, origin: string, token: string, bundled?: boolean) => string;
     powershell: (slug: string, origin: string, token: string, bundled?: boolean) => string;
   };
@@ -276,15 +290,88 @@ const codex: AgentDefinition = {
   },
 };
 
+// Cursor. Every field below is measured against cursor-agent
+// 2026.07.23-e383d2b by installing and running it - the connect syntax, the
+// approval model, the absence of a turn budget, and the tool count that
+// actually arrives (all 61, names matching exactly, nothing dropped by its
+// schema validator, proven against the production server). See
+// docs-private/CURSOR_FACTS.md for the runs behind each one.
+//
+// TIER 3 - CONNECT ONLY, deliberately. Connecting is verified end to end;
+// the unattended builder is NOT, because verifying it needs a paid Cursor
+// credential nobody here holds yet, and Cursor's quota/rate-limit failure
+// text has therefore never been observed. Claiming a builder on that basis
+// would be the "offered and silently absent" failure capabilities exists to
+// prevent - an owner's nightly builds would die quietly. What flipping it
+// needs, in order: measure the failure strings (CURSOR_FACTS.md lists them),
+// write scripts/agent-ci/cursor.mjs, regenerate the workflows, extend
+// docker/builder/run.sh, run the canary, then set headlessBuilder: true.
+const cursor: AgentDefinition = {
+  id: "cursor",
+  displayName: "Cursor",
+  cli: "cursor-agent",
+  installDocsPath: "/docs/install-cursor",
+  installUrl: "https://cursor.com/cli",
+  landingPath: "/cursor",
+  // Steel - distinct from Claude's clay and Codex's near-white at a glance.
+  mascot: { body: "#9bb0d4", shade: "#6f83a6" },
+  capabilities: {
+    mcp: true,
+    headlessBuilder: false,
+    caveat:
+      "Cursor connects to everything and drives every workflow you run yourself. It does not run the scheduled overnight builds yet - pick Claude Code or Codex for those.",
+  },
+  launch: (prompt) => `cursor-agent "${prompt}"`,
+  connect: {
+    serverName: mcpServerName,
+    bash: cursorConnectCommand,
+    powershell: cursorConnectCommandPS,
+    mcpAddBash: cursorMcpAddCommand,
+    mcpAddPowershell: cursorMcpAddCommandPS,
+  },
+  // No `setup` on purpose - see the field's comment. public/setup.sh knows
+  // claude and codex by name and exits 1 on anything else, which is the right
+  // behaviour; giving Cursor a command that hits that exit would be worse than
+  // having none.
+  credential: {
+    repoSecretName: "CURSOR_API_KEY",
+    envVar: "CURSOR_API_KEY",
+    instanceSettingsColumn: "builder_cursor_key",
+    placeholder: "your Cursor API key",
+    // Shape only, and deliberately NOT a prefix assertion: no real Cursor key
+    // was ever observed here, so asserting a prefix would be inventing a fact
+    // that could reject every valid key. What IS asserted is what is known -
+    // no whitespace (the line-wrapped-paste failure), enough length, and
+    // explicitly not one of the OTHER agents' credentials, which is the
+    // cross-paste mistake that has already bitten this repo twice.
+    looksValid: (v) =>
+      v.length > 20 && !/\s/.test(v) && !v.startsWith("sk-ant-") && !v.startsWith("sk-"),
+    howToMint: "Create an API key in your Cursor dashboard, under Integrations.",
+    mintUrl: "https://cursor.com/dashboard",
+    mintLinkLabel: "grab your key",
+    verifiedWith: "a shape check",
+  },
+  cost: {
+    model: "subscription",
+    note: "Runs on your existing Cursor plan - nothing extra to pay, and nothing is billed by DispatchSEO. Heavy use draws on the plan's monthly usage pool.",
+  },
+};
+
 const REGISTRY: Record<AgentId, AgentDefinition | undefined> = {
   claude,
   codex,
+  cursor,
 };
 
 /**
- * Every agent id, default first, as a non-empty tuple - the shape z.enum and
- * exhaustive UI loops want. Derived from the registry so a new agent shows up
- * everywhere this is read without another list to maintain.
+ * EVERY agent id, default first, as a non-empty tuple. Derived from the
+ * registry so a new agent shows up everywhere this is read without another
+ * list to maintain.
+ *
+ * Check which list you want before using this one: anything that ends up in
+ * projects.agent - set_agent's enum, a picker, a validator - wants
+ * BUILDER_AGENT_IDS instead, because this list includes agents no scheduled
+ * workflow can invoke.
  */
 export const AGENT_IDS = Object.keys(REGISTRY) as [AgentId, ...AgentId[]];
 
@@ -304,11 +391,47 @@ function lookup(id: string | null | undefined): AgentDefinition | undefined {
   return REGISTRY[id as AgentId];
 }
 
-/** Every agent that can actually be selected today. */
+/**
+ * Every registered agent - i.e. everything DispatchSEO speaks to at all.
+ *
+ * This is the CONNECT list: the marketing pages, the sitemap, the cross-links,
+ * and the "connect any client" tabs. It is NOT the list to offer where the
+ * owner is choosing who runs their scheduled builds - use builderAgents() for
+ * that, or a connect-only agent becomes selectable as a builder and the
+ * owner's overnight runs die quietly.
+ */
 export function availableAgents(): AgentDefinition[] {
   return (Object.keys(REGISTRY) as AgentId[])
     .map((id) => REGISTRY[id])
     .filter((a): a is AgentDefinition => a != null);
+}
+
+/**
+ * Every agent that can actually run the unattended builders.
+ *
+ * The distinction is the whole point of capabilities.headlessBuilder: an agent
+ * can be fully supported over MCP - every tool, every interactive workflow -
+ * without anything in a GitHub Actions runner knowing how to invoke it. Every
+ * surface where the answer feeds projects.agent (the wizards' pickers, the
+ * dashboard switch, the builder-credential boxes, set_agent's enum, the
+ * per-agent secret mirroring) must read THIS list, because that column decides
+ * which agent a scheduled run resolves to.
+ */
+export function builderAgents(): AgentDefinition[] {
+  return availableAgents().filter((a) => a.capabilities.headlessBuilder);
+}
+
+/**
+ * Builder agent ids as the non-empty tuple z.enum wants. Deliberately not
+ * AGENT_IDS: set_agent writes projects.agent, so offering a connect-only agent
+ * there would let an agent set a builder that no workflow can run.
+ */
+export const BUILDER_AGENT_IDS = builderAgents().map((a) => a.id) as [AgentId, ...AgentId[]];
+
+/** Whether an id names an agent that can run the scheduled builders. */
+export function isBuilderAgent(id: string | null | undefined): id is AgentId {
+  const a = lookup(id);
+  return a != null && a.capabilities.headlessBuilder;
 }
 
 /**

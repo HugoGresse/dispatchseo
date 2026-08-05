@@ -21,7 +21,20 @@ is where the answer lives — including the parts that aren't finished.
 |---|---|---|---|---|---|
 | [Claude Code](https://claude.com/claude-code) | 1 | ✅ | ✅ | ✅ GitHub Actions + docker builder | 2026-07-30 |
 | [Codex](https://developers.openai.com/codex/cli) | 1 | ✅ | ✅ | ✅ GitHub Actions + docker builder | 2026-07-30 |
-| Cursor, Gemini CLI, Copilot, anything else that speaks MCP | 3 | ✅ | ✅ | ❌ | — |
+| [Cursor](https://cursor.com/cli) | 3 | ✅ registry entry + one-paste connect | ✅ | ❌ not yet | 2026-08-05 |
+| Gemini CLI, Copilot, anything else that speaks MCP | 3 | ✅ | ✅ | ❌ | — |
+
+Cursor is the first agent to sit at Tier 3 *with* a registry entry, which is
+what `capabilities.headlessBuilder: false` is for. Connecting is verified end
+to end against the production server on 2026-08-05 — all 61 tools arrive, names
+matching the registry exactly, nothing dropped by its schema validator, on both
+the header and `?key=` auth forms. What is NOT verified is a headless run, and
+the gap is deliberate rather than pending-a-tidy-up: proving one needs a paid
+Cursor credential, and until Cursor's quota and rate-limit failure strings have
+actually been seen, a classify step could only guess at them — which is the
+codex-429 mistake, and it ends with a build reporting green having built
+nothing. `docs-private/CURSOR_FACTS.md` records every measurement and lists
+exactly what closing the gap requires.
 
 ### What "unattended builder" means, and how a project picks one
 

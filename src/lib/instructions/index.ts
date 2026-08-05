@@ -25,14 +25,26 @@ import { internalLinkingEnabled } from "@/lib/projects";
 import {
   INSTALL,
   INSTALL_STEPS,
-  CLAUDE_CREDENTIAL_STEP,
-  CODEX_CREDENTIAL_STEP,
-  CLAUDE_CREDENTIAL_BRIEF,
-  CODEX_CREDENTIAL_BRIEF,
-  CLAUDE_SMOKE_NOTE,
-  CODEX_SMOKE_NOTE,
+  AGENT_CREDENTIAL_STEP,
+  AGENT_CREDENTIAL_BRIEF,
+  AGENT_SMOKE_NOTE,
 } from "./install";
-import { projectAgent } from "@/lib/agents";
+import { projectAgent, type AgentId } from "@/lib/agents";
+
+// geo-scan attribution: AGENT_ENGINES' name for each agent's model family.
+// Keyed by AgentId so a new agent must decide its engine at compile time.
+//
+// cursor is PROVISIONAL and currently unreachable - a connect-only agent never
+// becomes projects.agent, so nothing renders it. It cannot be answered from the
+// agent id alone either: Cursor is model-agnostic (`--model gpt-5` and
+// `--model sonnet-4-thinking` are both normal), so the honest value depends on
+// the model a run is configured with. Decide it from that model, not from this
+// map, on the day Cursor becomes a builder.
+const AGENT_ENGINE: Record<AgentId, string> = {
+  claude: "claude",
+  codex: "chatgpt",
+  cursor: "chatgpt",
+};
 import { SETUP, SETUP_STEPS } from "./setup";
 import { RESEARCH, RESEARCH_STEPS } from "./research";
 import {
@@ -52,7 +64,7 @@ import { TREND_SCAN, TREND_SCAN_STEPS } from "./trend-scan";
 import { TREND_EXPAND, TREND_EXPAND_STEPS } from "./trend-expand";
 import { GEO_SCAN, GEO_SCAN_STEPS } from "./geo-scan";
 
-export const INSTRUCTIONS_VERSION = "2026-08-05.2";
+export const INSTRUCTIONS_VERSION = "2026-08-05.3";
 
 export const WORKFLOWS = [
   "install",
@@ -260,19 +272,18 @@ export async function renderInstructions(workflow: WorkflowName, project: Projec
   // through a placeholder here.
   {
     const agent = projectAgent(project);
-    const codex = agent.id === "codex";
     markdown = markdown
       .replaceAll("{{AGENT_NAME}}", agent.displayName)
-      .replaceAll("{{AGENT_CLI}}", codex ? "codex" : "claude")
+      .replaceAll("{{AGENT_CLI}}", agent.cli)
       .replaceAll("{{AGENT_SECRET_NAME}}", agent.credential.repoSecretName)
-      .replaceAll("{{AGENT_CREDENTIAL_STEP}}", codex ? CODEX_CREDENTIAL_STEP : CLAUDE_CREDENTIAL_STEP)
-      .replaceAll("{{AGENT_CREDENTIAL_BRIEF}}", codex ? CODEX_CREDENTIAL_BRIEF : CLAUDE_CREDENTIAL_BRIEF)
-      .replaceAll("{{AGENT_SMOKE_NOTE}}", codex ? CODEX_SMOKE_NOTE : CLAUDE_SMOKE_NOTE)
+      .replaceAll("{{AGENT_CREDENTIAL_STEP}}", AGENT_CREDENTIAL_STEP[agent.id])
+      .replaceAll("{{AGENT_CREDENTIAL_BRIEF}}", AGENT_CREDENTIAL_BRIEF[agent.id])
+      .replaceAll("{{AGENT_SMOKE_NOTE}}", AGENT_SMOKE_NOTE[agent.id])
       // geo-scan attribution: "chatgpt" is AGENT_ENGINES' name for the GPT
       // family, which is what a Codex run's answers actually are. Hardcoding
       // `claude` here silently attributed GPT answers to Claude in the
       // AI-visibility chart, with no backfill path.
-      .replaceAll("{{AGENT_ENGINE}}", codex ? "chatgpt" : "claude");
+      .replaceAll("{{AGENT_ENGINE}}", AGENT_ENGINE[agent.id]);
     // The agent-conditional TEXT carries project tokens of its own - both
     // credential steps end with `gh secret set … --repo {{REPO}}` - and it is
     // spliced in AFTER the pass above already resolved those. So every install

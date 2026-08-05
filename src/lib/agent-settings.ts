@@ -9,7 +9,7 @@
 
 import { db } from "@/lib/db";
 import { isCloudMode } from "@/lib/cloud";
-import { agentById, availableAgents, isSupportedAgent, type AgentDefinition } from "@/lib/agents";
+import { agentById, builderAgents, isBuilderAgent, type AgentDefinition } from "@/lib/agents";
 import { checkRepoSecret, setRepoSecret } from "@/lib/github-app-secrets";
 import { listProjects } from "@/lib/projects";
 import { builderAgentToken, setRepoActionsVariable } from "@/lib/github";
@@ -49,9 +49,18 @@ export async function setProjectAgent(
   project: Project,
   agentId: string,
 ): Promise<AgentSwitchResult> {
-  if (!isSupportedAgent(agentId)) {
+  // isBuilderAgent, not isSupportedAgent: this writes projects.agent, which is
+  // what a scheduled run resolves to. An agent that speaks MCP but that no
+  // workflow knows how to invoke must not be settable here - it would leave
+  // the owner's overnight builds resolving to an agent nothing can run. The
+  // supported list is derived so it can never drift from the registry.
+  if (!isBuilderAgent(agentId)) {
     throw new Error(
-      `Unknown agent "${agentId}". Supported: claude (Claude Code), codex (Codex).`,
+      `Unknown agent "${agentId}". Supported: ` +
+        builderAgents()
+          .map((a) => `${a.id} (${a.displayName})`)
+          .join(", ") +
+        ".",
     );
   }
   const agent = agentById(agentId);
@@ -233,7 +242,7 @@ export type AgentCredentialStatus = "ready" | "needs-key" | "unknown";
 export async function agentCredentialStatuses(
   project: Project,
 ): Promise<Record<string, AgentCredentialStatus>> {
-  const agents = availableAgents();
+  const agents = builderAgents();
   const unknown = () => Object.fromEntries(agents.map((a) => [a.id, "unknown" as const]));
   try {
     if (project.github_installation_id) {

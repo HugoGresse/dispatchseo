@@ -61,6 +61,9 @@ export const DOCS_NAV: { section: string; items: DocsNavItem[] }[] = [
       // Immediately after it: the second agent is a choice people make at the
       // same moment, and burying it further down reads as "unsupported".
       { slug: "install-codex", title: "Use Codex instead" },
+      // Third agent, same reasoning: someone who already lives in Cursor looks
+      // for it here, and its absence from this list reads as "unsupported".
+      { slug: "install-cursor", title: "Use Cursor" },
       { slug: "setup-wizard", title: "The setup wizard" },
       { slug: "search-console", title: "Google Search Console" },
       { slug: "keyword-data", title: "Keyword data sources" },

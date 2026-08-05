@@ -67,6 +67,34 @@ Identical in PowerShell - there's no header to quote. Codex has no
 sites apart. [The Codex guide](/docs/install-codex) covers the rest.
 
 </AgentTab>
+<AgentTab id="cursor">
+
+Cursor has no `mcp add` command - you write the config file, then approve it:
+
+```bash
+mkdir -p .cursor    # then add this server to .cursor/mcp.json:
+```
+
+```json
+{
+  "mcpServers": {
+    "dispatchseo-<slug>": {
+      "url": "<your-domain>/api/mcp",
+      "headers": { "Authorization": "Bearer <token>" }
+    }
+  }
+}
+```
+
+```bash
+cursor-agent mcp enable dispatchseo-<slug>
+```
+
+The `enable` step is not optional: an unapproved server loads no tools at
+all. Your dashboard has a one-paste version that merges into an existing
+config for you. [The Cursor guide](/docs/install-cursor) covers the rest.
+
+</AgentTab>
 </AgentTabs>
 
 **Anything else** that speaks streamable-HTTP MCP: point it at
