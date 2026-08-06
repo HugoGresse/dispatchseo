@@ -73,6 +73,17 @@ export type ChangelogEntry = {
 // this list - it exists so that writing the note down doesn't ping anyone.
 export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
+    kind: "improved",
+    text:
+      "The dashboard now tells you when it's waiting on YOU. While the install pull " +
+      "request sits unmerged, a banner names it and links straight to it - nothing can " +
+      "build until that PR lands on the default branch, and the dashboard used to look " +
+      "finished anyway. And the queue's \"building now\" badge stopped being an " +
+      "unconditional claim: it shows how long the build has been running, and past the " +
+      "point where the automatic recovery will re-queue it, it says \"build stalled - " +
+      "will retry\" instead of asserting live work it can't prove.",
+  },
+  {
     kind: "new",
     text:
       "DispatchSEO now works out when your site actually launched instead of assuming " +

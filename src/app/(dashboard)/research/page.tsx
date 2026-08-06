@@ -51,6 +51,7 @@ function toQueueRow(s: SuggestionRow): QueueRow {
     keyword_volume: s.keyword_volume,
     keyword_difficulty: s.keyword_difficulty,
     status: s.status,
+    started_at: (s as { started_at?: string | null }).started_at ?? null,
   };
 }
 

@@ -44,6 +44,12 @@ export function SetupProgressBanner({
   const [researchDone, setResearchDone] = useState(false);
   const [ranksPossible, setRanksPossible] = useState(true);
   const [slow, setSlow] = useState(false);
+  // The open install PR, while one exists: the single owner-blocking move of
+  // the whole setup. Until this was surfaced HERE, the dashboard could look
+  // finished while the pipeline sat on an unmerged branch - workflows only
+  // trigger from the default branch, so nothing would ever run, and the only
+  // way to learn that was to ask an agent (2026-08-06, mia-tax).
+  const [openPr, setOpenPr] = useState<{ url: string; title: string } | null>(null);
   const refreshed = useRef(false);
 
   useEffect(() => {
@@ -59,9 +65,11 @@ export function SetupProgressBanner({
           ideas_queued?: number;
           rank_checks?: number;
           ranks_possible?: boolean;
+          open_pr?: { url: string; title: string } | null;
         };
         setResearchDone((s.ideas_queued ?? 0) > 0);
         setRanksPossible(s.ranks_possible !== false);
+        setOpenPr(s.open_pr ?? null);
         // Evidence outranks stamps. A rank check EXISTS only if the pipeline
         // has really run, so it settles the question on its own - checked
         // first, before pipeline_installed, because that stamp can be null on
@@ -148,6 +156,33 @@ export function SetupProgressBanner({
   // Cloud installs itself in the background; self-host waits on the owner
   // running the install command, and the copy must not pretend otherwise.
   if (phase === "setup") {
+    // An open install PR outranks every other setup message: merging it is
+    // the owner's ONLY move, everything else is waiting on exactly that.
+    // Link straight to the PR, not /onboarding - one click from the answer.
+    if (openPr) {
+      return (
+        <div className="border-b border-amber-500/30 bg-amber-500/[0.08] px-4 py-2.5 sm:px-6">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-neutral-200">
+            <a
+              href={openPr.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex flex-1 items-center gap-2.5 hover:text-white"
+            >
+              {spinner}
+              <span>
+                <b className="font-semibold text-white">Waiting on you: merge the install pull request.</b>{" "}
+                Nothing can build or publish until it lands on the default branch — everything else
+                is ready and starts on its own once you merge.{" "}
+                <span className="whitespace-nowrap font-medium text-amber-300 underline-offset-2 group-hover:underline">
+                  Open the PR →
+                </span>
+              </span>
+            </a>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="border-b border-violet-500/25 bg-violet-500/[0.07] px-4 py-2.5 sm:px-6">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-neutral-200">

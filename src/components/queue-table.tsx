@@ -24,6 +24,9 @@ export type QueueRow = {
   keyword_volume: number | null;
   keyword_difficulty: number | null;
   status: string;
+  // When the builder marked this in_progress (0027) - lets "building now"
+  // carry its age instead of asserting live work it cannot prove.
+  started_at?: string | null;
 };
 
 // Approved needs no label (the row being here says it all); the two states
@@ -43,16 +46,45 @@ function StatusLabel({
   autoApproved,
   kd,
   kdCeiling,
+  startedAt,
 }: {
   status: string;
   autoApproved?: boolean;
   kd?: number | null;
+  startedAt?: string | null;
   // The project's current auto-approve KD line (kd-zones.ts). Null when no
   // domain-rating snapshot exists yet - then we show no ceiling rather than
   // assert one we cannot back.
   kdCeiling?: number | null;
 }) {
-  if (status === "in_progress") return <span className="text-neutral-300">building now</span>;
+  if (status === "in_progress") {
+    // "building now" used to be an unconditional claim, which reads as
+    // reassurance exactly when it is least true - a builder that died (or
+    // never really started: unmerged install PR, missing credential) left
+    // the row asserting live work for hours (2026-08-06, mia-tax's first
+    // guide). Carry the age, and past the 3h recovery threshold say what is
+    // actually happening: the sweep reverts it and the next builder retries.
+    const startedMs = startedAt ? Date.parse(startedAt) : NaN;
+    const hours = Number.isNaN(startedMs) ? null : (Date.now() - startedMs) / 3600_000;
+    if (hours != null && hours >= 3) {
+      return (
+        <span
+          className="text-amber-300/90"
+          title="The builder stopped reporting mid-build. This clears itself: the hourly sweep re-queues it and the next scheduled builder retries. If it keeps happening, check the cron health banner on Home."
+        >
+          build stalled — will retry
+        </span>
+      );
+    }
+    return (
+      <span className="text-neutral-300">
+        building now
+        {hours != null && hours * 60 >= 5 ? (
+          <span className="text-neutral-500"> · {Math.round(hours * 60)}m</span>
+        ) : null}
+      </span>
+    );
+  }
   if (status === "pending") {
     const why =
       kd == null
@@ -317,6 +349,7 @@ export function DraggableQueue({
                   autoApproved={autoApproved}
                   kd={r.keyword_difficulty}
                   kdCeiling={kdCeiling}
+                  startedAt={r.started_at}
                 />
               }
               stats={
@@ -470,6 +503,7 @@ export function DraggableQueue({
                     autoApproved={autoApproved}
                     kd={r.keyword_difficulty}
                     kdCeiling={kdCeiling}
+                    startedAt={r.started_at}
                   />
                 </div>
 
