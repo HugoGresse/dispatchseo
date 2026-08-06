@@ -13,9 +13,11 @@ import Link from "next/link";
 //              checks) are still landing. Message names what's actually running
 //              (research vs ranking checks) and does NOT link - setup is done,
 //              so /onboarding would just say "done" and confuse.
-//   done     - the first ranking check exists -> unmount + router.refresh so the
-//              now-populated dashboard renders. (GSC's traffic graph fills over
-//              the next 2-3 days on Google's own lag - not gated here.)
+//   done     - the first ranking check exists (or, on a free/GSC-only project
+//              that will never get one, the first ideas are queued) -> unmount
+//              + router.refresh so the now-populated dashboard renders. (GSC's
+//              traffic graph fills over the next 2-3 days on Google's own lag
+//              - not gated here.)
 
 const SLOW_AFTER_MS = 20 * 60_000; // "usually 5-15 min" - nudge past 20
 
@@ -35,6 +37,7 @@ export function SetupProgressBanner({
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>(installed ? "firstRun" : "setup");
   const [researchDone, setResearchDone] = useState(false);
+  const [ranksPossible, setRanksPossible] = useState(true);
   const [slow, setSlow] = useState(false);
   const refreshed = useRef(false);
 
@@ -50,8 +53,10 @@ export function SetupProgressBanner({
           pipeline_installed?: boolean;
           ideas_queued?: number;
           rank_checks?: number;
+          ranks_possible?: boolean;
         };
         setResearchDone((s.ideas_queued ?? 0) > 0);
+        setRanksPossible(s.ranks_possible !== false);
         // Evidence outranks stamps. A rank check EXISTS only if the pipeline
         // has really run, so it settles the question on its own - checked
         // first, before pipeline_installed, because that stamp can be null on
@@ -64,7 +69,14 @@ export function SetupProgressBanner({
         // published guides, null stamp, banner back for 24h). Ordering this
         // branch first means a site with real data can never be described as
         // still setting up, whatever the timestamps say.
-        if ((s.rank_checks ?? 0) > 0) {
+        // Rank tracking is the paid half. A free/GSC-only project
+        // (ranks_possible false; missing means an older backend, assume
+        // ranks are coming) has no rank_checks row coming, ever - waiting
+        // on one kept this banner up forever while promising "rankings are
+        // being pulled in now" (2026-08-06, usagecut). For those projects
+        // research landing IS the finish line, same settled rule as
+        // first-run-background.tsx.
+        if ((s.rank_checks ?? 0) > 0 || (s.ranks_possible === false && (s.ideas_queued ?? 0) > 0)) {
           setPhase("done");
           if (!refreshed.current) {
             refreshed.current = true;
@@ -166,8 +178,8 @@ export function SetupProgressBanner({
             ) : (
               <>
                 <b className="font-semibold text-white">Researching your first keywords.</b> Setup is
-                done — your first content ideas land in the queue shortly, then rankings follow.
-                Nothing for you to do.
+                done — your first content ideas land in the queue shortly
+                {ranksPossible ? ", then rankings follow" : ""}. Nothing for you to do.
               </>
             )}
           </span>

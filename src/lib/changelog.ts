@@ -73,6 +73,14 @@ export type ChangelogEntry = {
 // this list - it exists so that writing the note down doesn't ping anyone.
 export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
+    kind: "fixed",
+    text:
+      "On free (GSC-only) projects, the purple \"Running your first ranking checks\" banner " +
+      "used to stay up forever - it was waiting for a rank check that only projects with " +
+      "DataForSEO credentials ever get. It now closes once your first ideas are queued, and " +
+      "no longer promises rankings that aren't configured.",
+  },
+  {
     kind: "new",
     text:
       "Your site can now tell DispatchSEO which Google it lives in. A new Search market " +
