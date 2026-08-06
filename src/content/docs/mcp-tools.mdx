@@ -842,6 +842,18 @@ access checks keep failing, the guess was probably wrong.
   </Field>
 </Fields>
 
+### `detect_site_launch`
+
+Finds evidence of when the site actually went live - Search Console's
+earliest impression date (Google keeps ~16 months of history, so for
+older sites this is a floor, flagged `at_least: true`) and the Wayback
+Machine's first capture - and moves `site_launched_at` backward to the
+earlier of the two. Never moves the date forward and never overrides an
+owner's earlier correction. The launch date drives the Journey stage,
+publishing pace and research difficulty posture, so run this when it
+looks like the day the project joined DispatchSEO rather than the day
+the site launched. Takes no arguments.
+
 ### `set_market`
 
 Sets which Google country and language the project's rank checks and

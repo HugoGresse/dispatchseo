@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { setSiteLaunchedAt } from "@/app/actions";
+import { detectLaunchDate, setSiteLaunchedAt } from "@/app/actions";
 
 // The launch-date row on Settings. Migration 0015 backfills the date from
 // created_at (when the project joined DispatchSEO), which undercounts any
@@ -13,9 +13,39 @@ export function SiteLaunchedRow({ current, slug }: { current: string; slug: stri
   const [value, setValue] = useState(initial);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
   const router = useRouter();
 
   const dirty = value !== initial && value.length === 10;
+
+  // "Detect" asks the backend to find real evidence of the launch: Search
+  // Console's earliest impression (Google keeps ~16 months) and the Wayback
+  // Machine's first capture. It only ever moves the date backward.
+  function detect() {
+    if (pending) return;
+    setError(null);
+    setNote(null);
+    startTransition(async () => {
+      const result = await detectLaunchDate(slug);
+      if ("error" in result) {
+        setError(result.error);
+        return;
+      }
+      const sourceLabel =
+        result.source === "wayback" ? "Wayback Machine first capture" : "Search Console history";
+      if (result.updated) {
+        setValue(result.date);
+        setNote(
+          `Set to ${result.date} (${sourceLabel}${result.at_least ? " - the site is at least this old" : ""}).`,
+        );
+        router.refresh();
+      } else {
+        setNote(
+          `Found ${result.date} (${sourceLabel}) - not earlier than the current date, so nothing changed.`,
+        );
+      }
+    });
+  }
 
   function save() {
     if (!dirty || pending) return;
@@ -52,8 +82,19 @@ export function SiteLaunchedRow({ current, slug }: { current: string; slug: stri
           >
             {pending ? "Saving…" : "Save"}
           </button>
-        ) : null}
-        {error ? <span className="text-xs text-red-400">{error}</span> : null}
+        ) : (
+          <button
+            type="button"
+            onClick={detect}
+            disabled={pending}
+            title="Find the real launch date from Search Console history and the Wayback Machine - only ever moves the date backward"
+            className="rounded-md bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-300 hover:bg-neutral-700 disabled:opacity-50"
+          >
+            {pending ? "Detecting…" : "Detect"}
+          </button>
+        )}
+        {error ? <span className="max-w-xs text-xs text-red-400">{error}</span> : null}
+        {note ? <span className="max-w-xs text-xs text-neutral-400">{note}</span> : null}
       </span>
     </div>
   );

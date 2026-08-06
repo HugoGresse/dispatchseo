@@ -73,6 +73,18 @@ export type ChangelogEntry = {
 // this list - it exists so that writing the note down doesn't ping anyone.
 export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
+    kind: "new",
+    text:
+      "DispatchSEO now works out when your site actually launched instead of assuming " +
+      "it was born the day you signed up. It checks Search Console's history and the " +
+      "Wayback Machine's first capture of your domain - automatically once Search " +
+      "Console data starts flowing, or on demand with the new Detect button next to " +
+      "the launch date in Settings (and the detect_site_launch tool). The date only " +
+      "ever moves backward, and your own corrections always win. This matters because " +
+      "the launch date drives the Journey timeline, the publishing pace, and how " +
+      "ambitious keyword research is allowed to be.",
+  },
+  {
     kind: "improved",
     text:
       "Adding a second site on self-host no longer ends in a silent dashboard. The " +

@@ -1597,6 +1597,28 @@ export async function setSiteLaunchedAt(date: string, slug: string) {
   revalidatePath("/", "layout");
 }
 
+// The "Detect" button beside the Settings launch-date field. Same detection
+// (and the same only-move-backward rule) as the hourly-gsc auto-backfill and
+// the detect_site_launch MCP tool - lib/site-launch owns the logic.
+export async function detectLaunchDate(
+  slug: string,
+): Promise<{ date: string; source: string; at_least: boolean; updated: boolean } | { error: string }> {
+  await assertAuthed();
+  const project = await getProjectBySlug(slug);
+  if (!project) return { error: "Unknown project." };
+  if (isCloudMode()) await assertProjectOwned(project.id);
+  const { applyDetectedLaunch } = await import("@/lib/site-launch");
+  const result = await applyDetectedLaunch(project);
+  if (!result) {
+    return {
+      error:
+        "No evidence found - Search Console has no history for this property yet and the Wayback Machine has no capture of the domain. Set the date by hand.",
+    };
+  }
+  revalidatePath("/", "layout");
+  return { ...result.detected, updated: result.updated };
+}
+
 // The self-host repo row on Settings. Shares its write (and its validation
 // wording) with set_github_repo's self-host branch via lib/repo-connect -
 // cloud keeps the App-installation picker and never calls this.

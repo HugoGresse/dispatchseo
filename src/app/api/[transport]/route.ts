@@ -1799,6 +1799,47 @@ const mcpHandler = createMcpHandler(
       },
     );
 
+    // Parity for the Settings launch-date row's Detect button. The launch
+    // date drives the Journey stage, publishing pace and research difficulty
+    // posture, and it defaults to "the day the project joined DispatchSEO" -
+    // which poses an established site as a newborn whenever RDAP had nothing
+    // for the domain (most ccTLDs).
+    server.registerTool(
+      "detect_site_launch",
+      {
+        title: "Detect the site's real launch date",
+        description:
+          "Find evidence of when this site actually went live - Search Console's earliest " +
+          "impression date (Google keeps ~16 months of history, so for older sites this is " +
+          "a floor, flagged at_least) and the Wayback Machine's first capture - and move " +
+          "site_launched_at BACKWARD to the earlier of the two. Never moves the date " +
+          "forward and never overrides an owner's earlier correction; run it when the " +
+          "launch date looks like the DispatchSEO signup date. Same logic as the Settings " +
+          "row's Detect button and the automatic backfill that runs when GSC data first lands.",
+        inputSchema: {},
+      },
+      async () => {
+        const p = currentProject();
+        const { applyDetectedLaunch } = await import("@/lib/site-launch");
+        const result = await applyDetectedLaunch(p);
+        if (!result) {
+          return fail(
+            "No evidence found: Search Console has no history for this property and the Wayback Machine has no capture of the domain. The owner can set the date by hand on Settings.",
+          );
+        }
+        return ok({
+          project: p.slug,
+          detected: result.detected.date,
+          source: result.detected.source,
+          at_least: result.detected.at_least,
+          updated: result.updated,
+          note: result.updated
+            ? "site_launched_at moved back to the detected date."
+            : "Detected date is not meaningfully earlier than the current launch date - nothing changed.",
+        });
+      },
+    );
+
     // Parity for the Settings danger zone's Disconnect button (CLAUDE.md's
     // rule that anything the dashboard can do, the agent can do too). Unlike
     // set_github_repo above this is NOT cloud-only: the gap it closes is

@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { planGate } from "@/lib/billing";
 import { getFreshSnapshots, inspectIndexStatus, gscClientForProject, type GscClient } from "@/lib/gsc";
+import { applyDetectedLaunch, launchDateLooksDefaulted } from "@/lib/site-launch";
 import { gscCronReadiness } from "@/lib/gsc-readiness";
 import { checkCron } from "@/lib/cron-auth";
 import { reportCronRun } from "@/lib/cron-alerts";
@@ -137,6 +138,20 @@ async function runProject(project: Project): Promise<Record<string, unknown>> {
   // readiness checked immediately above - safe to fall back to the service
   // account for a project that has demonstrably synced through it before.
   const sc = await gscClientForProject(project, { afterReadinessCheck: true });
+  // One-time launch-date backfill, now that a GSC client provably works for
+  // this project: while the row still holds its creation default, detect the
+  // real launch from GSC history + the Wayback Machine (site-launch.ts).
+  // RDAP at creation covers gTLDs, but plenty of ccTLDs have no RDAP at all
+  // (.co.il surfaced this), and "joined DispatchSEO today" then poses an
+  // established site as a newborn - wrong Journey stage, wrong pacing, wrong
+  // research difficulty posture. Best-effort: never fails the snapshot run.
+  if (launchDateLooksDefaulted(project)) {
+    try {
+      await applyDetectedLaunch(project, sc);
+    } catch {
+      /* detection is a bonus, the snapshot is the job */
+    }
+  }
   const snaps = await getFreshSnapshots(project.gsc_site_url!, 3, sc);
   // No snapshot data is no reason to skip index verification - a brand-new
   // site with zero impressions is exactly where it matters most.
