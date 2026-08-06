@@ -73,6 +73,16 @@ export type ChangelogEntry = {
 // this list - it exists so that writing the note down doesn't ping anyone.
 export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
+    kind: "new",
+    text:
+      "Your site can now tell DispatchSEO which Google it lives in. A new Search market " +
+      "setting (Settings > Project, or the set_market tool) points rank checks and keyword " +
+      "research at your real country and language - 14 markets from Israel to Brazil - so a " +
+      "fully Hebrew site researches Hebrew keywords in Israeli results instead of American " +
+      "English ones. Keyword research used to query the US market no matter what; that's " +
+      "fixed as part of this.",
+  },
+  {
     kind: "fixed",
     text:
       "A full engineering audit of Cursor support caught and fixed two builder bugs " +

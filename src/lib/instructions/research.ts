@@ -118,7 +118,10 @@ product:
      (2-3 modifier sets: "tool", "software", "free", "automation", "for
      developers") and pick, per facet, the most product-shaped MULTI-WORD
      phrase it returns - "ai seo tool", "seo automation software" - NOT the
-     bare head term.
+     bare head term. On a non-English site, pass modifiers in the site's own
+     language (the defaults are English words, which produce junk queries
+     when prefixed onto a Hebrew or German seed) - autocomplete follows the
+     project's configured language automatically.
 
      **Never price a facet by its head term.** A head term on a young site is
      always KD 15-40, so seeding the paid call with one measures the single
@@ -131,8 +134,11 @@ product:
      which nothing in that run ever looked at.
    - **Price every facet in ONE \`keyword_ideas\` call**, passing the mid-tail
      phrase for each facet as one seed (the tool expands up to 5 seeds per
-     call - the facet count, by design). It returns English, volume-backed
-     candidates carrying KD, and because those results are guaranteed to
+     call - the facet count, by design). It returns volume-backed candidates
+     in the project's configured market and language (US/English unless the
+     owner set another via Settings or \`set_market\` - a Hebrew site set to
+     Israel researches Hebrew keywords in Israeli results), carrying KD,
+     and because those results are guaranteed to
      CONTAIN the seed phrase, a mid-tail seed returns the mid-tail band
      directly. Expansion and pricing are the same call; there is no separate
      bulk-metrics lookup, do not go looking for one. Attribute each keyword to

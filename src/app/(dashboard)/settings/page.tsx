@@ -17,6 +17,7 @@ import { DeleteProjectForm } from "@/components/delete-project";
 import { DisconnectRepoForm } from "@/components/disconnect-repo";
 import { DeleteAccountForm } from "@/components/delete-account";
 import { KeywordSourceSettings } from "@/components/keyword-source-settings";
+import { MarketRow } from "@/components/market-row";
 import { SiteLaunchedRow } from "@/components/site-launched";
 import { CopyBlock } from "@/components/client";
 import { PageHeader, SectionTitle } from "@/components/ui";
@@ -239,6 +240,15 @@ export default async function SettingsPage({
           <InfoRow
             label="Mode"
             value={project.mode === "auto" ? "Auto - hands-off publishing" : "Semi - you approve and merge"}
+          />
+          {/* Which Google the rank checks and keyword research query. Every
+              project starts at US/English - a site whose audience searches in
+              another country or language measures the wrong market until this
+              is corrected here (or via the set_market MCP tool). */}
+          <MarketRow
+            locationCode={project.location_code}
+            languageCode={project.language_code}
+            slug={project.slug}
           />
           {/* Feeds the site-age readout (Journey) - 0015 backfills it from
               created_at, so pre-existing sites need this corrected once. */}

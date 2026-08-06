@@ -585,6 +585,8 @@ export async function keywordSuggestions(
   seed: string,
   creds: DataforseoCreds,
   limit = 100,
+  locationCode: number = LOCATION_CODE,
+  languageCode: string = LANGUAGE_CODE,
 ): Promise<{ ideas: KeywordIdea[]; cost: number }> {
   const json = await post<{
     cost: number;
@@ -592,8 +594,8 @@ export async function keywordSuggestions(
   }>("/dataforseo_labs/google/keyword_suggestions/live", [
     {
       keyword: seed,
-      location_code: LOCATION_CODE,
-      language_code: LANGUAGE_CODE,
+      location_code: locationCode,
+      language_code: languageCode,
       limit,
       filters: [
         ["keyword_info.search_volume", ">", 0],
@@ -618,6 +620,8 @@ export async function relatedKeywords(
   seed: string,
   creds: DataforseoCreds,
   limit = 100,
+  locationCode: number = LOCATION_CODE,
+  languageCode: string = LANGUAGE_CODE,
 ): Promise<{ ideas: KeywordIdea[]; cost: number }> {
   const json = await post<{
     cost: number;
@@ -625,8 +629,8 @@ export async function relatedKeywords(
   }>("/dataforseo_labs/google/related_keywords/live", [
     {
       keyword: seed,
-      location_code: LOCATION_CODE,
-      language_code: LANGUAGE_CODE,
+      location_code: locationCode,
+      language_code: languageCode,
       limit,
       filters: [
         ["keyword_data.keyword_info.search_volume", ">", 0],

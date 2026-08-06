@@ -1596,6 +1596,19 @@ export async function setSiteLaunchedAt(date: string, slug: string) {
   revalidatePath("/", "layout");
 }
 
+// The Search-market row on Settings. Shares its write (and its validation
+// wording) with the set_market MCP tool via lib/market-store.
+export async function setMarket(locationCode: number, languageCode: string, slug: string) {
+  await assertAuthed();
+  const project = await getProjectBySlug(slug);
+  if (!project) throw new Error("Unknown project.");
+  if (isCloudMode()) await assertProjectOwned(project.id);
+  const { setProjectMarket } = await import("@/lib/market-store");
+  const err = await setProjectMarket(project.id, locationCode, languageCode);
+  if (err) throw new Error(err);
+  revalidatePath("/", "layout");
+}
+
 // Per-automation toggle on the Automations page. The mode label is derived:
 // a flag set matching a preset IS that preset ("check everything from semi
 // and you're simply auto"), anything else shows as "custom" in the topbar.

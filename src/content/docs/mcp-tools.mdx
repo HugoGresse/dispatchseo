@@ -639,9 +639,11 @@ Expands seed keywords into related searches with real monthly search
 volume and keyword difficulty, via DataForSEO. Works whenever the
 project has DataForSEO access - its own account, or the platform's
 bundled plan on cloud - so it's how bundled-plan projects get the
-numbers the quality bar gates on. Batch multiple seeds in one call: each
-call is one metered DataForSEO request regardless of how many seeds you
-send.
+numbers the quality bar gates on. Queries the project's configured
+search market (US/English unless changed via `set_market` or Settings),
+so a Hebrew site set to Israel gets Hebrew keywords with Israeli
+volumes. Send seeds best-first: only the first 5 are expanded, at 2
+metered DataForSEO calls each, and the response note names any skipped.
 
 <Fields>
   <Field name="seeds" type="array" required="true">
@@ -837,6 +839,25 @@ access checks keep failing, the guess was probably wrong.
 <Fields>
   <Field name="site_url" type="string" required="true">
     The property exactly as Search Console names it.
+  </Field>
+</Fields>
+
+### `set_market`
+
+Sets which Google country and language the project's rank checks and
+keyword research query. Every project starts at United States / English,
+which quietly measures the wrong Google for a site whose audience
+searches from another country or in another language. Same write as the
+Settings page's Search market row. The tool description lists every
+supported market with its location code and languages.
+
+<Fields>
+  <Field name="location_code" type="number" required="true">
+    DataForSEO location code, e.g. `2840` = United States, `2376` =
+    Israel.
+  </Field>
+  <Field name="language_code" type="string" required="true">
+    A language the chosen market supports, e.g. `en`, `he`, `de`.
   </Field>
 </Fields>
 

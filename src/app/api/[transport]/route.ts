@@ -12,6 +12,8 @@ import { getWeeklyProgress } from "@/lib/progress";
 import { getBriefing } from "@/lib/briefing";
 import { AUTOMATIONS, gatherEvidence } from "@/lib/automations";
 import { credsForProject, keywordSuggestions, relatedKeywords, type KeywordIdea } from "@/lib/dataforseo";
+import { MARKETS } from "@/lib/market";
+import { setProjectMarket } from "@/lib/market-store";
 import { isCloudMode } from "@/lib/cloud";
 import { builderAgentToken, canMerge, dispatchToolBuild, mergePr, openSeoPrs, verifyPipelinePrereqs } from "@/lib/github";
 import {
@@ -90,7 +92,7 @@ import { getAuthority, needsLinkMove } from "@/lib/authority";
 // set_playbook_status, update_backlink_prospect, mark_indexing_requested,
 // reorder_queue, build_suggestion_now (tools only - guides always ship at
 // the publishing pace), trigger_trend_scan, expand_trend_topic,
-// set_content_prefs, mark_cron_fixed). Owner-gated
+// set_content_prefs, set_market, mark_cron_fixed). Owner-gated
 // moves (approve/reject/restore, tool build now,
 // the trend buttons) share their logic with the dashboard actions via
 // lib/queue.ts and lib/trends.ts, and are unlocked over MCP by
@@ -1593,8 +1595,8 @@ const mcpHandler = createMcpHandler(
         const callErrors: string[] = [];
         for (const seed of expanded) {
           const settled = await Promise.allSettled([
-            keywordSuggestions(seed, creds, limit ?? 100),
-            relatedKeywords(seed, creds, limit ?? 100),
+            keywordSuggestions(seed, creds, limit ?? 100, p.location_code, p.language_code),
+            relatedKeywords(seed, creds, limit ?? 100, p.location_code, p.language_code),
           ]);
           for (const result of settled) {
             if (result.status === "rejected") {
@@ -1608,8 +1610,10 @@ const mcpHandler = createMcpHandler(
               if (!idea.search_volume) continue; // no/zero volume - never invent a number
               // Server-side filters already drop is_another_language=true rows,
               // but detected_language is the direct signal the incident above
-              // was actually about - check it too as a belt-and-suspenders pass.
-              if (idea.detected_language && idea.detected_language !== "en") continue;
+              // was actually about - check it too as a belt-and-suspenders pass,
+              // against the PROJECT's language: a hardcoded "en" here would
+              // silently drop every result for a Hebrew or German site.
+              if (idea.detected_language && idea.detected_language !== p.language_code) continue;
               const key = idea.keyword.toLowerCase();
               const existing = merged.get(key);
               if (!existing || (idea.search_volume ?? 0) > (existing.search_volume ?? 0)) {
@@ -1755,6 +1759,42 @@ const mcpHandler = createMcpHandler(
         const err = await setTrackedProperty(p.id, site_url);
         if (err) return fail(err);
         return ok({ project: p.slug, gsc_site_url: site_url });
+      },
+    );
+
+    // Parity for the Settings "Search market" row. Every project defaults to
+    // US/English, which is wrong for any site whose audience googles in
+    // another country or language - and until this is set, keyword_ideas and
+    // rank checks measure a market the site isn't in.
+    server.registerTool(
+      "set_market",
+      {
+        title: "Set the project's search market",
+        description:
+          "Set which Google country and language this project's rank checks (daily ranks, " +
+          "check_serp) and keyword research (keyword_ideas, suggest_keywords) query. Defaults " +
+          "to United States / English; a site whose audience searches elsewhere - or in another " +
+          "language - measures the wrong market until this is corrected. Same write as the " +
+          "dashboard's Settings > Search market row. Supported markets: " +
+          MARKETS.map((m) => `${m.location_code} = ${m.label} (${m.languages.map((l) => l.code).join("/")})`).join(", ") +
+          ".",
+        inputSchema: {
+          location_code: z
+            .number()
+            .int()
+            .describe("DataForSEO location code from the supported list, e.g. 2840 = United States, 2376 = Israel."),
+          language_code: z
+            .string()
+            .min(2)
+            .max(5)
+            .describe("Language code the chosen market supports, e.g. 'en', 'he', 'de'."),
+        },
+      },
+      async ({ location_code, language_code }) => {
+        const p = currentProject();
+        const err = await setProjectMarket(p.id, location_code, language_code);
+        if (err) return fail(err);
+        return ok({ project: p.slug, location_code, language_code });
       },
     );
 
