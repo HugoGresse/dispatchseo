@@ -1533,8 +1533,9 @@ const mcpHandler = createMcpHandler(
           "so French/Italian keywords leaked into English-seed results unfiltered. This tool now " +
           "calls keyword_suggestions (results GUARANTEED to contain the seed phrase) + " +
           "related_keywords (Google's real \"searches related to\" graph) per seed, merges and " +
-          `dedupes both, and drops anything with no search volume or a non-English detected ` +
-          `language before it ever reaches you. Works whenever the project has DataForSEO - its ` +
+          `dedupes both, and drops anything with no search volume or a detected language other ` +
+          `than the project's configured one (see set_market) before it ever reaches you. ` +
+          `Queries the project's configured market. Works whenever the project has DataForSEO - its ` +
           "OWN account or the platform's BUNDLED plan (cloud). Returns " +
           "{ ideas: [{keyword, volume, kd, cpc}], note } sorted by volume, highest first. COST: " +
           `up to ${KEYWORD_IDEAS_SEED_CAP} seeds are actually expanded per call (send your ` +
