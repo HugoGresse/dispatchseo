@@ -178,3 +178,20 @@ running without any of them.)*
   command-vs-link branching with slightly different rendering; one component should
   own it. Cosmetic, sizes differ (text-xs popover vs text-sm card) - needs a small
   size prop, not a copy-paste.
+
+- **Measure Cursor's headless web-search permission, then wire it on** (2026-08-06
+  audit). Cursor CLI reportedly gates its web_search tool behind an
+  `autoAcceptWebSearch` permission that `--trust/--force/--approve-mcps` do NOT
+  cover - if true, geo-scan on a Cursor project can't sample real answers and only
+  the playbook's fail-don't-fabricate rule stands between that and invented
+  AI-visibility rows. Needs one measurement run with pool available (ask for a web
+  search, inspect the result + cli-config.json), then the config write in
+  cursor.mjs + run.sh, and a CURSOR_FACTS entry either way. Same sweep should port
+  run.sh's Codex `web_search = true` line to the CI generator - the docker builder
+  enables it for Codex, the GitHub Actions path never did.
+
+- **Cursor canary should exercise the GENERATED config step** (2026-08-06 audit).
+  cursor-canary.yml hand-rolls its mcp.json with jq, so its green run never
+  tested the shipped render step - which is exactly where a no-op substitution
+  bug hid. Either generate the canary's config step from scripts/agent-ci/, or
+  add a canary assertion that the rendered file contains no `${` placeholder.

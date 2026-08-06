@@ -73,6 +73,19 @@ export type ChangelogEntry = {
 // this list - it exists so that writing the note down doesn't ping anyone.
 export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
+    kind: "fixed",
+    text:
+      "A full engineering audit of Cursor support caught and fixed two builder bugs " +
+      "before any customer hit them: the step that writes Cursor's MCP credentials " +
+      "was silently doing nothing (runs only worked because Cursor happens to resolve " +
+      "env placeholders itself), and a quoting slip would have crashed the failure " +
+      "classifier on Cursor daily and tool builds. Every shipped workflow script is " +
+      "now parsed by bash as a release gate, Cursor gets the same generous timeouts " +
+      "on every workflow, the self-host builder learned the two measured plan-limit " +
+      "messages, and a dozen docs pages that still described two agents now describe " +
+      "three.",
+  },
+  {
     kind: "improved",
     text:
       "The pixel dispatcher now wears lavender when Cursor runs your project, instead " +

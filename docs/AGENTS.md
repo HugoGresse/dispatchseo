@@ -49,10 +49,16 @@ version is in `docs-private/CURSOR_FACTS.md`):
   classify step branches on a field rather than grepping warning prose, which
   is why a Cursor builder was safe to write before its quota strings had ever
   been observed. Anything unrecognised still falls through to a loud failure.
-- **`.cursor/mcp.json` does not expand `${VAR}`**, and its failure mode is
-  disguised: the server reports "not loaded (needs approval)" while
-  `mcp enable` says it is approved. Credentials are rendered into the file, the
-  same way Codex's TOML renders them.
+- **`.cursor/mcp.json` credentials are rendered in as real values**, the same
+  way Codex's TOML renders them - but the reasoning got revised by a live run
+  (2026-08-06): cursor-agent CAN resolve `${VAR}` in an http server's headers
+  from its own environment. That expansion quietly carried a day of CI builds
+  while the render step was a no-op (a JS template-literal `${` that needed
+  escaping), which is exactly why the render stays: an undocumented client
+  behaviour, unproven for stdio env values, is not a thing credentials get to
+  depend on. The same incident added a `bash -n` rule to
+  `pipeline-pack-lint`, because the sibling bug it shipped with (a collapsed
+  `\"` escape) was a bash syntax error no text-level check could see.
 - **Plan limits arrive as stderr, not JSON** (measured 2026-08-06): the CLI
   exits 1 with an `ActionRequiredError` on stderr and emits no JSON at all, so
   subtype matching never sees them. Two shapes are recognised: "You've hit
@@ -61,7 +67,8 @@ version is in `docs-private/CURSOR_FACTS.md`):
   naming `SEO_CURSOR_MODEL` as the fix - named models are paid-plan-only).
   Cursor's `auto` model also proved slow on the heaviest workflow, which is
   why `seo-setup.yml` carries the same 45-minute ceiling as the daily
-  builder.
+  builder, and why research/geo-scan/trend workflows got matching headroom
+  (45/45/30/25) on 2026-08-06.
 
 One consequence for owners rather than contributors: a runner has no browser,
 so the builder needs `CURSOR_API_KEY`. Any plan can mint one at

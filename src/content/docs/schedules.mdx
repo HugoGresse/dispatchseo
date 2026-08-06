@@ -297,7 +297,7 @@ hand; it just no longer runs behind your back.
 
 <Meta>
 <MetaItem label="Runs">Polls `/api/builder/jobs` every `BUILDER_POLL_SECONDS` (default 600s / 10 minutes) and executes whatever comes back.</MetaItem>
-<MetaItem label="Needs">Your project's agent credential - a Claude Code OAuth token or an OpenAI key (the credential box on Settings, or `CLAUDE_CODE_OAUTH_TOKEN` / `OPENAI_API_KEY` in `.env`) - without one it idles and says exactly what it's waiting for.</MetaItem>
+<MetaItem label="Needs">Your project's agent credential - a Claude Code OAuth token, an OpenAI key, or a Cursor API key (the credential box on Settings, or `CLAUDE_CODE_OAUTH_TOKEN` / `OPENAI_API_KEY` / `CURSOR_API_KEY` in `.env`) - without one it idles and says exactly what it's waiting for.</MetaItem>
 <MetaItem label="If it fails">Each job reports under `builder-<job>--<slug>`, same rails as everything above.</MetaItem>
 </Meta>
 
@@ -306,7 +306,7 @@ schedule-driven workflows above (research, build-guide, build-tool,
 geo-scan) - the scheduling logic lives entirely on the backend, so cadence
 fixes ship as ordinary backend deploys, never as "rebuild your builder
 image." It runs each job with your project's own agent - headless Claude
-Code or Codex, taken per job off its poll feed - inside a clone of your
+Code, Codex, or Cursor, taken per job off its poll feed - inside a clone of your
 site's repo: research and geo-scan roughly every 6.5 days, build-guide and
 build-tool roughly daily (20-hour windows, so a run that fired a bit early
 yesterday is still due today). If the builder claims a job and then dies

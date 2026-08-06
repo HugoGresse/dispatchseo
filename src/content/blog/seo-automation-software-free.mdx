@@ -8,7 +8,7 @@ cover: /blog/covers/seo-automation-software-free.webp
 
 Type "seo automation software, free" into Google and by the third click something breaks: free means a capped trial, a tool that only watches your rankings instead of shipping anything, or a bundle of individual calculators built to sell a paid platform. Nothing on today's page 1 is free software that runs the whole job - research, drafting, shipping - without asking for a card first. This guide covers what "free" is actually doing on that page 1, then goes deep on the one model that runs the whole job for $0 in software cost: self-hosted, agent-driven, checked against this project's own repo instead of a pitch.
 
-> **TL;DR** - Page 1 for "seo automation software, free" today splits into listicles (4 of 7 organic results) and single-vendor product pages (3 of 7) - roundups and read-side tools, none of them an end-to-end pipeline you run for nothing. DispatchSEO's free tier isn't a capped trial: self-hosted, it's the whole product - 61 registered MCP tools, 7 cron endpoints, and 51 schema migrations, all running before a single paid API key gets involved. What genuinely costs nothing: rank checks on a free-tier SERP API, Google Search Console sync, and the content pipeline itself (it runs on the Claude Code or Codex subscription you already pay for). What costs money: keyword volume and difficulty data, metered per call to your own DataForSEO account - not marked up, not bundled into a seat.
+> **TL;DR** - Page 1 for "seo automation software, free" today splits into listicles (4 of 7 organic results) and single-vendor product pages (3 of 7) - roundups and read-side tools, none of them an end-to-end pipeline you run for nothing. DispatchSEO's free tier isn't a capped trial: self-hosted, it's the whole product - 61 registered MCP tools, 7 cron endpoints, and 51 schema migrations, all running before a single paid API key gets involved. What genuinely costs nothing: rank checks on a free-tier SERP API, Google Search Console sync, and the content pipeline itself (it runs on the Claude Code, Codex, or Cursor plan you already pay for). What costs money: keyword volume and difficulty data, metered per call to your own DataForSEO account - not marked up, not bundled into a seat.
 
 ## "Free" on page 1 means a trial with a clock on it
 
@@ -40,7 +40,7 @@ That's a real MCP server surface (keyword research, suggestion queue, rank track
 
 ## Who this fits, and who should just pay for a seat
 
-This fits you if you already run an agent CLI (Claude Code or Codex) for other work, already hold your own Vercel, Supabase, and GitHub accounts, and would rather SEO be one more scheduled job those accounts run than a new subscription and a new login. The [free tooling landscape](/blog/best-free-seo-tools) still has a real gap even inside this model - keyword volume and difficulty are the one thing that stays metered, and there's no support contract behind a 2am cron failure; you're reading the logs yourself, or asking the agent to. If you just want one free, no-login answer right now rather than a pipeline to run, this site's own [internal linking tool](/free-tools/internal-linking-tool) is the same "no seat, no gate" idea shrunk to a single job.
+This fits you if you already run an agent CLI (Claude Code, Codex, or Cursor) for other work, already hold your own Vercel, Supabase, and GitHub accounts, and would rather SEO be one more scheduled job those accounts run than a new subscription and a new login. The [free tooling landscape](/blog/best-free-seo-tools) still has a real gap even inside this model - keyword volume and difficulty are the one thing that stays metered, and there's no support contract behind a 2am cron failure; you're reading the logs yourself, or asking the agent to. If you just want one free, no-login answer right now rather than a pipeline to run, this site's own [internal linking tool](/free-tools/internal-linking-tool) is the same "no seat, no gate" idea shrunk to a single job.
 
 It's the wrong fit if you need a polished multi-user dashboard for a non-technical team, an SLA, or someone else's phone number to call when something breaks - a hosted SaaS platform is the honest answer in every one of those cases, trial-gated free tier and all. If you're the one person keeping one site's SEO moving and you'd rather point an agent at a queue than a vendor's editor, DispatchSEO runs that model end to end, and this project's own repo - counted above, not described - is what it looks like running.
 
@@ -55,7 +55,7 @@ Only keyword volume and keyword difficulty data, billed by DataForSEO directly t
 **Do I need a DataForSEO account to use any of this?**
 No - a project without DataForSEO credentials still runs rank tracking (on a free-tier SERP API) and the GSC-driven side of the pipeline; volume and difficulty numbers just aren't available until you add a key.
 
-**Can I run this without paying for Claude Code or Codex separately?**
+**Can I run this without paying for Claude Code, Codex, or Cursor separately?**
 No - the content pipeline's reasoning runs inside whichever agent CLI subscription you already have. There's no bundled AI-writing fee on top of it, but the agent itself isn't included.
 
 **How is this different from the "free SEO automation software" already on page 1?**

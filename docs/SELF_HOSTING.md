@@ -82,10 +82,12 @@ Reference, once you want the details:
   research and the writing, and it also runs the in-stack builder that works
   while you're away. Claude Code runs on the Claude subscription you already
   pay for; Codex runs on your own OpenAI API key, which OpenAI meters per
-  run. Pick one on the dashboard's **Settings → Coding agent** - the builder
-  reads that, so switching needs no reinstall. Its credential goes in one of
-  two places: pasted on Home's "Turn on automatic builds" card, or set as
-  `CLAUDE_CODE_OAUTH_TOKEN` / `OPENAI_API_KEY` in your `.env`.
+  run; Cursor runs on your Cursor plan's included usage, via an API key any
+  plan can mint. Pick one on the dashboard's **Settings → Coding agent** - the
+  builder reads that, so switching needs no reinstall. Its credential goes in
+  one of two places: pasted on Home's "Turn on automatic builds" card, or set
+  as `CLAUDE_CODE_OAUTH_TOKEN` / `OPENAI_API_KEY` / `CURSOR_API_KEY` in your
+  `.env`.
 - **Google Search Console access to your site** - free, at
   [search.google.com/search-console](https://search.google.com/search-console).
 

@@ -1,15 +1,17 @@
 ---
 title: Use Cursor
-description: Connect Cursor to DispatchSEO over MCP in one paste - all 61 tools, in the editor and the CLI. Here is the setup, what Cursor does not do yet, and the two things that surprise people.
+description: Connect Cursor to DispatchSEO over MCP in one paste - all 61 tools, in the editor and the CLI, plus the unattended overnight builder. Here is the setup, and the two things that surprise people.
 ---
 
 DispatchSEO is a backend with an MCP server on the front of it. Any coding
 agent that speaks MCP can drive it, and Cursor speaks MCP. If Cursor is the
 editor you already live in, you don't have to switch to use this.
 
-One thing up front, because finding it out later would cost you a night:
-**Cursor does not run the scheduled overnight builds yet.** Everything else
-works, and the rest of this page is honest about which is which.
+And not just the interactive half: **Cursor runs the scheduled overnight
+builds too**, verified end to end on a real runner. The one thing to know up
+front is that those builds need an API key (any plan mints one), because a
+build server has no browser to log in with - the table and the notes below
+are honest about what that costs.
 
 ## What you get
 

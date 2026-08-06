@@ -100,8 +100,8 @@ export async function setProjectAgent(
 /**
  * The shape-check failure message, per agent. Owner-facing prose, not a
  * registry field: it names the fix, not just the mismatch, and the fix is
- * different in kind per agent (a terminal command / a web page / a web page
- * plus a paid plan). Record<AgentId, …> so a new agent is a compile error
+ * different in kind per agent (a terminal command / a web page / a re-copy
+ * from the Cursor dashboard). Record<AgentId, …> so a new agent is a compile error
  * here - the `claude ? X : Y` ternary this replaced told a Cursor owner
  * their key "doesn't look like an OpenAI API key".
  */

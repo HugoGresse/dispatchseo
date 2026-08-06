@@ -182,11 +182,13 @@ on your computer. If they aren't - or if a command comes back
 
 Docker installs get one more item on the same screen: **turning on
 automatic builds**. One credential, minted for whichever agent you picked -
-`claude setup-token` on your own computer for Claude Code, or an API key
+`claude setup-token` on your own computer for Claude Code, an API key
 from [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
-for Codex - pasted into the field on this same screen (no terminal on the
-server needed). The wizard's checklist flips green when the builder makes
-its first check-in.
+for Codex, or an API key from
+[cursor.com/dashboard/api](https://cursor.com/dashboard/api) for Cursor -
+pasted into the field on this same screen (no terminal on the server
+needed). The wizard's checklist flips green when the builder makes its
+first check-in.
 
 ## Which key is which
 
@@ -203,6 +205,7 @@ goes in it:
 | GitHub token | `ghp_` | Lets the Approve button merge your pull requests | You create it on GitHub in step 6. |
 | Claude Code token | `sk-ant-oat` | Docker only, if you picked Claude Code - lets the bundled builder run it for you | You create it by running `claude setup-token` on your own computer. |
 | OpenAI API key | `sk-` | Docker only, if you picked Codex - lets the bundled builder run it for you | You create it at [platform.openai.com/api-keys](https://platform.openai.com/api-keys); the account needs credit on it. |
+| Cursor API key | `crsr_` | Docker only, if you picked Cursor - lets the bundled builder run it for you | You create it at [cursor.com/dashboard/api](https://cursor.com/dashboard/api) (open that URL directly - the page is often missing from the dashboard's own menu). |
 
 All of them are stored encrypted in your own database.
 

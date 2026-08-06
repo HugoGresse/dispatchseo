@@ -30,7 +30,7 @@ a project → copy the setup command from the Home page checklist.
    ```
 
    It registers the MCP server (`dispatchseo-<slug>`) with the site's coding
-   agent (Claude Code or Codex),
+   agent (Claude Code, Codex, or Cursor),
    verifies the token, and walks the user through the repo secrets the
    pipeline needs (it explains each one before asking).
 

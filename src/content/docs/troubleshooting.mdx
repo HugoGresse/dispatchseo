@@ -139,7 +139,7 @@ you re-apply the pipeline pack. Everything keeps publishing meanwhile.
 claude "Call the dispatchseo-yoursite MCP tool get_instructions with workflow install and follow it exactly."
 ```
 
-Swap `claude` for `codex` if that's your agent, and
+Swap `claude` for `codex` or `cursor-agent` if that's your agent, and
 `dispatchseo-yoursite` for your project's MCP server name. Merge the pull
 request it opens. Full walkthrough:
 [Updating the pipeline in your site repo](/docs/upgrading#updating-the-pipeline-in-your-site-repo).
@@ -156,6 +156,7 @@ request it opens. Full walkthrough:
 1. **No agent credential.** The builder needs your project's agent credential -
    `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`) for Claude Code
    projects, `OPENAI_API_KEY` (from platform.openai.com/api-keys) for Codex
+   projects, `CURSOR_API_KEY` (from cursor.com/dashboard/api) for Cursor
    projects. Easiest is pasting it in the credential box on Settings, which
    verifies it before storing; `.env` works too. You don't have to spot this
    in the logs any more: a job that comes due with no credential for its
@@ -173,7 +174,13 @@ request it opens. Full walkthrough:
    A model 404 is the same family: builds default to `gpt-5`, and some
    accounts can't serve it - set `CODEX_MODEL=` in `.env` (or the
    `SEO_CODEX_MODEL` repo variable on GitHub-Actions installs).
-5. **Cloud only - the repo won't let Actions open pull requests.** The
+5. **Cursor only - the plan can't run the pinned model, or is out of usage.**
+   Free Cursor plans run only the `auto` model, so pinning one via
+   `CURSOR_MODEL` in `.env` (or the `SEO_CURSOR_MODEL` repo variable) fails
+   every build with "Named models unavailable" - unset it or upgrade the
+   plan. A drained usage pool is gentler: builds report a deferral and retry
+   by themselves once the plan's usage resets.
+6. **Cloud only - the repo won't let Actions open pull requests.** The
    DispatchSEO GitHub App deliberately can't change your repo's own settings,
    so this one is yours to flip: repo **Settings → Actions → General → "Allow
    GitHub Actions to create and approve pull requests."** The onboarding
@@ -201,7 +208,7 @@ usually after a lapsed or duplicate subscription.
    `gh secret delete CLAUDE_CODE_OAUTH_TOKEN`. The builders use the key
    automatically whenever no subscription token exists. This runs on metered
    billing against your Anthropic account.
-4. **Or switch the site to Codex** in Settings.
+4. **Or switch the site to Codex or Cursor** in Settings.
 </Symptom>
 
 <Symptom error="user cancelled MCP tool call (Codex)">

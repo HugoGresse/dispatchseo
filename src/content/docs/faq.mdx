@@ -23,9 +23,9 @@ Not to run DispatchSEO itself. The free tier (Search Console only) costs
 $0 forever and self-hosting has no feature limits - see
 [Is the self-hosted version limited?](#is-the-self-hosted-version-limited-vs-the-cloud-one)
 below. You bring your own coding agent - a Claude subscription for Claude
-Code, or an OpenAI key for Codex (next question); beyond that, DispatchSEO
-never bills you for agent usage - it isn't a per-token service on top of
-your plan.
+Code, an OpenAI key for Codex, or a Cursor plan's API key for Cursor (next
+question); beyond that, DispatchSEO never bills you for agent usage - it
+isn't a per-token service on top of your plan.
 
 ## What does it cost to run?
 
@@ -51,7 +51,9 @@ the real numbers and how to avoid a surprise pause.
 ## Do I need a Claude subscription? Which plan?
 
 Only if Claude Code is your agent - Codex works too, on an OpenAI API key
-instead of a subscription (see [Use Codex instead](/docs/install-codex)).
+instead of a subscription (see [Use Codex instead](/docs/install-codex)),
+and so does Cursor, on its own plan's API key (see
+[Use Cursor](/docs/install-cursor)).
 
 For the Claude Code path: Claude Code isn't part of the free Claude plan.
 Pro, Max, Team, and current Enterprise plans all include it; Pro is the
@@ -59,7 +61,9 @@ cheapest way in if you're starting from nothing. See
 [Install Claude Code](/docs/install-claude-code) for the full plan table
 and the five-minute setup. For the Codex path there's no subscription at
 all - OpenAI meters each run against your key, so the account needs credit
-on it.
+on it. For the Cursor path, any plan can mint the key; builds draw on the
+plan's included usage, and the free pool is small enough that a nightly
+schedule realistically wants a paid plan.
 
 ## Can I run it on my laptop?
 
@@ -85,9 +89,10 @@ doesn't try to replace that knowledge with its own crawler or its own
 writer model. It's a backend for the agent you already have: MCP tools
 holding the queue, the keywords, the rankings, and the Search Console
 data, plus crons that keep that state fresh. The research and the
-writing happen in your own agent - Claude Code on your subscription, or
-Codex on your OpenAI key - DispatchSEO is state, scheduling, and an
-approval gate around it, not a competing content engine.
+writing happen in your own agent - Claude Code on your subscription,
+Codex on your OpenAI key, or Cursor on its plan's key - DispatchSEO is
+state, scheduling, and an approval gate around it, not a competing content
+engine.
 
 ## Will Google penalize AI-written content?
 
@@ -165,6 +170,11 @@ On Codex: scheduled builds default to `gpt-5`. Model availability is
 per-account (some keys 404 on models they can list), so there's an
 override: set the `SEO_CODEX_MODEL` variable in your repo's Actions
 variables, or `CODEX_MODEL` in your `.env` on a Docker install.
+
+On Cursor: scheduled builds run Cursor's `auto` model, and on a free plan
+that's the only option - pinning a named model via the `SEO_CURSOR_MODEL`
+repo variable (or `CURSOR_MODEL` in `.env`) needs a paid plan, and fails
+the run with "Named models unavailable" without one.
 
 ## Where does my data live?
 
