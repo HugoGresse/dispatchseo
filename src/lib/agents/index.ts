@@ -60,11 +60,13 @@ export type AgentDefinition = {
   landingPath: string;
 
   /**
-   * The pixel dispatcher's body tint on this agent. The body colour is the
-   * ONLY thing that changes between agents - desk, headset, monitor stay the
-   * site's own clay/violet so a recolour never reads as a second theme. Read
-   * by pixel-dispatcher.tsx (hub pages) and the dashboard layout (CSS vars),
-   * which must dress him identically.
+   * The pixel dispatcher's body tint on this agent. The character's colours
+   * are the ONLY thing that changes between agents - desk, headset, monitor
+   * stay the site's own clay/violet so a recolour never reads as a second
+   * theme. Read by pixel-dispatcher.tsx; the dashboard layout stamps only the
+   * agent id (--dispatcher-agent) and the palette resolves from here, so both
+   * paths dress him identically by construction.
+   *
    */
   mascot: { body: string; shade: string };
 
@@ -314,8 +316,13 @@ const cursor: AgentDefinition = {
   installDocsPath: "/docs/install-cursor",
   installUrl: "https://cursor.com/cli",
   landingPath: "/cursor",
-  // Steel - distinct from Claude's clay and Codex's near-white at a glance.
-  mascot: { body: "#9bb0d4", shade: "#6f83a6" },
+  // Lavender - lighter than the headset's violet (#8b5cf6) on purpose, so the
+  // character and the gear he wears stay two things. Purple was the owner's
+  // call (2026-08-06) after a day of black-and-white takes on Cursor's cube -
+  // all-black, black trousers, outlines, left/right and top/bottom splits -
+  // each looked worse at 12px than it sounded; the cube's b&w just doesn't
+  // survive a near-black scene at sprite scale.
+  mascot: { body: "#c4b5fd", shade: "#8f76e0" },
   capabilities: {
     mcp: true,
     headlessBuilder: true,

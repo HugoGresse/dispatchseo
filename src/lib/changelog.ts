@@ -75,6 +75,12 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
     kind: "improved",
     text:
+      "The pixel dispatcher now wears lavender when Cursor runs your project, instead " +
+      "of the old steel blue. Claude keeps its clay, Codex its off-white.",
+  },
+  {
+    kind: "improved",
+    text:
       "When a Claude account itself is the problem (a usage limit, or Anthropic blocking " +
       "subscription access), the weekly scans now say so on the banner - naming the fix, " +
       "including switching agent or moving to API billing - instead of a bare link to a " +

@@ -110,18 +110,21 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Outranks both banners below: it's the only one reporting something the
   // owner may still need to go switch off.
   const repoNotice = decodeRepoNotice(jar.get(REPO_NOTICE_COOKIE)?.value);
-  // The pixel dispatcher's body tint follows the active project's agent:
-  // clay (its default) stays untinted, every other agent's colour comes off
-  // its registry entry. Stamped as CSS variables on the shell so every
-  // dispatcher inside - including loading screens, which render synchronously
-  // and can't ask - picks it up without a prop thread; see paletteFor in
-  // pixel-dispatcher.tsx.
+  // The pixel dispatcher's dress follows the active project's agent: clay
+  // (its default) stays untinted, every other agent resolves from its
+  // registry entry. Two CSS variables on the shell, doing different jobs:
+  // --dispatcher-agent carries the ID, and the character's palette resolves
+  // from the registry inside paletteFor - so the two paths cannot drift.
+  // --dispatcher-body stays for the SURFACES tinted to match the agent (the
+  // briefing card's glow and speech rule read it directly as a colour).
+  // Stamped here because loading screens render synchronously and can't ask
+  // which project is active.
   const activeAgent = active ? projectAgent(active) : null;
   const dispatcherTint =
     activeAgent && activeAgent.id !== DEFAULT_AGENT
       ? ({
+          "--dispatcher-agent": activeAgent.id,
           "--dispatcher-body": activeAgent.mascot.body,
-          "--dispatcher-shade": activeAgent.mascot.shade,
         } as React.CSSProperties)
       : undefined;
   return (

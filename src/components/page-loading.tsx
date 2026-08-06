@@ -11,9 +11,9 @@ import { Dispatching } from "@/components/dispatching";
 // skeleton: the long pages (Home, Analytics) would otherwise park him below
 // the fold, where a loading state is worth nothing.
 //
-// His tint comes from the --dispatcher-body / --dispatcher-shade variables
-// the dashboard layout stamps from the active project's agent - clay for
-// Claude Code, white for Codex - so these files stay plain server components
+// His tint comes from the --dispatcher-agent variable the dashboard layout
+// stamps from the active project's agent - clay for Claude Code, white for
+// Codex, lavender for Cursor - so these files stay plain server components
 // and never have to ask which agent is on shift.
 export function PageLoading({
   label = "Loading",

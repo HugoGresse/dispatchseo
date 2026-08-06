@@ -54,24 +54,23 @@ const CLAY: Record<string, string> = {
 //   1. An explicit `variant` prop (an agent id) - the per-agent landing hub
 //      pages know statically which agent they present, and a non-default
 //      agent's registry colour wins.
-//   2. CSS variables (--dispatcher-body / --dispatcher-shade) stamped by the
+//   2. A CSS variable (--dispatcher-agent, an agent id) stamped by the
 //      dashboard layout from the active project's agent - because the
 //      dispatcher also shows on loading screens, which render synchronously
 //      with no way to ask which project is active. Read per frame, so a live
 //      agent switch retints on the next tick instead of waiting for a
-//      remount.
+//      remount. The var carries the ID, not colours: the palette always
+//      resolves from the registry, so the two paths cannot drift.
 // Anywhere neither applies (landing hero, wizard) the clay default renders,
 // byte-identical to before variants existed.
 function paletteFor(canvas: HTMLCanvasElement, variant: MascotVariant): Record<string, string> {
-  if (variant !== "clay" && isSupportedAgent(variant) && variant !== DEFAULT_AGENT) {
-    const m = agentById(variant).mascot;
-    return { ...CLAY, c: m.body, C: m.shade };
+  let id: string = variant;
+  if (id === "clay" || !isSupportedAgent(id)) {
+    id = getComputedStyle(canvas).getPropertyValue("--dispatcher-agent").trim();
   }
-  const cs = getComputedStyle(canvas);
-  const body = cs.getPropertyValue("--dispatcher-body").trim();
-  const shade = cs.getPropertyValue("--dispatcher-shade").trim();
-  if (!body) return CLAY;
-  return { ...CLAY, c: body, C: shade || body };
+  if (!isSupportedAgent(id) || id === DEFAULT_AGENT) return CLAY;
+  const m = agentById(id).mascot;
+  return { ...CLAY, c: m.body, C: m.shade };
 }
 
 // 12 x 11 character grids ('.' = transparent)
