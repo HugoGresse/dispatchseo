@@ -782,7 +782,16 @@ jobs:
                 fail "Cursor rejected the CURSOR_API_KEY secret on this repo (\"$sub\"). The key was probably revoked, or the plan's usage pool is exhausted. Mint a fresh key at cursor.com/dashboard/api and set it again with 'gh secret set CURSOR_API_KEY'." ;;
               "")
                 # No parseable JSON at all: killed, timed out, or died before
-                # it could write a result. Never quiet.
+                # it could write a result. Two stderr shapes ARE recognised
+                # first, because both were measured on 2026-08-06: the CLI
+                # exits 1 with an ActionRequiredError on stderr and emits no
+                # JSON at all, so subtype matching never sees them.
+                case "$err" in
+                  *"hit your usage limit"*)
+                    defer "Cursor's plan is out of Agent usage for now ("You've hit your usage limit") - the job stays due and is re-dispatched. It clears when the plan's usage resets; a paid Cursor plan carries a bigger pool." ;;
+                  *"Free plans can only use Auto"*|*"Named models unavailable"*)
+                    fail "SEO_CURSOR_MODEL names a specific model, but this Cursor plan only allows Auto - unset the repo variable ('gh variable delete SEO_CURSOR_MODEL') or upgrade the Cursor plan." ;;
+                esac
                 reason="Cursor produced no result (the job most likely hit its time limit)"
                 [ -n "$err" ] && reason="Cursor failed before producing a result: $err"
                 fail "$reason" ;;

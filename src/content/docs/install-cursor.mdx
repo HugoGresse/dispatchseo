@@ -31,7 +31,12 @@ Cursor API key - any plan can mint one at
 directly; the page is often missing from the dashboard's own menu).
 
 Builds draw on your Cursor plan's included usage, and the free plan's pool is
-small - so a nightly schedule realistically wants a paid plan for capacity.
+small - a single setup run can exhaust it - so a nightly schedule
+realistically wants a paid plan for capacity. Two more free-plan facts,
+both measured: the free plan can only run Cursor's `auto` model (setting
+the `SEO_CURSOR_MODEL` repo variable to a named model fails the run with
+"Named models unavailable"), and when the pool runs dry the builders
+report a deferral - the build stays due and retries once usage resets.
 If you'd rather not pay for that, pick Claude Code or Codex as the builder on
 **Settings → Coding agent** and keep using Cursor all day - the builder
 setting only decides who runs the scheduled jobs, not who you work with.

@@ -53,6 +53,15 @@ version is in `docs-private/CURSOR_FACTS.md`):
   disguised: the server reports "not loaded (needs approval)" while
   `mcp enable` says it is approved. Credentials are rendered into the file, the
   same way Codex's TOML renders them.
+- **Plan limits arrive as stderr, not JSON** (measured 2026-08-06): the CLI
+  exits 1 with an `ActionRequiredError` on stderr and emits no JSON at all, so
+  subtype matching never sees them. Two shapes are recognised: "You've hit
+  your usage limit" (a deferral - the free pool is small enough that one
+  setup run can drain it) and "Free plans can only use Auto" (a hard fail
+  naming `SEO_CURSOR_MODEL` as the fix - named models are paid-plan-only).
+  Cursor's `auto` model also proved slow on the heaviest workflow, which is
+  why `seo-setup.yml` carries the same 45-minute ceiling as the daily
+  builder.
 
 One consequence for owners rather than contributors: a runner has no browser,
 so the builder needs `CURSOR_API_KEY`. Any plan can mint one at

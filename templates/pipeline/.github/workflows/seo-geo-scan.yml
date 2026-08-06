@@ -500,6 +500,16 @@ jobs:
           fi
           if [ "$AGENT" = "cursor" ]; then
             sub=$(jq -r '.subtype // empty' "$RUNNER_TEMP/cursor-out.json" 2>/dev/null)
+            err=$(tail -c 400 "$RUNNER_TEMP/cursor-err.txt" 2>/dev/null)
+            # Both stderr shapes measured 2026-08-06 - the CLI exits 1 with an
+            # ActionRequiredError on stderr and no JSON, so subtype matching
+            # never sees them.
+            case "$err" in
+              *"hit your usage limit"*)
+                defer "Cursor's plan is out of Agent usage for now - the job stays due and is retried automatically. It clears when the plan's usage resets; a paid Cursor plan carries a bigger pool." ;;
+              *"Free plans can only use Auto"*|*"Named models unavailable"*)
+                fail "SEO_CURSOR_MODEL names a specific model, but this Cursor plan only allows Auto - unset the repo variable ('gh variable delete SEO_CURSOR_MODEL') or upgrade the Cursor plan." ;;
+            esac
             case "$sub" in
               *rate*limit*|*quota*|*usage*limit*|*too*many*)
                 defer "Cursor hit a usage or rate limit this run - it clears by itself, so the job stays due and is retried automatically. Not a failure." ;;
