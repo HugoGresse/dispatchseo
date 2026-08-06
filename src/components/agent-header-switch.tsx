@@ -372,7 +372,7 @@ export function AgentHeaderSwitch({ current, slug }: { current: string; slug: st
               value={keyValue}
               onChange={(e) => setKeyValue(e.target.value)}
               placeholder={formAgent.credential.placeholder}
-              autoComplete="off"
+              autoComplete="new-password"
               // eslint-disable-next-line jsx-a11y/no-autofocus
               autoFocus
               className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 font-mono text-xs text-neutral-100 placeholder:text-neutral-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-violet-400/60"

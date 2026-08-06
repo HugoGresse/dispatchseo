@@ -190,6 +190,11 @@ function AgentTokenForm({
               type="password"
               name="token"
               required
+              // "new-password", not "off": Chrome ignores off on password
+              // fields and prefills a saved login here, which reads as "just
+              // press Enter" and submits somebody's Google password as an
+              // agent credential (observed on the cloud wizard, 2026-08-06).
+              autoComplete="new-password"
               placeholder={
                 connected ? "Paste a new one to replace it" : agent.credential.placeholder
               }

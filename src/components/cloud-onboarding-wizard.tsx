@@ -847,7 +847,7 @@ export function CloudOnboardingWizard(props: {
                 name="token"
                 type="password"
                 placeholder={agent.credential.placeholder}
-                autoComplete="off"
+                autoComplete="new-password"
                 className={inputClass}
               />
               {/* Only true for Claude Code. There is no Claude session on this

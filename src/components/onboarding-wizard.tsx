@@ -1332,7 +1332,7 @@ export function OnboardingWizard({
                 name="token"
                 type="password"
                 placeholder="ghp_..."
-                autoComplete="off"
+                autoComplete="new-password"
                 className={inputClass}
               />
               <p className="text-sm leading-relaxed text-neutral-500">

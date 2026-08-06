@@ -177,7 +177,7 @@ function BuilderTokenForm({
             name="token"
             type="password"
             placeholder={connected ? "Paste a new one to replace it" : agent.credential.placeholder}
-            autoComplete="off"
+            autoComplete="new-password"
             className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-violet-400/60"
           />
           <button

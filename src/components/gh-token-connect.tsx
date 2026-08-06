@@ -31,7 +31,7 @@ export function GhTokenConnect({ repoName }: { repoName: string }) {
         name="token"
         type="password"
         placeholder="ghp_..."
-        autoComplete="off"
+        autoComplete="new-password"
         className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-violet-400/60"
       />
       <button
