@@ -4,11 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-// Cloud-only dashboard banner - the single honest progress surface for a fresh
-// project (cloud has no self-host "Initial setup" cards; the whole story lives
-// here). Three phases, then it hides:
-//   setup    - pipeline still installing (pipeline_installed false). Links to
-//              /onboarding, where the live install checklist runs.
+// Dashboard banner - the honest progress surface for a fresh project. On
+// cloud it is the ONLY surface (no setup cards); on self-host (since
+// 2026-08-06) it sits above the cards so a freshly added second site never
+// exits the wizard into a silent dashboard. Three phases, then it hides:
+//   setup    - pipeline not installed yet. Cloud copy: installing in the
+//              background. Self-host copy: waiting on the owner's install
+//              command - nothing self-host runs "in the background" before
+//              that. Both link to /onboarding's live install checklist.
 //   firstRun - pipeline installed; the first automations (research -> rank
 //              checks) are still landing. Message names what's actually running
 //              (research vs ranking checks) and does NOT link - setup is done,
@@ -28,11 +31,13 @@ export function SetupProgressBanner({
   repo,
   since,
   installed = false,
+  cloud = true,
 }: {
   slug: string;
   repo: string | null;
   since: string | null;
   installed?: boolean;
+  cloud?: boolean;
 }) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>(installed ? "firstRun" : "setup");
@@ -139,7 +144,9 @@ export function SetupProgressBanner({
     </span>
   ) : null;
 
-  // SETUP: pipeline still installing - link to the live install checklist.
+  // SETUP: pipeline not installed yet - link to the live install checklist.
+  // Cloud installs itself in the background; self-host waits on the owner
+  // running the install command, and the copy must not pretend otherwise.
   if (phase === "setup") {
     return (
       <div className="border-b border-violet-500/25 bg-violet-500/[0.07] px-4 py-2.5 sm:px-6">
@@ -147,9 +154,20 @@ export function SetupProgressBanner({
           <Link href="/onboarding" className="group flex flex-1 items-center gap-2.5 hover:text-white">
             {spinner}
             <span>
-              <b className="font-semibold text-white">Setting up your site in the background.</b>{" "}
-              This runs on GitHub and usually takes 5–15 minutes — feel free to look around; your
-              data fills in automatically once it&apos;s done.{" "}
+              {cloud ? (
+                <>
+                  <b className="font-semibold text-white">Setting up your site in the background.</b>{" "}
+                  This runs on GitHub and usually takes 5–15 minutes — feel free to look around;
+                  your data fills in automatically once it&apos;s done.{" "}
+                </>
+              ) : (
+                <>
+                  <b className="font-semibold text-white">This site isn&apos;t publishing yet.</b>{" "}
+                  The content pipeline isn&apos;t installed — run the install command from the
+                  &quot;Initial setup&quot; card on Home (or the wizard) inside your site&apos;s
+                  repo; this banner follows the install live and clears itself.{" "}
+                </>
+              )}
               <span className="whitespace-nowrap font-medium text-violet-300 underline-offset-2 group-hover:underline">
                 See what&apos;s happening →
               </span>

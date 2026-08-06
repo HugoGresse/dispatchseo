@@ -95,8 +95,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
     : active?.created_at
       ? new Date(active.created_at).getTime()
       : null;
+  // Both modes, since 2026-08-06: self-host used to be excluded (billing &&),
+  // which meant adding a SECOND self-host site exited the wizard into a
+  // silent dashboard - the any-project gate never re-locks, the cards read as
+  // clutter, and nothing said "this site isn't publishing yet". The component
+  // renders mode-appropriate copy (self-host setup waits on the owner's
+  // install command; nothing runs "in the background" until it's run).
   const setupInProgress =
-    billing &&
     active != null &&
     Boolean(active.github_repo) &&
     (installedAt != null
@@ -191,6 +196,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             repo={active.github_repo}
             since={active.github_app_installed_at}
             installed={active.pipeline_installed_at != null}
+            cloud={billing}
           />
         ) : release ? (
           // Only when setup ISN'T running: two stacked banners is one too many,

@@ -73,6 +73,14 @@ export type ChangelogEntry = {
 // this list - it exists so that writing the note down doesn't ping anyone.
 export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
+    kind: "improved",
+    text:
+      "Adding a second site on self-host no longer ends in a silent dashboard. The " +
+      "\"setting up\" banner - previously cloud-only - now shows on self-host too, with " +
+      "honest wording: it tells you the pipeline isn't installed, points at the install " +
+      "command, follows the install live, and clears itself once the first data lands.",
+  },
+  {
     kind: "fixed",
     text:
       "Self-host can finally change which GitHub repo a project publishes to. The repo " +
