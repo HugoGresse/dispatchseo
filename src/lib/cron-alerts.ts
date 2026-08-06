@@ -9,7 +9,9 @@ import { projectAgent } from "./agents";
 // logs the run to cron_runs (migration 0020), and on a failed run emails the
 // owner through Resend - debounced per job (24h for scheduled crons, so an
 // hourly cron that stays broken sends one email, not twenty-four; none for
-// deploy-check, where each run is a distinct human push). Failures that are
+// deploy-check, where each run is a distinct human push). Cloud's customer
+// emails carry a second, cross-job debounce keyed on the CAUSE - see
+// customerCauseEmailedRecently. Failures that are
 // purely transient vendor errors (see TRANSIENT_MARKER in dataforseo.ts)
 // additionally need two consecutive failed runs before the first email. The post-deploy
 // smoke test (deploy-check route + .github/workflows/deploy-check.yml) rides
@@ -386,6 +388,41 @@ export function customerActionableLead(errors: string[]): string | null {
   return null;
 }
 
+// One customer email per CAUSE per project, not per job. The per-job debounce
+// above is the wrong unit for the customer: a dead agent credential fails
+// seo-daily, seo-tools, seo-token-check and seo-geo-scan separately, each on
+// its own 6h window, so an owner whose account broke once got the identical
+// "here is what to do" email several times a day, every day, until they fixed
+// it (Maxpertise, 2026-08-04..06). They were told; repeating it daily only
+// trains them to ignore the address. While the same actionable cause keeps
+// failing anywhere in the project, re-send at most every 72h; a DIFFERENT
+// cause (a different CUSTOMER_ACTIONABLE lead) still emails immediately.
+// The operator's per-job emails are untouched. Best-effort like everything
+// here: a query error means "not emailed recently", never a swallowed alert.
+const CUSTOMER_CAUSE_DEBOUNCE_HOURS = 72;
+
+async function customerCauseEmailedRecently(job: string, lead: string): Promise<boolean> {
+  const slug = jobProjectSlug(job);
+  if (!slug) return false;
+  try {
+    const since = new Date(
+      Date.now() - CUSTOMER_CAUSE_DEBOUNCE_HOURS * 3600 * 1000,
+    ).toISOString();
+    const { data } = await db()
+      .from("cron_runs")
+      .select("errors")
+      .like("job", `%--${slug}`)
+      .not("emailed_at", "is", null)
+      .gte("emailed_at", since)
+      .limit(50);
+    return Boolean(
+      data?.some((r) => customerActionableLead((r.errors as string[]) ?? []) === lead),
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function ownerContactForJob(
   job: string,
 ): Promise<{ email: string; domain: string | null } | null> {
@@ -522,9 +559,10 @@ export async function reportCronRun(
         // from our Resend) so a hands-off owner hears their own job broke
         // without setting up any email of their own. Per-tenant debounce comes
         // free - the job name carries the slug, so cron_runs.emailed_at is
-        // already per-tenant.
+        // already per-tenant - plus the cross-job cause debounce above, so a
+        // single broken credential does not email once per workflow it kills.
         const lead = isCloudMode() ? customerActionableLead(errors) : null;
-        if (lead) {
+        if (lead && !(await customerCauseEmailedRecently(job, lead))) {
           try {
             const owner = await ownerContactForJob(job);
             if (

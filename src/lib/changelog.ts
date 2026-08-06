@@ -71,7 +71,22 @@ export type ChangelogEntry = {
 // Shipped, but not yet announced. Append here as the work lands; empty this
 // into a new CHANGELOG entry when it's time to cut a release. Nothing reads
 // this list - it exists so that writing the note down doesn't ping anyone.
-export const UNRELEASED: { kind: ChangeKind; text: string }[] = [];
+export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
+  {
+    kind: "improved",
+    text:
+      "When a Claude account itself is the problem (a usage limit, or Anthropic blocking " +
+      "subscription access), the weekly scans now say so on the banner - naming the fix, " +
+      "including switching agent or moving to API billing - instead of a bare link to a " +
+      "workflow log.",
+  },
+  {
+    kind: "improved",
+    text:
+      "One broken credential no longer emails you once per workflow it takes down - after " +
+      "the first heads-up, the same cause waits three days before reminding you.",
+  },
+];
 
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [

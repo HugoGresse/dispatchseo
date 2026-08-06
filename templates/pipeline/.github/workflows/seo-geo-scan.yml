@@ -461,6 +461,27 @@ jobs:
               "{{BACKEND_URL}}/api/cron/deploy-check" || true
             exit 1
           }
+          if [ "$AGENT" = "claude" ]; then
+            msg=""
+            f="$RUNNER_TEMP/claude-execution-output.json"
+            if [ -f "$f" ]; then
+              msg=$(jq -r 'if type=="array" then .[] else . end
+                           | select(.type? == "result")
+                           | (.result // .error // empty)' "$f" 2>/dev/null | tail -1)
+            fi
+            if echo "$msg" | grep -qiE 'session limit|usage limit|limit reached|limit .*resets|rate.?limit'; then
+              defer "Claude hit a usage limit this run - it clears by itself, so the job stays due and is retried automatically. Not a failure."
+            fi
+            # oauth_org_not_allowed: Anthropic flags the ACCOUNT, not the token,
+            # so "re-run setup" advice would send the owner to re-mint a token
+            # that comes back just as blocked. Name the real ways out instead.
+            if echo "$msg" | grep -qi 'disabled Claude subscription access'; then
+              fail "$msg. A fresh token will NOT fix this - Anthropic has flagged the Claude account itself (oauth_org_not_allowed). On a company Claude plan, ask its admin to enable Claude Code; on a personal plan, check claude.ai billing for a lapsed or duplicate subscription or contact Anthropic support. Or switch the builders to metered API billing: create a key at console.anthropic.com, 'gh secret set ANTHROPIC_API_KEY', then 'gh secret delete CLAUDE_CODE_OAUTH_TOKEN'"
+            fi
+            # No message at all (the action died before writing its execution
+            # log) falls through to the generic run-URL report below.
+            [ -n "$msg" ] && fail "$(printf '%s' "$msg" | tail -c 400)"
+          fi
           if [ "$AGENT" = "codex" ]; then
             probe=$(curl -s --max-time 30 -o /tmp/probe.json -w "%{http_code}" https://api.openai.com/v1/responses \
               -H "Authorization: Bearer $OPENAI_API_KEY" -H "Content-Type: application/json" \

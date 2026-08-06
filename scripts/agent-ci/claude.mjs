@@ -186,9 +186,36 @@ function classifyBranch() {
           fi`;
 }
 
-// The lean classify (non-builder workflows) has no Claude branch at all: a
-// Claude failure there keeps its existing loud path, deliberately.
-const basicClassifyBranch = null;
+// The lean classify's Claude branch (non-builder workflows). This was null -
+// "keeps its existing loud path, deliberately" - until 2026-08-05/06, when a
+// customer's org-flagged Claude account (oauth_org_not_allowed) failed their
+// geo scan and the report said, in full, "workflow failed - <run url>": a link
+// into a private repo log the operator cannot open, a banner line the owner
+// cannot act on, and no customer email at all (the generic wording matches no
+// CUSTOMER_ACTIONABLE rule) - while the builder workflows named the same
+// failure precisely. Same extraction and same defer/fail meanings as the full
+// classifyBranch above, minus the built-a-PR bookkeeping these jobs don't have.
+const basicClassifyBranch = `          if [ "$AGENT" = "claude" ]; then
+            msg=""
+            f="$RUNNER_TEMP/claude-execution-output.json"
+            if [ -f "$f" ]; then
+              msg=$(jq -r 'if type=="array" then .[] else . end
+                           | select(.type? == "result")
+                           | (.result // .error // empty)' "$f" 2>/dev/null | tail -1)
+            fi
+            if echo "$msg" | grep -qiE 'session limit|usage limit|limit reached|limit .*resets|rate.?limit'; then
+              defer "Claude hit a usage limit this run - it clears by itself, so the job stays due and is retried automatically. Not a failure."
+            fi
+            # oauth_org_not_allowed: Anthropic flags the ACCOUNT, not the token,
+            # so "re-run setup" advice would send the owner to re-mint a token
+            # that comes back just as blocked. Name the real ways out instead.
+            if echo "$msg" | grep -qi 'disabled Claude subscription access'; then
+              fail "$msg. A fresh token will NOT fix this - Anthropic has flagged the Claude account itself (oauth_org_not_allowed). On a company Claude plan, ask its admin to enable Claude Code; on a personal plan, check claude.ai billing for a lapsed or duplicate subscription or contact Anthropic support. Or switch the builders to metered API billing: create a key at console.anthropic.com, 'gh secret set ANTHROPIC_API_KEY', then 'gh secret delete CLAUDE_CODE_OAUTH_TOKEN'"
+            fi
+            # No message at all (the action died before writing its execution
+            # log) falls through to the generic run-URL report below.
+            [ -n "$msg" ] && fail "$(printf '%s' "$msg" | tail -c 400)"
+          fi`;
 
 // token-check: a Claude credential can only be proven by using it, so
 // liveness is one minimal model call - on whichever credential the repo
