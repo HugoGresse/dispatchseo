@@ -82,12 +82,13 @@ function configSteps({ guardIf, variant }) {
     `      # Cursor has no GitHub Action, so the CLI is installed here. Pinned to a
       # known version rather than piping cursor.com/install, which floats.
       #
-      # Then the MCP config, and this is the part that bites. The pack's
-      # mcp-ci.json is ALREADY Cursor's shape, so copying it looks free - but
-      # Cursor does not expand \${VAR} the way Claude does, and the failure is
-      # disguised: the server reports "not loaded (needs approval)" while
-      # \`mcp enable\` insists it is approved, so the hunt starts in the approval
-      # system rather than at the credential. Render the values in.
+      # Then the MCP config. The pack's mcp-ci.json is ALREADY Cursor's shape,
+      # but its \${VAR} placeholders are rendered to real values here anyway.
+      # Live runs (2026-08-06) showed cursor-agent CAN resolve \${VAR} in an
+      # http server's headers from its own environment - which quietly carried
+      # builds for a day while this render step was a no-op - but that
+      # behaviour is undocumented and unproven for stdio env values, so the
+      # credentials are never left to depend on it.
       #
       # \`mcp enable\` is not optional either. An unapproved server is not merely
       # unreachable, it is absent - the agent runs happily with zero tools.
@@ -119,7 +120,7 @@ ${envLines}        run: |
               # json.dumps then strip the quotes: escapes exactly what JSON
               # needs escaping and nothing else.
               val = json.dumps(os.environ.get(var, ""))[1:-1]
-              text = text.replace("${" + var + "}", val)
+              text = text.replace("\${" + var + "}", val)
           cfg = json.loads(text)
           json.dump(cfg, open(dst, "w"), indent=2)
           print("servers configured:", ", ".join(cfg.get("mcpServers", {})))
@@ -214,7 +215,7 @@ function invokeStep({ name, guardIf, prompt, env, continueOnError }) {
 // human-readable to upload; this file is the whole record of what happened.
 const transcriptPath = `\${{ runner.temp }}/cursor-out.json`;
 
-const classifyMsgExtraction = `            msg=$(cat "$RUNNER_TEMP/cursor-msg.txt" 2>/dev/null)
+const classifyMsgExtraction = `            msg=$(cat "$RUNNER_TEMP/cursor-msg.txt" 2>/dev/null || true)
             [ -n "$msg" ] || msg=$(jq -r '.result // empty' "$RUNNER_TEMP/cursor-out.json" 2>/dev/null)`;
 
 const classifyEnv = [`          CURSOR_API_KEY: \${{ secrets.CURSOR_API_KEY }}`];
@@ -227,15 +228,20 @@ const classifyEnv = [`          CURSOR_API_KEY: \${{ secrets.CURSOR_API_KEY }}`]
 // subtype as transient - a deferral is silent, and a silent deferral on a real
 // failure is the codex-429 mistake. Unknown always falls through to fail.
 //
-// The quota and rate-limit subtype spellings have not been observed yet (they
-// need an exhausted account). The patterns below are matched loosely against
-// whatever subtype arrives, and anything unmatched is loud, so a spelling we
-// guessed wrong costs a noisy alert rather than a silent dead pipeline.
+// Two limit shapes WERE observed (2026-08-06, an exhausted free account): the
+// CLI exits 1 with an ActionRequiredError on stderr and no JSON at all, so
+// they're matched in the "" arm below. JSON-subtype limit spellings remain
+// unobserved; those patterns are matched loosely, and anything unmatched is
+// loud, so a spelling we guessed wrong costs a noisy alert rather than a
+// silent dead pipeline.
 function classifyBranch() {
   return `          if [ "$AGENT" = "cursor" ]; then
-            sub=$(jq -r '.subtype // empty' "$RUNNER_TEMP/cursor-out.json" 2>/dev/null)
-            iserr=$(jq -r '.is_error // empty' "$RUNNER_TEMP/cursor-out.json" 2>/dev/null)
-            err=$(tail -c 400 "$RUNNER_TEMP/cursor-err.txt" 2>/dev/null)
+            # || true on every extraction: this step runs under set -e, and a
+            # truncated cursor-out.json (CLI killed mid-write) would otherwise
+            # kill the classifier itself - silently, before it could report.
+            sub=$(jq -r '.subtype // empty' "$RUNNER_TEMP/cursor-out.json" 2>/dev/null || true)
+            iserr=$(jq -r '.is_error // empty' "$RUNNER_TEMP/cursor-out.json" 2>/dev/null || true)
+            err=$(tail -c 400 "$RUNNER_TEMP/cursor-err.txt" 2>/dev/null || true)
             case "$sub" in
               *rate*limit*|*quota*|*usage*limit*|*too*many*)
                 # Clears by itself. The job stays due and is re-dispatched.
@@ -250,7 +256,7 @@ function classifyBranch() {
                 # JSON at all, so subtype matching never sees them.
                 case "$err" in
                   *"hit your usage limit"*)
-                    defer "Cursor's plan is out of Agent usage for now (\"You've hit your usage limit\") - the job stays due and is re-dispatched. It clears when the plan's usage resets; a paid Cursor plan carries a bigger pool." ;;
+                    defer "Cursor's plan is out of Agent usage for now (\\"You've hit your usage limit\\") - the job stays due and is re-dispatched. It clears when the plan's usage resets; a paid Cursor plan carries a bigger pool." ;;
                   *"Free plans can only use Auto"*|*"Named models unavailable"*)
                     fail "SEO_CURSOR_MODEL names a specific model, but this Cursor plan only allows Auto - unset the repo variable ('gh variable delete SEO_CURSOR_MODEL') or upgrade the Cursor plan." ;;
                 esac
@@ -268,8 +274,8 @@ function classifyBranch() {
 }
 
 const basicClassifyBranch = `          if [ "$AGENT" = "cursor" ]; then
-            sub=$(jq -r '.subtype // empty' "$RUNNER_TEMP/cursor-out.json" 2>/dev/null)
-            err=$(tail -c 400 "$RUNNER_TEMP/cursor-err.txt" 2>/dev/null)
+            sub=$(jq -r '.subtype // empty' "$RUNNER_TEMP/cursor-out.json" 2>/dev/null || true)
+            err=$(tail -c 400 "$RUNNER_TEMP/cursor-err.txt" 2>/dev/null || true)
             # Both stderr shapes measured 2026-08-06 - the CLI exits 1 with an
             # ActionRequiredError on stderr and no JSON, so subtype matching
             # never sees them.

@@ -429,12 +429,13 @@ jobs:
       # Cursor has no GitHub Action, so the CLI is installed here. Pinned to a
       # known version rather than piping cursor.com/install, which floats.
       #
-      # Then the MCP config, and this is the part that bites. The pack's
-      # mcp-ci.json is ALREADY Cursor's shape, so copying it looks free - but
-      # Cursor does not expand ${VAR} the way Claude does, and the failure is
-      # disguised: the server reports "not loaded (needs approval)" while
-      # `mcp enable` insists it is approved, so the hunt starts in the approval
-      # system rather than at the credential. Render the values in.
+      # Then the MCP config. The pack's mcp-ci.json is ALREADY Cursor's shape,
+      # but its ${VAR} placeholders are rendered to real values here anyway.
+      # Live runs (2026-08-06) showed cursor-agent CAN resolve ${VAR} in an
+      # http server's headers from its own environment - which quietly carried
+      # builds for a day while this render step was a no-op - but that
+      # behaviour is undocumented and unproven for stdio env values, so the
+      # credentials are never left to depend on it.
       #
       # `mcp enable` is not optional either. An unapproved server is not merely
       # unreachable, it is absent - the agent runs happily with zero tools.
@@ -466,7 +467,7 @@ jobs:
               # json.dumps then strip the quotes: escapes exactly what JSON
               # needs escaping and nothing else.
               val = json.dumps(os.environ.get(var, ""))[1:-1]
-              text = text.replace(" + var + ", val)
+              text = text.replace("${" + var + "}", val)
           cfg = json.loads(text)
           json.dump(cfg, open(dst, "w"), indent=2)
           print("servers configured:", ", ".join(cfg.get("mcpServers", {})))

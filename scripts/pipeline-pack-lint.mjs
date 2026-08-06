@@ -29,6 +29,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readdirSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -182,11 +183,64 @@ function checkAgentLimitClassifier({ where, content }) {
   }
 }
 
+// ---- rule 5: every `run: |` block must parse as bash -----------------------
+// Why (2026-08-06): the Cursor classify step shipped a JS template-literal
+// escape slip - `\"` collapses to a bare quote where `\\"` was meant - so the
+// generated bash carried an unbalanced string and the WHOLE classify step died
+// on a syntax error for every Cursor run of seo-daily/seo-tools, skipping the
+// dashboard report with it. Review, the drift check and the golden snapshot
+// all passed, because they compare text, and only a parser catches a parser
+// error. So: pull each literal-block script out of the YAML the same way the
+// runner does (dedent to the first body line), blank out `${{ }}` expressions
+// (GitHub substitutes those before bash ever sees the script), and `bash -n`.
+function runBlocks(content) {
+  const lines = content.split("\n");
+  const blocks = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^(\s*)run:\s*\|-?\s*$/);
+    if (!m) continue;
+    const keyIndent = m[1].length;
+    const body = [];
+    let bodyIndent = null;
+    for (let j = i + 1; j < lines.length; j++) {
+      const line = lines[j];
+      if (line.trim() === "") {
+        body.push("");
+        continue;
+      }
+      const indent = line.match(/^\s*/)[0].length;
+      if (indent <= keyIndent) break;
+      if (bodyIndent === null) bodyIndent = indent;
+      body.push(line.slice(Math.min(bodyIndent, indent)));
+    }
+    while (body.length && body[body.length - 1] === "") body.pop();
+    if (body.length) blocks.push({ line: i + 1, script: body.join("\n") });
+  }
+  return blocks;
+}
+
+function checkRunBlocksParse({ where, content }) {
+  for (const { line, script } of runBlocks(content)) {
+    const neutral = script.replace(/\$\{\{[^}]*\}\}/g, "GITHUB_EXPR");
+    const res = spawnSync("bash", ["-n"], { input: neutral, encoding: "utf8" });
+    if (res.status !== 0) {
+      const first = (res.stderr || "unknown parse error").trim().split("\n")[0];
+      fail(
+        `${where}:${line}`,
+        "run-block-bash-syntax",
+        `a \`run: |\` block does not parse as bash - the step would die on a syntax error before ` +
+          `doing (or reporting) anything: ${first}`,
+      );
+    }
+  }
+}
+
 for (const t of targets) {
   checkNoFatalAdaptMarker(t);
   checkPnpmSetupShape(t);
   checkLooksLikeWorkflow(t);
   checkAgentLimitClassifier(t);
+  checkRunBlocksParse(t);
 }
 
 // The backend twin of rule 4. cron-alerts.ts decides whether the owner is even

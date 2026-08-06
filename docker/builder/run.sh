@@ -267,12 +267,12 @@ run_job() { # run_job <base64 job json>
     # there is no --mcp-config flag to point elsewhere - so this lands inside
     # the clone rather than in /data/mcp like the other two.
     #
-    # LITERAL credentials, for the same reason Codex's TOML holds them: Cursor
-    # does NOT expand ${VAR} in this file (measured 2026-08-05). Its failure
-    # mode is worse than Codex's, though - the server comes back "not loaded
-    # (needs approval)" while `mcp enable` insists it is approved, so the hunt
-    # starts in the approval system instead of at the credential. The file is
-    # deleted right after the run, alongside the other agents' secrets.
+    # LITERAL credentials, same policy as Codex's TOML. A CI run on 2026-08-06
+    # showed cursor-agent CAN resolve ${VAR} in an http server's headers from
+    # its own environment, revising the 2026-08-05 no-expansion reading - but
+    # that behaviour is undocumented and unproven for stdio env values, so the
+    # credentials are rendered in rather than left to depend on it. The file
+    # is deleted right after the run, alongside the other agents' secrets.
     mkdir -p "$dir/.cursor"
     cfg="$dir/.cursor/mcp.json"
     if [ -n "$DATAFORSEO_LOGIN" ]; then
@@ -396,8 +396,8 @@ RULEEOF
           --trust --force --approve-mcps \
           --model "${CURSOR_MODEL:-auto}" > "$out" 2>"$out.err" )
     rc=$?
-    # The config holds real credentials (no ${VAR} expansion), so it goes as
-    # soon as the run does - same contract as Codex's auth.json above.
+    # The config holds real, rendered credentials, so it goes as soon as the
+    # run does - same contract as Codex's auth.json above.
     rm -f "$cfg"
     msg=$(jq -r '.result // empty' "$out" 2>/dev/null | tail -c 400)
     [ -n "$msg" ] || msg=$(tail -c 400 "$out.err" 2>/dev/null)
@@ -484,8 +484,23 @@ RULEEOF
     # guessing from prose. What it must never do is treat an UNRECOGNISED
     # subtype as transient - a deferral is silent, and a silent deferral on a
     # real failure is the exact mistake the Codex branch above exists to avoid.
-    # The quota spellings are unobserved as yet, so they are matched loosely
-    # and everything unmatched falls through to a loud failure.
+    #
+    # Two limit shapes WERE measured (2026-08-06, an exhausted free plan): the
+    # CLI exits 1 with an ActionRequiredError on STDERR and no JSON at all, so
+    # subtype matching never sees them. Match stderr first; JSON-subtype limit
+    # spellings remain unobserved, matched loosely below, and everything
+    # unmatched falls through to a loud failure.
+    cerr=$(tail -c 400 "$out.err" 2>/dev/null)
+    case "$cerr" in
+      *"hit your usage limit"*)
+        log "job $key deferred - Cursor plan out of Agent usage"
+        report "$key" deferred "Cursor's plan is out of Agent usage for now - retried automatically. It clears when the plan's usage resets; a paid Cursor plan carries a bigger pool."
+        return ;;
+      *"Free plans can only use Auto"*|*"Named models unavailable"*)
+        log "job $key FAILED - Cursor plan cannot run the pinned model"
+        report "$key" fail "CURSOR_MODEL names a specific model, but this Cursor plan only allows Auto - unset CURSOR_MODEL in .env or upgrade the Cursor plan."
+        return ;;
+    esac
     sub=$(jq -r '.subtype // empty' "$out" 2>/dev/null)
     case "$sub" in
       *rate*limit*|*quota*|*usage*limit*|*too*many*)
@@ -598,7 +613,7 @@ while :; do
   if [ -z "$AGENTS" ]; then
     # Poll every 5 min while unconfigured so a freshly pasted key goes live
     # quickly, instead of the long idle a settled builder uses.
-    log "idle - no coding-agent credential yet. Paste one on the dashboard's 'Turn on automatic builds' step (or set CLAUDE_CODE_OAUTH_TOKEN or OPENAI_API_KEY in .env)."
+    log "idle - no coding-agent credential yet. Paste one on the dashboard's 'Turn on automatic builds' step (or set CLAUDE_CODE_OAUTH_TOKEN, OPENAI_API_KEY, or CURSOR_API_KEY in .env)."
     sleep 300; continue
   fi
 
