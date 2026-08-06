@@ -886,17 +886,20 @@ note }`.
 
 ### `set_github_repo`
 
-<Pill tone="violet">Cloud only</Pill>
-
-Picks which repository of the project's GitHub App installation the
-content pipeline lives in. Validated against the installation's live
-repo list - a repo outside the installation is refused. Self-host
-connects its repo during project creation instead, so this tool fails
-there on purpose.
+Points the project at the GitHub repository its content pipeline lives
+in. On cloud it's validated against the project's GitHub App
+installation's live repo list - a repo outside the installation is
+refused. On self-host it's validated against the instance's stored
+GitHub token when one exists (the token must see the repo and read its
+code); before that token is saved, the write is accepted on format
+alone, same as project creation. Changing an already-connected repo
+never touches the old repo - if the pipeline was installed there, run
+`disconnect_repo` first so its workflows stop.
 
 <Fields>
   <Field name="repo" type="string" required="true">
-    `owner/repo`, must be part of this project's App installation.
+    `owner/repo` (a github.com URL works too). On cloud it must be part
+    of this project's App installation.
   </Field>
 </Fields>
 

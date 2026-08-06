@@ -42,6 +42,18 @@ and slash commands.
    {{AGENT_NAME}} in this folder and paste the install command again; that is
    a restart, not an error (2026-07-23: this exact case cost an owner three
    confused round-trips).
+
+   **If \`get_project\` shows \`github_repo: null\`** (the rendered name above
+   reads "the project repo"), the project has NO repo connected - a
+   disconnect, or a creation that skipped it. That is fixable right here:
+   confirm with the owner that THIS directory's repo is where content should
+   publish, then call \`set_github_repo\` with the remote's \`owner/name\` and
+   re-check \`get_project\` before proceeding. If the owner is not present,
+   STOP and report - never pick a publish target for them. If the project
+   shows a DIFFERENT repo and the owner says this one is right, the same
+   tool changes it (on self-host it validates against the instance's stored
+   GitHub token; remind them the OLD repo keeps any installed workflows -
+   \`disconnect_repo\` is the teardown).
 2. Confirm \`gh auth status\` works and the account can push branches and set
    secrets on this repo. If not, have the owner run \`gh auth login\` first.
 3. **Brief the owner on everything this run will need - BEFORE doing

@@ -955,12 +955,13 @@ export type DisconnectRepoState = { error: string } | { done: string } | null;
 // "Stop using DispatchSEO for this site" as a button, which until now did not
 // exist anywhere on the self-hosted version.
 //
-// Deleting the project is refused for the home project, Settings shows the repo
-// as read-only text, and set_github_repo is cloud-only and will not take an
-// empty value - so a self-hoster who tried this on one site was left with
-// scheduled workflows in their own repo, spending their own GitHub Actions
-// minutes, and no supported way to stop them. The only exit was deleting the
-// workflow files by hand through the GitHub API.
+// Deleting the project is refused for the home project, and set_github_repo
+// would not take an empty value - so a self-hoster who tried this on one site
+// was left with scheduled workflows in their own repo, spending their own
+// GitHub Actions minutes, and no supported way to stop them. The only exit was
+// deleting the workflow files by hand through the GitHub API. (Since
+// 2026-08-06 Settings can also CHANGE the repo via setSelfHostRepo below -
+// but changing never tears the old repo down; this button is the teardown.)
 //
 // Available on the home project on purpose: that is precisely the project that
 // cannot be deleted, so if disconnect skipped it too, the gap would still be
@@ -1596,6 +1597,21 @@ export async function setSiteLaunchedAt(date: string, slug: string) {
   revalidatePath("/", "layout");
 }
 
+// The self-host repo row on Settings. Shares its write (and its validation
+// wording) with set_github_repo's self-host branch via lib/repo-connect -
+// cloud keeps the App-installation picker and never calls this.
+export async function setSelfHostRepo(repo: string, slug: string) {
+  await assertAuthed();
+  if (isCloudMode()) throw new Error("Cloud picks the repo through the GitHub App installation.");
+  const project = await getProjectBySlug(slug);
+  if (!project) throw new Error("Unknown project.");
+  const { setProjectRepoSelfHost } = await import("@/lib/repo-connect");
+  const result = await setProjectRepoSelfHost(project, repo);
+  if ("error" in result) throw new Error(result.error);
+  revalidatePath("/", "layout");
+  return result.repo;
+}
+
 // The Search-market row on Settings. Shares its write (and its validation
 // wording) with the set_market MCP tool via lib/market-store.
 export async function setMarket(locationCode: number, languageCode: string, slug: string) {
@@ -1828,7 +1844,7 @@ export async function chooseGithubRepo(
   formData: FormData,
 ): Promise<ChooseRepoState> {
   await assertAuthed();
-  if (!isCloudMode()) return { error: "Self-host connects the repo in step 1 instead." };
+  if (!isCloudMode()) return { error: "Self-host sets the repo from Settings (or set_github_repo) instead." };
   const repo = String(formData.get("repo") ?? "").trim();
   if (!repo) return { error: "Pick a repository." };
   // Explicit slug, like runPipelineInstall and connectClaudeToken: this is the

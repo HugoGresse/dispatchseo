@@ -309,11 +309,13 @@ export async function uninstallPipelineFromRepo(
 //
 // This exists because "stop using DispatchSEO for this site" had no path at
 // all on self-host. Deleting is refused for the home project (it anchors the
-// schema's column defaults), Settings renders the repo as read-only text, and
-// set_github_repo is cloud-only and rejects an empty value - so a self-hoster
-// whose one site was a trial had workflows running in their repo, spending
-// their own Actions minutes, with no button anywhere that stopped it. The only
-// way out was deleting the workflow files by hand through the GitHub API.
+// schema's column defaults), and set_github_repo rejects an empty value - so
+// a self-hoster whose one site was a trial had workflows running in their
+// repo, spending their own Actions minutes, with no button anywhere that
+// stopped it. The only way out was deleting the workflow files by hand
+// through the GitHub API. (Settings can now CHANGE the repo on self-host,
+// but changing never tears the old repo down - this teardown remains the
+// only thing that stops installed workflows.)
 //
 // ON FAILURE THE REPO STAYS CONNECTED, deliberately. Clearing github_repo
 // while the workflows are still live in the repo would strand them: they would

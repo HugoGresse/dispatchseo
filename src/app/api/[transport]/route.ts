@@ -1856,21 +1856,29 @@ const mcpHandler = createMcpHandler(
       {
         title: "Set the connected GitHub repo",
         description:
-          "Cloud only: pick which repository of the project's GitHub App " +
-          "installation the content pipeline lives in. Validated against the " +
-          "installation's live repo list - a repo outside the installation is " +
-          "refused. Same write as the onboarding wizard's repo picker. " +
-          "Self-host connects the repo during project creation instead.",
+          "Point this project at the GitHub repository its content pipeline lives in. " +
+          "Cloud: validated against the project's GitHub App installation's live repo " +
+          "list - a repo outside the installation is refused. Self-host: validated " +
+          "against the instance's stored GitHub token when one exists (it must be able " +
+          "to see the repo and read its code), format-only before that token is saved. " +
+          "Same write as the onboarding wizard's repo picker. Changing an already-" +
+          "connected repo does NOT touch the old repo - if the pipeline was installed " +
+          "there, run disconnect_repo first so its workflows stop.",
         inputSchema: {
           repo: z
             .string()
             .min(3)
-            .describe("The repository as owner/name. Must be one the project's GitHub App installation can reach."),
+            .describe("The repository as owner/name (a github.com URL is accepted too)."),
         },
       },
       async ({ repo }) => {
-        if (!isCloudMode()) return fail("Self-host connects the repo during project creation.");
         const p = currentProject();
+        if (!isCloudMode()) {
+          const { setProjectRepoSelfHost } = await import("@/lib/repo-connect");
+          const result = await setProjectRepoSelfHost(p, repo);
+          if ("error" in result) return fail(result.error);
+          return ok({ project: p.slug, github_repo: result.repo });
+        }
         if (!p.github_installation_id) {
           return fail("The DispatchSEO GitHub App is not installed for this project yet.");
         }

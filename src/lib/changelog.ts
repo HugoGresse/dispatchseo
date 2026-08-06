@@ -75,6 +75,15 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
     kind: "fixed",
     text:
+      "Self-host can finally change which GitHub repo a project publishes to. The repo " +
+      "used to be settable exactly once, at creation - connect the wrong one (or disconnect " +
+      "to fix it) and the project was stranded. Settings now has an editable repo field, " +
+      "set_github_repo works on self-host too, and the install playbook walks your agent " +
+      "through reconnecting instead of stopping at a dead end.",
+  },
+  {
+    kind: "fixed",
+    text:
       "On free (GSC-only) projects, the purple \"Running your first ranking checks\" banner " +
       "used to stay up forever - it was waiting for a rank check that only projects with " +
       "DataForSEO credentials ever get. It now closes once your first ideas are queued, and " +

@@ -18,6 +18,7 @@ import { DisconnectRepoForm } from "@/components/disconnect-repo";
 import { DeleteAccountForm } from "@/components/delete-account";
 import { KeywordSourceSettings } from "@/components/keyword-source-settings";
 import { MarketRow } from "@/components/market-row";
+import { RepoRow } from "@/components/repo-row";
 import { SiteLaunchedRow } from "@/components/site-launched";
 import { CopyBlock } from "@/components/client";
 import { PageHeader, SectionTitle } from "@/components/ui";
@@ -223,7 +224,14 @@ export default async function SettingsPage({
         <div className="divide-y divide-neutral-800/70 rounded-xl bg-neutral-900 px-4 py-1.5 sm:px-5">
           <InfoRow label="Name" value={project.name} />
           <InfoRow label="Domain" value={project.domain} />
-          <InfoRow label="GitHub repo" value={project.github_repo ?? "not connected"} />
+          {/* Self-host: editable, because creation was the only writer and a
+              disconnect left the project stranded with no repo. Cloud stays
+              read-only - its repo choice belongs to the App installation. */}
+          {isCloudMode() ? (
+            <InfoRow label="GitHub repo" value={project.github_repo ?? "not connected"} />
+          ) : (
+            <RepoRow current={project.github_repo} slug={project.slug} />
+          )}
           <InfoRow label="Search Console property" value={project.gsc_site_url ?? "not connected"} />
           <InfoRow
             label="DataForSEO"
