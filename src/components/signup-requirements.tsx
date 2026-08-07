@@ -7,11 +7,12 @@ import { MascotFace } from "@/components/mascot-face";
 // The Dispatcher's aside on the signup form: what a site needs before any of
 // this can work, said BEFORE an account exists and long before a card does.
 //
-// Collapsed at rest, opened by a click. The resting tab is labelled as an
-// important message rather than a mascot aside: hiding the content behind a
-// click already costs readers, so the trigger has to earn the click instead of
-// looking like decoration. It still stays out of the way of someone who only
-// wants to type an email.
+// Open at rest, dismissible. It spent a week collapsed behind an "Open the
+// message" tab (b823712), and on 2026-08-07 a WordPress site owner walked
+// straight past that tab, started a trial, hit the Connect GitHub screen and
+// cancelled within five minutes with reason "unused". A gate this decisive
+// doesn't get to wait behind a click; the Hide button is for people who've
+// read it.
 //
 // Why it lives here and not in AuthShell: the shell is shared with /login, and
 // a person signing back in has already been through setup. The notice belongs
@@ -73,7 +74,7 @@ function Eyebrow() {
 }
 
 export function SignupRequirements() {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
 
   return (
     <div className="flex items-start gap-2.5">
@@ -83,8 +84,8 @@ export function SignupRequirements() {
           <Tail />
           <Eyebrow />
           <p className="mt-1 text-[13px] leading-relaxed text-amber-200/90">
-            Your site needs to live in a GitHub repo, and you&apos;ll need a Claude subscription.
-            WordPress, Wix, Squarespace and Shopify don&apos;t work yet.
+            Your site needs to live in a GitHub repo, and you&apos;ll need a coding agent - Claude
+            Code, Codex, or Cursor. WordPress, Wix, Squarespace and Shopify don&apos;t work yet.
           </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
             <Link

@@ -75,6 +75,15 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
     kind: "improved",
     text:
+      "The GitHub-repo requirement now greets you before a card does. The landing hero " +
+      "says it under the domain box, a new FAQ answers the WordPress question head-on, " +
+      "and the signup notice starts open instead of waiting behind a click - so a " +
+      "WordPress site owner learns the answer on the way in, not at the Connect GitHub " +
+      "screen with a trial already ticking.",
+  },
+  {
+    kind: "improved",
+    text:
       "The dashboard now tells you when it's waiting on YOU. While the install pull " +
       "request sits unmerged, a banner names it and links straight to it - nothing can " +
       "build until that PR lands on the default branch, and the dashboard used to look " +

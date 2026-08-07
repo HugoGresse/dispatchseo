@@ -549,6 +549,10 @@ export default async function LandingPage({
               <div className="a">A website that lives in a GitHub repo, an AI agent (Claude Code on your Claude subscription, Codex on an OpenAI key, or Cursor on your Cursor plan), free Google Search Console access, and a machine with Docker. Your laptop works for a test drive, but we highly recommend a machine that stays awake for real use - a $5 VPS or a Raspberry Pi - since schedules only run while it&apos;s on. Rank tracking works with a free SerpApi key; search volume data needs a DataForSEO account, which is the main gap the cloud version fills. The <a href={DOCS_URL}>docs</a> walk you through it.</div>
             </details>
             <details>
+              <summary>Does it work with WordPress?</summary>
+              <div className="a">Not right now. DispatchSEO publishes by opening pull requests in your site&apos;s GitHub repo, so the site has to live in one - Next.js, Astro, Hugo, or anything else you deploy from code. WordPress, Wix, Squarespace and Shopify sites have no repo to publish into, so they aren&apos;t supported.</div>
+            </details>
+            <details>
               <summary>Is this another AI content spammer?</summary>
               <div className="a">No. Every draft is reviewed for quality and sameness before it ships, publishing pace ramps up slowly on purpose, and the agent writes from your product&apos;s actual facts, with your repo as its source material. You choose the gate: approve every piece yourself, or run on auto with pull requests as the audit trail.</div>
             </details>

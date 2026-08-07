@@ -74,7 +74,13 @@ export function DomainCta() {
       <button type="submit" className="btn btn-solid">
         Automate my SEO
       </button>
-      <p className="domain-note">7-day free trial.</p>
+      {/* The repo requirement, said at the very first touchpoint. The agent
+          requirement already sits in the hero sub line; this note carries the
+          one fact that twice sent a WordPress owner into a dead-end trial. */}
+      <p className="domain-note">
+        7-day free trial. Your site needs to live in a GitHub repo - WordPress and site builders
+        aren&apos;t supported.
+      </p>
     </form>
   );
 }
