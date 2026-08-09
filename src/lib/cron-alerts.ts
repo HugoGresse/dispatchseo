@@ -789,8 +789,56 @@ export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]>
     pipelineHeartbeatAlerts(projectSlug, reported),
     builderJobHeartbeatAlerts(projectSlug, reported),
   ]);
-  const all = await unstaleIdleBuilders([...health, ...heartbeat, ...builderHeartbeat]);
+  // Twin-rail first: it is pure in-memory, so every row it clears is a
+  // suggestions-count query the idle gate below never has to make.
+  const all = await unstaleIdleBuilders(
+    unstaleTwinRailBuilders([...health, ...heartbeat, ...builderHeartbeat]),
+  );
   return [...all, ...(await githubQuotaAlert(projectSlug, all))];
+}
+
+// The guide/tool builders run on TWO rails - the GitHub Actions workflow
+// (seo-daily/seo-tools) and the in-stack builder (builder-build-guide/
+// build-tool) - and whichever rail gets there first anchors built_today, so
+// the other rail's guard skips silently every day from then on. Correct
+// behaviour, but its staleness clock keeps aging: on a builder-active project
+// seo-daily last posts a real row the day the builder takes over, goes
+// "overdue" 36h later, and stays on the banner forever while a guide ships
+// every single day (seo-daily--mia-tax, 2026-08-09). The empty-queue gate
+// below cannot catch this - the queue HAS approved work; the other rail is
+// doing it.
+//
+// So: a stale build job whose twin rail completed a real, healthy run inside
+// this job's own staleness window is not late, it is superseded - clear the
+// flag. Same contract as the idle gate: only ever CLEARS, never sets. The
+// recency bound is what keeps it honest - a twin whose last real outcome is
+// old fails it, so "nothing has built anywhere for days" stays exactly as
+// loud as it was, and a twin that is failing or itself stale (the stuck-claim
+// 36h backstop) never vouches for anyone.
+const TWIN_RAIL: Record<string, string> = {
+  "seo-daily": "builder-build-guide",
+  "seo-tools": "builder-build-tool",
+  "builder-build-guide": "seo-daily",
+  "builder-build-tool": "seo-tools",
+};
+
+function unstaleTwinRailBuilders(health: CronHealth[]): CronHealth[] {
+  const byJob = new Map(health.map((h) => [h.job, h]));
+  return health.map((h) => {
+    const base = baseJobName(h.job);
+    const twinBase = TWIN_RAIL[base];
+    const slug = jobProjectSlug(h.job);
+    if (!h.stale || !h.ok || !twinBase || !slug) return h;
+    const twin = byJob.get(`${twinBase}--${slug}`);
+    if (!twin || !twin.ok || twin.stale) return h;
+    // The twin's latest row can be a claim (build in flight right now); its
+    // ok already reflects the last real outcome (see okRow above), and a
+    // claim that never completes trips the 36h stuck-claim backstop, so the
+    // stale check above covers it. Judged on the boot-aware clock, same as
+    // the staleness it is clearing.
+    const twinAge = staleAgeHours(new Date(twin.last_run_at).getTime());
+    return twinAge <= (STALE_HOURS[base] ?? 36) ? { ...h, stale: false } : h;
+  });
 }
 
 // A build workflow that hasn't run because there is NOTHING TO BUILD is not
