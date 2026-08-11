@@ -1,5 +1,6 @@
 import { effectiveAutomations, getProjectByToken, internalLinkingEnabled } from "@/lib/projects";
 import { projectAgent } from "@/lib/agents";
+import { planGate } from "@/lib/billing";
 import { db } from "@/lib/db";
 import pack from "@/lib/pipeline-pack.json";
 
@@ -86,6 +87,35 @@ async function approvedWaiting(projectId: string): Promise<{ guide: boolean; too
   }
 }
 
+// Everything switched off, for a project whose plan no longer covers it.
+//
+// This endpoint is the ONLY lever that reaches an already-installed repo. A
+// lapsed account's workflows keep firing on GitHub's clock - each builder's
+// dead-man's cron, the auto-merge sweep, the daily health check - and we
+// cannot edit those files to stop them: pipeline-install is itself plan-gated,
+// so a lapsed repo never receives another pack update. What every installed
+// version DOES do, before it spends anything, is ask this endpoint what to do,
+// and honour "off" by exiting in seconds without reporting a thing.
+//
+// So the pause is expressed in the fields the shipped workflows already read,
+// not in a new one they would have to be taught: automations off (the builders
+// and auto-merge stand down), built_today true and approved_waiting false (the
+// dead-man's crons find nothing to do), ran_today true (the weeklies likewise).
+// plan_paused is the honest name for it, carried alongside for future packs
+// and for anyone reading this response by hand.
+//
+// Without this, an ex-customer whose coding agent still worked kept getting a
+// guide built and merged every single day, free, indefinitely - the exact hole
+// api/cron/seo-dispatch's own plan gate closed on the dispatch path and left
+// wide open on the dead-man's path.
+const PAUSED_AUTOMATIONS = {
+  auto_approve: false,
+  auto_approve_tools: false,
+  auto_build_guides: false,
+  auto_build_tools: false,
+  auto_merge: false,
+};
+
 // Tiny read endpoint for the project repos' CI. Before acting, workflows ask
 // which automations this project has enabled: auto-merge checks
 // automations.auto_merge, the builders check auto_build_guides /
@@ -100,7 +130,35 @@ export async function GET(req: Request) {
   if (!project) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
+  // Fails OPEN, like every other plan gate: a subscription read that errors
+  // must never pause a paying customer's builders. Self-host and unconfigured
+  // billing answer `allowed` without a query at all.
+  let planPaused = false;
+  try {
+    planPaused = !(await planGate(project.id)).allowed;
+  } catch (e) {
+    console.error(`[project-mode] plan check failed for ${project.slug}:`, e);
+  }
+  if (planPaused) {
+    return Response.json({
+      slug: project.slug,
+      mode: project.mode,
+      agent: projectAgent(project).id,
+      plan_paused: true,
+      automations: PAUSED_AUTOMATIONS,
+      internal_linking: false,
+      // Still served: the version check is free, and a repo that comes back
+      // after the owner re-subscribes should be current rather than a pack
+      // behind. It reports through the report door, which stays quiet while
+      // the plan is inactive.
+      pipeline_version: (pack as { version?: string }).version ?? null,
+      built_today: { guide: true, tool: true },
+      ran_today: Object.fromEntries(RETRY_GUARDED_JOBS.map((j) => [j, true])),
+      approved_waiting: { guide: false, tool: false },
+    });
+  }
   return Response.json({
+    plan_paused: false,
     slug: project.slug,
     mode: project.mode,
     // Which coding agent this project's builders run. Served here rather than

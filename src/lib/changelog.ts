@@ -73,6 +73,16 @@ export type ChangelogEntry = {
 // this list - it exists so that writing the note down doesn't ping anyone.
 export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
+    kind: "fixed",
+    text:
+      "A plan that ends now really ends. Rank tracking and the builders already stopped " +
+      "when a plan lapsed, but the site's own GitHub workflows kept running on their own " +
+      "schedule - so a finished trial could still build and merge a guide every day, and " +
+      "kept sending failure alerts about a pipeline nobody was paying for. Those " +
+      "workflows now stand down on their next run, and the alerts stop with them. " +
+      "Re-subscribe and everything picks up again by itself.",
+  },
+  {
     kind: "improved",
     text:
       "The GitHub-repo requirement now greets you before a card does. The landing hero " +

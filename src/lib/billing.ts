@@ -650,3 +650,68 @@ export async function planGate(
   }
   return { allowed: true };
 }
+
+// planGate's verdict for every project at once, as a set of SLUGS - the shape
+// the alerting rails need, because they work in job names ("seo-daily--acme"),
+// not project ids.
+//
+// Why this exists. planGate stops the WORK when a plan lapses: crons skip the
+// project, the scheduler never dispatches a build, DataForSEO is never called.
+// It never stopped the NOISE, and the noise has its own engine - the customer's
+// own repo keeps its GitHub-side schedules (the daily health check, the
+// builders' dead-man's crons, the auto-merge sweep), which run on GitHub's
+// clock, not ours, and phone their outcomes home. So an account that stopped
+// paying kept filing failure rows, kept lighting the Home banner, and kept
+// emailing - the operator AND the ex-customer - about a pipeline it was no
+// longer entitled to have running. Maxpertise's trial lapsed and its dead
+// Claude credential mailed the operator every morning for a week
+// (2026-08-11). A plan that has stopped buying the work has stopped buying
+// the alerting about it too.
+//
+// Computed in two queries and joined in memory rather than calling planGate
+// per job: getCronHealth runs on every dashboard render and once per project
+// inside the schedulers, and planGate costs three round-trips each time.
+//
+// FAILS OPEN in every direction - self-host, unconfigured billing, ownerless
+// projects, any query error - and the asymmetry is deliberate: a wrong "paused"
+// silences a PAYING customer's broken pipeline, which is far more expensive
+// than one stray email about a lapsed one.
+export const planPausedProjectSlugs = cache(async (): Promise<Set<string>> => {
+  const paused = new Set<string>();
+  if (!isCloudMode() || !polarConfigured()) return paused;
+  try {
+    const { data: projects, error } = await db()
+      .from("projects")
+      .select("slug, owner_user_id")
+      .order("created_at", { ascending: true }); // same order coverage is decided in
+    if (error || !projects) return paused;
+    const byOwner = new Map<string, string[]>();
+    for (const p of projects as Array<{ slug: string; owner_user_id: string | null }>) {
+      if (!p.owner_user_id) continue; // ownerless = never gated, exactly like planGate
+      byOwner.set(p.owner_user_id, [...(byOwner.get(p.owner_user_id) ?? []), p.slug]);
+    }
+    if (byOwner.size === 0) return paused;
+    const { data: subs, error: subErr } = await db()
+      .from("subscriptions")
+      .select("user_id, status, sites_limit");
+    if (subErr) return paused;
+    const subByUser = new Map(
+      ((subs ?? []) as Array<{ user_id: string } & Subscription>).map((s) => [s.user_id, s]),
+    );
+    for (const [ownerId, slugs] of byOwner) {
+      const sub = subByUser.get(ownerId) ?? null;
+      // No subscription row at all is NOT lapsed: a fresh signup is
+      // mid-onboarding, and planGate (via isActive(null)) is the authority
+      // both ways - it denies that account too, so its projects pause here in
+      // the same breath they stop being worked on.
+      if (!isActive(sub)) {
+        for (const slug of slugs) paused.add(slug);
+        continue;
+      }
+      for (const slug of slugs.slice(sub!.sites_limit)) paused.add(slug); // downgrade overflow
+    }
+    return paused;
+  } catch {
+    return new Set();
+  }
+});

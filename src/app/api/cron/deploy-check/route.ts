@@ -5,7 +5,7 @@ import { reportCronRun, isPipelineUpdateNotice } from "@/lib/cron-alerts";
 import { getProjectByToken, listProjectsChecked } from "@/lib/projects";
 import { missingMigrations } from "@/lib/schema-check";
 import { isCloudMode } from "@/lib/cloud";
-import { polarConfigured } from "@/lib/billing";
+import { planGate, polarConfigured } from "@/lib/billing";
 import { appJwt } from "@/lib/github-app";
 
 // Post-deploy smoke test. The deploy-check GitHub Action hits this after
@@ -107,6 +107,30 @@ export async function GET(req: Request): Promise<Response> {
     );
   }
   const job = (jobParam ?? "deploy-check") + projectSuffix;
+
+  // A report from a project whose plan no longer covers it is answered
+  // honestly and dropped. reportCronRun refuses it anyway (that gate has to
+  // live there - the in-stack builder, the refill sweep and the recovery sweep
+  // all report through other doors), but a caller told "recorded" about a row
+  // that was never written is exactly the shape of lie that costs an hour of
+  // debugging later: this is the endpoint someone curls by hand when a repo
+  // looks connected and the dashboard never moves. Fails open like every plan
+  // gate - an unreadable subscription reports as normal.
+  if (reporterProject) {
+    let planPaused = false;
+    try {
+      planPaused = !(await planGate(reporterProject.id)).allowed;
+    } catch (e) {
+      console.error(`[deploy-check] plan check failed for ${reporterProject.slug}:`, e);
+    }
+    if (planPaused) {
+      return Response.json({
+        ignored: "this project's plan is not active - its pipeline is paused, so run outcomes are not recorded",
+        job,
+      });
+    }
+  }
+
   const failMsg = url.searchParams.get("fail");
   if (failMsg) {
     const result = { sha: liveSha || null, error: failMsg.slice(0, 300) };

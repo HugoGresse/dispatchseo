@@ -3,6 +3,7 @@ import { isTransientErrorMessage } from "./dataforseo";
 import { isCloudMode, isLocalBackendUrl } from "./cloud";
 import { listProjects, effectiveAutomations } from "./projects";
 import { projectAgent } from "./agents";
+import { planPausedProjectSlugs } from "./billing";
 
 // Cron failure alerts (LATER.md gap A4). Every cron route calls
 // reportCronRun() with its result JSON right before responding; this module
@@ -506,6 +507,25 @@ export async function reportCronRun(
   claimedOnly = false,
 ): Promise<void> {
   try {
+    // A lapsed plan drops out of the run log entirely - no row, no banner, no
+    // email to anyone. This is the door the noise actually comes through: the
+    // work stopped the moment planGate denied (crons skip, nothing is
+    // dispatched), but the ex-customer's repo keeps its own GitHub-side
+    // schedules and keeps reporting their outcomes here, so "stopped paying"
+    // used to mean "keeps alerting, forever, about a pipeline nobody is
+    // entitled to". Dropping the row rather than only the email is the point:
+    // a failed row that lives on goes stale and re-alarms by itself.
+    //
+    // Scoped to per-tenant jobs by construction - a bare job name is an
+    // instance-wide backend cron, which belongs to the operator and is never
+    // gated. planPausedProjectSlugs fails open, so this can only ever go quiet
+    // for an account whose plan really is inactive.
+    const reportingSlug = jobProjectSlug(job);
+    if (reportingSlug && (await planPausedProjectSlugs()).has(reportingSlug)) {
+      console.log(`[cron-alerts] ${job} ignored - the project's plan is inactive`);
+      return;
+    }
+
     const errors = hadError ? collectErrors(result) : [];
     let emailedAt: string | null = null;
 
@@ -632,6 +652,16 @@ export async function markCronFixed(job: string, projectSlug?: string): Promise<
 // never see a sibling project's job names or failure text. Omit the slug
 // for the owner's all-projects dashboard view.
 export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]> {
+  // Lapsed plans have no health, because they have no pipeline: planGate has
+  // already turned every cron into a skip for them. Their last rows are frozen
+  // history, and history left in here doesn't sit still - it ages past its
+  // staleness threshold and starts alarming on its own, which is how a
+  // cancelled account keeps a red banner (and, through markCronFixed's
+  // allowlist, a clearable one) forever. The lapsed owner is told the one true
+  // thing instead, by PlanLapsedBanner: the plan stopped, so the work did.
+  const paused = await planPausedProjectSlugs();
+  if (projectSlug && paused.has(projectSlug)) return [];
+
   const { data, error } = await db()
     .from("cron_runs")
     .select("job, ok, errors, created_at, claimed_only")
@@ -698,6 +728,13 @@ export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]>
   }
   const health = [...latest.values()]
     .filter((row) => !RETIRED_JOBS.has(baseJobName(row.job as string)))
+    // ...and the same suppression for the operator's all-projects view, which
+    // is not scoped by the early return above. Rows written before the plan
+    // lapsed stay in the table; they just stop being anybody's alert.
+    .filter((row) => {
+      const owner = jobProjectSlug(row.job as string);
+      return !(owner && paused.has(owner));
+    })
     .filter((row) => {
       if (!projectSlug) return true;
       const owner = jobProjectSlug(row.job as string);
@@ -786,7 +823,7 @@ export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]>
   // run together. Serially they put two per-project sweeps in front of Home.
   const reported = new Set(health.map((h) => h.job));
   const [heartbeat, builderHeartbeat] = await Promise.all([
-    pipelineHeartbeatAlerts(projectSlug, reported),
+    pipelineHeartbeatAlerts(projectSlug, reported, paused),
     builderJobHeartbeatAlerts(projectSlug, reported),
   ]);
   // Twin-rail first: it is pure in-memory, so every row it clears is a
@@ -1126,6 +1163,7 @@ async function builderJobHeartbeatAlerts(
 async function pipelineHeartbeatAlerts(
   projectSlug: string | undefined,
   alreadyReported: Set<string>,
+  paused: Set<string>,
 ): Promise<CronHealth[]> {
   try {
     // Unreachable installs: GitHub's runners can never reach a backend on
@@ -1145,6 +1183,13 @@ async function pipelineHeartbeatAlerts(
     for (const p of projects) {
       if (projectSlug && p.slug !== projectSlug) continue;
       if (!p.github_repo) continue; // nothing installable, nothing to expect
+      // A lapsed plan's silence is the CORRECT state, not a rotted secret.
+      // Without this the suppression above would invert into a new alarm: we
+      // stop recording their reports, their last row eventually ages out of
+      // the window, and this rail - which exists to catch a repo that never
+      // reported - starts telling the operator to go fix the secrets of an
+      // account that stopped paying.
+      if (paused.has(p.slug as string)) continue;
       const job = `seo-token-check--${p.slug}`;
       if (alreadyReported.has(job)) continue; // window already covers it
       // Wired = the install stamp, or a conventions row for installs that

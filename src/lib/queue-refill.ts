@@ -5,6 +5,7 @@ import { listProjects } from "./projects";
 import { isCloudMode, isLocalBackendUrl } from "./cloud";
 import { inStackBuilderOwnsBuilds } from "./builder-status";
 import { builderJobKey } from "./build-schedule";
+import { planGate } from "./billing";
 
 // Queue-empty self-heal (2026-07-27 incident).
 //
@@ -78,6 +79,15 @@ async function refillProject(p: {
   // token and the dispatch fails to authenticate.
   github_installation_id?: number | null;
 }): Promise<RefillOutcome> {
+  // Plan gate, same rule and same shape as api/cron/seo-dispatch: a lapsed or
+  // uncovered project buys no work. This sweep was the one path left that still
+  // WOKE a lapsed customer's repo - the dispatch fires a full research run on
+  // their Actions minutes, and every keyword it looks up is DataForSEO spend on
+  // the platform account. Informational skip, never hadError: a lapsed plan is
+  // a normal state, not a broken run.
+  const gate = await planGate(p.id);
+  if (!gate.allowed) return { skipped: `plan: ${gate.reason}` };
+
   // Setup gate, per CLAUDE.md: a project that has not finished onboarding has
   // no workflows to dispatch into, and that is a NORMAL state - informational
   // skip, never an error, never an alert email.
