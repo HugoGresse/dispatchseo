@@ -71,121 +71,134 @@ export type ChangelogEntry = {
 // Shipped, but not yet announced. Append here as the work lands; empty this
 // into a new CHANGELOG entry when it's time to cut a release. Nothing reads
 // this list - it exists so that writing the note down doesn't ping anyone.
-export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
-  {
-    kind: "fixed",
-    text:
-      "A plan that ends now really ends. Rank tracking and the builders already stopped " +
-      "when a plan lapsed, but the site's own GitHub workflows kept running on their own " +
-      "schedule - so a finished trial could still build and merge a guide every day, and " +
-      "kept sending failure alerts about a pipeline nobody was paying for. Those " +
-      "workflows now stand down on their next run, and the alerts stop with them. " +
-      "Re-subscribe and everything picks up again by itself.",
-  },
-  {
-    kind: "improved",
-    text:
-      "The GitHub-repo requirement now greets you before a card does. The landing hero " +
-      "says it under the domain box, a new FAQ answers the WordPress question head-on, " +
-      "and the signup notice starts open instead of waiting behind a click - so a " +
-      "WordPress site owner learns the answer on the way in, not at the Connect GitHub " +
-      "screen with a trial already ticking.",
-  },
-  {
-    kind: "improved",
-    text:
-      "The dashboard now tells you when it's waiting on YOU. While the install pull " +
-      "request sits unmerged, a banner names it and links straight to it - nothing can " +
-      "build until that PR lands on the default branch, and the dashboard used to look " +
-      "finished anyway. And the queue's \"building now\" badge stopped being an " +
-      "unconditional claim: it shows how long the build has been running, and past the " +
-      "point where the automatic recovery will re-queue it, it says \"build stalled - " +
-      "will retry\" instead of asserting live work it can't prove.",
-  },
-  {
-    kind: "new",
-    text:
-      "DispatchSEO now works out when your site actually launched instead of assuming " +
-      "it was born the day you signed up. It checks Search Console's history and the " +
-      "Wayback Machine's first capture of your domain - automatically once Search " +
-      "Console data starts flowing, or on demand with the new Detect button next to " +
-      "the launch date in Settings (and the detect_site_launch tool). The date only " +
-      "ever moves backward, and your own corrections always win. This matters because " +
-      "the launch date drives the Journey timeline, the publishing pace, and how " +
-      "ambitious keyword research is allowed to be.",
-  },
-  {
-    kind: "improved",
-    text:
-      "Adding a second site on self-host no longer ends in a silent dashboard. The " +
-      "\"setting up\" banner - previously cloud-only - now shows on self-host too, with " +
-      "honest wording: it tells you the pipeline isn't installed, points at the install " +
-      "command, follows the install live, and clears itself once the first data lands.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "Self-host can finally change which GitHub repo a project publishes to. The repo " +
-      "used to be settable exactly once, at creation - connect the wrong one (or disconnect " +
-      "to fix it) and the project was stranded. Settings now has an editable repo field, " +
-      "set_github_repo works on self-host too, and the install playbook walks your agent " +
-      "through reconnecting instead of stopping at a dead end.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "On free (GSC-only) projects, the purple \"Running your first ranking checks\" banner " +
-      "used to stay up forever - it was waiting for a rank check that only projects with " +
-      "DataForSEO credentials ever get. It now closes once your first ideas are queued, and " +
-      "no longer promises rankings that aren't configured.",
-  },
-  {
-    kind: "new",
-    text:
-      "Your site can now tell DispatchSEO which Google it lives in. A new Search market " +
-      "setting (Settings > Project, or the set_market tool) points rank checks and keyword " +
-      "research at your real country and language - 14 markets from Israel to Brazil - so a " +
-      "fully Hebrew site researches Hebrew keywords in Israeli results instead of American " +
-      "English ones. Keyword research used to query the US market no matter what; that's " +
-      "fixed as part of this.",
-  },
-  {
-    kind: "fixed",
-    text:
-      "A full engineering audit of Cursor support caught and fixed two builder bugs " +
-      "before any customer hit them: the step that writes Cursor's MCP credentials " +
-      "was silently doing nothing (runs only worked because Cursor happens to resolve " +
-      "env placeholders itself), and a quoting slip would have crashed the failure " +
-      "classifier on Cursor daily and tool builds. Every shipped workflow script is " +
-      "now parsed by bash as a release gate, Cursor gets the same generous timeouts " +
-      "on every workflow, the self-host builder learned the two measured plan-limit " +
-      "messages, and a dozen docs pages that still described two agents now describe " +
-      "three.",
-  },
-  {
-    kind: "improved",
-    text:
-      "The pixel dispatcher now wears lavender when Cursor runs your project, instead " +
-      "of the old steel blue. Claude keeps its clay, Codex its off-white.",
-  },
-  {
-    kind: "improved",
-    text:
-      "When a Claude account itself is the problem (a usage limit, or Anthropic blocking " +
-      "subscription access), the weekly scans now say so on the banner - naming the fix, " +
-      "including switching agent or moving to API billing - instead of a bare link to a " +
-      "workflow log.",
-  },
-  {
-    kind: "improved",
-    text:
-      "One broken credential no longer emails you once per workflow it takes down - after " +
-      "the first heads-up, the same cause waits three days before reminding you.",
-  },
-];
+export const UNRELEASED: { kind: ChangeKind; text: string }[] = [];
 
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "1.5.0",
+    date: "2026-08-18",
+    title: "Your site's own Google, its real launch date - and self-host stops getting stuck",
+    summary:
+      "Rank checks and keyword research now run in your site's own country and language " +
+      "instead of always asking American Google, DispatchSEO works out when your site really " +
+      "launched instead of assuming it was born at signup, and self-host can finally change " +
+      "which repo a project publishes to. Plus a Cursor audit, honest dashboard states while " +
+      "you're still setting up, and a plan that ends now really ends.",
+    announce: true,
+    changes: [
+      {
+        kind: "new",
+        text:
+          "DispatchSEO now works out when your site actually launched instead of assuming " +
+          "it was born the day you signed up. It checks Search Console's history and the " +
+          "Wayback Machine's first capture of your domain - automatically once Search " +
+          "Console data starts flowing, or on demand with the new Detect button next to " +
+          "the launch date in Settings (and the detect_site_launch tool). The date only " +
+          "ever moves backward, and your own corrections always win. This matters because " +
+          "the launch date drives the Journey timeline, the publishing pace, and how " +
+          "ambitious keyword research is allowed to be.",
+      },
+      {
+        kind: "new",
+        text:
+          "Your site can now tell DispatchSEO which Google it lives in. A new Search market " +
+          "setting (Settings > Project, or the set_market tool) points rank checks and keyword " +
+          "research at your real country and language - 14 markets from Israel to Brazil - so a " +
+          "fully Hebrew site researches Hebrew keywords in Israeli results instead of American " +
+          "English ones. Keyword research used to query the US market no matter what; that's " +
+          "fixed as part of this.",
+      },
+      {
+        kind: "improved",
+        text:
+          "The GitHub-repo requirement now greets you before a card does. The landing hero " +
+          "says it under the domain box, a new FAQ answers the WordPress question head-on, " +
+          "and the signup notice starts open instead of waiting behind a click - so a " +
+          "WordPress site owner learns the answer on the way in, not at the Connect GitHub " +
+          "screen with a trial already ticking.",
+      },
+      {
+        kind: "improved",
+        text:
+          "The dashboard now tells you when it's waiting on YOU. While the install pull " +
+          "request sits unmerged, a banner names it and links straight to it - nothing can " +
+          "build until that PR lands on the default branch, and the dashboard used to look " +
+          "finished anyway. And the queue's \"building now\" badge stopped being an " +
+          "unconditional claim: it shows how long the build has been running, and past the " +
+          "point where the automatic recovery will re-queue it, it says \"build stalled - " +
+          "will retry\" instead of asserting live work it can't prove.",
+      },
+      {
+        kind: "improved",
+        text:
+          "Adding a second site on self-host no longer ends in a silent dashboard. The " +
+          "\"setting up\" banner - previously cloud-only - now shows on self-host too, with " +
+          "honest wording: it tells you the pipeline isn't installed, points at the install " +
+          "command, follows the install live, and clears itself once the first data lands.",
+      },
+      {
+        kind: "improved",
+        text:
+          "The pixel dispatcher now wears lavender when Cursor runs your project, instead " +
+          "of the old steel blue. Claude keeps its clay, Codex its off-white.",
+      },
+      {
+        kind: "improved",
+        text:
+          "When a Claude account itself is the problem (a usage limit, or Anthropic blocking " +
+          "subscription access), the weekly scans now say so on the banner - naming the fix, " +
+          "including switching agent or moving to API billing - instead of a bare link to a " +
+          "workflow log.",
+      },
+      {
+        kind: "improved",
+        text:
+          "One broken credential no longer emails you once per workflow it takes down - after " +
+          "the first heads-up, the same cause waits three days before reminding you.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "A plan that ends now really ends. Rank tracking and the builders already stopped " +
+          "when a plan lapsed, but the site's own GitHub workflows kept running on their own " +
+          "schedule - so a finished trial could still build and merge a guide every day, and " +
+          "kept sending failure alerts about a pipeline nobody was paying for. Those " +
+          "workflows now stand down on their next run, and the alerts stop with them. " +
+          "Re-subscribe and everything picks up again by itself.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "Self-host can finally change which GitHub repo a project publishes to. The repo " +
+          "used to be settable exactly once, at creation - connect the wrong one (or disconnect " +
+          "to fix it) and the project was stranded. Settings now has an editable repo field, " +
+          "set_github_repo works on self-host too, and the install playbook walks your agent " +
+          "through reconnecting instead of stopping at a dead end.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "On free (GSC-only) projects, the purple \"Running your first ranking checks\" banner " +
+          "used to stay up forever - it was waiting for a rank check that only projects with " +
+          "DataForSEO credentials ever get. It now closes once your first ideas are queued, and " +
+          "no longer promises rankings that aren't configured.",
+      },
+      {
+        kind: "fixed",
+        text:
+          "A full engineering audit of Cursor support caught and fixed two builder bugs " +
+          "before any customer hit them: the step that writes Cursor's MCP credentials " +
+          "was silently doing nothing (runs only worked because Cursor happens to resolve " +
+          "env placeholders itself), and a quoting slip would have crashed the failure " +
+          "classifier on Cursor daily and tool builds. Every shipped workflow script is " +
+          "now parsed by bash as a release gate, Cursor gets the same generous timeouts " +
+          "on every workflow, the self-host builder learned the two measured plan-limit " +
+          "messages, and a dozen docs pages that still described two agents now describe " +
+          "three.",
+      },
+    ],
+  },
   {
     version: "1.2.0",
     date: "2026-08-05",
