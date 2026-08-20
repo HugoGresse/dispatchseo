@@ -2,7 +2,7 @@ import { db } from "./db";
 import { getAnalyticsOverview, type AnalyticsOverview } from "./analytics-data";
 import { getJourney, type Journey } from "./journey";
 import { getWeeklyProgress, type WeeklyProgress } from "./progress";
-import { getCronHealth } from "./cron-alerts";
+import { getCronHealth, criticalCronIssues } from "./cron-alerts";
 import { isCloudMode } from "./cloud";
 import { hasDataforseo } from "./pipeline-pack";
 import { effectiveAutomations, type Project } from "./projects";
@@ -675,12 +675,15 @@ export async function gatherPipelineState(
   ]);
   const suggestions = (sugRes.data ?? []) as Suggestion[];
 
-  // "Update available" reports are deliberately excluded: an outdated pipeline
-  // is not a failure, and the dispatcher opening with an alarm about one would
-  // be crying wolf on the normal state after any backend deploy.
-  const failingJobs = health
-    .filter((h) => !isCloudMode() || h.job.includes(`--${project.slug}`))
-    .filter((h) => (!h.ok || h.stale) && !h.update_available).length;
+  // The same bar as Home's red panel (criticalCronIssues): persistent,
+  // missed-window, or urgent failures only. Update notices and one-off blips
+  // must not flip the dispatcher into its alarm pose - crying wolf on the
+  // normal weather of scheduled jobs is what trains owners to ignore the pose
+  // that matters. Quota waits are excluded here too, matching Home, where
+  // they get their own calmer amber surface.
+  const failingJobs = criticalCronIssues(
+    health.filter((h) => !isCloudMode() || h.job.includes(`--${project.slug}`)),
+  ).length;
 
   // The pipeline is in, but the first research or the first rank check hasn't
   // landed yet - the honest "I'm still filling this in" window. Derived from

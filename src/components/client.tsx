@@ -740,8 +740,19 @@ export function CronFixedButton({
 }
 
 // Button-first sibling of CopyBlock for when the full text would drown the
-// card: a short labeled button that copies the exact full text.
-export function CopyButton({ text, label }: { text: string; label: string }) {
+// card: a short labeled button that copies the exact full text. `subtle`
+// renders it as small dotted-underline text instead of the emerald button -
+// for whisper-weight surfaces (the pipeline-update line) where a filled
+// button would promote the notice right back into a banner.
+export function CopyButton({
+  text,
+  label,
+  subtle = false,
+}: {
+  text: string;
+  label: string;
+  subtle?: boolean;
+}) {
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -750,7 +761,11 @@ export function CopyButton({ text, label }: { text: string; label: string }) {
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
       }}
-      className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-neutral-950 transition-colors hover:bg-emerald-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+      className={
+        subtle
+          ? "whitespace-nowrap text-xs text-neutral-400 underline decoration-dotted underline-offset-2 transition-colors hover:text-neutral-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400"
+          : "rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-neutral-950 transition-colors hover:bg-emerald-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+      }
     >
       {copied ? "Copied ✓" : label}
     </button>

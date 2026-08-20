@@ -29,7 +29,7 @@ import { EmptyState, GscChart, Mono, ProgressMeter, SectionTitle } from "@/compo
 import { GlanceSection } from "@/components/glance-stats";
 import { FREE_BACKLINKS, PAID_BACKLINKS } from "@/lib/playbook-data";
 import { getActivityReport, type ActivityLine } from "@/lib/activity";
-import { getCronHealth } from "@/lib/cron-alerts";
+import { getCronHealth, criticalCronIssues, looksLikeQuotaFailure } from "@/lib/cron-alerts";
 import { buildCronFixPrompt, buildPipelineUpdatePrompt } from "@/lib/cron-fix-prompt";
 import { isLive } from "@/lib/page-liveness";
 import { getAnalyticsOverview } from "@/lib/analytics-data";
@@ -73,7 +73,6 @@ import { DockerAccessTip } from "@/components/docker-access-tip";
 import { ChromeExtensionTip } from "@/components/chrome-extension-tip";
 import { FirstRunBackground } from "@/components/first-run-background";
 import AiVisibilitySection from "./ai-visibility-section";
-import { looksLikeQuotaFailure } from "@/lib/build-schedule";
 
 export const dynamic = "force-dynamic";
 
@@ -435,9 +434,12 @@ export default async function Home() {
   const quotaWaits = jobIssues.filter(
     (h) => !h.update_available && !h.ok && !h.stale && looksLikeQuotaFailure(h.errors),
   );
-  const cronIssues = jobIssues.filter(
-    (h) => !h.update_available && !quotaWaits.some((q) => q.job === h.job),
-  );
+  // The red panel is reserved for CRITICAL issues: failures that persisted
+  // across runs, missed a whole schedule window, or belong to an urgent class
+  // (broken deploy, dead credentials, empty balance). A single flaky run stays
+  // in the run log and get_cron_health, where the agent can still see it - the
+  // next scheduled run either cures it quietly or promotes it here.
+  const cronIssues = criticalCronIssues(jobIssues);
 
   // The last window before bundled DataForSEO runs out. Exhaustion itself is
   // already owned by the needsUsageLimit setup card below - this is the part
@@ -898,29 +900,25 @@ export default async function Home() {
           </div>
         ) : null}
         {updateNotices.length > 0 ? (
-          <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm">
-            <p className="font-medium text-sky-200">Pipeline update available</p>
-            <p className="mt-1 text-sky-300/90">
-              The SEO workflows in{" "}
-              <span className="break-words font-mono">{project.github_repo ?? "your site repo"}</span> are a
-              version behind this backend. Everything keeps publishing on the current version -
-              apply the update whenever convenient.
-              {updateNotices.map((h) => (
-                <span key={h.job} className="ml-2 whitespace-nowrap">
-                  <CronFixedButton job={h.job} label="mark applied" tone="sky" />
-                </span>
-              ))}
-            </p>
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <CopyButton
-                text={buildPipelineUpdatePrompt(project)}
-                label="Copy update prompt"
-              />
-              <p className="text-xs text-sky-300/70">
-                Paste it into your coding agent in the site repo - it applies the current pack, and this
-                notice clears after the next nightly check.
-              </p>
-            </div>
+          // Deliberately a whisper, not a box: an update waiting is the NORMAL
+          // state of every self-host install the morning after any backend
+          // release, and it used to arrive as one more colored banner on all
+          // of them at once. Publishing continues on the current version
+          // either way, so this earns one line of small print and two quiet
+          // actions - paste the update prompt into the coding agent, or mark
+          // it applied.
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-xs text-neutral-500">
+            <span className="min-w-0">
+              Pipeline update available for{" "}
+              <span className="break-words font-mono text-neutral-400">
+                {project.github_repo ?? "your site repo"}
+              </span>{" "}
+              — publishing continues on the current version; apply it whenever convenient.
+            </span>
+            <CopyButton text={buildPipelineUpdatePrompt(project)} label="Copy update prompt" subtle />
+            {updateNotices.map((h) => (
+              <CronFixedButton key={h.job} job={h.job} label="mark applied" tone="sky" />
+            ))}
           </div>
         ) : null}
       </div>

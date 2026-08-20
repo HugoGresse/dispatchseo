@@ -71,7 +71,19 @@ export type ChangelogEntry = {
 // Shipped, but not yet announced. Append here as the work lands; empty this
 // into a new CHANGELOG entry when it's time to cut a release. Nothing reads
 // this list - it exists so that writing the note down doesn't ping anyone.
-export const UNRELEASED: { kind: ChangeKind; text: string }[] = [];
+export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
+  {
+    kind: "improved",
+    text:
+      "The dashboard interrupts you a lot less. The red panel and the alert emails now fire " +
+      "only for problems that are real: a failure that happened twice in a row, a job that " +
+      "missed a whole schedule window, or something urgent like dead credentials or a broken " +
+      "deploy. A one-off blip - a GitHub hiccup, a vendor timeout - stays in the run log, " +
+      "where your agent can still see it, and usually fixes itself on the next run without " +
+      "painting anything red. \"Pipeline update available\" is one quiet line now instead of " +
+      "a colored box.",
+  },
+];
 
 // Newest first. The head of this list is what the banner announces.
 export const CHANGELOG: ChangelogEntry[] = [

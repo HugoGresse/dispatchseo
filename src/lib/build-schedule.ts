@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { getCronHealth } from "./cron-alerts";
+import { getCronHealth, looksLikeQuotaFailure } from "./cron-alerts";
 import { effectiveAutomations, type Project } from "./projects";
 import { guideQueueDry } from "./queue-refill";
 
@@ -92,12 +92,8 @@ export const FAILURE_RETRY_HOURS = 2;
 // a false negative just means normal backoff, a false positive just means we
 // retry at 2h instead of 4h. Neither can lose data or double-build - the
 // builders' own gates (built-today, open PR, empty queue) make an extra attempt
-// a no-op.
-const QUOTA_HINT = /session limit|usage limit|rate.?limit|quota|too many requests|\b429\b/i;
-
-export function looksLikeQuotaFailure(errors: readonly string[] | null | undefined): boolean {
-  return (errors ?? []).some((e) => QUOTA_HINT.test(e));
-}
+// a no-op. The classifier itself (looksLikeQuotaFailure) lives in
+// cron-alerts.ts now, shared with the banner policy there.
 
 export function failureRetryHours(
   consecutiveFailures: number,

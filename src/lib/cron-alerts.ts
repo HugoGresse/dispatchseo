@@ -1,5 +1,4 @@
 import { db } from "./db";
-import { isTransientErrorMessage } from "./dataforseo";
 import { isCloudMode, isLocalBackendUrl } from "./cloud";
 import { listProjects, effectiveAutomations } from "./projects";
 import { projectAgent } from "./agents";
@@ -12,9 +11,10 @@ import { planPausedProjectSlugs } from "./billing";
 // hourly cron that stays broken sends one email, not twenty-four; none for
 // deploy-check, where each run is a distinct human push). Cloud's customer
 // emails carry a second, cross-job debounce keyed on the CAUSE - see
-// customerCauseEmailedRecently. Failures that are
-// purely transient vendor errors (see TRANSIENT_MARKER in dataforseo.ts)
-// additionally need two consecutive failed runs before the first email. The post-deploy
+// customerCauseEmailedRecently. Every non-URGENT failure (see
+// isUrgentCronFailure) additionally needs two consecutive failed runs before
+// the first email - the same persistence bar the Home banner applies through
+// criticalCronIssues, so the two rails always tell one story. The post-deploy
 // smoke test (deploy-check route + .github/workflows/deploy-check.yml) rides
 // the same rails: same run log, same banner, same email.
 //
@@ -180,7 +180,72 @@ export type CronHealth = {
   // reportCronRun's claimedOnly param. Only /api/builder/jobs's due() check
   // reads this; every other consumer (banner, get_cron_health) can ignore it.
   claimed_only: boolean;
+  // The failure has been seen on at least two consecutive real runs - the
+  // previous real outcome was also a failure. This is what separates weather
+  // (one flaky run that the next scheduled run cures by itself) from a job
+  // that is actually broken, and criticalCronIssues keys on it. Manual
+  // "mark as fixed" rows are invisible to this scan on purpose: declaring a
+  // job fixed without fixing it must not reset its persistence.
+  repeat_failure: boolean;
 };
+
+// A quota failure is "come back later", not a broken job: the agent account it
+// names is the customer's own Claude/Codex plan hitting its usage window, a
+// normal state of a bring-your-own-credential product. Matching on message
+// text is deliberately a HINT, not a verdict - a false negative just means the
+// failure is treated as ordinary, a false positive means it waits in the amber
+// box instead of the red one. (Lives here rather than build-schedule.ts so the
+// banner policy below can use it without an import cycle; build-schedule
+// re-imports it for its retry-backoff decision.)
+const QUOTA_HINT = /session limit|usage limit|rate.?limit|quota|too many requests|\b429\b/i;
+
+export function looksLikeQuotaFailure(errors: readonly string[] | null | undefined): boolean {
+  return (errors ?? []).some((e) => QUOTA_HINT.test(e));
+}
+
+// Failure classes worth interrupting the owner for on their FIRST occurrence,
+// because waiting a cadence changes nothing and costs a day:
+//   - deploy-check: a human just pushed and the deploy is broken - every run
+//     is a distinct event, and "wait and see" is never the answer;
+//   - dead credentials / permissions / an empty balance: these never heal on
+//     their own, and every scheduled run until they're fixed is a no-op.
+// Everything else gets one grace run (see criticalCronIssues / reportCronRun):
+// scheduled jobs retry on their own, so a real breakage announces itself again
+// within one cadence, while a GitHub blip or vendor hiccup never gets to paint
+// the dashboard red at all.
+// "gave up after N attempts" is the jobs queue's terminal-failure phrasing
+// (api/cron/jobs): the retries are already spent, so waiting a grace run
+// changes nothing and an owner's article sits unpublished meanwhile.
+const URGENT_FAILURE =
+  /secret|credential|token|api.?key|unauthorized|forbidden|revoked|permission|\b401\b|\b403\b|payment|billing|balance|oauth_org_not_allowed|disabled claude subscription|gave up after \d+ attempts/i;
+
+export function isUrgentCronFailure(job: string, errors: string[]): boolean {
+  if (baseJobName(job) === "deploy-check") return true;
+  return errors.some((e) => URGENT_FAILURE.test(e));
+}
+
+// THE BANNER POLICY, in one place - Home's red panel and the briefing's alert
+// tone both call this, so they can never drift apart. A failed run-log row is
+// not automatically worth interrupting the owner: most one-off failures are
+// weather, and the run log already keeps them. The red surface is reserved for
+// failures that are:
+//   - stale: a full schedule window passed with the app up - persistent by
+//     definition, whatever the error text said;
+//   - repeated: failed on at least two consecutive real runs;
+//   - urgent: see isUrgentCronFailure - first occurrence is already the alarm.
+// Quota waits and pipeline-update notices are excluded because they have their
+// own calmer surfaces on Home. Everything filtered out here stays visible in
+// get_cron_health: the agent-facing view keeps full fidelity, and this filter
+// is presentation policy, not truth.
+export function criticalCronIssues(health: CronHealth[]): CronHealth[] {
+  return health.filter((h) => {
+    if (h.ok && !h.stale) return false;
+    if (h.update_available) return false;
+    if (!h.ok && !h.stale && looksLikeQuotaFailure(h.errors)) return false;
+    if (h.stale) return true;
+    return h.repeat_failure || isUrgentCronFailure(h.job, h.errors);
+  });
+}
 
 // Pull the human-readable error strings out of a cron's result JSON: any
 // "error" string and any non-empty "failed" string array, prefixed with the
@@ -534,19 +599,26 @@ export async function reportCronRun(
     // owner, and it would fire for EVERY connected repo of EVERY user on the
     // morning after any backend deploy that touches the pack.
     if (hadError && !isPipelineUpdateNotice(job, errors)) {
-      // Transient vendor blips (tagged by dataforseo.ts / serp.ts AFTER
-      // their in-call retries already failed) get one grace run: the run
-      // still logs as failed and the banner shows it immediately, but the
-      // email only goes out if the previous run of this job also failed -
-      // a sustained outage wakes the owner, a one-off SERP hiccup doesn't.
-      // Any untagged error in the mix (creds, balance, our own bugs) keeps
-      // emailing on the first failure, as before.
+      // One grace run before the first email, same policy as the Home banner
+      // (criticalCronIssues): the run still logs as failed and get_cron_health
+      // shows it immediately, but the email only goes out if the previous real
+      // run of this job also failed - a sustained breakage wakes the owner, a
+      // one-off blip (GitHub hiccup, cancelled runner, vendor 5xx) doesn't.
+      // This used to apply only to transient-TAGGED vendor errors; it now
+      // covers every non-urgent failure, because scheduled jobs retry on their
+      // own and a real breakage re-announces itself within one cadence.
+      // Urgent classes (isUrgentCronFailure: a broken deploy just pushed, dead
+      // credentials, an empty balance) still email on the first failure -
+      // those never heal by waiting.
       let persistedAcrossRuns = true;
-      if (errors.length > 0 && errors.every(isTransientErrorMessage)) {
+      if (!isUrgentCronFailure(job, errors)) {
         const { data: prev } = await db()
           .from("cron_runs")
           .select("ok")
           .eq("job", job)
+          // Claim rows are handouts, not outcomes - they must not count as
+          // "the previous run recovered" (nor as a failure).
+          .eq("claimed_only", false)
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -709,6 +781,11 @@ export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]>
   // dashboard. oldestClaim covers the never-completed-even-once case.
   const lastRealAt = new Map<string, string>();
   const oldestClaimAt = new Map<string, string>();
+  // Persistence scan for repeat_failure: the newest two real outcomes per job,
+  // skipping manual "mark as fixed" rows - so declaring a job fixed without
+  // fixing it never resets its persistence, and the next real failure still
+  // reads as a repeat (banner comes straight back).
+  const realOks = new Map<string, boolean[]>();
   for (const row of data) {
     const owner = jobProjectSlug(row.job as string);
     if (
@@ -722,8 +799,16 @@ export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]>
     if (!latest.has(job)) latest.set(job, row);
     if (row.claimed_only) {
       oldestClaimAt.set(job, row.created_at as string); // desc order: last write wins = oldest
-    } else if (!lastRealAt.has(job)) {
-      lastRealAt.set(job, row.created_at as string);
+    } else {
+      if (!lastRealAt.has(job)) lastRealAt.set(job, row.created_at as string);
+      const isManualFix =
+        Boolean(row.ok) &&
+        ((((row.errors as string[]) ?? [])[0] ?? "")).startsWith("marked as fixed manually");
+      const oks = realOks.get(job) ?? [];
+      if (oks.length < 2 && !isManualFix) {
+        oks.push(Boolean(row.ok));
+        realOks.set(job, oks);
+      }
     }
   }
   const health = [...latest.values()]
@@ -817,6 +902,10 @@ export async function getCronHealth(projectSlug?: string): Promise<CronHealth[]>
           !okRow.ok &&
           isPipelineUpdateNotice(job, (okRow.errors as string[]) ?? []),
         claimed_only: claimed,
+        repeat_failure: (() => {
+          const oks = realOks.get(job) ?? [];
+          return oks.length >= 2 && !oks[0] && !oks[1];
+        })(),
       };
     });
   // Independent of each other - both only read the reported-job set - so they
@@ -1042,6 +1131,10 @@ async function githubQuotaAlert(
         ],
         update_available: false,
         claimed_only: false,
+        // Synthesized from a whole missed window / multi-job silence - a
+        // persistent condition by construction, so it must clear the
+        // criticalCronIssues persistence bar.
+        repeat_failure: true,
       });
     }
     return out;
@@ -1126,6 +1219,7 @@ async function builderJobHeartbeatAlerts(
             ],
             update_available: false,
             claimed_only: false,
+            repeat_failure: true, // a whole missed window - persistent by construction
           });
           continue;
         }
@@ -1139,6 +1233,7 @@ async function builderJobHeartbeatAlerts(
             errors: [],
             update_available: false,
             claimed_only: false,
+            repeat_failure: true, // a whole missed window - persistent by construction
           });
         }
       }
@@ -1236,6 +1331,7 @@ async function pipelineHeartbeatAlerts(
           ],
           update_available: false,
           claimed_only: false,
+          repeat_failure: true, // never-reported since install - persistent by construction
         });
       } else {
         const ageHours = staleAgeHours(new Date(hb.created_at as string).getTime());
@@ -1248,6 +1344,7 @@ async function pipelineHeartbeatAlerts(
             errors: [],
             update_available: false,
             claimed_only: false,
+            repeat_failure: true, // a whole missed window - persistent by construction
           });
         }
       }

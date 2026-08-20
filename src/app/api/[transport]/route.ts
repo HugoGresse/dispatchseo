@@ -2197,9 +2197,13 @@ const mcpHandler = createMcpHandler(
           "they phone their outcomes home), and the secrets canary that " +
           "validates tokens/keys every 6h. Each entry: ok/failed, error strings, " +
           "and whether the job is stale (hasn't run inside its expected window). " +
-          "This is the dashboard's red 'background jobs need attention' banner " +
-          "as data - check it when rankings or GSC stats look frozen, when a " +
-          "build seems missing, or to confirm the latest deploy passed its " +
+          "This is a SUPERSET of the dashboard's red banner: the banner only " +
+          "shows failures that repeated (repeat_failure=true), missed a whole " +
+          "window, or are urgent (dead credentials, a broken deploy) - a " +
+          "one-off failed run appears here and nowhere else, and usually cures " +
+          "itself on the next scheduled run. Check this when rankings or GSC " +
+          "stats look frozen, when a build seems missing, or to confirm the " +
+          "latest deploy passed its " +
           "smoke test. Empty means no job has ever logged a run (fresh install). " +
           "An entry with update_available=true is NOT a failure: it means the " +
           "repo's installed pipeline pack is a version behind this backend " +

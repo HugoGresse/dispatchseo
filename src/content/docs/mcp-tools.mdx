@@ -1025,7 +1025,12 @@ platform's own instance-wide crons too. Takes no parameters. Each entry
 carries ok/failed, error strings, and whether the job is stale. An empty
 result means no job has ever logged a run; an entry with
 `update_available:true` isn't a failure, just an installed pipeline pack
-a version behind.
+a version behind. `repeat_failure:true` means the same job also failed
+the real run before this one. The owner's dashboard and the alert emails
+only surface failures that are repeated, stale, or urgent (a broken
+deploy, dead credentials, an empty balance) - a one-off failed run shows
+here first and nowhere else, so finding one the dashboard doesn't show
+is the design working, not a discrepancy to report.
 
 ### `mark_cron_fixed`
 

@@ -18,10 +18,15 @@ works too.
 
 ## Where failures surface
 
-Every scheduled job logs its runs. Failures show as a red banner on the
-dashboard Home page, and - if you set up the
-[failure email](#get-emailed-when-something-breaks) - land in your inbox too,
-at most one email per job per day.
+Every scheduled job logs its runs. A failure that persists - the same job
+failing twice in a row, or missing a whole schedule window - shows as a red
+banner on the dashboard Home page, and - if you set up the
+[failure email](#get-emailed-when-something-breaks) - lands in your inbox
+too, at most one email per job per day. Urgent problems (a broken deploy,
+dead credentials, an empty balance) skip the wait and surface on their
+first failure. A single one-off failed run does neither: it sits in the
+run log and `get_cron_health`, and the next scheduled run usually cures
+it on its own.
 
 **A skipped job is not a failed job.** Capabilities you haven't finished
 setting up - no Search Console yet, no keyword data source - skip quietly by

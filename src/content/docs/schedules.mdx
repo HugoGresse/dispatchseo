@@ -324,22 +324,27 @@ just running from inside the stack instead.
 
 Every job on this page - backend cron, workflow, or builder job - reports
 its outcome through the same function, `reportCronRun()`. A run always
-gets logged to the `cron_runs` table; a failed run additionally triggers,
-in order:
+gets logged to the `cron_runs` table; a failure that's worth interrupting
+you for additionally triggers, in order:
 
 1. A red banner on the dashboard **Home** page.
 2. An email through Resend, if you've set up
    [failure alerts](/docs/troubleshooting#get-emailed-when-something-breaks) -
    debounced so a job that stays broken doesn't spam you: 24 hours for the
-   three backend data crons, 6 hours by default for everything reported
+   backend data crons, 6 hours by default for everything reported
    from GitHub Actions or the builder, and every single time for
-   deploy-check, since each of its failures is a distinct human push. A
-   one-off vendor blip (a transient DataForSEO or SerpApi error) gets one
-   free pass too - the email only goes out if the same job also failed on
-   its previous run.
+   deploy-check, since each of its failures is a distinct human push.
 3. Visibility in the `get_cron_health` MCP tool, so your agent can see
    exactly what's broken and, once you've actually fixed and verified it,
    clear the alert itself with `mark_cron_fixed`.
+
+"Worth interrupting you for" has a precise meaning: the same job failed
+twice in a row, a job missed a whole schedule window, or the error is one
+you must act on now (a broken deploy you just pushed, dead credentials,
+an empty balance). A single failed run - a GitHub hiccup, a vendor
+timeout - stays in the run log and in `get_cron_health`, where your agent
+can still see it; scheduled jobs retry on their own, so it either cures
+itself on the next run or gets promoted to the banner and email then.
 
 See [Troubleshooting](/docs/troubleshooting) for the fixes to the specific
 failures you're most likely to hit.
