@@ -10,6 +10,16 @@
 // Sentry breaks it from outside the route. `Sentry.captureRequestError` (wired
 // as onRequestError) attaches the request URL to every server-side error event,
 // and tracesSampleRate attaches http.url / http.target to sampled transactions.
+//
+// STATE AS OF 2026-08-05: the server-side hook that did this was deleted
+// outright (428b872), so there is no server Sentry to leak through today and
+// this module runs only from instrumentation-client.ts. It is deliberately
+// kept, and kept complete, for two reasons: the browser SDK still attaches
+// URLs to client events and transactions, and the day server instrumentation
+// comes back, the redaction has to already exist - re-adding an init without
+// remembering this invariant is exactly how the token would ship to a third
+// party. Wire `beforeSend`/`beforeSendTransaction` to scrubSentryEvent in any
+// future src/instrumentation.ts before setting a DSN on it.
 // So any 500 or any 1-in-10 sampled request on /api/mcp?key=... ships a live
 // tenant credential to a third-party service - and on cloud those are OTHER
 // PEOPLE'S tokens, sitting in the operator's issue tracker forever, readable by

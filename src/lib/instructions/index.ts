@@ -66,8 +66,12 @@ import { BACKLINKS, BACKLINKS_STEPS } from "./backlinks";
 import { TREND_SCAN, TREND_SCAN_STEPS } from "./trend-scan";
 import { TREND_EXPAND, TREND_EXPAND_STEPS } from "./trend-expand";
 import { GEO_SCAN, GEO_SCAN_STEPS } from "./geo-scan";
+import { CHAT_CORE } from "./chat-core";
+import { WRITE_GUIDE_CHAT, WRITE_GUIDE_CHAT_STEPS } from "./write-guide-chat";
+import { SETUP_CHAT, SETUP_CHAT_STEPS } from "./setup-chat";
+import { RESEARCH_CHAT, RESEARCH_CHAT_STEPS } from "./research-chat";
 
-export const INSTRUCTIONS_VERSION = "2026-08-06.2";
+export const INSTRUCTIONS_VERSION = "2026-08-20.2";
 
 export const WORKFLOWS = [
   "install",
@@ -80,6 +84,11 @@ export const WORKFLOWS = [
   "report",
   "backlinks",
   "geo-scan",
+  // Chat playbooks: same job, written for Claude.ai or ChatGPT rather than a
+  // coding agent. They carry CHAT_CORE instead of CORE - see CHAT_WORKFLOWS.
+  "setup-chat",
+  "research-chat",
+  "write-guide-chat",
 ] as const;
 
 export type WorkflowName = (typeof WORKFLOWS)[number];
@@ -103,6 +112,12 @@ export const WORKFLOW_SUMMARIES: Record<WorkflowName, string> = {
   backlinks: "On demand: prospect backlink targets for a keyword or competitor",
   "geo-scan":
     "Weekly: sample the questions customers ask AI assistants on the owner's own subscription, record which answers cite the site, surface the domains cited instead",
+  "setup-chat":
+    "One-time, with the owner present: read the site summary, ask three questions (who buys, what never to say, how it should sound), and save the answers as standing writing rules",
+  "research-chat":
+    "On demand: turn what the business actually does into a handful of defensible ideas, checked against real numbers where we have them, and queue them for approval",
+  "write-guide-chat":
+    "Per article: take the top approved idea, find what the current results miss, write it, self-check it, and hand it in with submit_article",
 };
 
 // Plain-English pipelines for the dashboard's Instructions page - each entry
@@ -119,6 +134,9 @@ export const WORKFLOW_STEPS: Record<WorkflowName, WorkflowStep[]> = {
   report: REPORT_STEPS,
   backlinks: BACKLINKS_STEPS,
   "geo-scan": GEO_SCAN_STEPS,
+  "setup-chat": SETUP_CHAT_STEPS,
+  "research-chat": RESEARCH_CHAT_STEPS,
+  "write-guide-chat": WRITE_GUIDE_CHAT_STEPS,
 };
 
 const BODIES: Record<WorkflowName, string> = {
@@ -132,11 +150,20 @@ const BODIES: Record<WorkflowName, string> = {
   report: REPORT,
   backlinks: BACKLINKS,
   "geo-scan": GEO_SCAN,
+  "setup-chat": SETUP_CHAT,
+  "research-chat": RESEARCH_CHAT,
+  "write-guide-chat": WRITE_GUIDE_CHAT,
 };
+
+// Workflows served to a chat app rather than a coding agent. They get
+// CHAT_CORE in place of CORE + CORE_TAIL: the standard preamble is 21KB and
+// opens by telling the reader to go and read a file at the repository root,
+// which a chat model can neither afford nor do.
+const CHAT_WORKFLOWS: WorkflowName[] = ["setup-chat", "research-chat", "write-guide-chat"];
 
 // Workflows whose text embeds the live pacing verdict (one guide per day,
 // pacing.ts). Only these pay the extra pages query at render time.
-const PACED_WORKFLOWS: WorkflowName[] = ["build-guide", "research"];
+const PACED_WORKFLOWS: WorkflowName[] = ["build-guide", "research", "write-guide-chat"];
 
 // Workflows that actually VET keywords, and therefore receive the keyword
 // half of the quality bar (volume bands, dynamic KD ceiling, authority gate,
@@ -156,6 +183,10 @@ const KEYWORD_VETTING_WORKFLOWS: WorkflowName[] = [
   "trend-expand",
   "install",
   "setup",
+  // research-chat deliberately absent: it carries its own short-form version
+  // of this bar (see the file). The full one is ten pages of prose written
+  // for an agent with a large window, and sending it to a chat client would
+  // spend more of the session on the policy than on the research.
 ];
 
 // Every response is self-contained: shared core + the workflow body, with the
@@ -253,7 +284,9 @@ export async function renderInstructions(workflow: WorkflowName, project: Projec
   // as disable-lists). OFF swaps the ~45-line cover step for a five-line note,
   // so an owner who doesn't want covers stops paying for the instructions too.
   const coversOn = !prefs.disabled_blocks.includes("cover");
-  const raw = `${CORE}${CORE_TAIL}\n${BODIES[workflow]}`;
+  const raw = CHAT_WORKFLOWS.includes(workflow)
+    ? `${CHAT_CORE}\n${BODIES[workflow]}`
+    : `${CORE}${CORE_TAIL}\n${BODIES[workflow]}`;
   let markdown = raw
     .replaceAll("{{RESEARCH_QUALITY_BAR}}", researchBar)
     .replaceAll("{{BACKLINKS_STEP}}", backlinksStep)

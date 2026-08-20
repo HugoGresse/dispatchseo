@@ -346,6 +346,269 @@ Returns `pass` (boolean), `compared_against` (how many published guides
 it checked against), and `flags` - the exact offending strings when it
 fails.
 
+## Articles and publishing
+
+The other way an article reaches a site. The original route has a coding
+agent in your own CI write the article and open the pull request; this
+one takes a finished article straight from your AI and publishes it for
+you - to WordPress, or as a pull request our server opens in your repo.
+Either way your AI hands the article over and stops there.
+
+### `submit_article`
+
+Hand in a finished article as plain markdown. The server runs it through
+the publishing gate, stores it as a draft, then formats it, inserts
+internal links into your existing pages, builds the meta description,
+FAQ schema and cover image, and publishes it on your schedule. Your
+agent does not publish anything itself and does not need to know how
+your site works.
+
+The gate is the point. It runs here rather than inside the writing
+agent, because a model checking its own draft passes it - so the same
+24 checks apply whether the article came from Claude Code, Codex, the
+Claude app, or ChatGPT. A failed submission comes back with the exact
+checks that failed and a `fix` line for each one, written to be acted on
+without a human: apply them and call `submit_article` again with the
+same `suggestion_id` and it updates the same draft. Three rejected
+attempts is the point to stop and tell the owner what's blocking it.
+
+Where it ends up is the site's own setting, not something to pass here.
+On the WordPress route the article is posted for you; on the GitHub
+route our server commits it into the folder your site already keeps its
+articles in and opens a pull request (merged automatically if the site
+is on automatic mode). `set_publish_target` changes the door, and
+`get_drafts` says where each article got to.
+
+<Fields>
+  <Field name="suggestion_id" type="string">
+    The queued idea this article fulfils. Passing it marks the idea
+    `in_progress` and keeps one live article per idea - a resubmission
+    updates that draft instead of adding another. Omit it only for an
+    article the owner asked for that was never in the queue.
+  </Field>
+  <Field name="title" type="string" required="true">
+    The title as it should appear on the page.
+  </Field>
+  <Field name="slug" type="string" required="true">
+    Lowercase and hyphenated, no leading or trailing slash.
+  </Field>
+  <Field name="meta_description" type="string">
+    Roughly 120-160 characters. Omitted means one is built from the
+    opening.
+  </Field>
+  <Field name="primary_keyword" type="string" required="true">
+    The single search term the article targets, exactly as someone would
+    type it.
+  </Field>
+  <Field name="markdown" type="string" required="true">
+    The full article. No frontmatter, no raw HTML, and not wrapped in a
+    code fence.
+  </Field>
+  <Field name="faq" type="array">
+    `{ question, answer }` pairs for the FAQ block and its schema. Each
+    question ends in "?" and each answer is a couple of real sentences.
+  </Field>
+  <Field name="sources" type="array">
+    `{ url, title? }` for sources actually used. Placeholder and
+    example.com URLs fail the gate.
+  </Field>
+  <Field name="cover_brief" type="string">
+    One line describing the cover image's subject. Never published as
+    text.
+  </Field>
+</Fields>
+
+A site can hand in **5 articles a day** and have **3 waiting to publish**
+at once. Neither number is about our costs - the finisher calls no model,
+so an article costs us a fraction of a cent. They're about yours:
+publishing a week of content in an afternoon is the pattern search
+engines read as a bulk-generated site, which costs you more than the
+extra articles are worth. Both caps refuse by name and store nothing, a
+rejected article never counts against either, and a resubmission of
+something already in flight always goes through.
+
+Accepted returns `{ draft_id, status: "submitted", score, advisory,
+note }` - `score` is 0-100 across every check, and `advisory` lists the
+non-blocking ones that failed, worth fixing next time but not worth a
+round trip now. Rejected comes back as an error carrying `draft_id`,
+`score`, and `blocking` - one `{ id, title, fix }` per check that must
+pass. An article for an idea we've already accepted is refused by name,
+not by a database error.
+
+### `get_drafts`
+
+Every article submitted through `submit_article` and what happened to it -
+the same list the owner's Drafts screen shows. Call it after a rejection:
+the blocking checks and their `fix` lines come back here too, so a new
+chat can pick up where the last one left off without resubmitting blind.
+
+The statuses, in the order an article moves through them:
+
+| Status | What it means |
+|---|---|
+| `submitted` | Passed the gate, queued for formatting |
+| `rejected` | Sent back - `problems` says what to fix |
+| `accepted` | Formatted and queued to publish |
+| `blocked_setup` | Nowhere to publish yet; `blocked_reason` says what's missing |
+| `finished` | Posted to WordPress, or a pull request opened in the repo - not yet confirmed live |
+| `published` | Confirmed live |
+| `discarded` | The owner threw it away |
+
+<Fields>
+  <Field name="status" type="string">
+    Return only this status. Omit for everything.
+  </Field>
+  <Field name="limit" type="number">
+    How many, newest first. Defaults to 20, max 50.
+  </Field>
+</Fields>
+
+Returns one compact object per draft: `{ id, suggestion_id, title, slug,
+status, score, problems, published_url, pr_url, created_at, updated_at }`.
+Only the checks that FAILED come back in `problems` - the full report is
+stored, but twenty passing checks are not worth your context. `pr_url` is
+set only on the GitHub route, and is where the owner reviews the article
+until the page is confirmed live.
+
+### `approve_draft`
+
+Publish a finished article right now instead of at the site's usual
+publishing hour. Owner-gated: an accepted article already publishes on
+its own, so an autonomous run has no reason to call this. It's also how
+you release an article that parked as `blocked_setup`, once the owner has
+connected their site.
+
+<Fields>
+  <Field name="id" type="string" required="true">
+    The draft id from `get_drafts` or `submit_article`.
+  </Field>
+</Fields>
+
+Refuses by name rather than queueing work that can't run: an article
+that isn't prepared yet, one that's already live, a discarded one, or a
+site with nowhere to publish all come back as an error saying which.
+When the article already has a publish queued for the site's usual hour,
+that job is pulled forward to now rather than left waiting - "now" means
+now.
+
+### `discard_draft`
+
+Throw an article away so it is never published. Owner-gated. The row is
+kept as history rather than deleted, so "why did that article never
+appear" stays answerable. A rejected draft doesn't need discarding - fix
+it and resubmit instead.
+
+<Fields>
+  <Field name="id" type="string" required="true">
+    The draft id from `get_drafts` or `submit_article`.
+  </Field>
+</Fields>
+
+### `get_site_digest`
+
+What your site already covers, read for you. Our server crawls the site
+when you connect it and again every week, and keeps a compact summary:
+the sections it has, how many pages, the newest and oldest, sample
+titles, the most-linked pages, typical article length.
+
+Call it before researching or writing. It's how your AI avoids
+proposing an article you already have, and how it matches your site's
+voice and depth - and reading 150 pages instead would cost more context
+than the article is worth, which is the whole reason this exists.
+
+Returns `{ crawled, digest, notes, page_count, source, crawled_at }`.
+`notes` names anything the crawl couldn't see (a page cap it hit, pages
+that wouldn't load), so a partial picture says so rather than passing
+itself off as the whole site. A site we haven't read yet comes back as
+`{ crawled: false, note }` - a real state, not an error.
+
+The full page inventory the internal linker uses is deliberately not in
+here. It's an order of magnitude larger, our finisher is the only thing
+that reads it, and folding it in would break the context budget this
+summary exists to respect.
+
+### `rescan_site`
+
+Queue a fresh read of the site. It runs in the background; call
+`get_site_digest` a few minutes later for the result. The site is
+re-read weekly anyway, so this is for when something changed that
+matters now - a restructure, a new section, pages published elsewhere.
+Calling it twice in a day queues one read and tells you so
+(`already_queued: true`) rather than pretending to queue a second.
+
+### `set_publish_target`
+
+Choose where finished articles go: `wordpress` posts them straight to
+your site, `github` commits the article to the connected repo and opens
+a pull request (merged automatically in automatic mode), `manual`
+finishes the article and leaves it for you to place. Owner-gated.
+
+<Fields>
+  <Field name="target" type="string" required="true">
+    `github`, `wordpress`, or `manual`.
+  </Field>
+</Fields>
+
+It does **not** connect anything. The WordPress username and application
+password are entered on the Settings screen and never travel through the
+MCP - same rule as every other credential. Setting `wordpress` before
+that connection exists is allowed, and the response says plainly that
+articles will wait until it's made.
+
+### `set_content_path_hint`
+
+Repo route only. The folder in the connected GitHub repo that holds the
+site's articles (for example `content/blog`). Leave it unset and the
+publisher works it out from the repo's layout; set it when `get_drafts`
+reports a draft parked on "where your articles live", or when the owner
+tells you the folder. An empty string clears it. Owner-gated. The same
+field as Settings - Where your articles live.
+
+<Fields>
+  <Field name="path" type="string" required="true">
+    Repo-relative folder, plain characters only, no `..`. Empty string
+    clears the hint.
+  </Field>
+</Fields>
+
+### `save_research_notes`
+
+Store what you learned researching an idea, so a **later** conversation
+can write the article without paying to redo the research.
+
+This is what makes the split work on a chat plan. A coding agent
+researches and writes in one long run and keeps the findings in its
+context; Claude.ai or ChatGPT has neither the window nor the continuity
+for that, so one chat researches, another writes, and this is the
+handover between them.
+
+<Fields>
+  <Field name="suggestion_id" type="string">
+    The queued idea this research is for. Saving again for the same id
+    replaces the previous notes, so the writing session never has to
+    guess which of two versions is current. Omit for research that isn't
+    tied to a queued idea.
+  </Field>
+  <Field name="notes" type="object" required="true">
+    Your findings as a JSON object - SERP picture, competitor gaps, the
+    angle, an outline, numbers with their sources. Shape it however suits
+    the work; nothing on our side parses it. Capped at 64KB, which is
+    room for conclusions and not room for three competitor articles
+    pasted in whole. Over that it's refused by name, and whatever was
+    saved before stays intact.
+  </Field>
+</Fields>
+
+### `get_research_notes`
+
+Read back research an earlier conversation saved. Call it first in a
+writing session: if notes exist for the idea you're about to write, the
+research is done. Pass `suggestion_id` for one idea's notes, or omit it
+to list the most recent unattached ones.
+
+Nothing saved yet comes back as `{ found: false, note }` - it means
+nobody has researched this, not that the lookup failed.
+
 ## Keywords and rankings
 
 The tracking set is separate from one-off research: what you track here
@@ -612,9 +875,18 @@ indexed yet, or the cron hasn't run its first pass for this project.
 This project's DataForSEO billing status: who it's billed to, month-to-
 date spend against the platform's monthly budget (when applicable), the
 projected month-end spend under the rank cron's current pacing, and
-today's `check_serp` count against its daily cap. Takes no parameters. A
-project on its own account (or self-host) isn't metered here - the spend
-fields stay zero.
+today's `check_serp` and `keyword_ideas` counts against their daily caps.
+Takes no parameters. A project on its own account (or self-host) isn't
+metered here - the spend fields stay zero.
+
+The two daily caps exist for different reasons and behave differently.
+`check_serp`'s is 30 and applies only to projects on the shared plan -
+it stops our account being used as a free SERP proxy. `keyword_ideas`'s
+is 10 and applies to **every** project, because one call there is worth
+up to ten metered requests and a looping client can empty an account
+that isn't ours to protect but is still someone's. Both reset at UTC
+midnight and both refuse by name rather than returning an empty result,
+so a caller that hits one stops instead of retrying.
 
 ### `suggest_keywords`
 
@@ -966,10 +1238,16 @@ migration.
 The project this token belongs to and how it's set up: domain, mode,
 the effective auto-approve flags, keyword source, whether a SERP
 provider and Search Console are connected, whether this repo has its own
-DataForSEO MCP server, the content-pipeline repo, and whether one-tap
-merge is available. Takes no parameters. Worth calling first in a
-session, since it tells you which of the other tools will actually work.
-Secrets are never returned - credentials stay dashboard-only.
+DataForSEO MCP server, the content-pipeline repo, whether one-tap merge
+is available, where finished articles go (`publish_target`: github,
+wordpress or manual) and whether WordPress is actually connected
+(`wordpress_connected`), plus the setup wizard's answers - `ai_choice`
+(what the owner said will write: claude-web, chatgpt, claude-code,
+codex, cursor, or null for projects from before the adaptive wizard) and
+`chat_app_connected` (true once any request has reached this server
+from a chat app). Takes no parameters. Worth calling first in a session,
+since it tells you which of the other tools will actually work. Secrets
+are never returned - credentials stay dashboard-only.
 
 ## Dashboard parity
 

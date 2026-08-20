@@ -9,18 +9,30 @@ import { AgentMark } from "@/components/agent-mark";
 import {
   chooseGithubRepo,
   connectClaudeToken,
+  finishWizard,
   runPipelineInstall,
   setAgent,
   setProjectMode,
   setWizardScreen,
+  wizardChatSeen,
   wizardCreateProject,
   wizardSetGscProperty,
   type ChooseRepoState,
+  type CloudWizardCreateState,
   type ConnectClaudeState,
-  type WizardCreateState,
   type WizardGscPropertyState,
 } from "@/app/actions";
 import type { CloudWizardScreen } from "@/lib/wizard-screens";
+import {
+  agentForAiChoice,
+  aiKind,
+  aiStep,
+  firstStepAfterCreate,
+  type PublishChoice,
+} from "@/lib/wizard-branch";
+import { AgentConnectTabs } from "@/components/agent-connect-tabs";
+import { WordPressConnect, type WordPressStatus } from "@/components/wordpress-connect";
+import { CopyBlock } from "@/components/client";
 import {
   CopyBox,
   ErrorLine,
@@ -30,7 +42,11 @@ import {
   inputClass,
 } from "@/components/wizard-ui";
 
-// The cloud onboarding wizard - six screens (c0-c5) over a 5-step rail.
+// The cloud onboarding wizard - nine screens over a 5-step rail, of which
+// any one owner walks six. Step 1 and step 2 each come in variants (connect a
+// repo or a WordPress site; connect a coding agent, an agent without a repo,
+// or the claude.ai app) because the answers are structural, not cosmetic - see
+// wizard-branch.ts, which decides which pair this owner gets.
 // Cloud drops everything self-host's wizard needs a terminal for: GitHub
 // connects through the App (no token to paste), Claude Code needs one
 // setup-token paste instead of a whole install command, and the pipeline
@@ -39,10 +55,17 @@ import {
 // (setWizardScreen) and the resume-on-reload pattern are copied verbatim
 // from onboarding-wizard.tsx so the two wizards never drift on the basics.
 
+// Nine screens, still five steps: c1/c1w are alternative step 1s (connect the
+// site) and c2/c2a/c2c alternative step 2s (connect the AI). Nobody walks more
+// than five, so the rail never grows - see wizard-branch.ts for which pair a
+// given owner gets.
 const RAIL: Record<CloudWizardScreen, number> = {
   c0: 0,
   c1: 1,
+  c1w: 1,
   c2: 2,
+  c2a: 2,
+  c2c: 2,
   c3: 3,
   c4: 4,
   c5: 5,
@@ -53,7 +76,10 @@ const STEP_COUNT = 5;
 const META: Record<Exclude<CloudWizardScreen, "c5">, { name: string; time: string }> = {
   c0: { name: "Add your site", time: "about 30 seconds" },
   c1: { name: "Connect GitHub", time: "about 1 minute" },
+  c1w: { name: "Connect WordPress", time: "about 2 minutes" },
   c2: { name: "Connect your coding agent", time: "about 1 minute" },
+  c2a: { name: "Connect your coding agent", time: "about 1 minute" },
+  c2c: { name: "Connect the Claude app", time: "about 2 minutes" },
   c3: { name: "Search Console", time: "about 2 minutes" },
   c4: { name: "Publish mode", time: "30 seconds" },
 };
@@ -77,6 +103,23 @@ export type CloudWizardResume = {
   gscSiteUrl: string | null; // current tracked property
   mode: "semi" | "auto" | "custom";
   agent: AgentId; // which coding agent c2 is currently set to
+  // The branch, as the row records it. Read through publishTarget()/the
+  // qualifier server-side so this is always one of the three, never null.
+  publishTarget: PublishChoice;
+  aiChoice: string | null; // null on every project created before c0 asked
+  // WordPress connection state, in the shape c1w hands to <WordPressConnect>.
+  wpConnected: boolean;
+  wp: {
+    url: string | null;
+    username: string | null;
+    seoPlugin: string | null;
+    canPublish: boolean;
+    canUploadMedia: boolean;
+  };
+  // This project's MCP key: what c2a's connect command and c2c's connector URL
+  // are built from. Only ever rendered on those two screens.
+  mcpToken: string | null;
+  chatSeen: boolean; // the chat app has reached our MCP door at least once
 };
 
 type PipelineInstallResult = Awaited<ReturnType<typeof runPipelineInstall>>;
@@ -195,6 +238,91 @@ const AGENT_VERIFY_NOTE: Record<AgentId, string> = {
     "This is shape-checked before it is stored - Cursor offers nothing to probe without a browser login, so the pipeline's token-check run does the real proving shortly after.",
 };
 
+// One radio option on c0, in the same compact grammar as the c2 agent picker:
+// the whole card is the label, the border lights up on :checked, the hint
+// lines up under the name. Two groups here, so the markup is shared rather
+// than written twice and allowed to drift.
+//
+// `quiet` is for an option that is deliberately not a peer of the others -
+// "Neither yet" is the fallback someone picks when neither real answer fits,
+// and rendering it the same size as the two routes we actually support would
+// invite it. `disabled` is for one we cannot serve yet and say so by name.
+function PickOption({
+  name,
+  value,
+  label,
+  hint,
+  defaultChecked,
+  disabled,
+  quiet,
+  required,
+}: {
+  name: string;
+  value: string;
+  label: string;
+  hint?: string;
+  defaultChecked?: boolean;
+  disabled?: boolean;
+  quiet?: boolean;
+  required?: boolean;
+}) {
+  return (
+    <label
+      className={`flex flex-col gap-1 rounded-lg border transition-colors ${
+        quiet ? "p-3" : "p-3.5"
+      } ${
+        disabled
+          ? "cursor-not-allowed border-neutral-800 bg-neutral-950/40"
+          : "cursor-pointer border-neutral-700 hover:border-neutral-500 has-[:checked]:border-violet-500 has-[:checked]:bg-[#191521]"
+      }`}
+    >
+      <span className="flex items-center gap-2.5">
+        <input
+          type="radio"
+          name={name}
+          value={value}
+          defaultChecked={defaultChecked}
+          disabled={disabled}
+          required={required}
+          className="h-4 w-4 accent-violet-500"
+        />
+        <span
+          className={
+            quiet || disabled
+              ? "text-[13px] font-medium text-neutral-400"
+              : "text-sm font-semibold text-neutral-100"
+          }
+        >
+          {label}
+        </span>
+      </span>
+      {hint ? (
+        <span
+          className={`pl-6 leading-relaxed ${
+            quiet || disabled ? "text-[12px] text-neutral-600" : "text-[13px] text-neutral-400"
+          }`}
+        >
+          {hint}
+        </span>
+      ) : null}
+    </label>
+  );
+}
+
+// A numbered instruction, same shape as the one on the Connect page - c2c
+// walks through claude.ai's own settings screens and every step has to name a
+// thing the reader can see in front of them.
+function NumStep({ n, children }: { n: number; children: ReactNode }) {
+  return (
+    <li className="flex gap-2.5">
+      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-[11px] font-semibold text-neutral-300">
+        {n}
+      </span>
+      <span className="text-sm leading-relaxed text-neutral-400">{children}</span>
+    </li>
+  );
+}
+
 function chevron() {
   return (
     <svg
@@ -213,23 +341,54 @@ function chevron() {
 export function CloudOnboardingWizard(props: {
   resume: CloudWizardResume | null;
   prefillDomain: string | null;
+  // This deployment's public origin - c2a's connect command and c2c's
+  // connector URL are built from it. Passed in rather than read from
+  // window.location so the two match every other surface (request-origin.ts).
+  origin: string;
+  // What the pre-checkout qualifier already learned, so c0 asks its two
+  // questions with the answers already filled in. Being asked the same thing
+  // twice in one signup reads as "nothing I typed was saved".
+  prefillPublish?: PublishChoice;
+  prefillAi?: string | null;
   ghFlag?: string | null;
   ghError?: string | null;
   gscFlag?: string | null;
 }): JSX.Element {
-  const { resume, prefillDomain, ghFlag, ghError, gscFlag } = props;
+  const { resume, prefillDomain, origin, prefillPublish, prefillAi, ghFlag, ghError, gscFlag } =
+    props;
 
-  const [screen, setScreenRaw] = useState<CloudWizardScreen>(() =>
-    resume?.created && resume.screen === "c0" ? "c1" : resume?.screen ?? "c0",
-  );
+  // buildCloudResume already maps a c0 stamp on a created project to that
+  // project's own first step, so no GitHub default is re-derived here.
+  const [screen, setScreenRaw] = useState<CloudWizardScreen>(() => resume?.screen ?? "c0");
   function setScreen(next: CloudWizardScreen) {
     setScreenRaw(next);
     void setWizardScreen(next);
   }
 
+  // The branch. Held in state rather than read from props on every render
+  // because c0 sets it for a project that did not exist a moment ago, and
+  // every screen after it - which site step, which AI step, what c4 and c5 say
+  // - is decided by these two values.
+  const [publish, setPublish] = useState<PublishChoice>(
+    resume?.publishTarget ?? prefillPublish ?? "github",
+  );
+  const [aiChoice, setAiChoice] = useState<string | null>(resume?.aiChoice ?? null);
+  const kind = aiKind(aiChoice);
+  // c0's prefilled answers, from what the qualifier already asked before
+  // checkout. GitHub is the fallback for "we could not tell", which keeps
+  // today's flow the default for everyone the detector had no opinion about.
+  // The AI is prefilled only when it is one this wizard can set up - the page
+  // drops gemini/none/chatgpt, so an owner who named one of those picks again
+  // here rather than starting from a preselected answer that was never theirs.
+  const publishDefault: PublishChoice = prefillPublish ?? "github";
+  const aiDefault = prefillAi ?? null;
+
   const [created, setCreated] = useState<{ slug: string; name: string; domain: string } | null>(
     resume?.created ?? null,
   );
+  // Only c2a and c2c ever render it; both need it the moment the project is
+  // created (fresh) or the page is reloaded (resume).
+  const [mcpToken, setMcpToken] = useState<string | null>(resume?.mcpToken ?? null);
   const [githubRepo, setGithubRepo] = useState<string | null>(resume?.githubRepo ?? null);
   const [gscSiteUrl, setGscSiteUrl] = useState<string | null>(resume?.gscSiteUrl ?? null);
   const [modeChoice, setModeChoice] = useState<"semi" | "auto">(
@@ -247,14 +406,20 @@ export function CloudOnboardingWizard(props: {
   const step = RAIL[screen];
 
   // ---- c0: create the project ----------------------------------------------
-  const [createState, createAction, createPending] = useActionState<WizardCreateState, FormData>(
-    wizardCreateProject,
-    null,
-  );
+  const [createState, createAction, createPending] = useActionState<
+    CloudWizardCreateState,
+    FormData
+  >(wizardCreateProject, null);
   useEffect(() => {
     if (createState && "ok" in createState) {
       setCreated({ slug: createState.slug, name: createState.name, domain: createState.domain });
-      setScreen("c1");
+      setMcpToken(createState.mcpToken);
+      // Straight from the action rather than from the radio the browser
+      // submitted: the server is what validated and stored these, so the
+      // client branches on the value that actually landed in the row.
+      setPublish(createState.publishTarget);
+      setAiChoice(createState.aiChoice);
+      setScreen(firstStepAfterCreate(createState.publishTarget, aiKind(createState.aiChoice)));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [createState]);
@@ -267,7 +432,9 @@ export function CloudOnboardingWizard(props: {
   useEffect(() => {
     if (repoState && "ok" in repoState) {
       setGithubRepo(repoState.repo);
-      setScreen("c2");
+      // aiStep, not a hardcoded "c2": someone on the GitHub route whose AI is
+      // the claude.ai app has no credential to paste and belongs on c2c.
+      setScreen(aiStep(publish, kind));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repoState]);
@@ -277,9 +444,57 @@ export function CloudOnboardingWizard(props: {
   // `resume.githubRepo` now reflects the pick made mid-flow. One mount-time
   // check bumps past the now-stale c1 without needing a second navigation.
   useEffect(() => {
-    if (screen === "c1" && resume?.githubRepo) setScreen("c2");
+    if (screen === "c1" && resume?.githubRepo) setScreen(aiStep(publish, kind));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ---- c1w: connect WordPress ------------------------------------------------
+  // The connect form lives in <WordPressConnect> (Settings renders the same
+  // one). It reports success through onConnected, which is all this screen
+  // needs to enable Continue without a reload.
+  //
+  // The STATUS it is handed stays the server's answer on purpose. Flipping
+  // status.connected from the in-page flag would swap the form for its
+  // "Connected to <site>, posting as <user>" panel - built from resume fields
+  // this page load does not have yet, so it would render that sentence with
+  // both blanks empty. Left alone, the form shows its own green success line,
+  // which says the same thing and knows the details.
+  const [wpJustConnected, setWpJustConnected] = useState(false);
+  const wpConnected = (resume?.wpConnected ?? false) || wpJustConnected;
+  const wpStatus: WordPressStatus = {
+    connected: resume?.wpConnected ?? false,
+    url: resume?.wp.url ?? null,
+    username: resume?.wp.username ?? null,
+    seoPlugin: resume?.wp.seoPlugin ?? null,
+    canPublish: resume?.wp.canPublish ?? false,
+    canUploadMedia: resume?.wp.canUploadMedia ?? false,
+  };
+
+  // ---- c2c: the chat app's connector ------------------------------------------
+  // Evidence, polled: the MCP door stamps chat_last_seen_at the first time the
+  // owner's Claude reaches us, so this screen turns green on its own. There is
+  // deliberately no "I've connected it" button - pressing one proves nothing,
+  // and a mistyped connector URL would sail straight past it.
+  const [chatSeen, setChatSeen] = useState(resume?.chatSeen ?? false);
+  useEffect(() => {
+    // Only while the screen is up, and only until it turns green: once we have
+    // seen the chat app there is nothing left to learn, and the poll would
+    // otherwise run for as long as the tab stays open.
+    if (screen !== "c2c" || chatSeen) return;
+    const slug = created?.slug;
+    if (!slug) return;
+    const id = setInterval(() => {
+      void wizardChatSeen(slug).then(
+        (seen) => {
+          if (seen) setChatSeen(true);
+        },
+        () => {
+          /* a failed poll is a poll - the next one is 5 seconds away */
+        },
+      );
+    }, 5000);
+    return () => clearInterval(id);
+  }, [screen, chatSeen, created?.slug]);
 
   // ---- c2: the coding agent, then its credential -----------------------------
   // The choice is persisted the moment it is made rather than on submit: a
@@ -287,7 +502,27 @@ export function CloudOnboardingWizard(props: {
   // back to Claude Code after picking Codex would send them to mint the wrong
   // credential. It is also what the builders read at run time, so writing it
   // late would leave a window where the repo secret and projects.agent disagree.
-  const [agentChoice, setAgentChoice] = useState<AgentId>(resume?.agent ?? "claude");
+  const [agentChoice, setAgentChoice] = useState<AgentId>(
+    resume?.agent ?? agentForAiChoice(resume?.aiChoice) ?? "claude",
+  );
+  // c0 now asks WHICH AI, and three of its answers name a coding agent - so by
+  // the time this screen renders the question has been answered and the row
+  // already says so (wizardCreateProject writes projects.agent). Without this
+  // the picker would sit on its own "claude" default while the row said codex,
+  // and the hidden `agent` field below would file the pasted key under the
+  // wrong secret. The picker stays switchable: changing it here is still a
+  // real decision, it just no longer starts by contradicting the last one.
+  // On CHANGE only, never on mount: resume.agent is what the owner last
+  // picked (pickAgent persists it), and re-applying the c0 answer on every
+  // reload would snap a deliberate switch to Codex back to Claude Code and
+  // file the freshly minted key under the wrong secret.
+  const lastAiChoice = useRef(aiChoice);
+  useEffect(() => {
+    if (aiChoice === lastAiChoice.current) return;
+    lastAiChoice.current = aiChoice;
+    const fromChoice = agentForAiChoice(aiChoice);
+    if (fromChoice) setAgentChoice(fromChoice);
+  }, [aiChoice]);
   const agent = agentById(agentChoice);
   const [agentSaving, startAgentSave] = useTransition();
   function pickAgent(next: AgentId) {
@@ -353,6 +588,14 @@ export function CloudOnboardingWizard(props: {
   }
 
   // ---- c5: fire-and-poll the install ------------------------------------------
+  //
+  // Only ONE branch installs anything. A pipeline is a set of GitHub workflows
+  // committed into a repo and driven by an unattended coding agent, so it only
+  // means something for a repo-published site whose AI is that agent. On every
+  // other branch there is no repo to write into and nothing to schedule, and
+  // firing the install would either error out on a missing repo or - worse -
+  // commit into whatever repo happened to be attached.
+  const githubFinale = publish === "github" && kind === "coding";
   const [installResult, setInstallResult] = useState<PipelineInstallResult | null>(null);
   const [installPending, startInstall] = useTransition();
   const installedOnce = useRef(false);
@@ -382,7 +625,9 @@ export function CloudOnboardingWizard(props: {
     // to fire the install would just sit there. Re-entry is safe: the install
     // is idempotent by design (pipeline-install.ts), and an already-installed
     // project short-circuits in the action.
-    if (screen !== "c5") {
+    //
+    // And ONLY on the branch that has a pipeline at all - see githubFinale.
+    if (screen !== "c5" || !githubFinale) {
       installedOnce.current = false;
       setInstallResult(null);
       return;
@@ -391,7 +636,36 @@ export function CloudOnboardingWizard(props: {
     installedOnce.current = true;
     fireInstall();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen]);
+  }, [screen, githubFinale]);
+
+  // The other branches' finale. Nothing installs, so nothing else would write
+  // the c5 stamp that unlocks the dashboard (onboarding-gate.ts keys on it,
+  // and runPipelineInstall is where it normally gets written) - which would
+  // leave a fully set-up owner bounced back into this wizard by every
+  // dashboard page they opened.
+  const [finishError, setFinishError] = useState<string | null>(null);
+  const finishedOnce = useRef(false);
+  useEffect(() => {
+    if (screen !== "c5" || githubFinale) {
+      finishedOnce.current = false;
+      return;
+    }
+    if (finishedOnce.current) return;
+    const slug = created?.slug;
+    if (!slug) {
+      setFinishError("Lost track of which site this is - reload and try again.");
+      return;
+    }
+    finishedOnce.current = true;
+    setFinishError(null);
+    void finishWizard(slug).then(
+      (r) => {
+        if ("error" in r) setFinishError("Couldn't finish setup - reload and try again.");
+      },
+      () => setFinishError("Couldn't finish setup - reload and try again."),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, githubFinale]);
 
   function renderInstallBanner(): JSX.Element | null {
     if (!installResult) {
@@ -589,11 +863,14 @@ export function CloudOnboardingWizard(props: {
             </svg>
           </StepIcon>
           <h2 className="text-2xl font-semibold tracking-tight">Add your site</h2>
+          {/* Deliberately not "GitHub and your coding agent connect next" any
+              more: what connects next is exactly what the two questions below
+              decide, and naming one route here would read as the only one. */}
           <p className="mb-2.5 text-base text-neutral-400">
-            The website you want Google traffic for. Takes 30 seconds - GitHub and your coding
-            agent connect next.
+            The website you want Google traffic for. Takes 30 seconds - what you answer below
+            decides what we connect next.
           </p>
-          {/* Same slot on all six screens - see StepHelp's note on why the
+          {/* Same slot on every screen - see StepHelp's note on why the
               position is uniform and why it opens in a new tab. */}
           <StepHelp
             href="/docs/setup-wizard#on-dispatchseo-com-the-hosted-version"
@@ -619,6 +896,87 @@ export function CloudOnboardingWizard(props: {
                 The website whose rankings DispatchSEO will grow and track.
               </span>
             </label>
+
+            {/* The two questions that decide which setup this owner walks.
+                They are asked HERE, before anything is connected, because the
+                answers are structural: a WordPress site has no repo to open a
+                pull request against, and the claude.ai app has no terminal to
+                paste a credential into. Asking them three screens later is how
+                a paying customer ends up staring at "Connect GitHub" with
+                nothing to connect. Both are prefilled from what they already
+                told the qualifier before checkout. */}
+            <fieldset className="space-y-2">
+              <legend className="mb-1.5 text-base font-medium text-neutral-200">
+                Where should finished articles go?
+              </legend>
+              <PickOption
+                name="publish_target"
+                value="wordpress"
+                label="WordPress"
+                hint="I host it myself. We post articles straight into it - no plugin."
+                defaultChecked={publishDefault === "wordpress"}
+              />
+              <PickOption
+                name="publish_target"
+                value="github"
+                label="A GitHub repo"
+                hint="My site is built from code. We open pull requests."
+                defaultChecked={publishDefault === "github"}
+              />
+              <PickOption
+                name="publish_target"
+                value="manual"
+                label="Neither yet"
+                hint="Finish each article and I'll place it myself."
+                defaultChecked={publishDefault === "manual"}
+                quiet
+              />
+            </fieldset>
+
+            <fieldset className="space-y-2">
+              <legend className="mb-1.5 text-base font-medium text-neutral-200">
+                Which AI will do the writing?
+              </legend>
+              <PickOption
+                name="ai_choice"
+                value="claude-web"
+                label="Claude app"
+                hint="claude.ai, the ordinary chat app"
+                defaultChecked={aiDefault === "claude-web"}
+                required
+              />
+              <PickOption
+                name="ai_choice"
+                value="claude-code"
+                label="Claude Code"
+                defaultChecked={aiDefault === "claude-code"}
+                required
+              />
+              <PickOption
+                name="ai_choice"
+                value="codex"
+                label="Codex"
+                defaultChecked={aiDefault === "codex"}
+                required
+              />
+              <PickOption
+                name="ai_choice"
+                value="cursor"
+                label="Cursor"
+                defaultChecked={aiDefault === "cursor"}
+                required
+              />
+              {/* Shown rather than hidden: someone whose only AI is ChatGPT
+                  needs to see that we know it exists and that the answer is
+                  "not yet", not wonder whether they missed it. */}
+              <PickOption
+                name="ai_choice"
+                value="chatgpt"
+                label="ChatGPT"
+                hint="not available yet"
+                disabled
+              />
+            </fieldset>
             {/* Cloud detects the repo's content layout during setup instead of
                 asking here - the blog-location question doesn't exist yet
                 because there's no repo to inspect until step 2. */}
@@ -760,6 +1118,229 @@ export function CloudOnboardingWizard(props: {
                 </a>
               </>
             )}
+          </div>
+          {/* The one step in this wizard that can belong to somebody else.
+              Plenty of owners bought this for a site a developer built for
+              them, and they reach this screen with no GitHub account and no
+              idea whose it is - which reads as "this product is not for me"
+              rather than "this one step needs the person who owns the code".
+              Quiet and collapsed: it is noise to everyone else on the screen.
+              Rendered in every c1 state, because the person who needs it may
+              only realise it at the repo pick. */}
+          <details className="group mt-4 rounded-xl bg-neutral-900 px-4 py-3">
+            <summary className="flex cursor-pointer select-none items-center justify-between text-sm font-medium text-neutral-400 transition-colors hover:text-neutral-200">
+              Not the technical one? Read this
+              {chevron()}
+            </summary>
+            <p className="mt-2 text-sm leading-relaxed text-neutral-400">
+              This step has to be done by whoever owns your site&apos;s code on GitHub. Sit with
+              them for a minute: they sign into GitHub on this computer, click Install, pick the
+              repo, and come straight back here. Nothing else in the setup needs them.
+            </p>
+          </details>
+        </section>
+      ) : null}
+
+      {/* ============ c1w · Connect WordPress ============ */}
+      {screen === "c1w" ? (
+        <section>
+          <StepIcon>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4" aria-hidden>
+              <circle cx="12" cy="12" r="10" />
+              <path d="M5 9h14" strokeLinecap="round" />
+              <path d="m8.5 9 3 8 3-8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </StepIcon>
+          <h2 className="text-2xl font-semibold tracking-tight">Connect your WordPress site</h2>
+          <p className="mb-2.5 text-base text-neutral-400">
+            We post finished articles straight into your WordPress - no plugin, nothing to
+            install. You need the username you log in with and an application password, which
+            WordPress makes for you in about a minute.
+          </p>
+          <StepHelp href="/docs/setup-wizard" label="Walk me through this" />
+          <div className="rounded-xl bg-neutral-900 p-4">
+            {/* The same component Settings renders, so the instructions, the
+                live capability check and every sentence about what went wrong
+                exist in exactly one place. */}
+            <WordPressConnect
+              status={wpStatus}
+              slug={created?.slug}
+              onConnected={() => setWpJustConnected(true)}
+            />
+          </div>
+          <div className="mt-5 flex items-center justify-between gap-4">
+            {/* Skippable on purpose. Someone who does not have their WordPress
+                password to hand must not be trapped on step 1 of a product
+                they have already paid for - and the drafts wait rather than
+                vanish, which is the honest promise to make here. */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setScreen(aiStep(publish, kind))}
+                className="cursor-pointer text-sm font-medium text-neutral-500 transition-colors hover:text-neutral-300"
+              >
+                Skip for now - I&apos;ll connect it from Settings
+              </button>
+              <p className="mt-1 text-[13px] text-neutral-600">
+                Until it&apos;s connected, finished articles wait for you on the Drafts screen.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={!wpConnected}
+              onClick={() => setScreen(aiStep(publish, kind))}
+              className="shrink-0 cursor-pointer rounded-lg bg-violet-500 px-5 py-2 text-sm font-semibold text-neutral-950 transition-colors hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Continue
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {/* ============ c2a · Connect a coding agent, no repo ============ */}
+      {screen === "c2a" ? (
+        <section>
+          <StepIcon>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4" aria-hidden>
+              <polyline points="4 17 10 11 4 5" strokeLinecap="round" strokeLinejoin="round" />
+              <line x1="12" y1="19" x2="20" y2="19" strokeLinecap="round" />
+            </svg>
+          </StepIcon>
+          <h2 className="text-2xl font-semibold tracking-tight">Connect your coding agent</h2>
+          <p className="mb-2.5 text-base text-neutral-400">
+            Your agent runs on your own computer and connects to this site with one command.
+            There is nothing to paste into GitHub: finished articles go straight to your site.
+          </p>
+          <StepHelp href="/docs/connect-your-site" label="What does this command do?" />
+          <div className="rounded-xl bg-neutral-900 p-4">
+            {/* No credential is stored on this branch. c2's paste exists to put
+                an agent token on a REPO as an Actions secret so unattended
+                workflows can run there; with no repo there are no workflows,
+                the agent runs where the owner is, and the connect command is
+                the whole of the setup. */}
+            {created && mcpToken ? (
+              <AgentConnectTabs
+                slug={created.slug}
+                origin={origin}
+                token={mcpToken}
+                box="wizard"
+              />
+            ) : (
+              <ErrorLine msg="Lost track of this site's connection key - reload the page and it comes back." />
+            )}
+          </div>
+          <div className="mt-5 flex items-center justify-end">
+            <button
+              type="button"
+              onClick={() => setScreen("c3")}
+              className="cursor-pointer rounded-lg bg-violet-500 px-5 py-2 text-sm font-semibold text-neutral-950 transition-colors hover:bg-violet-400"
+            >
+              Continue
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {/* ============ c2c · Connect the Claude app ============ */}
+      {screen === "c2c" ? (
+        <section>
+          <StepIcon>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4" aria-hidden>
+              <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.8 8.8 0 0 1-3.9-.9L3 20.5l1.6-4.8A8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </StepIcon>
+          <h2 className="text-2xl font-semibold tracking-tight">Connect the Claude app</h2>
+          <p className="mb-2.5 text-base text-neutral-400">
+            This is for the ordinary Claude app you already pay for, at claude.ai. Your Claude
+            does the research and the writing on your own subscription; we check the article,
+            format it, add links to your other pages, and publish it. Nothing to install.
+          </p>
+          <StepHelp href="/docs/connect-your-site" label="Walk me through this" />
+          {/* Should be unreachable - the qualifier refuses ChatGPT before
+              checkout - but a row created before it did carries the choice, and
+              silently showing them Claude's steps with no explanation is worse
+              than saying which app these steps are for. */}
+          {aiChoice === "chatgpt" ? (
+            <p className="mb-3.5 rounded-lg border border-amber-500/25 bg-amber-500/[0.07] px-3.5 py-3 text-sm text-amber-100/90">
+              ChatGPT can&apos;t connect yet - use the Claude app for now; these same steps work
+              there.
+            </p>
+          ) : null}
+          <div className="space-y-5 rounded-xl bg-neutral-900 p-4">
+            {created && mcpToken ? (
+              <>
+                <div className="space-y-2.5">
+                  <p className="text-[13px] font-medium text-neutral-300">1. Add the connector</p>
+                  <ol className="space-y-2">
+                    <NumStep n={1}>
+                      Open <b className="text-neutral-200">claude.ai</b> in a browser (not the
+                      phone app - the setting is only on the website).
+                    </NumStep>
+                    <NumStep n={2}>
+                      Click your name at the bottom left, then{" "}
+                      <b className="text-neutral-200">Settings</b>, then{" "}
+                      <b className="text-neutral-200">Connectors</b>.
+                    </NumStep>
+                    <NumStep n={3}>
+                      Click <b className="text-neutral-200">Add custom connector</b>. Name it
+                      DispatchSEO and paste this as the URL:
+                    </NumStep>
+                  </ol>
+                  {/* CopyBlock, not CopyBox: this one wraps, and a connector
+                      URL that scrolls out of sight is a URL people paste half
+                      of. The &client=chat on the end is load-bearing - see
+                      connect-client.tsx. */}
+                  <CopyBlock text={`${origin}/api/mcp?key=${mcpToken}&client=chat`} />
+                  <p className="text-[12px] leading-relaxed text-neutral-600">
+                    This address is a password. Anyone who has it can read and change this
+                    site&apos;s content plan, so do not post it anywhere.
+                  </p>
+                </div>
+
+                <div className="space-y-2.5">
+                  <p className="text-[13px] font-medium text-neutral-300">2. Say hello</p>
+                  <p className="text-sm leading-relaxed text-neutral-400">
+                    Start a new chat with the connector switched on and paste this. It takes
+                    about five minutes and every article afterwards is better for it.
+                  </p>
+                  <CopyBlock text="Use the DispatchSEO connector and run the setup-chat workflow from get_instructions." />
+                  <p className="text-[12px] leading-relaxed text-neutral-500">
+                    Claude asks you three short questions (who buys from you, what never to say,
+                    how it should sound) - a sentence each is plenty. The first time it uses each
+                    DispatchSEO tool, claude.ai asks you to allow it; choose{" "}
+                    <b className="text-neutral-400">Always allow</b>.
+                  </p>
+                </div>
+
+                {/* The screen's own answer to "did that work?", and the reason
+                    there is no button here: this line turns green when the
+                    owner's Claude actually reaches our MCP door, which is the
+                    only fact worth reporting. */}
+                <p
+                  className={`text-sm leading-relaxed ${
+                    chatSeen ? "text-emerald-300" : "text-neutral-400"
+                  }`}
+                >
+                  {chatSeen
+                    ? "Connected. Your Claude has reached us."
+                    : "Waiting for your Claude to say hello. This turns green on its own the first time it reaches us - there is no button to press."}
+                </p>
+              </>
+            ) : (
+              <ErrorLine msg="Lost track of this site's connection key - reload the page and it comes back." />
+            )}
+          </div>
+          <div className="mt-5 flex items-center justify-end">
+            {/* Never blocking. Someone who wants to set the connector up on a
+                laptop later must still be able to finish setup now - and the
+                Connect screen carries these same steps forever. */}
+            <button
+              type="button"
+              onClick={() => setScreen("c3")}
+              className="cursor-pointer rounded-lg bg-violet-500 px-5 py-2 text-sm font-semibold text-neutral-950 transition-colors hover:bg-violet-400"
+            >
+              {chatSeen ? "Continue" : "Continue - I'll connect it later"}
+            </button>
           </div>
         </section>
       ) : null}
@@ -1038,9 +1619,17 @@ export function CloudOnboardingWizard(props: {
                 </span>
               </div>
               <h3 className="text-[15px] font-semibold">Semi-automatic</h3>
+              {/* The human gate is in a different place per route, so the copy
+                  has to be. With a repo it is the pull request: an article is
+                  written, and a person merges it. Without one there is no PR to
+                  merge - the article publishes itself at the site's publish
+                  hour - so the gate moves earlier, to approving the idea. Two
+                  routes, one sentence each, rather than one sentence that is
+                  wrong for half the customers. */}
               <p className="mt-1 text-sm text-neutral-400">
-                Claude researches and builds on its own, but nothing goes live without you. You
-                approve ideas and merge finished pull requests right from the dashboard.
+                {publish === "github"
+                  ? "Claude researches and builds on its own, but nothing goes live without you. You approve ideas and merge finished pull requests right from the dashboard."
+                  : "Your AI researches ideas and writes on its own, but no idea is written until you approve it on the Queue screen. Finished articles publish on their own at the hour you choose."}
               </p>
               <p className="mt-2 text-sm text-neutral-400">A few minutes of your attention a week.</p>
             </button>
@@ -1061,8 +1650,9 @@ export function CloudOnboardingWizard(props: {
               </div>
               <h3 className="text-[15px] font-semibold">Automatic</h3>
               <p className="mt-1 text-sm text-neutral-400">
-                Everything runs itself. Ideas are approved for you, and every page that passes its
-                checks merges and goes live without anyone touching it.
+                {publish === "github"
+                  ? "Everything runs itself. Ideas are approved for you, and every page that passes its checks merges and goes live without anyone touching it."
+                  : "Ideas are approved for you, and every article that passes our checks publishes on its own."}
               </p>
               <p className="mt-2 text-sm text-neutral-400">
                 You can watch everything, and undo anything, from the dashboard.
@@ -1106,21 +1696,81 @@ export function CloudOnboardingWizard(props: {
               <polyline points="22 4 12 14.01 9 11.01" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </StepIcon>
-          <h2 className="text-2xl font-semibold tracking-tight">You&apos;re live.</h2>
-          <p className="mb-2.5 text-base text-neutral-400">
-            Installing the pipeline into {created?.name ?? "your"}&apos;s repo now - no more
-            pastes needed. This runs on GitHub and usually takes{" "}
-            <b className="font-medium text-neutral-200">5-15 minutes</b>. You can leave this page
-            and come back - setup finishes on its own, and your dashboard fills in as the
-            data lands.
-          </p>
+          <h2 className="text-2xl font-semibold tracking-tight">
+            {githubFinale ? "You're live." : "You're set."}
+          </h2>
+          {githubFinale ? (
+            <p className="mb-2.5 text-base text-neutral-400">
+              Installing the pipeline into {created?.name ?? "your"}&apos;s repo now - no more
+              pastes needed. This runs on GitHub and usually takes{" "}
+              <b className="font-medium text-neutral-200">5-15 minutes</b>. You can leave this page
+              and come back - setup finishes on its own, and your dashboard fills in as the
+              data lands.
+            </p>
+          ) : (
+            <p className="mb-2.5 text-base text-neutral-400">
+              Your site is set up. Nothing installs itself here - the work starts the moment you
+              ask your AI for it, and the two things to paste are right below.
+            </p>
+          )}
           <StepHelp href="/docs/day-to-day" label="What happens next?" />
 
-          <div className="rounded-xl bg-neutral-900 p-4">{renderInstallBanner()}</div>
+          {githubFinale ? (
+            <div className="rounded-xl bg-neutral-900 p-4">{renderInstallBanner()}</div>
+          ) : (
+            <div className="space-y-4">
+              {/* The stamp that unlocks the dashboard is the ONLY server work
+                  this finale does on these branches, so its failure is the one
+                  thing worth a red line here. */}
+              {finishError ? <ErrorLine msg={finishError} /> : null}
+              <div className="space-y-3 rounded-xl bg-neutral-900 p-4">
+                {kind === "chat" ? (
+                  <>
+                    <p className="text-sm leading-relaxed text-neutral-400">
+                      Open Claude, start a new chat with the DispatchSEO connector switched on,
+                      and paste:
+                    </p>
+                    <CopyBox text="Use the DispatchSEO connector and run the setup-chat workflow from get_instructions." />
+                    <p className="pt-1 text-sm leading-relaxed text-neutral-400">
+                      Once you&apos;ve approved a few ideas on the Queue screen, ask it to write
+                      the first one:
+                    </p>
+                    <CopyBox text="Use the DispatchSEO connector and run the write-guide-chat workflow from get_instructions. Write my next approved article." />
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm leading-relaxed text-neutral-400">In your agent, run:</p>
+                    <CopyBox text="Run the setup-chat workflow from get_instructions." />
+                    <p className="pt-1 text-sm leading-relaxed text-neutral-400">
+                      Once you&apos;ve approved a few ideas on the Queue screen:
+                    </p>
+                    <CopyBox text="Run the write-guide-chat workflow from get_instructions and write my next approved article." />
+                  </>
+                )}
+              </div>
+              {/* Said here rather than left to be discovered: an article that
+                  finishes with nowhere to go is the single most confusing
+                  outcome this product has, and both of these branches can
+                  produce it. */}
+              {publish === "wordpress" && !wpConnected ? (
+                <p className="rounded-lg border border-amber-500/25 bg-amber-500/[0.07] px-3.5 py-3 text-sm text-amber-100/90">
+                  WordPress isn&apos;t connected yet - finished articles will wait on the Drafts
+                  screen until you connect it from Settings.
+                </p>
+              ) : null}
+              {publish === "manual" ? (
+                <p className="rounded-lg bg-neutral-900 px-3.5 py-3 text-sm text-neutral-400">
+                  Finished articles appear on the Drafts screen with a Copy button - you place
+                  them on your site.
+                </p>
+              ) : null}
+            </div>
+          )}
 
           {/* The dashboard unlocks at this finale - the gate keys on the c5
-              stamp, which runPipelineInstall wrote server-side when it fired
-              just above - so don't trap the owner on this page: the background
+              stamp, written server-side by whichever action fired just above
+              (runPipelineInstall on the repo branch, finishWizard on the
+              others) - so don't trap the owner on this page: the background
               run keeps going and the dashboard shows its own "setting up"
               banner. Earlier screens stay locked on purpose; abandoning the
               wizard mid-flow bounces back here, not to a dashboard of zeros. */}
@@ -1129,7 +1779,7 @@ export function CloudOnboardingWizard(props: {
               href="/dashboard"
               className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-900 px-5 py-2.5 text-sm font-semibold text-neutral-100 transition-colors hover:border-violet-500/50 hover:bg-neutral-800"
             >
-              Explore your dashboard while this finishes →
+              {githubFinale ? "Explore your dashboard while this finishes →" : "Explore your dashboard →"}
             </a>
           </div>
 
@@ -1157,7 +1807,10 @@ export function CloudOnboardingWizard(props: {
             </div>
           </details>
 
-          {created ? <FirstRunStatus slug={created.slug} cloud /> : null}
+          {/* The live install checklist, and only where an install exists to
+              watch: on the other branches every one of its rows would sit at
+              "waiting" forever, describing work nobody scheduled. */}
+          {created && githubFinale ? <FirstRunStatus slug={created.slug} cloud /> : null}
         </section>
       ) : null}
     </div>

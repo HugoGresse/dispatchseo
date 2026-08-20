@@ -7,7 +7,8 @@ import { AgentSwitch } from "@/components/agent-switch";
 import { agentById, builderAgents, isBuilderAgent, projectAgent } from "@/lib/agents";
 import { getActiveProjectOrNull } from "@/lib/active-project";
 import { credsForProject } from "@/lib/dataforseo";
-import { DEFAULT_PROJECT_ID, fetchProjectToken } from "@/lib/projects";
+import { DEFAULT_PROJECT_ID, fetchProjectToken, publishTarget } from "@/lib/projects";
+import { setContentPathHint } from "@/app/repo-actions";
 import { isCloudMode } from "@/lib/cloud";
 import { ClaudeTokenConnect } from "@/components/claude-token-connect";
 import { BuilderTokenConnect } from "@/components/builder-token-connect";
@@ -22,6 +23,8 @@ import { RepoRow } from "@/components/repo-row";
 import { SiteLaunchedRow } from "@/components/site-launched";
 import { CopyBlock } from "@/components/client";
 import { PageHeader, SectionTitle } from "@/components/ui";
+import { WordPressConnect } from "@/components/wordpress-connect";
+import { connectionSummary } from "@/lib/wordpress-connect";
 
 export const dynamic = "force-dynamic";
 // Server actions run under the invoking page's limit, and this page owns the
@@ -158,6 +161,9 @@ export default async function SettingsPage({
 
   const isDefault = project.id === DEFAULT_PROJECT_ID;
   const mcpToken = await fetchProjectToken(project.id);
+  // Never includes the password - connectionSummary() exists precisely so no
+  // page can accidentally render it.
+  const wp = connectionSummary(project);
   // Whether THIS project's agent already has its credential stored on the repo,
   // so Settings can say "you're done, this is only for rotating" instead of
   // looking like a required first-time setup. Keyed off the project's agent
@@ -265,6 +271,63 @@ export default async function SettingsPage({
             slug={project.slug}
           />
         </div>
+      </section>
+
+      {/* Where this site's articles go. Only rendered once a project exists.
+          The WordPress case leads, being the one an owner has to do by hand;
+          the repo case needs exactly one answer from them, and only when our
+          own scan of the repo could not find it. */}
+      <section className="space-y-3">
+        <SectionTitle sub="where finished articles get published - connect WordPress if your site isn't built from a code repository">
+          Your website
+        </SectionTitle>
+        <div className="rounded-xl bg-neutral-900 px-4 py-4 sm:px-5">
+          <WordPressConnect
+            status={{
+              connected: wp.connected,
+              url: wp.url,
+              username: wp.username,
+              seoPlugin: wp.seo_plugin,
+              canPublish: Boolean(wp.capabilities?.publish_posts),
+              canUploadMedia: Boolean(wp.capabilities?.upload_files),
+            }}
+          />
+        </div>
+        {/* THE ONE QUESTION THE REPO ROUTE CAN GET WRONG. We commit the article
+            into the folder this site already keeps its articles in, worked out
+            by reading the repo - which is right for almost every layout and
+            guessable-wrong for the rest. Left empty on purpose: an answer is
+            only needed when an article parks itself asking for one. */}
+        {publishTarget(project) === "github" && project.github_repo ? (
+          <div className="rounded-xl bg-neutral-900 px-4 py-4 sm:px-5">
+            <h3 className="text-sm font-semibold text-neutral-100">Where your articles live</h3>
+            <p className="mt-1 text-[13px] leading-relaxed text-neutral-400">
+              The folder in your repo that holds your articles. Leave empty and we work it out
+              from the repo.
+            </p>
+            <form action={setContentPathHint} className="mt-3 flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                name="content_path_hint"
+                defaultValue={project.content_path_hint ?? ""}
+                placeholder="content/blog"
+                maxLength={120}
+                // The server's three rules, enforced before the submit leaves
+                // the browser: allowed characters, and no `..` segment climbing
+                // out of the repo.
+                pattern="(?!.*\.\.)[A-Za-z0-9._/-]*"
+                title="A plain folder path, like content/blog"
+                className="w-64 rounded-md bg-neutral-800 px-2 py-1 text-sm text-neutral-200 placeholder:text-neutral-600"
+              />
+              <button
+                type="submit"
+                className="cursor-pointer rounded-md bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-300 hover:bg-emerald-500/25"
+              >
+                Save
+              </button>
+            </form>
+          </div>
+        ) : null}
       </section>
 
       <section className="space-y-3">

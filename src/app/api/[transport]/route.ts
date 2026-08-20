@@ -42,11 +42,11 @@ import {
 import { saveContentPrefs } from "@/lib/content-prefs-store";
 import { renderInstructions, WORKFLOWS } from "@/lib/instructions";
 import { getPipelinePack, hasDataforseo } from "@/lib/pipeline-pack";
-import { effectiveAutomations, getProjectByToken, internalLinkingEnabled } from "@/lib/projects";
+import { effectiveAutomations, getProjectByToken, internalLinkingEnabled, publishTarget, type Project } from "@/lib/projects";
 import { BUILDER_AGENT_IDS, builderAgents, projectAgent } from "@/lib/agents";
 import { setProjectAgent } from "@/lib/agent-settings";
 import { loadSiteProfile } from "@/lib/site-profile";
-import { currentProject, projectStore } from "@/lib/mcp-context";
+import { clientKindStore, currentClientKind, currentProject, projectStore } from "@/lib/mcp-context";
 import { duplicateNote, findDuplicateSuggestion, isDuplicateKeyError } from "@/lib/suggestion-dedupe";
 import { fetchProjectUrl, isProjectUrl } from "@/lib/url-guard";
 import { isLive, refreshPageLiveness, type LivenessRow } from "@/lib/page-liveness";
@@ -69,11 +69,17 @@ import { setTrackedProperty } from "@/lib/gsc-oauth";
 import { expandKeyword } from "@/lib/suggest";
 import {
   checkSerpDailyCapReached,
+  KEYWORD_IDEAS_DAILY_CAP,
+  keywordIdeasDailyCapReached,
   platformUsageStatus,
   recordCheckSerpCall,
+  recordKeywordIdeasCall,
 } from "@/lib/dataforseo-usage";
 import { getDomainRating } from "@/lib/domain-rating";
 import { getAuthority, needsLinkMove } from "@/lib/authority";
+import { validateArticle } from "@/lib/article-validate";
+import { enqueue } from "@/lib/jobs";
+import { blockedReason, publishDraftNow, publishRoute } from "@/lib/job-handlers/draft-status";
 
 // The seo-manager MCP server. It is mostly a door to the Supabase state - the
 // suggestions queue, tracked keywords, published pages, GSC stats, and backlink
@@ -114,7 +120,19 @@ import { getAuthority, needsLinkMove } from "@/lib/authority";
 // Every tool returns its data as pretty-printed JSON text. MCP clients read the
 // text block; keeping it JSON means the agent gets structured data to reason on.
 function ok(data: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+  // Chat clients get it minified. Pretty-printing costs roughly 40% more
+  // tokens for indentation nobody reads - which is free on a coding agent's
+  // window and expensive on a $20 chat plan that has to fit the research, the
+  // article and the tool traffic in one conversation.
+  const text =
+    currentClientKind() === "chat" ? JSON.stringify(data) : JSON.stringify(data, null, 2);
+  return { content: [{ type: "text" as const, text }] };
+}
+
+/** True when the caller is a chat app rather than a coding agent. Read at the
+ *  point of use so a tool can trim its own answer. */
+function chatMode(): boolean {
+  return currentClientKind() === "chat";
 }
 function fail(message: string) {
   return {
@@ -123,14 +141,159 @@ function fail(message: string) {
   };
 }
 
+// A failure that carries structured detail the caller is expected to act on -
+// the article gate's per-check `fix` lines, mostly. Same shape as fail(), one
+// object merged in, so a client that only reads `error` still sees a sentence.
+// Minified for chat clients for the same reason ok() is - the rejection
+// payload is the answer a chat model reads most often.
+function failWith(message: string, detail: Record<string, unknown>) {
+  const payload = { error: message, ...detail };
+  const text =
+    currentClientKind() === "chat" ? JSON.stringify(payload) : JSON.stringify(payload, null, 2);
+  return {
+    isError: true,
+    content: [{ type: "text" as const, text }],
+  };
+}
+
+// How many articles one site may hand in per UTC day, and how many may be
+// waiting to go out at once.
+//
+// Neither number is about our costs - the finisher calls no model, so an
+// article costs us a fraction of a cent. They are about the owner. A chat
+// client that loops, or an enthusiastic session that writes six articles in
+// an afternoon, publishes a week of content in a day; that is the pattern
+// search engines read as a scaled-content site, and it is the exact failure
+// this product exists to avoid. Five a day is already far above the one-a-day
+// pace the builders keep, so the cap only ever catches a runaway.
+const SUBMIT_DAILY_CAP = 5;
+const SUBMIT_IN_FLIGHT_CAP = 3;
+
+/** Null when this site may accept another article, or the sentence explaining
+ *  why not. Two counts, one round trip each, only on the accepted path. */
+async function submissionCaps(projectId: string): Promise<string | null> {
+  const startOfDay = `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`;
+  const LIVE = ["submitted", "accepted", "blocked_setup", "finished", "published"];
+  const [{ count: todayCount }, { count: inFlight }] = await Promise.all([
+    db()
+      .from("article_drafts")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", projectId)
+      .gte("created_at", startOfDay)
+      .in("status", LIVE),
+    db()
+      .from("article_drafts")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", projectId)
+      .in("status", ["submitted", "accepted"]),
+  ]);
+  if ((todayCount ?? 0) >= SUBMIT_DAILY_CAP) {
+    return (
+      `This site has already taken ${SUBMIT_DAILY_CAP} articles today, which is its daily limit; it resets at UTC midnight. ` +
+      "Publishing faster than this reads as bulk-generated content to search engines, which costs the site more than the extra articles are worth. Nothing was lost - hand this one in tomorrow."
+    );
+  }
+  if ((inFlight ?? 0) >= SUBMIT_IN_FLIGHT_CAP) {
+    return (
+      `This site already has ${SUBMIT_IN_FLIGHT_CAP} articles waiting to be published, which is the limit. ` +
+      "Call get_drafts to see them. Once one goes live there is room for another."
+    );
+  }
+  return null;
+}
+
+// The last path segment of a published page's URL. The pages table stores full
+// URLs, not slugs, and the article gate compares slugs - deriving one here
+// beats adding a column that would need backfilling on every existing site.
+function slugFromUrl(url: string): string {
+  try {
+    const path = new URL(url).pathname.replace(/\/+$/, "");
+    return path.slice(path.lastIndexOf("/") + 1).toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
 // keyword_ideas (2026-07-30 rewrite): each expanded seed now costs 2 metered
 // DataForSEO calls (keyword_suggestions + related_keywords) instead of the
 // old 1-call-for-all-seeds shape, so cap how many seeds a single tool call
 // actually expands rather than trusting every caller to self-limit.
 const KEYWORD_IDEAS_SEED_CAP = 5;
 
+// How much research one note may carry. 64KB is roughly 10,000 words: room for
+// a real SERP analysis, an outline and a page of numbers, and not room for
+// three competitor articles pasted in whole - which is the actual failure mode
+// this bounds, because the next session pays to read whatever is stored here.
+const MAX_RESEARCH_NOTES_CHARS = 64_000;
+
+// WHAT A CHAT CLIENT SEES. Claude.ai and ChatGPT pay for every tool schema on
+// every request: the full surface is ~64 tools and ~64KB of JSON schema, which
+// is most of a $20 plan's context spent before the model has read a word of
+// the site. These are the ones a chat session actually needs to research,
+// write and hand in an article. Everything else (the repo pipeline, the
+// backlink playbook, trends, feedback, install) belongs to a coding agent that
+// has the window for it.
+//
+// Names not registered yet are simply skipped, so a name may be added here
+// before its tool exists.
+const CHAT_TOOLS = new Set([
+  "get_instructions",
+  "get_overview",
+  "get_project",
+  "get_site_profile",
+  "set_site_profile",
+  "get_conventions",
+  "set_conventions",
+  "get_site_digest",
+  "get_build_brief",
+  "check_serp",
+  "keyword_ideas",
+  "suggest_keywords",
+  "check_sameness",
+  "get_suggestions",
+  "propose_suggestion",
+  "save_research_notes",
+  "get_research_notes",
+  "submit_article",
+  "get_drafts",
+]);
+
+// Tools whose effects a client should confirm before running. Purely a UX
+// hint - nothing is gated on it, and a client that ignores annotations loses
+// no safety, because every one of these is owner-gated in its own handler.
+const DESTRUCTIVE_TOOLS = new Set(["merge_pr", "discard_draft", "disconnect_repo"]);
+
+// Reads, by naming convention. The convention is load-bearing enough to
+// derive from: a get_/check_ tool that mutated tenant state would already be
+// misnamed. One honest exception rides along - check_serp and keyword_ideas
+// read nothing of ours but do spend the project's DataForSEO credit, so
+// "read-only" here means "changes nothing", not "costs nothing". The daily
+// caps are what actually bound the spend.
+const READ_ONLY_PREFIX = /^(get_|check_)/;
+
 const mcpHandler = createMcpHandler(
-  (server) => {
+  (mcpServer) => {
+    // One place decides what this particular caller may see, so the 60-odd
+    // registrations below stay untouched and a new tool cannot forget to be
+    // curated or annotated. Safe as a per-request decision: mcp-handler builds
+    // a fresh McpServer for every request and calls this callback on it.
+    const chat = currentClientKind() === "chat";
+    const server = {
+      registerTool: ((name: string, config: Record<string, unknown>, cb: unknown) => {
+        if (chat && !CHAT_TOOLS.has(name)) return;
+        const annotations = {
+          ...(READ_ONLY_PREFIX.test(name) ? { readOnlyHint: true } : {}),
+          ...(DESTRUCTIVE_TOOLS.has(name) ? { destructiveHint: true } : {}),
+          // A tool that states its own annotations wins over the convention.
+          ...((config.annotations as Record<string, unknown> | undefined) ?? {}),
+        };
+        return mcpServer.registerTool(
+          name,
+          { ...config, annotations } as Parameters<typeof mcpServer.registerTool>[1],
+          cb as Parameters<typeof mcpServer.registerTool>[2],
+        );
+      }) as unknown as typeof mcpServer.registerTool,
+    };
     // ---- suggestions queue (the heart) ------------------------------------
     server.registerTool(
       "get_suggestions",
@@ -169,9 +332,25 @@ const mcpHandler = createMcpHandler(
         if (error) return fail(error.message);
         // Build order is computed here, not in SQL, so the tool keeps working
         // before migration 0014 adds queue_position (rows just stay FIFO).
-        return ok(
-          sortQueue((data ?? []) as { created_at: string; queue_position?: number | null }[]),
+        const queue = sortQueue(
+          (data ?? []) as { created_at: string; queue_position?: number | null }[],
         );
+        if (chatMode()) {
+          // The full row carries a free-form `spec` brief that can run to
+          // pages. A chat client is picking WHICH idea to write, and needs the
+          // brief only for the one it picks - which get_build_brief hands it.
+          return ok(
+            (queue as unknown as Record<string, unknown>[]).map((r) => ({
+              id: r.id,
+              title: r.title,
+              type: r.type,
+              status: r.status,
+              primary_keyword: r.primary_keyword,
+              rationale: typeof r.rationale === "string" ? r.rationale.slice(0, 240) : null,
+            })),
+          );
+        }
+        return ok(queue);
       },
     );
 
@@ -762,6 +941,764 @@ const mcpHandler = createMcpHandler(
       },
     );
 
+    // ---- the article door --------------------------------------------------
+    // Where an outside AI hands us a finished article. Everything past this
+    // point is ours: validate, store, render, add internal links, publish.
+    //
+    // The gate runs HERE rather than inside the writing agent for the same
+    // reason the sameness gate does - a model grading its own work grades it
+    // generously, and the promise of this product is that the article a
+    // customer gets does not depend on which AI they happen to pay for. A
+    // rejection is not a dead end: every failed check carries a `fix` written
+    // TO the submitting model, so the normal path is submit -> read the fixes
+    // -> resubmit, without a human in the loop.
+    server.registerTool(
+      "submit_article",
+      {
+        title: "Submit article",
+        description:
+          "Hand in a finished article. We check it against the publishing gate, store it " +
+          "as a draft, then format it, add internal links, build the schema and cover, and " +
+          "publish it to the site on the owner's schedule - you do not publish it yourself. " +
+          "Send the article as plain markdown: one H1, H2/H3 sections, no frontmatter and " +
+          "no HTML. If it fails the gate the call comes back with the exact checks that " +
+          "failed and a `fix` line for each one - apply them and call submit_article again " +
+          "with the same suggestion_id, which updates the same draft rather than piling up " +
+          "duplicates. Give up after 3 rejected attempts and tell the owner what is blocking " +
+          "it. Pass suggestion_id whenever the article fulfils a queued idea; that is what " +
+          "marks the idea in progress and keeps one article per idea.",
+        inputSchema: {
+          suggestion_id: z
+            .string()
+            .uuid()
+            .optional()
+            .describe(
+              "The queued idea this article fulfils (from get_suggestions / get_build_brief). " +
+                "Omit only for an article the owner asked for that was never in the queue.",
+            ),
+          title: z.string().min(1).describe("The article title as it should appear on the page."),
+          slug: z
+            .string()
+            .min(1)
+            .describe("URL slug, lowercase and hyphenated, no leading or trailing slash - e.g. 'how-to-price-a-service'."),
+          meta_description: z
+            .string()
+            .optional()
+            .describe("Meta description, roughly 120-160 characters. Omitted means we build one from the opening."),
+          primary_keyword: z
+            .string()
+            .min(1)
+            .describe("The single search term this article targets, exactly as someone would type it."),
+          markdown: z
+            .string()
+            .min(1)
+            .describe("The full article in markdown. No frontmatter, no raw HTML, no code fences wrapping the whole thing."),
+          faq: z
+            .array(
+              z.object({
+                question: z.string().describe("The question, phrased as a real question ending in '?'."),
+                answer: z.string().describe("The answer in a couple of full sentences - at least 8 words, never a stub."),
+              }),
+            )
+            .optional()
+            .describe(
+              "Real Q&A pairs for the FAQ block and its schema. Each question ends in '?' and each answer is a couple of sentences, not a stub.",
+            ),
+          sources: z
+            .array(
+              z.object({
+                url: z.string().describe("The source's full URL, including https://."),
+                title: z.string().optional().describe("The source page or publication's title."),
+              }),
+            )
+            .optional()
+            .describe(
+              "External sources you actually used, as full URLs. Placeholder or example.com URLs fail the gate.",
+            ),
+          cover_brief: z
+            .string()
+            .optional()
+            .describe("Optional one-line description of the cover image's subject. Never published as text."),
+        },
+      },
+      async (input) => {
+        const p = currentProject();
+
+        const submission = {
+          title: input.title,
+          slug: input.slug,
+          metaDescription: input.meta_description ?? "",
+          primaryKeyword: input.primary_keyword,
+          markdown: input.markdown,
+          faq: input.faq ?? [],
+          sources: input.sources ?? [],
+          coverBrief: input.cover_brief,
+        };
+
+        // WHOSE IDEA IS IT. On Semi the owner's approval is the point of the
+        // queue: an idea sitting pending has not been said yes to, and one
+        // they rejected has been said no to - writing either anyway would make
+        // the approve/reject buttons decorative. On Auto the owner has already
+        // delegated that decision (auto_approve is what "fully automatic"
+        // means here), so the same check would only refuse work they asked to
+        // happen without them.
+        //
+        // in_progress passes on both: that is the status submit_article itself
+        // sets, so a resubmission after a rejection must not trip over its own
+        // first attempt.
+        if (input.suggestion_id && !effectiveAutomations(p).auto_approve) {
+          const { data: idea } = await db()
+            .from("suggestions")
+            .select("status, title")
+            .eq("id", input.suggestion_id)
+            .eq("project_id", p.id)
+            .maybeSingle();
+          const ideaRow = idea as { status: string; title: string } | null;
+          if (ideaRow && !["approved", "in_progress"].includes(ideaRow.status)) {
+            return fail(
+              ideaRow.status === "rejected"
+                ? `The owner rejected that idea ("${ideaRow.title}"), so it is not one to write. Call get_suggestions for the approved ones.`
+                : `That idea ("${ideaRow.title}") is still waiting for the owner to approve it - this site approves ideas by hand, on the dashboard's Queue screen. Do not write it yet. Either write one that is already approved (get_suggestions lists them), or tell the owner to approve this one on the Queue screen; if you already wrote it, keep the article with save_research_notes and hand it in once they say it is approved.`,
+            );
+          }
+        }
+
+        // One live article per queued idea. A resubmission after a rejection
+        // updates that same row; a resubmission after we already accepted one
+        // is refused here rather than by a unique-index error, because "we are
+        // already publishing that" is an answer and "23505" is not.
+        let existingId: string | null = null;
+        if (input.suggestion_id) {
+          const { data: prior } = await db()
+            .from("article_drafts")
+            .select("id, status")
+            .eq("project_id", p.id)
+            .eq("suggestion_id", input.suggestion_id)
+            .in("status", ["submitted", "rejected", "accepted", "blocked_setup", "finished", "published"])
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const row = prior as { id: string; status: string } | null;
+          if (row && ["accepted", "blocked_setup", "finished", "published"].includes(row.status)) {
+            return failWith(
+              "We already accepted an article for that idea. Nothing was changed - read it with get_drafts.",
+              { draft_id: row.id, status: row.status },
+            );
+          }
+          existingId = row?.id ?? null;
+        }
+
+        // What this site already covers, so the gate can refuse a near-repeat.
+        // Two sources: pages (what the repo route published) and the drafts
+        // this door has already accepted. Both fail open - an unreadable
+        // corpus must not refuse someone's article.
+        const [pagesRes, draftsRes] = await Promise.all([
+          db().from("pages").select("url, title").eq("project_id", p.id).limit(1000),
+          db()
+            .from("article_drafts")
+            .select("slug, title")
+            .eq("project_id", p.id)
+            .in("status", ["accepted", "blocked_setup", "finished", "published"])
+            .limit(1000),
+        ]);
+        const existingSlugs: string[] = [];
+        const existingTitles: string[] = [];
+        for (const row of (pagesRes.data ?? []) as { url: string; title: string | null }[]) {
+          const slug = slugFromUrl(row.url);
+          if (slug) existingSlugs.push(slug);
+          if (row.title) existingTitles.push(row.title);
+        }
+        for (const row of (draftsRes.data ?? []) as { slug: string | null; title: string | null }[]) {
+          if (row.slug) existingSlugs.push(row.slug);
+          if (row.title) existingTitles.push(row.title);
+        }
+
+        // content_prefs is read raw here rather than through
+        // normalizeContentPrefs, which drops keys it does not know about:
+        // these two are gate settings, not template controls, and both have a
+        // safe default (cite your sources; ban nothing).
+        const prefs = (p.content_prefs ?? {}) as Record<string, unknown>;
+        const bannedClaims = Array.isArray(prefs.banned_claims)
+          ? (prefs.banned_claims as unknown[]).filter((c): c is string => typeof c === "string")
+          : [];
+        const requireSources =
+          typeof prefs.require_sources === "boolean" ? prefs.require_sources : true;
+
+        const report = validateArticle(submission, {
+          existingSlugs,
+          existingTitles,
+          requireSources,
+          bannedClaims,
+          siteName: p.name,
+        });
+
+        // Caps, checked only for a NEW accepted article.
+        //
+        // Deliberately not checked earlier: a rejected submission consumes
+        // nothing, so refusing one on a cap would punish an agent for the very
+        // round trip the gate asked it to make. And a resubmission updates a
+        // draft that already counted, so it must pass freely or a capped site
+        // could never fix the article it already has in flight.
+        if (report.ok && !existingId) {
+          const capped = await submissionCaps(p.id);
+          if (capped) return fail(capped);
+        }
+
+        const now = new Date().toISOString();
+        const row = {
+          project_id: p.id,
+          suggestion_id: input.suggestion_id ?? null,
+          title: submission.title,
+          slug: submission.slug,
+          meta_description: input.meta_description ?? null,
+          primary_keyword: submission.primaryKeyword,
+          markdown: submission.markdown,
+          faq: submission.faq,
+          sources: submission.sources,
+          cover_brief: input.cover_brief ?? null,
+          validation: report,
+          // Which kind of AI handed it in. The whole promise of a server-side
+          // gate is that quality does not depend on this value, which is only
+          // checkable if it is recorded.
+          client_kind: currentClientKind(),
+          // A rejected draft is stored too, deliberately: "why was my article
+          // refused" has to be answerable weeks later, and rejection rates per
+          // client are the only measurement of whether the gate is fair.
+          status: report.ok ? "submitted" : "rejected",
+          updated_at: now,
+        };
+
+        let draftId = existingId;
+        if (draftId) {
+          const { error } = await db().from("article_drafts").update(row).eq("id", draftId);
+          if (error) return fail(`Could not save the article: ${error.message}`);
+        } else {
+          const { data, error } = await db()
+            .from("article_drafts")
+            .insert(row)
+            .select("id")
+            .maybeSingle();
+          if (error) {
+            if (isDuplicateKeyError(error)) {
+              return fail(
+                "There is already an article in flight for that idea. Read it with get_drafts before submitting another.",
+              );
+            }
+            return fail(`Could not save the article: ${error.message}`);
+          }
+          draftId = (data as { id: string } | null)?.id ?? null;
+        }
+        if (!draftId) return fail("Could not save the article: the database returned no row.");
+
+        if (!report.ok) {
+          const failed = report.blocking.filter((c) => !c.passed);
+          return failWith(
+            `Not published: ${failed.length} check(s) must pass first. Fix each one below and call submit_article again with the same suggestion_id.`,
+            {
+              draft_id: draftId,
+              status: "rejected",
+              score: report.score,
+              blocking: failed.map((c) => ({ id: c.id, title: c.title, fix: c.fix })),
+              advisory: report.advisory
+                .filter((c) => !c.passed)
+                .map((c) => ({ id: c.id, title: c.title, fix: c.fix })),
+            },
+          );
+        }
+
+        try {
+          await enqueue({
+            projectId: p.id,
+            kind: "finish",
+            payload: { draftId },
+            idempotencyKey: `finish:${draftId}`,
+          });
+        } catch (e) {
+          // The article is saved but nothing will pick it up. Say so - a
+          // "submitted" that silently never publishes is the worst outcome
+          // this tool has.
+          return failWith(
+            `Your article was saved but we could not queue it for publishing: ${
+              e instanceof Error ? e.message : String(e)
+            }. Call submit_article again with the same suggestion_id in a minute.`,
+            { draft_id: draftId, status: "submitted" },
+          );
+        }
+
+        if (input.suggestion_id) {
+          // Best effort: the article is accepted either way, and a queue
+          // status that lags is a smaller problem than refusing the work.
+          await db()
+            .from("suggestions")
+            .update({ status: "in_progress" })
+            .eq("id", input.suggestion_id)
+            .eq("project_id", p.id);
+        }
+
+        return ok({
+          draft_id: draftId,
+          status: "submitted",
+          score: report.score,
+          advisory: report.advisory
+            .filter((c) => !c.passed)
+            .map((c) => ({ id: c.id, title: c.title, fix: c.fix })),
+          note: "Accepted. We will format it, add internal links, build the cover and schema, and publish it on the owner's schedule. Nothing else for you to do.",
+        });
+      },
+    );
+
+    server.registerTool(
+      "get_drafts",
+      {
+        title: "Get drafts",
+        description:
+          "The articles submitted through submit_article and what happened to each: " +
+          "what passed, what was sent back and why, what is queued, and what is live. " +
+          "The same list the owner's Drafts screen shows. Call it before submitting " +
+          "again after a rejection - the blocking checks and their fixes are here. " +
+          "Statuses: submitted (checking) | rejected (sent back, see problems) | " +
+          "accepted (queued to publish) | blocked_setup (nowhere to publish yet - the " +
+          "owner has not connected their site) | finished (posted to WordPress, or pull " +
+          "request opened in the repo - not yet confirmed live; `pr_url` links it) | " +
+          "published (confirmed live) | discarded.",
+        inputSchema: {
+          status: z
+            .enum([
+              "submitted",
+              "rejected",
+              "accepted",
+              "blocked_setup",
+              "finished",
+              "published",
+              "discarded",
+            ])
+            .optional()
+            .describe("Only this status. Omit for everything, newest first."),
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(50)
+            .optional()
+            .describe("How many to return, newest first. Defaults to 20."),
+        },
+      },
+      async ({ status, limit }) => {
+        const p = currentProject();
+        let q = db()
+          .from("article_drafts")
+          .select(
+            "id, suggestion_id, title, slug, status, validation, published_url, pr_url, created_at, updated_at",
+          )
+          .eq("project_id", p.id)
+          .order("created_at", { ascending: false })
+          .limit(limit ?? 20);
+        if (status) q = q.eq("status", status);
+        const { data, error } = await q;
+        if (error) return fail(error.message);
+
+        const rows = (data ?? []) as {
+          id: string;
+          suggestion_id: string | null;
+          title: string;
+          slug: string;
+          status: string;
+          validation: {
+            score?: number;
+            blocking?: { id: string; title: string; fix: string; passed?: boolean }[];
+          } | null;
+          published_url: string | null;
+          pr_url: string | null;
+          created_at: string;
+          updated_at: string;
+        }[];
+
+        // The full validation report is several KB per row and most of it is
+        // checks that passed. Only the failures carry an instruction, and only
+        // those are worth an agent's context.
+        return ok(
+          rows.map((r) => ({
+            id: r.id,
+            suggestion_id: r.suggestion_id,
+            title: r.title,
+            slug: r.slug,
+            status: r.status,
+            score: typeof r.validation?.score === "number" ? r.validation.score : null,
+            problems: (r.validation?.blocking ?? [])
+              .filter((c) => c.passed === false)
+              .map((c) => ({ id: c.id, title: c.title, fix: c.fix })),
+            published_url: r.published_url,
+            // Only ever set on the repo route: the pull request this article
+            // was committed into, so the agent can point the owner at it.
+            pr_url: r.pr_url,
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+            ...(r.status === "blocked_setup" ? { blocked_reason: blockedReason(p) } : {}),
+          })),
+        );
+      },
+    );
+
+    server.registerTool(
+      "approve_draft",
+      {
+        title: "Publish a draft now",
+        description:
+          "Owner-gated: publish a finished article immediately instead of waiting for " +
+          "the site's usual publishing hour. Use ONLY when the owner asked for it in " +
+          "this conversation - an accepted article already publishes on its own, so an " +
+          "autonomous run has no reason to call this. Also the way to release an article " +
+          "that parked as blocked_setup, once the owner has connected their site.",
+        inputSchema: {
+          id: z.string().uuid().describe("The draft id from get_drafts or submit_article."),
+        },
+      },
+      async ({ id }) => {
+        const p = currentProject();
+        const { data } = await db()
+          .from("article_drafts")
+          .select("id, status, rendered_html")
+          .eq("id", id)
+          .eq("project_id", p.id)
+          .maybeSingle();
+        const draft = data as { id: string; status: string; rendered_html: string | null } | null;
+        if (!draft) return fail("No draft with that id on this site.");
+        if (draft.status === "published") return fail("That article is already live.");
+        // Only a draft that is actually waiting may be pushed out: a discarded
+        // one stays discarded, and a submitted/rejected one has not been
+        // prepared yet.
+        if (!["accepted", "blocked_setup", "finished"].includes(draft.status)) {
+          return fail(
+            draft.status === "discarded"
+              ? "That article was discarded. Ask the owner to resubmit it if they changed their mind."
+              : "That article has not been prepared yet. Try again in a few minutes.",
+          );
+        }
+        if (!draft.rendered_html) {
+          return fail("That article has not been prepared yet. Try again in a few minutes.");
+        }
+        // Refuse rather than queue a job that would immediately park itself -
+        // reporting "queued" for work that cannot run is the failure mode this
+        // whole readiness split exists to prevent.
+        const route = publishRoute(p);
+        if (route !== "wordpress" && route !== "repo") return fail(blockedReason(p));
+
+        // Pulls an already-scheduled publish forward instead of silently
+        // deduping against it - see publishDraftNow.
+        await publishDraftNow(p.id, draft.id);
+        return ok({
+          id: draft.id,
+          queued: true,
+          note:
+            route === "repo"
+              ? "The pull request opens within a few minutes."
+              : "It goes out within a few minutes.",
+        });
+      },
+    );
+
+    server.registerTool(
+      "discard_draft",
+      {
+        title: "Discard a draft",
+        description:
+          "Owner-gated: throw an article away so it is never published. Use ONLY when " +
+          "the owner asked for it in this conversation. The row is kept as history " +
+          "rather than deleted, so 'why did that article never appear' stays " +
+          "answerable. A rejected draft does not need discarding - fix it and " +
+          "resubmit instead.",
+        inputSchema: {
+          id: z.string().uuid().describe("The draft id from get_drafts or submit_article."),
+        },
+        annotations: { destructiveHint: true },
+      },
+      async ({ id }) => {
+        const p = currentProject();
+        const { data, error } = await db()
+          .from("article_drafts")
+          .update({ status: "discarded", updated_at: new Date().toISOString() })
+          .eq("id", id)
+          .eq("project_id", p.id)
+          .select("id, title")
+          .maybeSingle();
+        if (error) return fail(error.message);
+        if (!data) return fail("No draft with that id on this site.");
+        return ok({ discarded: true, ...(data as { id: string; title: string }) });
+      },
+    );
+
+    // ---- research notes (one chat's findings, for the next chat) -----------
+    // A coding agent researches and writes in one run and keeps the findings
+    // in its context. A chat app has neither the window nor the continuity for
+    // that, so the work splits: one conversation researches, another writes.
+    // These two tools are the handover.
+    server.registerTool(
+      "save_research_notes",
+      {
+        title: "Save research notes",
+        description:
+          "Store what you learned researching an idea, so a LATER conversation can write " +
+          "the article without redoing the research. Call it at the end of a research " +
+          "session with whatever you found: the SERP picture, what the top results cover " +
+          "and miss, the angle worth taking, an outline, real numbers with their sources. " +
+          "Shape it however suits the work - nothing here parses it. Saving again for the " +
+          "same suggestion_id REPLACES the previous notes, so the writing session never has " +
+          "to guess which of two versions is current.",
+        inputSchema: {
+          suggestion_id: z
+            .string()
+            .uuid()
+            .optional()
+            .describe(
+              "The queued idea this research is for. Omit for research the owner asked for that is not tied to a queued idea.",
+            ),
+          notes: z
+            .record(z.string(), z.unknown())
+            .describe(
+              "Your findings as a JSON object - serp, gaps, angle, outline, sources, whatever the work produced. Up to 64KB.",
+            ),
+        },
+      },
+      async ({ suggestion_id, notes }) => {
+        const p = currentProject();
+        // A ceiling, because the failure mode without one is an agent pasting
+        // three competitor pages in full and the next session paying for it.
+        const size = JSON.stringify(notes ?? {}).length;
+        if (size > MAX_RESEARCH_NOTES_CHARS) {
+          return fail(
+            `Those notes are ${size.toLocaleString()} characters, past the ${MAX_RESEARCH_NOTES_CHARS.toLocaleString()} we store. ` +
+              "Save your conclusions - the angle, the gaps, the outline, the numbers with their sources - rather than the pages you read.",
+          );
+        }
+
+        const now = new Date().toISOString();
+        if (suggestion_id) {
+          const { data, error } = await db()
+            .from("research_notes")
+            .upsert(
+              { project_id: p.id, suggestion_id, notes, updated_at: now },
+              { onConflict: "project_id,suggestion_id" },
+            )
+            .select("id")
+            .maybeSingle();
+          if (error) return fail(`Could not save those notes: ${error.message}`);
+          return ok({ id: (data as { id: string } | null)?.id ?? null, saved: true, suggestion_id, chars: size });
+        }
+        const { data, error } = await db()
+          .from("research_notes")
+          .insert({ project_id: p.id, notes, updated_at: now })
+          .select("id")
+          .maybeSingle();
+        if (error) return fail(`Could not save those notes: ${error.message}`);
+        return ok({ id: (data as { id: string } | null)?.id ?? null, saved: true, chars: size });
+      },
+    );
+
+    server.registerTool(
+      "get_research_notes",
+      {
+        title: "Get research notes",
+        description:
+          "Read back research saved by an earlier conversation. Call this FIRST in a " +
+          "writing session: if notes exist for the idea you are about to write, the " +
+          "research is already done and repeating it costs the owner a second round of " +
+          "their own plan. Pass suggestion_id for one idea's notes; omit it to list the " +
+          "most recent unattached notes.",
+        inputSchema: {
+          suggestion_id: z
+            .string()
+            .uuid()
+            .optional()
+            .describe("The queued idea whose notes you want. Omit to list recent unattached notes."),
+        },
+      },
+      async ({ suggestion_id }) => {
+        const p = currentProject();
+        if (suggestion_id) {
+          const { data, error } = await db()
+            .from("research_notes")
+            .select("id, suggestion_id, notes, created_at, updated_at")
+            .eq("project_id", p.id)
+            .eq("suggestion_id", suggestion_id)
+            .maybeSingle();
+          if (error) return fail(error.message);
+          // An absent note is an answer, not a failure: it means nobody has
+          // researched this yet, and the writing session should go and do it.
+          if (!data) {
+            return ok({
+              found: false,
+              suggestion_id,
+              note: "Nobody has researched this idea yet. Do the research, then save it with save_research_notes.",
+            });
+          }
+          return ok({ found: true, ...(data as Record<string, unknown>) });
+        }
+        const { data, error } = await db()
+          .from("research_notes")
+          .select("id, suggestion_id, notes, created_at, updated_at")
+          .eq("project_id", p.id)
+          .is("suggestion_id", null)
+          .order("created_at", { ascending: false })
+          .limit(5);
+        if (error) return fail(error.message);
+        return ok({ found: (data ?? []).length > 0, notes: data ?? [] });
+      },
+    );
+
+    // ---- what we know about the site (the crawl, and where articles go) ----
+    server.registerTool(
+      "get_site_digest",
+      {
+        title: "Get site digest",
+        description:
+          "What this site already covers, read for you so you do not have to crawl it. " +
+          "Our server reads the site on a schedule and keeps a compact summary: the " +
+          "sections it has, how many pages, the newest and oldest, sample titles, the " +
+          "most-linked pages, typical article length. Call this BEFORE researching or " +
+          "writing - it is how you avoid proposing an article the site already has, and " +
+          "how you match its voice and depth. Reading the site yourself instead would " +
+          "cost far more of this conversation than the whole article is worth. " +
+          "`notes` names anything the crawl could not see, so a partial picture says so.",
+        inputSchema: {},
+      },
+      async () => {
+        const p = currentProject();
+        const { data, error } = await db()
+          .from("site_digests")
+          .select("digest, notes, page_count, source, crawled_at")
+          .eq("project_id", p.id)
+          .maybeSingle();
+        if (error) return fail(error.message);
+        if (!data) {
+          // Not an error: a site we have not read yet is a normal state on a
+          // new project, and the answer is "ask for a read", not "give up".
+          return ok({
+            crawled: false,
+            note: chatMode()
+              ? "We have not read your site yet. It happens on its own once the site is connected, and again every week. Until then, ask the owner what the site covers rather than guessing."
+              : "We have not read your site yet. Call rescan_site to queue a read; it usually finishes within a few minutes.",
+          });
+        }
+        return ok({ crawled: true, ...(data as Record<string, unknown>) });
+      },
+    );
+
+    server.registerTool(
+      "rescan_site",
+      {
+        title: "Rescan the site",
+        description:
+          "Queue a fresh read of the site. It happens in the background and takes a few " +
+          "minutes; call get_site_digest afterwards for the result. The site is re-read " +
+          "automatically every week, so use this only when something changed that matters " +
+          "now - pages published elsewhere, a restructure, a new section. Calling it " +
+          "repeatedly in one day does nothing extra: the same read is queued once.",
+        inputSchema: {},
+      },
+      async () => {
+        const p = currentProject();
+        if (!p.domain) return fail("This project has no website address yet, so there is nothing to read.");
+        const day = new Date().toISOString().slice(0, 10);
+        const job = await enqueue({
+          projectId: p.id,
+          kind: "crawl",
+          payload: { isWordPress: publishTarget(p) === "wordpress", maxPages: 150 },
+          idempotencyKey: `crawl:${p.id}:manual:${day}`,
+        });
+        return ok({
+          queued: true,
+          // enqueue returns null when an identical read is already pending.
+          // That is a success - the work is going to happen - and saying so
+          // beats reporting a second queue that does not exist.
+          already_queued: job === null,
+          note: "We will read the site in the background. Call get_site_digest in a few minutes.",
+        });
+      },
+    );
+
+    server.registerTool(
+      "set_publish_target",
+      {
+        title: "Set where articles are published",
+        description:
+          "Owner-gated: choose where finished articles go. `wordpress` posts them straight " +
+          "to the site's own WordPress; `github` commits the article to the connected repo " +
+          "and opens a pull request (merged automatically in automatic mode); `manual` " +
+          "finishes the article and leaves it for the owner to place. Use " +
+          "ONLY when the owner asked for the change in this conversation. This does NOT " +
+          "connect anything - the WordPress username and password are entered on the " +
+          "Settings screen and never travel through here. Setting `wordpress` before that " +
+          "connection exists is allowed, and articles simply wait until it does.",
+        inputSchema: {
+          target: z
+            .enum(["github", "wordpress", "manual"])
+            .describe("Where finished articles go from now on."),
+        },
+      },
+      async ({ target }) => {
+        const p = currentProject();
+        const { error } = await db()
+          .from("projects")
+          .update({ publish_target: target })
+          .eq("id", p.id);
+        if (error) return fail(`Could not change where articles are published: ${error.message}`);
+
+        // Say what this actually means right now rather than a bare "saved" -
+        // choosing wordpress on a site with no WordPress connected looks like
+        // it worked and then quietly parks every article.
+        const notes: string[] = [];
+        if (target === "wordpress" && !p.wp_app_password) {
+          notes.push(
+            "No WordPress site is connected yet, so articles will wait. Connect it on the Settings screen.",
+          );
+        }
+        if (target === "github" && !p.github_repo) {
+          notes.push("No repository is connected yet, so articles will wait.");
+        }
+        return ok({ publish_target: target, saved: true, ...(notes.length ? { note: notes.join(" ") } : {}) });
+      },
+    );
+
+    server.registerTool(
+      "set_content_path_hint",
+      {
+        title: "Set where the repo keeps its articles",
+        description:
+          "Owner-gated, repo route only: the folder in the connected GitHub repo that holds " +
+          "the site's articles (for example content/blog). We work it out from the repo when " +
+          "this is empty; set it when get_drafts reports a draft parked on \"where your " +
+          "articles live\", or when the owner tells you the folder. Pass an empty string to " +
+          "clear it. Same field as Settings - Where your articles live.",
+        inputSchema: {
+          path: z
+            .string()
+            .max(160)
+            .describe("Repo-relative folder, e.g. content/blog. Empty string clears the hint."),
+        },
+      },
+      async ({ path }) => {
+        const p = currentProject();
+        const { normalizeContentPathHint } = await import("@/lib/repo-publish");
+        const raw = path.trim();
+        const clean = raw ? normalizeContentPathHint(raw) : null;
+        if (raw && clean === null) {
+          return fail("Use a plain folder path, like content/blog - letters, digits, dots, dashes and slashes, no '..'.");
+        }
+        const { error } = await db()
+          .from("projects")
+          .update({ content_path_hint: clean })
+          .eq("id", p.id);
+        if (error) return fail(`Could not save the folder: ${error.message}`);
+        return ok({
+          content_path_hint: clean,
+          saved: true,
+          note: clean
+            ? "Saved. A draft parked on this will publish the next time it runs - press Publish now (approve_draft) to run it now."
+            : "Cleared. We will work the folder out from the repo again.",
+        });
+      },
+    );
+
     // ---- keyword tracking --------------------------------------------------
     server.registerTool(
       "track_keywords",
@@ -1334,10 +2271,25 @@ const mcpHandler = createMcpHandler(
             top ?? 10,
           );
           if (billedToPlatform) void recordCheckSerpCall(p.id);
+          const trimmed = results.slice(0, top ?? 10);
+          if (chatMode()) {
+            // A chat client is reading this to decide what to write, not to
+            // build a report: rank, title and URL are the whole decision, and
+            // the citation list behind an AI Overview is a research errand of
+            // its own (get_ai_visibility). Domain is dropped as derivable.
+            return ok({
+              keyword,
+              source: provider.kind,
+              results: trimmed.map((r) => ({ position: r.position, title: r.title, url: r.url })),
+              ai_overview: ai
+                ? { present: ai.present, cited_domains: ai.references.slice(0, 5).map((x) => x.domain) }
+                : null,
+            });
+          }
           return ok({
             keyword,
             source: provider.kind,
-            results: results.slice(0, top ?? 10),
+            results: trimmed,
             // Google's AI Overview citations when this call carried them
             // (SerpApi mode). null = not measured here - DataForSEO mode
             // records AI Overviews via the weekly sweep; read get_ai_visibility.
@@ -1579,6 +2531,18 @@ const mcpHandler = createMcpHandler(
             note: "No DataForSEO access for this project (free/GSC-only mode, or the monthly bundled budget is spent). Use check_serp + product judgment - do not invent numbers.",
           });
         }
+
+        // One call is worth up to 10 metered requests, which makes an
+        // unattended loop here the most expensive mistake available through
+        // this server. Named refusal, never a silent empty list: a caller told
+        // "no ideas" retries, a caller told "tomorrow" stops.
+        if (await keywordIdeasDailyCapReached(p.id)) {
+          return fail(
+            `You have used today's ${KEYWORD_IDEAS_DAILY_CAP} keyword_ideas calls for this site; it resets at UTC midnight. ` +
+              "Work with the ideas you already have, or use check_serp and suggest_keywords, which are not capped this way.",
+          );
+        }
+        void recordKeywordIdeasCall(p.id);
 
         // Cost control (2026-07-30): the old call was 1 metered call for up
         // to 20 seeds; two-endpoints-per-seed makes cost scale with seed
@@ -1978,6 +2942,37 @@ const mcpHandler = createMcpHandler(
             impressions: r.impressions,
             avg_position: r.avgPosition,
           });
+          const rankings = o.rankings.map((r) => ({
+            keyword: r.keyword.keyword,
+            position: r.current,
+            change_30d: r.change,
+            volume: r.volume,
+          }));
+          if (chatMode()) {
+            // Everything a writer needs to pick an angle, and nothing that is
+            // only useful on a dashboard. The per-page traffic table is the
+            // expensive part - a site with fifty guides sends fifty rows - so
+            // chat gets counts plus the handful that are actually moving.
+            return ok({
+              domain: o.domain,
+              stage: journey?.stage ?? null,
+              totals_28d: o.totals,
+              domain_rating: o.dr,
+              tracked_keywords: rankings.length,
+              keywords_in_top100: o.rankingCount,
+              // Best-ranked first: the ones worth strengthening or defending.
+              rankings: rankings
+                .filter((r) => r.position != null)
+                .sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
+                .slice(0, 15),
+              top_queries: (o.topQueries ?? []).slice(0, 15),
+              published: { guides: o.guides.length, tools: o.tools.length },
+              top_pages: [...o.guides, ...o.tools]
+                .sort((a, b) => b.clicks - a.clicks)
+                .slice(0, 10)
+                .map((r) => ({ url: r.url, title: r.title, clicks: r.clicks, impressions: r.impressions })),
+            });
+          }
           return ok({
             domain: o.domain,
             journey,
@@ -1987,12 +2982,7 @@ const mcpHandler = createMcpHandler(
             last_24h: o.fresh24,
             tracked_keywords: o.rankings.length,
             keywords_in_top100: o.rankingCount,
-            rankings: o.rankings.map((r) => ({
-              keyword: r.keyword.keyword,
-              position: r.current,
-              change_30d: r.change,
-              volume: r.volume,
-            })),
+            rankings,
             top_queries: o.topQueries,
             guides: o.guides.map(pageRow),
             tools: o.tools.map(pageRow),
@@ -2750,6 +3740,22 @@ const mcpHandler = createMcpHandler(
           // project - tells "repo connected but App revoked" apart from
           // "never connected".
           github_app_installed: p.github_installation_id != null,
+          // Where finished articles go (github | wordpress | manual) and
+          // whether the WordPress half of that is actually connected - the
+          // same facts the Drafts screen's "waiting on setup" state derives
+          // from. wordpress_connected is presence only; the credential itself
+          // never leaves wordpress-connect.ts.
+          publish_target: publishTarget(p),
+          wordpress_connected: Boolean(p.wp_app_password),
+          // The wizard's answers (migration 0060). ai_choice is what the owner
+          // SAID will write (claude-web | chatgpt | claude-code | codex |
+          // cursor; null = never said - projects from before the adaptive
+          // wizard), distinct from `agent` above, which is the coding agent
+          // the repo builders run. chat_app_connected is evidence, not a
+          // claim: true once any request has reached this door with
+          // ?client=chat.
+          ai_choice: p.ai_choice ?? null,
+          chat_app_connected: Boolean(p.chat_last_seen_at),
           // The onboarding "does the site have a blog?" answer - the setup
           // workflow's content-home hint (the repo wins on conflict).
           content_mode: p.content_mode,
@@ -3441,7 +4447,35 @@ async function authed(req: Request): Promise<Response> {
       { status: 401, headers: { "WWW-Authenticate": 'Bearer realm="dispatchseo"' } },
     );
   }
-  return projectStore.run(project, () => mcpHandler(req));
+  // ?client=chat marks a chat app (claude.ai, ChatGPT) rather than a coding
+  // agent. It changes what the tool list contains and how big the answers
+  // are, never what the caller is allowed to do - authorisation is the token's
+  // job alone, and a caller can always drop this parameter, so nothing
+  // security-relevant may ever hang off it.
+  const client = new URL(req.url).searchParams.get("client") === "chat" ? "chat" : "agent";
+  if (client === "chat") noteChatSeen(project);
+  return projectStore.run(project, () => clientKindStore.run(client, () => mcpHandler(req)));
+}
+
+/** The "Connected" light for the Claude/ChatGPT app (migration 0060). Every
+ *  request that arrives with ?client=chat is evidence the owner's chat app
+ *  actually reached us - which is worth more than any button they could
+ *  press to tell us so. Throttled to one write per ten minutes per project
+ *  and never awaited: a stamp that fails or lags costs a green light on a
+ *  setup screen, and must never cost the tool call it rode in on. The
+ *  comparison reads the row the token already resolved, so a quiet project
+ *  costs one update per chat session, not one per tool call. */
+function noteChatSeen(project: Project): void {
+  const last = project.chat_last_seen_at ? Date.parse(project.chat_last_seen_at) : 0;
+  if (Date.now() - last < 10 * 60_000) return;
+  void db()
+    .from("projects")
+    .update({ chat_last_seen_at: new Date().toISOString() })
+    .eq("id", project.id)
+    .then(
+      () => undefined,
+      () => undefined,
+    );
 }
 
 export { authed as GET, authed as POST, authed as DELETE };

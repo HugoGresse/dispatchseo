@@ -32,6 +32,21 @@ export const TIER_BUDGET_MICROUSD: Record<Tier, number> = {
 export const CHECK_SERP_DAILY_CAP = 30;
 const CHECK_SERP_ENDPOINT = "check_serp";
 
+// keyword_ideas is the other tool a caller can hold down. Each call expands up
+// to 5 seeds and each seed costs 2 metered DataForSEO requests, so one call is
+// worth up to 10 - which makes an unattended loop the most expensive mistake
+// available through this server. A real research session makes one to three
+// calls; ten is three times a heavy day and still bounds the worst case at
+// 100 requests.
+//
+// Capped for EVERY project, not only platform-billed ones, unlike check_serp.
+// The reasoning differs: check_serp's cap exists to stop our shared plan being
+// used as a free SERP proxy, which is only our problem. This one exists to
+// stop a looping chat client emptying an account, and a project paying its own
+// DataForSEO bill has exactly the same thing to lose.
+export const KEYWORD_IDEAS_DAILY_CAP = 10;
+const KEYWORD_IDEAS_ENDPOINT = "keyword_ideas_calls";
+
 function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -82,20 +97,44 @@ export async function recordCheckSerpCall(projectId: string): Promise<void> {
   }
 }
 
-async function checkSerpCallsToday(projectId: string): Promise<number> {
+async function callsToday(projectId: string, endpoint: string): Promise<number> {
   const { data, error } = await db()
     .from("dataforseo_usage")
     .select("calls")
     .eq("project_id", projectId)
     .eq("day", todayUtc())
-    .eq("endpoint", CHECK_SERP_ENDPOINT)
+    .eq("endpoint", endpoint)
     .maybeSingle();
   if (error || !data) return 0;
   return (data as { calls: number }).calls ?? 0;
 }
 
+function checkSerpCallsToday(projectId: string): Promise<number> {
+  return callsToday(projectId, CHECK_SERP_ENDPOINT);
+}
+
 export async function checkSerpDailyCapReached(projectId: string): Promise<boolean> {
   return (await checkSerpCallsToday(projectId)) >= CHECK_SERP_DAILY_CAP;
+}
+
+/** Same fire-and-forget shape as recordCheckSerpCall: a rate-limit tick, not a
+ *  spend, so a failure only under-counts and is never worth failing the call
+ *  that was already made. */
+export async function recordKeywordIdeasCall(projectId: string): Promise<void> {
+  const { error } = await db().rpc("record_dataforseo_usage", {
+    p_project_id: projectId,
+    p_day: todayUtc(),
+    p_endpoint: KEYWORD_IDEAS_ENDPOINT,
+    p_calls: 1,
+    p_cost_microusd: 0,
+  });
+  if (error) {
+    console.error(`[dataforseo-usage] keyword_ideas record failed for ${projectId}: ${error.message}`);
+  }
+}
+
+export async function keywordIdeasDailyCapReached(projectId: string): Promise<boolean> {
+  return (await callsToday(projectId, KEYWORD_IDEAS_ENDPOINT)) >= KEYWORD_IDEAS_DAILY_CAP;
 }
 
 async function ownedProjectIds(ownerId: string): Promise<string[]> {
@@ -240,6 +279,8 @@ export type PlatformUsageStatus = {
   pacing: PacingLevel;
   check_serp_today: number;
   check_serp_daily_cap: number;
+  keyword_ideas_today: number;
+  keyword_ideas_daily_cap: number;
   resets_at: string;
 };
 
@@ -248,10 +289,11 @@ export type PlatformUsageStatus = {
 // platformBudgetGate for that).
 export async function platformUsageStatus(projectId: string): Promise<PlatformUsageStatus> {
   // Three independent lookups, so start them together rather than in series.
-  const [project, ownerId, serpToday] = await Promise.all([
+  const [project, ownerId, serpToday, ideasToday] = await Promise.all([
     getProjectById(projectId),
     ownerUserIdForProject(projectId),
     checkSerpCallsToday(projectId),
+    callsToday(projectId, KEYWORD_IDEAS_ENDPOINT),
   ]);
   // Both need a result from above, but not from each other.
   const [billedTo, sub] = await Promise.all([
@@ -279,6 +321,8 @@ export async function platformUsageStatus(projectId: string): Promise<PlatformUs
     pacing: pacing.level,
     check_serp_today: serpToday,
     check_serp_daily_cap: CHECK_SERP_DAILY_CAP,
+    keyword_ideas_today: ideasToday,
+    keyword_ideas_daily_cap: KEYWORD_IDEAS_DAILY_CAP,
     resets_at: nextMonthStartUtc(),
   };
 }

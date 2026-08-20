@@ -1,16 +1,18 @@
 ---
 title: What DispatchSEO is
-description: An SEO manager your coding agent drives - research, content that ships as pull requests, and rank tracking, on infrastructure you own.
+description: An SEO manager driven by the AI you already pay for, the Claude app or a coding agent - research, content that ships to your site, and rank tracking, on infrastructure you own.
 ---
 
-DispatchSEO turns your coding agent - Claude Code, Codex, or Cursor - into the person
-who handles your SEO.
+DispatchSEO turns the AI you already pay for into the person who handles your
+SEO: the ordinary Claude app at claude.ai, or a coding agent (Claude Code,
+Codex, Cursor).
 
-Your agent researches keywords, writes the guide, and opens a pull request
-against your site's repo. DispatchSEO is the backend it works against: the
-queue of ideas waiting for your yes or no, the rankings, the Search Console
-numbers, the schedules that make it happen without you asking, and the
-dashboard where you approve things.
+Your AI researches keywords and writes the guide. The finished article is
+posted straight to your WordPress site, or opened as a pull request against
+your repo. DispatchSEO is the backend it works against: the queue of ideas
+waiting for your yes or no, the rankings, the Search Console numbers, the
+schedules that make it happen without you asking, and the dashboard where you
+approve things.
 
 You spend a few minutes a week. It does the rest.
 
@@ -39,7 +41,7 @@ your agent, where your product knowledge already lives.
 ## The loop
 
 <Steps>
-  <Step title="Your agent researches">
+  <Step title="Your AI researches">
     Once a week it mines your Search Console data, Google Autocomplete, and
     what it already knows about your product. Each idea lands in a queue with
     the reasoning attached: the keyword, why it looks winnable, the angle.
@@ -64,12 +66,14 @@ your agent, where your product knowledge already lives.
 
 You'll get value out of this if:
 
-- **Your site's source lives in a Git repo.** Content arrives as pull requests,
-  so this has to be true.
-- **You already have a coding agent.** Claude Code (on the plan you have),
+- **You have somewhere we can publish.** Either a WordPress site you host
+  yourself, where finished articles are posted straight to it, or your site's
+  source in a Git repo, where they arrive as pull requests you review.
+- **You already have an AI.** The ordinary Claude app at claude.ai on a paid
+  plan, or a coding agent: Claude Code (on the plan you have),
   [Codex](/docs/install-codex) (metered on an OpenAI key), or
-  [Cursor](/docs/install-cursor) (on your Cursor plan) - your agent is the
-  engine, and DispatchSEO never bills you for agent usage.
+  [Cursor](/docs/install-cursor) (on your Cursor plan). Your AI is the engine,
+  and DispatchSEO never bills you for its usage.
 - **You'd rather own the thing than rent it.** One Docker command, your
   machine, your data, AGPL-3.0.
 
@@ -77,9 +81,13 @@ You'll get value out of this if:
 
 Being honest saves you an install:
 
-- **WordPress, Webflow, Ghost, or any database-backed CMS.** There's no repo to
-  open a pull request against. This will not work, and there's no workaround
-  planned.
+- **Wix, Squarespace, Shopify, Webflow, Framer, or Ghost.** There's no repo to open a
+  pull request against and no way in through their own APIs either. This will
+  not work, and there's no workaround planned. (WordPress you host yourself
+  does work - see above.)
+- **Anyone whose only AI is ChatGPT or Gemini.** ChatGPT can't connect to us
+  yet, and the Gemini app has no way to connect an outside tool at all. The
+  Claude app, Claude Code, Codex and Cursor all work today.
 - **Anyone wanting content published without review.** You can turn that on -
   but the whole design assumes a human who occasionally says no.
 - **Anyone expecting results in two weeks.** SEO doesn't work that way, and the

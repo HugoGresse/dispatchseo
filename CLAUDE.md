@@ -122,7 +122,7 @@ Vercel Hobby caps crons at once/day and 2 jobs total, so schedules are split:
 - `vercel.json` runs only **daily-ranks** (`0 4 * * *`).
 - Higher-frequency crons live in `.github/workflows/*.yml`, which `curl` the
   backend cron endpoints with `CRON_SECRET` (e.g. `hourly-gsc.yml` at `:07`).
-- Routes: `src/app/api/cron/{daily-ranks,hourly-gsc,weekly-opportunities,seo-dispatch,serp-collect,heartbeat,deploy-check}/route.ts`
+- Routes: `src/app/api/cron/{daily-ranks,hourly-gsc,weekly-opportunities,seo-dispatch,serp-collect,jobs,heartbeat,deploy-check}/route.ts`
   (self-host schedules live in `docker/cron/crontab`, whose header documents
   which routes are deliberately excluded there and why).
 

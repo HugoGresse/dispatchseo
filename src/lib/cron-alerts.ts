@@ -31,6 +31,7 @@ export type CronJob =
   | "daily-ranks"
   | "hourly-gsc"
   | "serp-collect"
+  | "jobs"
   | "weekly-opportunities"
   | "deploy-check";
 
@@ -42,6 +43,14 @@ export type CronJob =
 // no entry here on purpose - see RETIRED_JOBS below.)
 const STALE_HOURS: Record<string, number> = {
   "daily-ranks": 36,
+  // The article queue drain, scheduled every 10 minutes in both
+  // .github/workflows/jobs.yml and docker/cron/crontab. Idle ticks report as
+  // claim-only, so this clock is only ever advanced by a tick that actually
+  // processed something - which means the threshold has to tolerate a genuinely
+  // quiet queue. 6h is far longer than any real gap between a crawl, a finish
+  // and a publish on an active project, and short enough that a wedged drain
+  // is noticed the same working day.
+  jobs: 6,
   // The backend's own SEO scheduler (api/cron/seo-dispatch), every 3h. It is
   // now the thing that WAKES every connected repo's builders, so its silence is
   // the highest-leverage failure in the pipeline: no dispatcher, no builds
@@ -158,6 +167,9 @@ export function jobProjectSlug(job: string): string | null {
 // own email. Everything else (reported workflows) defaults to 6h - frequent
 // runners like seo-auto-merge must not send an email per failing run.
 const DEBOUNCE_HOURS: Record<string, number> = {
+  // Every 10 minutes, so a broken queue would otherwise send 144 emails a day.
+  // One per day is the right amount of "your articles are not going out".
+  jobs: 24,
   "daily-ranks": 24,
   "hourly-gsc": 24,
   "serp-collect": 24, // hourly like hourly-gsc - one email per broken day, not one per run

@@ -7,7 +7,17 @@ import { redirect } from "next/navigation";
 import { getActiveProjectOrNull, scopedProjects } from "@/lib/active-project";
 import { isCloudMode } from "@/lib/cloud";
 import { hasConfiguredProject } from "@/lib/onboarding-gate";
-import { fetchProjectToken } from "@/lib/projects";
+import { fetchProjectToken, publishTarget } from "@/lib/projects";
+import { connectionSummary } from "@/lib/wordpress-connect";
+import { latestQualifier } from "@/lib/qualifier";
+import {
+  aiKind,
+  aiStep,
+  firstStepAfterCreate,
+  isWizardAiChoice,
+  siteStep,
+  type PublishChoice,
+} from "@/lib/wizard-branch";
 import { projectAgent } from "@/lib/agents";
 import { requestOrigin } from "@/lib/request-origin";
 import { OnboardingWizard, type WizardResume } from "@/components/onboarding-wizard";
@@ -108,11 +118,30 @@ async function buildCloudResume(): Promise<CloudWizardResume | null> {
   // repo and was saved only by that project having no GitHub App installed
   // (2026-07-26). c5 is now reachable only when it was EXPLICITLY saved, i.e.
   // when someone actually walked the wizard to the end.
+  // Which of the three setups this project is on. Everything below - the
+  // default screen, which stale screens get corrected, whether a missing repo
+  // is a problem at all - follows from these two.
+  const target = publishTarget(project);
+  const kind = aiKind(project.ai_choice);
+  const branchDefault = firstStepAfterCreate(target, kind);
   const saved =
     savedScreen && (CLOUD_WIZARD_SCREENS as readonly string[]).includes(savedScreen)
       ? (savedScreen as CloudWizardResume["screen"])
-      : "c1";
-  let screen = saved === "c0" ? "c1" : saved;
+      : branchDefault;
+  // Never resume INTO c0 - the project exists. For a GitHub project this is
+  // the same "c1" it always was; for the others it is their own first step.
+  let screen = saved === "c0" ? branchDefault : saved;
+
+  // A screen saved from the WRONG branch, corrected to this branch's
+  // equivalent. It happens for one mundane reason: createProjectCore stamps
+  // "c1" on every cloud row at creation, before the wizard's own write records
+  // which route the owner picked - so a reload in that window would land a
+  // WordPress owner on "Connect GitHub", the screen this whole flow exists to
+  // keep them off. Same correction covers a route changed later from Settings.
+  const mySite = siteStep(target);
+  const myAi = aiStep(target, kind);
+  if ((screen === "c1" || screen === "c1w") && screen !== mySite) screen = mySite ?? myAi;
+  if ((screen === "c2" || screen === "c2a" || screen === "c2c") && screen !== myAi) screen = myAi;
 
   // Same reasoning from the other direction, kept as a second gate: c5 requires
   // a connected repo and c2-c4 are only reachable after one is chosen, so with
@@ -122,7 +151,12 @@ async function buildCloudResume(): Promise<CloudWizardResume | null> {
   // leaving onboarding_screen null -> a finale that instantly errored "no repo
   // connected" (2026-07-23). The default above now covers that case too; this
   // stays because a saved c2-c5 on a repo-less project must still land at c1.
-  if (!project.github_repo) screen = "c1";
+  //
+  // GITHUB PROJECTS ONLY. WordPress and manual sites have no repo by design,
+  // and their site step is skippable on purpose (a WordPress password nobody
+  // has to hand must not trap a paying owner on step 1), so forcing them back
+  // would be a loop with no exit.
+  if (target === "github" && !project.github_repo) screen = "c1";
 
   let installationRepos: string[] | null = null;
   if (project.github_installation_id && !project.github_repo) {
@@ -146,6 +180,11 @@ async function buildCloudResume(): Promise<CloudWizardResume | null> {
     }
   }
 
+  // The same summary Settings renders from, so "connected" means exactly one
+  // thing across the product (a url AND a stored password) and the wizard can
+  // never disagree with the screen the owner is sent to next.
+  const wp = connectionSummary(project);
+
   return {
     screen,
     created: { slug: project.slug, name: project.name, domain: project.domain },
@@ -160,6 +199,21 @@ async function buildCloudResume(): Promise<CloudWizardResume | null> {
     // that has not run 0044 reads the column back as undefined, and the picker
     // needs a real id to check a radio against.
     agent: projectAgent(project).id,
+    publishTarget: target,
+    aiChoice: project.ai_choice,
+    wpConnected: wp.connected,
+    wp: {
+      url: wp.url,
+      username: wp.username,
+      seoPlugin: wp.seo_plugin,
+      canPublish: Boolean(wp.capabilities?.publish_posts),
+      canUploadMedia: Boolean(wp.capabilities?.upload_files),
+    },
+    // Fetched here rather than on the two screens that need it because they
+    // are client components with no way to read it. Never rendered outside
+    // c2a/c2c - the connect command and the connector URL both ARE the key.
+    mcpToken: await fetchProjectToken(project.id),
+    chatSeen: Boolean(project.chat_last_seen_at),
   };
 }
 
@@ -242,8 +296,8 @@ export default async function OnboardingPage({
   //
   // It used to key on owning ZERO sites, which covered a returning customer who
   // had just deleted their last one but missed the case that actually happens:
-  // someone on day one who adds their site, reaches the GitHub step, and only
-  // there discovers their stack can't work with this at all (WordPress, Wix,
+  // someone on day one who adds their site, reaches the publishing step, and
+  // only there discovers their stack can't work with this at all (Wix,
   // Squarespace, Shopify - named on the signup page, easy to miss). They own a
   // project, so the old condition hid the link from the one person most likely
   // to be looking for it, mid-trial, with a card already on file.
@@ -300,7 +354,26 @@ export default async function OnboardingPage({
   // The domain typed into the landing hero (stashed by /signup) prefills
   // step 1, so nobody types their domain twice.
   const pending = (await cookies()).get("pending_domain")?.value ?? "";
-  const prefillDomain = isValidDomain(pending) ? pending : null;
+  // The pre-checkout qualifier's answers, which every cloud signup now passes
+  // through. It already asked what the site runs on and which AI the owner
+  // has, and step 1 asks the same two questions - so it arrives with them
+  // answered. Asking twice in one signup reads as "nothing I typed was saved",
+  // which is exactly the impression a half-finished setup must avoid.
+  const qualified = cloud && auth.user ? await latestQualifier(auth.user.id) : null;
+  let prefillDomain = isValidDomain(pending) ? pending : null;
+  if (!prefillDomain && qualified?.domain && isValidDomain(qualified.domain)) {
+    prefillDomain = qualified.domain;
+  }
+  // WordPress is the only platform we route away from GitHub: the detector's
+  // other answers (nextjs, static, unknown, unreachable) all reach checkout on
+  // the repo route, and "we could not tell" must keep today's default rather
+  // than guess someone onto a route they did not ask for.
+  const prefillPublish: PublishChoice = qualified?.platform === "wordpress" ? "wordpress" : "github";
+  // Only the four the wizard can actually set up. gemini/none never get past
+  // the qualifier, and chatgpt has no connector yet - preselecting any of them
+  // would check a radio that cannot be submitted.
+  const prefillAi =
+    qualified?.ai_choice && isWizardAiChoice(qualified.ai_choice) ? qualified.ai_choice : null;
 
   // Standalone shell on purpose - no sidebar, no dashboard chrome. The
   // owner sees the wizard and only the wizard until setup verifies and
@@ -382,6 +455,9 @@ export default async function OnboardingPage({
           <CloudOnboardingWizard
             resume={cloudResume}
             prefillDomain={prefillDomain}
+            origin={origin}
+            prefillPublish={prefillPublish}
+            prefillAi={prefillAi}
             ghFlag={params.gh ?? null}
             ghError={params.msg ?? null}
             gscFlag={params.connected === "1" ? "connected" : (params.error ?? null)}

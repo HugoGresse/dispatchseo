@@ -183,6 +183,9 @@ async function refillProject(p: {
   const res = await dispatchResearch({
     github_repo: p.github_repo,
     github_installation_id: p.github_installation_id ?? null,
+    // The slug is what instanceTokenAllowedFor keys on; without it an
+    // operator project with no App installation would resolve no credential.
+    slug: p.slug,
   });
   if (!res.ok) {
     // This project has a connected repo AND a stamped pipeline install, so

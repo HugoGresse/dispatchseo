@@ -1,4 +1,5 @@
 import { db } from "./db";
+import { aiKind } from "./wizard-branch";
 import { getAnalyticsOverview, type AnalyticsOverview } from "./analytics-data";
 import { getJourney, type Journey } from "./journey";
 import { getWeeklyProgress, type WeeklyProgress } from "./progress";
@@ -514,6 +515,10 @@ export type BriefingInput = {
   // Pipeline wired into the repo AND a builder automation switched on. See
   // Briefing.onDuty for why this is not folded into `tone`.
   onDuty: boolean;
+  // The owner's AI is the ordinary Claude/ChatGPT app: nothing runs unless
+  // they paste a sentence, so an empty queue is a prompt for them, not a
+  // background job still landing.
+  chatClient?: boolean;
   // The authority read (authority.ts) behind today's action. Null/omitted
   // degrades to no action - a caller without the data never invents a nudge.
   authority?: Authority | null;
@@ -559,6 +564,9 @@ export function computeBriefing(input: BriefingInput): Briefing {
         : `${nf(failingJobs)} of my background jobs are failing and I can't fix them from here.`;
   } else if (tone === "setup") {
     lead = "I'm still setting up in the background. Nothing needed from you yet.";
+  } else if (input.chatClient && !building && queued === 0 && pendingDecisions === 0 && !(numbers && numbers.impressions > 0)) {
+    lead =
+      "Nothing from your chat app yet. Ask it for a few article ideas, approve the ones you like on the Queue screen, and I take it from there.";
   } else if (numbers && numbers.impressions > 0) {
     const window = numbers.window === "live24h" ? "In the last 24 hours" : "Over the last week";
     lead =
@@ -659,7 +667,7 @@ export async function gatherPipelineState(
 ): Promise<
   Pick<
     BriefingInput,
-    "failingJobs" | "settingUp" | "building" | "queued" | "pendingDecisions" | "onDuty" | "authority"
+    "failingJobs" | "settingUp" | "building" | "queued" | "pendingDecisions" | "onDuty" | "chatClient" | "authority"
   >
 > {
   const client = db();
@@ -695,7 +703,8 @@ export async function gatherPipelineState(
   // check coming - ever. Waiting on one there would park the dispatcher in
   // "still setting up" permanently, describing work that isn't pending, it's
   // just not configured. Same trap the first-run strip fell into.
-  const pipelineInstalled = project.pipeline_installed_at != null;
+  const chatClient = project.ai_choice != null && aiKind(project.ai_choice) === "chat";
+  const pipelineInstalled = !chatClient && project.pipeline_installed_at != null;
   const ranksPossible = hasDataforseo(project);
   const settingUp =
     pipelineInstalled &&
@@ -711,6 +720,7 @@ export async function gatherPipelineState(
     pendingDecisions: suggestions.filter((s) => s.status === "pending").length,
     onDuty:
       pipelineInstalled && (automations.auto_build_guides || automations.auto_build_tools),
+    chatClient,
     authority,
   };
 }

@@ -83,6 +83,61 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
       "painting anything red. \"Pipeline update available\" is one quiet line now instead of " +
       "a colored box.",
   },
+  {
+    kind: "new",
+    text: "Signing up now checks your site and your AI before you pay, so nobody gets charged for a setup that can't finish.",
+  },
+  {
+    kind: "new",
+    text:
+      "You can now connect a WordPress site and publish straight to it. Connect it once " +
+      "from Settings with an application password and finished articles are posted to your " +
+      "site on their own: cover image uploaded, links to your existing pages inserted, meta " +
+      "description and FAQ markup in place. No plugin, nothing to install, and no repo " +
+      "needed. Self-hosted WordPress only for now.",
+  },
+  {
+    kind: "new",
+    text:
+      "You can connect the ordinary Claude app at claude.ai, not just a coding agent. " +
+      "A new Connect your AI screen has the connector address and the exact steps; your " +
+      "Claude does the research and the writing on your own subscription, and hands the " +
+      "article to us to check, finish and publish.",
+  },
+  {
+    kind: "new",
+    text:
+      "A new Drafts screen shows every article your AI has handed in and what happened " +
+      "to it: what passed, what was sent back and why, what is waiting to publish, and " +
+      "what is live. You can publish one early or throw it away from there.",
+  },
+  {
+    kind: "improved",
+    text:
+      "Setup adapts to you. It asks where finished articles should go (WordPress, a " +
+      "GitHub repo, or neither yet) and which AI will write (the Claude app, Claude Code, " +
+      "Codex or Cursor), then shows only the steps your answers need: WordPress owners " +
+      "connect WordPress instead of GitHub, Claude-app owners paste one connector address " +
+      "instead of an agent token, and a green light tells you the moment your Claude has " +
+      "reached us.",
+  },
+  {
+    kind: "new",
+    text:
+      "Articles written with the Claude app can now go to a code-built site too. When " +
+      "your site lives in a GitHub repo, we commit the finished article and open the pull " +
+      "request ourselves - merged automatically in automatic mode - so a coding agent is " +
+      "no longer required on either kind of site. The Drafts screen links each pull " +
+      "request and shows when it is merged and live.",
+  },
+  {
+    kind: "improved",
+    text:
+      "Claude-app sites now get a \"Your next step\" list on Home that ticks itself off: connect, " +
+      "let Claude ask its three questions, ask for ideas, approve them on the Queue screen, ask it " +
+      "to write, watch Drafts - each step with the exact sentence to paste. Home also stopped " +
+      "calling a Claude-app site \"Claude Code - setting up\".",
+  },
 ];
 
 // Newest first. The head of this list is what the banner announces.

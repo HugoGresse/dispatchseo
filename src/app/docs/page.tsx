@@ -163,11 +163,12 @@ export default function DocsQuickstart() {
           </span>
           <span>
             <span className="block text-sm font-medium text-neutral-100">
-              A website whose code lives in a GitHub repo
+              A WordPress site, or a website whose code lives in a GitHub repo
             </span>
             <span className="mt-1 block text-sm text-neutral-400">
-              Articles arrive as pull requests you review, so the site has to be git-based.
-              WordPress and other database-backed CMSes can&apos;t work this way.
+              Self-hosted WordPress connects from Settings and articles are posted straight to
+              it. A git-based site gets them as pull requests you review instead. Hosted site
+              builders like Wix and Squarespace have neither, so they can&apos;t work.
             </span>
           </span>
         </li>
@@ -177,7 +178,7 @@ export default function DocsQuickstart() {
           </span>
           <span>
             <span className="block text-sm font-medium text-neutral-100">
-              A coding agent -{" "}
+              An AI to drive it - the Claude app at claude.ai, or a coding agent:{" "}
               <a
                 href="https://claude.com/product/claude-code"
                 target="_blank"
@@ -197,9 +198,11 @@ export default function DocsQuickstart() {
               (on your Cursor plan)
             </span>
             <span className="mt-1 block text-sm text-neutral-400">
-              Your agent does the actual thinking. Claude Code and Cursor run on plans you
-              already pay for; Codex is metered by OpenAI per run. DispatchSEO never bills you
-              for any of them.
+              Your AI does the actual thinking. A coding agent connects from a terminal and
+              can also build interactive tools and run unattended overnight; the Claude app
+              connects as a custom connector, so your install needs an address it can reach.
+              Claude Code and Cursor run on plans you already pay for, Codex is metered by
+              OpenAI per run, and DispatchSEO never bills you for any of them.
             </span>
           </span>
         </li>
@@ -216,7 +219,8 @@ export default function DocsQuickstart() {
               (<code className={INLINE_CODE}>gh</code>), signed in
             </span>
             <span className="mt-1 block text-sm text-neutral-400">
-              Your agent opens every pull request through it. Check with{" "}
+              Only if a coding agent is your AI - that&apos;s how your agent opens every pull
+              request. Check with{" "}
               <code className={INLINE_CODE}>gh auth status</code>.
             </span>
           </span>

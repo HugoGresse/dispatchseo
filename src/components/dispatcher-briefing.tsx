@@ -160,12 +160,35 @@ function StatusChip({
   tone,
   agentName,
   onDuty,
+  stateLabel,
 }: {
   tone: BriefingTone;
   agentName: string;
   onDuty: boolean;
+  /** A caller-supplied state for the active tone - the Claude-app project
+   *  says "connected" / "not connected yet", because it is never dispatching
+   *  or standing by in the builder sense. */
+  stateLabel?: string;
 }) {
   const t = TONE[tone];
+  if (tone === "active" && stateLabel) {
+    const live = stateLabel === "connected";
+    return (
+      <p className="flex items-start gap-2.5 text-sm">
+        <span className="relative mt-1.5 flex h-2 w-2 shrink-0" aria-hidden="true">
+          <span
+            className={`relative inline-flex h-2 w-2 rounded-full ${
+              live ? "bg-emerald-400 ring-4 ring-emerald-400/15" : "bg-neutral-500 ring-4 ring-neutral-500/15"
+            }`}
+          />
+        </span>
+        <span className="min-w-0 break-words">
+          <span className="font-medium text-neutral-200">{agentName}</span>
+          <span className={live ? "text-emerald-300/90" : "text-neutral-500"}> · {stateLabel}</span>
+        </span>
+      </p>
+    );
+  }
   // "On the desk" has to be earned. With automatic building switched off the
   // agent is not working a shift - it is waiting to be told - and the chip
   // says so rather than dressing a hand-driven project as an autonomous one.
@@ -328,11 +351,13 @@ function WinRow({ win }: { win: QuickWin }) {
 export function DispatcherBriefing({
   briefing,
   agentName,
+  stateLabel,
   children,
   duty,
 }: {
   briefing: Briefing;
   agentName: string;
+  stateLabel?: string;
   // The interactive block - fix prompts, "mark applied", copy buttons. It
   // carries real controls, so it gets its own bordered sub-panel with room
   // rather than being threaded into the prose.
@@ -400,7 +425,7 @@ export function DispatcherBriefing({
             </div>
 
             <div className="min-w-0 flex-1">
-              <StatusChip tone={briefing.tone} agentName={agentName} onDuty={briefing.onDuty} />
+              <StatusChip tone={briefing.tone} agentName={agentName} onDuty={briefing.onDuty} stateLabel={stateLabel} />
               {/* Greeting and recap are one sentence apart on purpose: the
                   hello is small and constant, the recap is the line that has to
                   be worth reading on its own. */}

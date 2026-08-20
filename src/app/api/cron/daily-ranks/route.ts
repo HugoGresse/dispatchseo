@@ -16,7 +16,8 @@ import {
 } from "@/lib/ai-visibility";
 import { reportCronRun } from "@/lib/cron-alerts";
 import { detectRefreshCandidates } from "@/lib/refresh-detect";
-import { listProjectsChecked, type Project } from "@/lib/projects";
+import { listProjectsChecked, publishTarget, type Project } from "@/lib/projects";
+import { enqueue } from "@/lib/jobs";
 import { isCloudMode } from "@/lib/cloud";
 import { platformBalanceAlert } from "@/lib/dataforseo-balance";
 
@@ -50,6 +51,11 @@ import { platformBalanceAlert } from "@/lib/dataforseo-balance";
 // nothing for idle wall clock.
 
 export const maxDuration = 300;
+
+/** How old a site digest may get before it is re-read. A week: long enough
+ *  that we are not a load on anyone's site, short enough that a page
+ *  published last week can already be linked to. */
+const CRAWL_MAX_AGE_DAYS = 7;
 
 // SerpApi free tier = 250 searches/month. Weekly checks keep ~60 tracked
 // keywords inside that budget; Monday is arbitrary but stable.
@@ -314,7 +320,59 @@ async function runProject(project: Project): Promise<Record<string, unknown>> {
     result.refresh = { error: e instanceof Error ? e.message : String(e) };
   }
 
+  // --- 5. Keep what we know about the site from going stale. The digest is
+  // what a chat AI reads INSTEAD of crawling the site itself, and the link
+  // candidates are what the finisher inserts internal links from - both go
+  // wrong quietly as a site grows, because a stale digest still looks like a
+  // digest. Weekly is the cadence: often enough that a month-old page is
+  // linkable, rare enough that nobody's site is hit daily by us.
+  //
+  // Queued, never run here: this cron has three other halves waiting on it,
+  // and a 150-page crawl inside one of them would push the whole run past its
+  // wall clock. Only queued for projects that publish through us; a project
+  // with neither a repo nor a WordPress connection has nothing to link into.
+  try {
+    result.crawl = await queueCrawlIfStale(project);
+  } catch (e) {
+    result.hadError = true;
+    result.crawl = { error: e instanceof Error ? e.message : String(e) };
+  }
+
   return result;
+}
+
+/** Weekly re-read of the customer's own site. Returns what it decided, so a
+ *  run log answers "why is this digest three weeks old" without a query. */
+async function queueCrawlIfStale(project: Project): Promise<Record<string, unknown>> {
+  // Nothing to read. Not an error: a project can exist before its domain does.
+  if (!project.domain) return { skipped: "no domain yet" };
+
+  // Skip only a project that genuinely publishes nowhere: target github with
+  // no repo connected. WordPress and manual both count - a manual-target
+  // owner's own AI is exactly who reads the digest, and their finished
+  // articles still get internal links inserted from it.
+  const publishes = publishTarget(project) !== "github" || Boolean(project.github_repo);
+  if (!publishes) return { skipped: "site does not publish through us yet" };
+
+  const { data } = await db()
+    .from("site_digests")
+    .select("crawled_at")
+    .eq("project_id", project.id)
+    .maybeSingle();
+  const crawledAt = (data as { crawled_at: string | null } | null)?.crawled_at ?? null;
+  const ageDays = crawledAt ? (Date.now() - Date.parse(crawledAt)) / 86_400_000 : Infinity;
+  if (ageDays < CRAWL_MAX_AGE_DAYS) return { fresh: true, age_days: Math.round(ageDays) };
+
+  // Dated key: today's crawl is queued once no matter how often this cron
+  // fires, and tomorrow's is not blocked by today's still sitting there.
+  const day = new Date().toISOString().slice(0, 10);
+  const job = await enqueue({
+    projectId: project.id,
+    kind: "crawl",
+    payload: { isWordPress: publishTarget(project) === "wordpress", maxPages: 150 },
+    idempotencyKey: `crawl:${project.id}:${day}`,
+  });
+  return { queued: Boolean(job), age_days: crawledAt ? Math.round(ageDays) : null };
 }
 
 export async function GET(req: Request): Promise<Response> {

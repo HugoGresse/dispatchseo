@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireDashboard } from "@/lib/auth-gate";
 import { isCloudMode } from "@/lib/cloud";
+import { latestQualifier } from "@/lib/qualifier";
 import { getSubscription, isActive, polarConfigured, TIER_LIMITS, type Tier } from "@/lib/billing";
 import { foundingOffer, foundingPriceLabel, listPriceLabel } from "@/lib/founding";
 import { DispatchMark } from "@/components/logo";
@@ -85,6 +86,23 @@ export default async function PlansPage() {
   if (!isCloudMode() || !auth.user) redirect("/dashboard");
   const sub = await getSubscription(auth.user.id);
   if (isActive(sub)) redirect("/onboarding?new=1");
+
+  // Nobody reaches a price until we know we can serve them. /qualify asks what
+  // the site is built on and which AI will drive it, and only writes
+  // proceeded=true when both answers are ones we can actually deliver on.
+  // Both answers now have several right ones (WordPress or a repo; the Claude
+  // app or a coding agent), so this gate is no longer "do you have a repo" - it
+  // is the shorter list of combinations nothing can serve: ChatGPT-only,
+  // Gemini, no AI at all, or a site on Wix, Squarespace, Shopify, Webflow,
+  // Framer or Ghost. Before it existed, a WordPress owner paid first and found
+  // out at wizard screen c1 that there was no repo to connect, which is how two
+  // of the four real trials ended, one of them inside five minutes.
+  //
+  // latestQualifier() answers null on any DB error, which would send someone
+  // back to /qualify rather than into a checkout we cannot honour. That is the
+  // safe direction: the worst case is one extra screen, not a bad charge.
+  const qualifier = await latestQualifier(auth.user.id);
+  if (!qualifier?.proceeded) redirect("/qualify");
 
   // null = offer over (or billing unconfigured); every branch below then
   // renders the plain list price with nothing left dangling.

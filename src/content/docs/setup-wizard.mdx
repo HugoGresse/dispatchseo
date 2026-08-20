@@ -9,39 +9,70 @@ whenever, and it reopens exactly where you stopped.
 
 ## On dispatchseo.com (the hosted version)
 
-The hosted wizard is shorter - about 5 minutes, 5 steps - because the
-platform does the installing for you:
+The hosted wizard is shorter - about 5 minutes - because the platform does
+the installing for you. It also branches: the first screen asks where your
+articles should go and which AI will write them, and your two answers
+decide which screens you see after that.
 
-1. **Add your site** - name and domain. No repo field here; that comes
-   from the GitHub App in the next step.
-2. **Connect GitHub** - one click installs the DispatchSEO GitHub App on
-   your site's repo. The platform then commits the pipeline into the repo
-   and manages PRs through the App - no tokens to create or paste.
-3. **Connect your coding agent** - pick Claude Code, Codex, or Cursor,
-   then paste the credential it asks for (`claude setup-token` for Claude
-   Code, an OpenAI API key for Codex, a Cursor API key from
-   cursor.com/dashboard/api for Cursor). It's stored as a secret on **your repo**, never on our
-   side, and builds run on your own subscription or key. Don't have one
-   yet? Install [Claude Code](/docs/install-claude-code),
+1. **Add your site** - name and domain, then the two questions. Where do
+   finished articles go: a WordPress site you host yourself, a GitHub
+   repo, or neither yet? And which AI will write them: the ordinary Claude
+   app at claude.ai, Claude Code, Codex, or Cursor? There is no repo field
+   here; the repo comes from the GitHub App on the next screen if you pick
+   that answer.
+2. **Connect WordPress**, or **Connect GitHub** - which screen you get
+   depends on the first answer. For **WordPress**: your site's address,
+   the username you log in with, and an application password. The screen
+   shows you where to
+   generate one (in your own WordPress admin: Users, then Profile, then
+   Application Passwords) and checks it against your site before it lets
+   you past. Nothing gets installed on the site itself. For a **GitHub
+   repo**: one click installs the DispatchSEO GitHub App on it, and the
+   platform then commits the pipeline into the repo and manages PRs
+   through the App - no tokens to create or paste. If you answered
+   "neither yet", this screen doesn't appear at all.
+3. **Connect the Claude app**, or **Connect your coding agent** - three
+   shapes, and you get the one your answers point at. If your AI is the
+   **Claude app**, the screen gives you one address to paste into
+   claude.ai under Settings, then Connectors, as a custom connector, plus
+   the sentence to send in a new chat so your
+   Claude introduces itself to the site. A light on the screen turns green
+   on its own the moment your Claude reaches us; there is no button to
+   press. Expect claude.ai to ask you to allow each DispatchSEO tool the
+   first time it uses it - choose Always allow - and expect Claude to ask
+   you three short questions about your business; a sentence each is
+   plenty. From then on the Home screen's "Your next step" list tells you
+   which sentence to paste next and which screen to open. If it's a **coding agent and your articles go to a repo**, you
+   paste the credential the agent asks for (`claude setup-token` for
+   Claude Code, an OpenAI API key for Codex, a Cursor API key from
+   cursor.com/dashboard/api for Cursor). It's stored as a secret on **your
+   repo**, never on our side, and builds run on your own subscription or
+   key. A **coding agent with no repo** gets one connect command to run in
+   a terminal, and stores nothing anywhere. Don't have an agent yet?
+   Install [Claude Code](/docs/install-claude-code),
    [Codex](/docs/install-codex), or [Cursor](/docs/install-cursor) first -
-   about five minutes, and this step won't work until you have.
+   about five minutes, and this step won't pass until you have.
 4. **Connect Google Search Console** - one click, sign in with the Google
    account that has access to your property, pick the property. Read-only,
-   revocable any time. No service account needed.
-5. **Publish mode** - decide whether pages ship only after you merge them
-   (semi-automatic) or fully on their own.
+   revocable any time. No service account needed. You can skip it and come
+   back later; everything else works without it, you just have no traffic
+   numbers until it's connected.
+5. **Publish mode** - decide whether pages go live only after you approve
+   them (semi-automatic) or fully on their own.
 
-Then the finale installs everything itself and shows live progress until
-your site's first data lands. Keyword data is included in your plan -
-there is nothing to set up for it.
+Then the finale does the rest itself and shows live progress until your
+site's first data lands - on the repo path, that includes installing the
+pipeline. Keyword data is included in your plan - there is nothing to set
+up for it.
 
-There is one thing the App can't do for you. It deliberately holds no
-permission to change your repo's own settings, and some repos have
-GitHub's "Allow GitHub Actions to create and approve pull requests"
-turned off - which stops DispatchSEO opening the pull requests it
-publishes through. When that's the case, the finale says so with a direct
-link to the setting. Flip it once; the checklist re-checks on its own and
-unblocks, so there's nothing to come back and confirm.
+If your articles go to a repo, there is one thing the App can't do for
+you. It deliberately holds no permission to change your repo's own
+settings, and some repos have GitHub's "Allow GitHub Actions to create and
+approve pull requests" turned off - which stops DispatchSEO opening the
+pull requests it publishes through. When that's the case, the finale says
+so with a direct link to the setting. Flip it once; the checklist
+re-checks on its own and unblocks, so there's nothing to come back and
+confirm.
 
 The rest of this page describes the **self-hosted** wizard, which has a
 few more steps because your own install does the work the platform does

@@ -30,6 +30,7 @@ import { GlanceSection } from "@/components/glance-stats";
 import { FREE_BACKLINKS, PAID_BACKLINKS } from "@/lib/playbook-data";
 import { getActivityReport, type ActivityLine } from "@/lib/activity";
 import { getCronHealth, criticalCronIssues, looksLikeQuotaFailure } from "@/lib/cron-alerts";
+import { queueHealth } from "@/lib/jobs";
 import { buildCronFixPrompt, buildPipelineUpdatePrompt } from "@/lib/cron-fix-prompt";
 import { isLive } from "@/lib/page-liveness";
 import { getAnalyticsOverview } from "@/lib/analytics-data";
@@ -39,7 +40,8 @@ import { JourneyCard } from "@/components/journey-card";
 import { NextUpdate } from "@/components/next-update";
 import { getActiveProject } from "@/lib/active-project";
 import { projectAgent } from "@/lib/agents";
-import { effectiveAutomations, fetchProjectToken } from "@/lib/projects";
+import { effectiveAutomations, fetchProjectToken, publishTarget } from "@/lib/projects";
+import { aiKind } from "@/lib/wizard-branch";
 import { credsForProject } from "@/lib/dataforseo";
 import {
   platformBudgetGate,
@@ -72,6 +74,7 @@ import { cookies } from "next/headers";
 import { DockerAccessTip } from "@/components/docker-access-tip";
 import { ChromeExtensionTip } from "@/components/chrome-extension-tip";
 import { FirstRunBackground } from "@/components/first-run-background";
+import { ChatNextSteps, type ChatStep } from "@/components/chat-next-steps";
 import AiVisibilitySection from "./ai-visibility-section";
 
 export const dynamic = "force-dynamic";
@@ -315,6 +318,14 @@ export default async function Home() {
   // Free-tier DIY: every DataForSEO call bills the project's own account.
   const dfsCreds = await credsForProject(project);
 
+  // A site driven by the ordinary Claude/ChatGPT app rather than a coding
+  // agent. Several things below read differently for it: there is no pipeline
+  // to install (the conventions row its setup chat writes is NOT an install
+  // footprint), nobody is "on duty" in the builder sense, and the owner needs
+  // to be told which sentence to paste next.
+  const chatProject = project.ai_choice != null && aiKind(project.ai_choice) === "chat";
+  const chatAiName = project.ai_choice === "chatgpt" ? "Your ChatGPT" : "Your Claude";
+
   const client = db();
   const [
     sugRes,
@@ -334,6 +345,8 @@ export default async function Home() {
     mergeReady,
     saEmail,
     dfsUsage,
+    articleQueue,
+    draftsRes,
   ] = await Promise.all([
     client
       .from("suggestions")
@@ -397,7 +410,15 @@ export default async function Home() {
     // the moment it matters. platformUsageStatus keeps reporting "platform"
     // through exhaustion for this reason.
     isCloudMode() ? platformUsageStatus(project.id) : Promise.resolve(null),
+    // The article queue behind the WordPress route: what is waiting, what is
+    // in flight, what gave up. Counts only - see queueHealth's own note on why
+    // it never returns rows.
+    queueHealth(project.id),
+    // Every article the owner's AI has handed in, by status - drives the
+    // Claude-app next-steps card. Statuses only; the Drafts screen has the rest.
+    client.from("article_drafts").select("status").eq("project_id", project.id),
   ]);
+  const draftStatuses = ((draftsRes.data ?? []) as { status: string }[]).map((d) => d.status);
 
   // Two guide numbers from one query (0033): "logged" drives the setup cards
   // (the pipeline demonstrably works once anything lands, merged or not);
@@ -440,6 +461,34 @@ export default async function Home() {
   // in the run log and get_cron_health, where the agent can still see it - the
   // next scheduled run either cures it quietly or promotes it here.
   const cronIssues = criticalCronIssues(jobIssues);
+
+  // WHAT THE ARTICLE QUEUE IS DOING, in one line and only when it is worth a
+  // line. Same policy as the cron banner above: an article in flight is the
+  // system working, and a dashboard that narrates normal operation trains
+  // people to stop reading it. Two things earn the line - work that gave up
+  // for good (nothing will retry it, and an article is sitting unpublished),
+  // and work that is far older than the ten-minute drain can explain, which
+  // is what a wedged queue looks like from outside.
+  const STUCK_MINUTES = 45;
+  const stuck =
+    articleQueue.oldestPendingMinutes !== null &&
+    articleQueue.oldestPendingMinutes >= STUCK_MINUTES;
+  // Named by what actually failed. A site scan giving up and an article never
+  // reaching the site are different problems with different fixes, and one
+  // sentence covering both would be true of neither.
+  const failedArticleWork = articleQueue.failedKinds.some((k) =>
+    ["finish", "publish", "verify"].includes(k),
+  );
+  const failedScan = articleQueue.failedKinds.includes("crawl");
+  const articleQueueNote = failedArticleWork
+    ? `${articleQueue.failed === 1 ? "An article was written but could not be published" : `${articleQueue.failed} articles were written but could not be published`} after repeated tries. The writing is safe - the last error is on the job's record.`
+    : failedScan
+      ? "We could not finish reading your site after repeated tries, so new articles may go out without links to your existing pages."
+      : articleQueue.wedged > 0
+        ? `${articleQueue.wedged} background ${articleQueue.wedged === 1 ? "job is" : "jobs are"} stuck and will not retry on their own.`
+        : stuck
+          ? `An article has been waiting ${articleQueue.oldestPendingMinutes} minutes to be processed, which is longer than it should take.`
+          : null;
 
   // The last window before bundled DataForSEO runs out. Exhaustion itself is
   // already owned by the needsUsageLimit setup card below - this is the part
@@ -573,8 +622,9 @@ export default async function Home() {
   // ingredient is already readable over MCP (get_project, get_automations,
   // get_suggestions), so no parity tool is needed.
   const agentWired =
-    project.pipeline_installed_at != null ||
-    (!conventionsRes.error && conventionsRes.data != null);
+    !chatProject &&
+    (project.pipeline_installed_at != null ||
+      (!conventionsRes.error && conventionsRes.data != null));
   const agentActive =
     agentWired && (automations.auto_build_guides || automations.auto_build_tools);
 
@@ -608,9 +658,14 @@ export default async function Home() {
   // pipeline_installed_at via mark_pipeline_installed (0018); the conventions
   // row (written by setup, which install chains into) stays as the fallback
   // signal for installs that predate the stamp.
+  // A chat project never has a pipeline: its setup chat writes the same
+  // conventions row, which used to read here as "pipeline installed" and put
+  // the dispatcher into "still setting up" for a site that was simply waiting
+  // for its owner's next sentence.
   const pipelineInstalled =
-    project.pipeline_installed_at != null ||
-    (!conventionsRes.error && conventionsRes.data != null);
+    !chatProject &&
+    (project.pipeline_installed_at != null ||
+      (!conventionsRes.error && conventionsRes.data != null));
   // Which of these three cards to show turns on whether the pipeline is
   // actually installed - NOT on project identity. It used to key off
   // `isDefaultProject` as a proxy for "the pipeline exists", which holds only
@@ -741,7 +796,27 @@ export default async function Home() {
   // customer's scheduled workflows keep running while approvals, one-tap merge
   // and every dashboard-triggered dispatch silently lose their credential -
   // exactly the "looks healthy, does nothing" state with no way to notice.
-  const hasCloudSetupCards = isCloudMode() && (needsAppReconnect || (needsGsc && !gscWaiting));
+  //
+  // The two below are the same shape of hole on the non-GitHub routes: a site
+  // that is fully set up except for the one connection that decides whether
+  // anything can ever come out of it. Both are skippable in the wizard on
+  // purpose (a WordPress password nobody has to hand, a connector someone
+  // wants to set up on their laptop later), so this is where the skip is
+  // remembered - without it the owner is left with a dashboard that looks
+  // finished and an article that never appears.
+  const needsWordPress =
+    isCloudMode() && publishTarget(project) === "wordpress" && !project.wp_app_password;
+  // Only for an owner who TOLD us their AI is a chat app. A null ai_choice is
+  // every project created before c0 asked, and those run a coding agent - the
+  // card would be an instruction to connect something they do not use.
+  const needsChatConnect =
+    isCloudMode() &&
+    project.ai_choice != null &&
+    aiKind(project.ai_choice) === "chat" &&
+    !project.chat_last_seen_at;
+  const hasCloudSetupCards =
+    isCloudMode() &&
+    (needsAppReconnect || (needsGsc && !gscWaiting) || needsWordPress || needsChatConnect);
 
   // The dispatcher's briefing - Home's opening surface, where the agent reports
   // in the first person instead of the page narrating about it. Built from the
@@ -782,6 +857,7 @@ export default async function Home() {
     queued: approvedUnbuilt.length,
     pendingDecisions: pendingSugs.length,
     onDuty: agentActive,
+    chatClient: chatProject,
     authority,
     // Only Home can know this: "unseen" is a property of THIS browser's
     // cookie, which is why get_briefing leaves it null.
@@ -800,7 +876,12 @@ export default async function Home() {
             precisely what the dispatcher now says, in better words. */}
         <DispatcherBriefing
           briefing={briefing}
-          agentName={projectAgent(project).displayName}
+          agentName={chatProject ? chatAiName : projectAgent(project).displayName}
+          // A chat app is never "dispatching" or "standing by" in the builder
+          // sense; the one fact worth a chip is whether it has reached us.
+          stateLabel={
+            chatProject ? (project.chat_last_seen_at ? "connected" : "not connected yet") : undefined
+          }
           // Only when a guide is actually queued for it: a countdown to a build
           // that has nothing to build is a promise about an empty morning.
           duty={
@@ -846,6 +927,61 @@ export default async function Home() {
         {pipelineInstalled ? (
           <FirstRunBackground slug={project.slug} cloud={isCloudMode()} quiet />
         ) : null}
+        {/* The Claude-app owner's guide: which sentence to paste next, which
+            screen to open, ticking itself off from real state. Leaves once the
+            first article is live - by then the loop is understood. */}
+        {chatProject && !draftStatuses.includes("published")
+          ? (() => {
+              const profileDone =
+                (!profileRes.error && profileRes.data != null) ||
+                (!conventionsRes.error && conventionsRes.data != null);
+              const anyApproved = suggestions.some((s) =>
+                ["approved", "in_progress", "done"].includes(s.status),
+              );
+              const steps: ChatStep[] = [
+                {
+                  title: `Connect ${project.ai_choice === "chatgpt" ? "ChatGPT" : "Claude"} to this site`,
+                  done: project.chat_last_seen_at != null,
+                  href: "/connect",
+                  linkLabel: "Open Connect your AI",
+                  hint: "One address to paste under Settings, then Connectors. The first time it uses each DispatchSEO tool it will ask you to allow it - choose Always allow.",
+                },
+                {
+                  title: "Let it learn your business (three short questions)",
+                  done: profileDone,
+                  paste: "Use the DispatchSEO connector and run the setup-chat workflow from get_instructions.",
+                  hint: "Paste this in a new chat. It asks who buys from you, what never to say, and how it should sound - a sentence each is plenty.",
+                },
+                {
+                  title: "Ask it for article ideas",
+                  done: suggestions.length > 0,
+                  paste: "Use the DispatchSEO connector and run the research-chat workflow from get_instructions. Find five article ideas and propose them.",
+                  hint: "It checks what people search for and queues a handful of ideas with a one-line reason each.",
+                },
+                {
+                  title: "Approve the ideas you like",
+                  done: anyApproved,
+                  href: "/research",
+                  linkLabel: `Open the Queue${pendingSugs.length ? ` (${pendingSugs.length} waiting)` : ""}`,
+                  hint: "Nothing is written until you say yes. Approve one or two to start.",
+                },
+                {
+                  title: "Ask it to write the first one",
+                  done: draftStatuses.length > 0,
+                  paste: "Use the DispatchSEO connector and run the write-guide-chat workflow from get_instructions. Write my next approved article.",
+                  hint: "It researches, writes and hands the article in. We check it, format it, add links and the cover, and publish it on your schedule.",
+                },
+                {
+                  title: "Watch it go live on the Drafts screen",
+                  done: false,
+                  href: "/drafts",
+                  linkLabel: "Open Drafts",
+                  hint: "Checking, then Ready to publish (press Publish now to skip the wait), then Posted, then Live. After the first one, you only repeat the last two steps.",
+                },
+              ];
+              return <ChatNextSteps steps={steps} aiName={chatAiName} />;
+            })()
+          : null}
         {budgetWarning ? (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
             <p className="font-medium text-amber-200">
@@ -872,6 +1008,19 @@ export default async function Home() {
               ) : null}
               .
             </p>
+          </div>
+        ) : null}
+        {articleQueueNote ? (
+          // A whisper, deliberately, and only when there is something to say.
+          // The queue's resting state is empty, and an article moving through
+          // it normally (submitted at midnight, published at nine) is not news
+          // - so this stays silent unless something has genuinely given up or
+          // has been sitting far longer than the ten-minute drain explains.
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-xs text-neutral-500">
+            <span className="min-w-0">{articleQueueNote}</span>
+            <Link href="/drafts" className="whitespace-nowrap text-neutral-400 underline decoration-dotted underline-offset-2 transition-colors hover:text-neutral-200">
+              Open Drafts
+            </Link>
           </div>
         ) : null}
         {quotaWaits.length > 0 ? (
@@ -913,7 +1062,7 @@ export default async function Home() {
               <span className="break-words font-mono text-neutral-400">
                 {project.github_repo ?? "your site repo"}
               </span>{" "}
-              — publishing continues on the current version; apply it whenever convenient.
+              - publishing continues on the current version; apply it whenever convenient.
             </span>
             <CopyButton text={buildPipelineUpdatePrompt(project)} label="Copy update prompt" subtle />
             {updateNotices.map((h) => (
@@ -943,7 +1092,7 @@ export default async function Home() {
       {/* ---------- NEEDS YOU (cloud) - see hasCloudSetupCards ---------- */}
       {hasCloudSetupCards ? (
       <section className="space-y-3">
-        <SectionTitle sub="the hosted version handles setup for you - these are the only two things it cannot do on your behalf, and each disappears on its own once it's sorted">
+        <SectionTitle sub="the hosted version handles setup for you - these are the few things it cannot do on your behalf, and each disappears on its own once it's sorted">
           Needs you
         </SectionTitle>
         <div className="grid gap-4 [&>*]:min-w-0 md:grid-cols-2 xl:grid-cols-3">
@@ -983,6 +1132,44 @@ export default async function Home() {
                 "Done - traffic starts landing with the next hourly sync. Google's data runs 2-3 days behind, so give it a day or two.",
               ]}
               closing="This card disappears on its own once the first day of search data arrives."
+            />
+          ) : null}
+          {needsWordPress ? (
+            <SetupStep
+              title="Connect your WordPress site"
+              why="Finished articles are waiting for somewhere to go. Connect WordPress from Settings and they publish on their own."
+              steps={[
+                <>
+                  <Link
+                    href="/settings"
+                    className="text-sky-400 underline underline-offset-2 hover:text-sky-300"
+                  >
+                    Open Settings
+                  </Link>{" "}
+                  - the WordPress section walks through making an application password.
+                </>,
+                "Anything that finished while there was nowhere to publish is on the Drafts screen, with a Publish now button.",
+              ]}
+              closing="This card disappears on its own the moment the connection is saved."
+            />
+          ) : null}
+          {needsChatConnect ? (
+            <SetupStep
+              title="Connect your Claude app"
+              why="Your Claude hasn't reached us yet. The Connect screen has the address and the three steps."
+              steps={[
+                <>
+                  <Link
+                    href="/connect"
+                    className="text-sky-400 underline underline-offset-2 hover:text-sky-300"
+                  >
+                    Open Connect
+                  </Link>{" "}
+                  - copy the connector address and add it in claude.ai&apos;s own Settings.
+                </>,
+                "Then start a chat with the connector on and paste the setup line that page gives you.",
+              ]}
+              closing="This card disappears on its own the first time your Claude reaches us - there is no button to press."
             />
           ) : null}
         </div>

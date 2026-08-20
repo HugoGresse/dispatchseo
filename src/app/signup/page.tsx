@@ -235,7 +235,7 @@ export default async function SignupPage({
         <p className="text-neutral-300">
           {domain ? (
             <>
-              Create a free account and have your coding agent run{" "}
+              Create a free account and have your own AI run{" "}
               <span className="inline-flex items-center gap-1.5 align-bottom">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -248,12 +248,13 @@ export default async function SignupPage({
               &apos;s SEO for you.
             </>
           ) : (
-            <>Create a free account and have your coding agent run your site&apos;s SEO for you.</>
+            <>Create a free account and have your own AI run your site&apos;s SEO for you.</>
           )}
         </p>
-        {/* Said before the email field, not after checkout: the wizard's first
-            screen is where a WordPress owner used to discover there was no
-            repo to publish into, and that screen sits past the card. */}
+        {/* Said before the email field, not after checkout. It used to be the
+            wizard's first screen - past the card - where an owner discovered
+            there was nowhere to publish into. WordPress has its own door since
+            2026-08-19, but the site builders still do not. */}
         <SignupRequirements />
         {/* One tick covers both buttons - it belongs to the email form below
             via the `form` attribute, and rides the Google form as a hidden

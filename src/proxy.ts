@@ -110,6 +110,15 @@ export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (
     pathname.startsWith("/api/") ||
+    // RFC 8414 / RFC 9728 discovery. MCP clients (claude.ai's custom
+    // connectors, for one) probe /.well-known/oauth-protected-resource and
+    // /.well-known/oauth-authorization-server before their first real call.
+    // A 404 there is the correct "no OAuth on this server, use what you were
+    // given" answer; a 307 to /login reads as "there IS a sign-in service",
+    // and the client then tries to register with it and fails (seen live
+    // 2026-08-20: "Couldn't register with DispatchSEO's sign-in service").
+    // Nothing is served under this prefix, so letting it through is a 404.
+    pathname.startsWith("/.well-known/") ||
     pathname.startsWith("/login") ||
     // Cloud account creation - only meaningful in CLOUD_MODE (the page
     // itself bounces self-host visitors to /login).

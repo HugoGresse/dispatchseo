@@ -74,7 +74,8 @@
 
 ## ⚡ How it works
 
-1. **Your agent researches.** Claude Code, Codex, or Cursor connects to DispatchSEO over MCP,
+1. **Your AI researches.** The Claude app at claude.ai, or a coding agent
+   (Claude Code, Codex, Cursor), connects to DispatchSEO over MCP,
    reads the served playbook, and mines keywords from your Search Console
    data, Google Autocomplete, and what it already knows about your product.
    Ideas land in a queue with the reasoning attached.
@@ -131,16 +132,27 @@ The honest difference is who pays: Claude Code runs on a subscription you
 already have, Cursor runs on your Cursor plan's API key, and Codex is
 metered by OpenAI per run.
 
+You can also skip coding agents entirely. Add DispatchSEO to the ordinary
+Claude app at claude.ai as a custom connector and your Claude does the research
+and the writing on the subscription you already have, then hands the article
+back for the backend to check, finish and publish. It won't build interactive
+tools or run the overnight builder, and claude.ai has to be able to reach your
+install, so that path wants a public URL rather than a laptop. ChatGPT can't
+connect yet.
+
 [docs/AGENTS.md](docs/AGENTS.md) has the details, the support tiers, and how to
 add an agent.
 
 ## ✅ What you need before you start
 
-- **Your site's source in a GitHub repo.** The pipeline ships content as pull
-  requests, so git-based sites only - WordPress won't work.
-- **A coding agent.** Your agent is the engine. Claude Code runs on the Claude
+- **Somewhere to publish.** Either WordPress you host yourself, connected once
+  from Settings with an application password and posted to directly, or your
+  site's source in a GitHub repo, where content arrives as pull requests. Wix,
+  Squarespace, Shopify, Webflow and Ghost have neither door and won't work.
+- **An AI to drive it.** Your AI is the engine, and it can be the ordinary
+  Claude app at claude.ai or a coding agent. Claude Code runs on the Claude
   subscription you already pay for; Codex and Cursor do everything Claude Code
-  does here, including the overnight builder — Codex is metered by OpenAI per
+  does here, including the overnight builder. Codex is metered by OpenAI per
   run, and Cursor builds draw on your Cursor plan's included usage. See the table above.
 - **A machine with Docker** (~1 GB RAM). A laptop works for a test drive, but
   a machine that stays on is much better for daily use - a $5 VPS, a Raspberry

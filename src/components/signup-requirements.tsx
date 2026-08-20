@@ -31,10 +31,12 @@ import { MascotFace } from "@/components/mascot-face";
 // account" notice below it: the reader has done nothing wrong. They are being
 // handed a fact early enough to act on it.
 //
-// The requirement list is deliberately BOTH hard gates, not just the repo one.
-// The wizard refuses to finish without a repo (pipeline-install.ts) AND
-// without a coding agent token (screen c2 has no skip). Naming one and hiding
-// the other just moves the surprise one screen later.
+// The list names BOTH hard gates, not just the publishing one. Neither gate is
+// a repo or an agent token specifically any more: since the wizard branched
+// (wizard-branch.ts) an owner needs somewhere we can publish (WordPress or a
+// repo) and an AI that can reach us (the claude.ai app or a coding agent), and
+// no branch of it finishes without both. Naming one and hiding the other just
+// moves the surprise one screen later.
 
 // The bubble's tail, shared by the resting tab and the opened panel so the
 // mascot keeps speaking from the same spot when it expands. Only the two edges
@@ -84,8 +86,11 @@ export function SignupRequirements() {
           <Tail />
           <Eyebrow />
           <p className="mt-1 text-[13px] leading-relaxed text-amber-200/90">
-            Your site needs to live in a GitHub repo, and you&apos;ll need a coding agent - Claude
-            Code, Codex, or Cursor. WordPress, Wix, Squarespace and Shopify don&apos;t work yet.
+            You&apos;ll need an AI: the Claude app at claude.ai, or a coding agent (Claude Code,
+            Codex, Cursor). ChatGPT can&apos;t connect yet. And somewhere we can publish:
+            WordPress you host yourself, or anything that lives in a GitHub repo. Wix,
+            Squarespace, Shopify, Webflow and Ghost don&apos;t work. We&apos;ll check your site and
+            tell you before you pay anything.
           </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
             <Link

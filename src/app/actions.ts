@@ -60,6 +60,14 @@ import {
 } from "@/lib/gsc";
 import { uninstallPipelineFromRepo, type UninstallResult } from "@/lib/pipeline-uninstall";
 import { REPO_NOTICE_COOKIE, encodeRepoNotice } from "@/lib/repo-notice";
+import {
+  agentForAiChoice,
+  aiKind,
+  firstStepAfterCreate,
+  isPublishChoice,
+  isWizardAiChoice,
+  type PublishChoice,
+} from "@/lib/wizard-branch";
 
 // Every action re-validates auth server-side - the proxy only does presence
 // routing, this is the real check. dashboardAuth covers both modes: the
@@ -1283,6 +1291,13 @@ async function createProjectCore(
     const parts = repo.split("/").filter(Boolean);
     if (parts.length >= 2) repo = `${parts[0]}/${parts[1]}`;
   }
+  // Cloud connects a repo only through the GitHub App (wizard c1 ->
+  // chooseGithubRepo), which binds it to an installation GitHub itself scopes
+  // the credential to. The cloud forms render no repo field, so a value here
+  // is a hand-posted one - and stored, it would become a github_repo with no
+  // installation behind it, pointing at a repository nobody verified this
+  // tenant owns. Ignored, not rejected: nothing legitimate sends it.
+  if (isCloudMode()) repo = "";
 
   const domain = rawDomain
     .toLowerCase()
@@ -1460,6 +1475,27 @@ export type WizardCreateState =
   | { ok: true; slug: string; name: string; domain: string; mcpToken: string }
   | null;
 
+// The cloud wizard's own create state: everything above plus the two facts its
+// step 1 now collects, because the very next screen depends on them and the
+// client must not have to re-read the row to learn what it just wrote.
+//
+// A separate type rather than two more fields on WizardCreateState: the
+// self-host wizard and the dashboard's add-site dialog share that one, neither
+// asks these questions, and making them required there would force both
+// callers to invent answers.
+export type CloudWizardCreateState =
+  | { error: string }
+  | {
+      ok: true;
+      slug: string;
+      name: string;
+      domain: string;
+      mcpToken: string;
+      publishTarget: PublishChoice;
+      aiChoice: string;
+    }
+  | null;
+
 // On-the-spot liveness check for wizard step 1: a typo'd domain surfaces
 // weeks later as a mystery cron failure, so the wizard refuses one it can
 // prove wrong right now. The repo deliberately gets NO such check - private
@@ -1492,21 +1528,87 @@ async function domainAnswers(domain: string): Promise<boolean> {
   return false;
 }
 
+/**
+ * Write the two branch answers onto a freshly created cloud project and park
+ * it on the first screen its branch actually needs. Shared by the wizard's
+ * step 1 and the dashboard's add-site dialog, so a second site gets the same
+ * adaptive setup as the first - an existing owner adding a WordPress site must
+ * not be sent to "Connect GitHub" because the dialog skipped the question.
+ *
+ * createProjectCore stamps "c1" for every cloud row, which is the right answer
+ * for exactly one of the three branches; this corrects it in the same write,
+ * server-side, because the wizard's own setWizardScreen POST is fire-and-forget
+ * and a reload that lost it would resume a WordPress owner onto "Connect
+ * GitHub" - the screen this whole change exists to stop them reaching.
+ *
+ * Tolerated, not fatal: the project row already exists, so a failed write
+ * costs a correct resume, never the creation the owner is standing in front
+ * of. But tolerated is not ignored: supabase-js reports failure in `error`, it
+ * does not throw, so it is read - and a database that has not run 0060 yet
+ * rejects the whole update over the unknown ai_choice column, taking
+ * publish_target and the screen stamp down with it. Drop the new column and
+ * retry, the way createProjectCore handles its own pending-migration columns.
+ */
+async function applyWizardChoices(
+  slug: string,
+  publishTarget: PublishChoice,
+  aiChoice: string,
+): Promise<void> {
+  const row: Record<string, unknown> = {
+    publish_target: publishTarget,
+    ai_choice: aiChoice,
+    onboarding_screen: firstStepAfterCreate(publishTarget, aiKind(aiChoice)),
+  };
+  // Only when the AI actually IS a coding agent. A chat app has no builder to
+  // run, and writing null here would erase the column's default rather than
+  // say "not applicable".
+  const agent = agentForAiChoice(aiChoice);
+  if (agent) row.agent = agent;
+  let { error } = await db().from("projects").update(row).eq("slug", slug);
+  if (error && error.message.includes("ai_choice")) {
+    delete row.ai_choice;
+    ({ error } = await db().from("projects").update(row).eq("slug", slug));
+  }
+  if (error) {
+    console.warn(`[wizard] branch write failed for ${slug}: ${error.message}`);
+  }
+}
+
 // The onboarding wizard's step 1. Same creation, but no redirect - the wizard
 // advances client-side and shows the MCP token in its Claude Code step.
 export async function wizardCreateProject(
   _prev: WizardCreateState,
   formData: FormData,
-): Promise<WizardCreateState> {
+): Promise<CloudWizardCreateState> {
   await assertAuthed();
+  // The two branch questions are the CLOUD wizard's step 1 only. The self-host
+  // wizard shares this action and asks neither: createProjectCore refuses a
+  // project without a repo there, so every self-host site publishes through
+  // GitHub by construction and has nothing to choose.
+  const cloud = isCloudMode();
+  const publishRaw = String(formData.get("publish_target") ?? "").trim();
+  const aiRaw = String(formData.get("ai_choice") ?? "").trim();
+  if (cloud) {
+    // Server-side because the radio group is the thing that decides which
+    // wizard this owner walks - a submit that skipped the client's `required`
+    // must not silently create a GitHub-flow project for a WordPress site.
+    if (!isPublishChoice(publishRaw)) return { error: "Pick where articles should go." };
+    if (!isWizardAiChoice(aiRaw)) return { error: "Pick which AI will do the writing." };
+  }
+  const publishTarget: PublishChoice = isPublishChoice(publishRaw) ? publishRaw : "github";
+  const aiChoice = isWizardAiChoice(aiRaw) ? aiRaw : "";
+
   const result = await createProjectCore(formData);
   if ("error" in result) return result;
+
+  if (cloud) await applyWizardChoices(result.slug, publishTarget, aiChoice);
+
   // The landing hero stashes the typed domain in pending_domain so step 1
   // prefills once - but it's a 7-day cookie and was never cleared, so it
   // lingered and pre-filled a STALE domain on every later signup. The site now
   // exists; drop it so the next signup starts with a clean field.
   (await cookies()).delete("pending_domain");
-  return { ok: true, ...result };
+  return { ok: true, ...result, publishTarget, aiChoice };
 }
 
 // The dashboard's add-site dialog. Same creation as the wizard's step 1, then
@@ -1529,19 +1631,32 @@ export async function addSiteAndStartSetup(
   formData: FormData,
 ): Promise<WizardCreateState> {
   await assertAuthed();
+  // Cloud: the dialog asks the same two branch questions as the wizard's step
+  // 1, and they are required for the same reason - without them a second site
+  // is a GitHub-flow project whatever the owner meant.
+  const cloud = isCloudMode();
+  const publishRaw = String(formData.get("publish_target") ?? "").trim();
+  const aiRaw = String(formData.get("ai_choice") ?? "").trim();
+  if (cloud) {
+    if (!isPublishChoice(publishRaw)) return { error: "Pick where articles should go." };
+    if (!isWizardAiChoice(aiRaw)) return { error: "Pick which AI will do the writing." };
+  }
   const result = await createProjectCore(formData);
   if ("error" in result) return result;
   // createProjectCore already pointed the dash_project cookie at the new row,
-  // so this scopes to it. Tolerated, not awaited on: a pre-0030 database has
-  // no onboarding_screen column, and losing the stamp costs a resume nicety,
-  // never the creation the owner just paid attention to.
-  try {
-    await db()
-      .from("projects")
-      .update({ onboarding_screen: isCloudMode() ? "c1" : "s1" })
-      .eq("slug", result.slug);
-  } catch {
-    // resume falls back to its own defaults
+  // so this scopes to it.
+  if (cloud) {
+    await applyWizardChoices(result.slug, publishRaw as PublishChoice, aiRaw);
+  } else {
+    // Self-host: park the new project on the screen that FOLLOWS step 1.
+    // Tolerated, not awaited on: a pre-0030 database has no onboarding_screen
+    // column, and losing the stamp costs a resume nicety, never the creation
+    // the owner just paid attention to.
+    try {
+      await db().from("projects").update({ onboarding_screen: "s1" }).eq("slug", result.slug);
+    } catch {
+      // resume falls back to its own defaults
+    }
   }
   (await cookies()).delete("pending_domain");
   return { ok: true, ...result };
@@ -2152,6 +2267,48 @@ export async function runPipelineInstall(
   };
 }
 
+/** Has this project's chat app ever reached us?
+ *
+ *  The MCP door stamps chat_last_seen_at the first time a request arrives with
+ *  ?client=chat, so this is evidence rather than a self-report - which is the
+ *  whole point. The c2c screen polls it and turns green on its own; there is
+ *  no "I've connected it" button to press, because the owner pressing one
+ *  proves nothing and a wrong-looking connector URL would sail past it. */
+export async function wizardChatSeen(slug: string): Promise<boolean> {
+  await assertAuthed();
+  if (!slug) return false;
+  const project = await getProjectBySlug(slug);
+  if (!project) return false;
+  if (isCloudMode()) await assertProjectOwned(project.id);
+  return Boolean(project.chat_last_seen_at);
+}
+
+/** The non-GitHub finale's stamp.
+ *
+ *  runPipelineInstall writes onboarding_screen = "c5" as a side effect, and
+ *  that stamp is what unlocks the dashboard (onboarding-gate.ts). A WordPress
+ *  or chat-app project has no repo to install a pipeline into, so it never
+ *  calls that action - and without this it would reach the finale, be told it
+ *  was set up, and then be bounced back into the wizard by every dashboard
+ *  page it opened. Same server-side write, none of the repo work. */
+export async function finishWizard(slug: string): Promise<{ ok: true } | { error: string }> {
+  await assertAuthed();
+  if (!slug) return { error: "No project specified." };
+  const project = await getProjectBySlug(slug);
+  if (!project) return { error: "Unknown project." };
+  if (isCloudMode()) await assertProjectOwned(project.id);
+  const { error } = await db()
+    .from("projects")
+    .update({ onboarding_screen: "c5" })
+    .eq("id", project.id);
+  // Unlike setWizardScreen's fire-and-forget, this one's failure is worth
+  // saying out loud: it is the only thing standing between this owner and
+  // their dashboard.
+  if (error) return { error: error.message };
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
 export type WizardGscPropertyState = { ok: true } | { error: string } | null;
 
 // The cloud wizard's inline property picker (c3): corrects onboarding's
@@ -2305,4 +2462,170 @@ export async function acknowledgeGithubCost(reason: AckReason): Promise<{ ok: tr
   await captureServer(auth.user.id, "github_cost_acknowledged", { reason });
   revalidatePath("/", "layout");
   return { ok: true };
+}
+
+// --- WordPress publishing ---------------------------------------------------
+//
+// The second publishing route. Everything about the connection itself lives in
+// src/lib/wordpress-connect.ts; these actions are the dashboard's door to it.
+// Deliberately thin: validation, storage and every owner-facing sentence come
+// from the lib, so the MCP tool that mirrors these actions cannot drift into
+// telling a different story than the settings page.
+
+export type ConnectWordPressState = { error?: string; ok?: string } | null;
+
+export async function connectWordPressSite(
+  _prev: ConnectWordPressState,
+  formData: FormData,
+): Promise<ConnectWordPressState> {
+  await assertAuthed();
+
+  const url = String(formData.get("wp_url") ?? "").trim();
+  const username = String(formData.get("wp_username") ?? "").trim();
+  const applicationPassword = String(formData.get("wp_app_password") ?? "");
+
+  if (!url || !username || !applicationPassword.trim()) {
+    return { error: "All three fields are needed." };
+  }
+
+  // Which site this password belongs to. The wizard names it explicitly (a
+  // hidden slug field) for the same reason its repo and token forms do: a
+  // second tab that switched projects moves the dash_project cookie, and a
+  // WordPress password stored on the wrong site is the worst version of that
+  // mistake. Settings sends no slug - there the active project IS the screen.
+  const slug = String(formData.get("slug") ?? "").trim();
+  const project = slug ? await getProjectBySlug(slug) : await getActiveProject();
+  if (!project) return { error: "That site no longer exists - reload and try again." };
+  await assertProjectOwned(project.id);
+
+  const { connectAndStore } = await import("@/lib/wordpress-connect");
+  const result = await connectAndStore(project.id, { url, username, applicationPassword });
+  if (!result.ok) return { error: result.message };
+
+  // Say what we actually found rather than a bare "connected". An owner whose
+  // user cannot publish, or whose site has no SEO plugin to write a meta
+  // description into, needs to know that NOW - the whole point of checking at
+  // connect time is that the answer arrives while they are still looking.
+  const notes: string[] = [];
+  if (!result.canPublish) {
+    notes.push(
+      "this user can write drafts but not publish them, so articles will wait for you in WordPress",
+    );
+  }
+  if (!result.canUploadMedia) notes.push("this user cannot upload images, so posts will have no cover image");
+  if (result.seoPlugin) notes.push(`${result.seoPlugin} detected for meta descriptions`);
+
+  // Articles that parked while there was nowhere to publish. The owner who
+  // just connected is exactly the owner wondering where their article went,
+  // and the Drafts screen has the release button - deliberately not published
+  // automatically here, because releasing three at once is a pacing decision
+  // that belongs to them.
+  const { count: parked } = await db()
+    .from("article_drafts")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", project.id)
+    .eq("status", "blocked_setup");
+  if (parked) {
+    notes.push(
+      `${parked} finished article${parked === 1 ? " is" : "s are"} waiting from before - ` +
+        `release ${parked === 1 ? "it" : "them"} with Publish now on the Drafts screen`,
+    );
+  }
+
+  revalidatePath("/settings");
+  revalidatePath("/", "layout");
+  return {
+    ok: `Connected to ${result.siteName}${notes.length ? ` - ${notes.join("; ")}` : ""}.`,
+  };
+}
+
+export async function disconnectWordPressSite() {
+  await assertAuthed();
+  const project = await getActiveProject();
+  await assertProjectOwned(project.id);
+  const { disconnectWordPress } = await import("@/lib/wordpress-connect");
+  await disconnectWordPress(project.id);
+  revalidatePath("/settings");
+  revalidatePath("/", "layout");
+}
+
+// --- Article drafts ---------------------------------------------------------
+//
+// The review screen's two buttons. Everything that decides WHETHER an article
+// can go out lives in the job handlers and draft-status.ts; these actions only
+// say "now" or "never" on behalf of the owner.
+
+export type DraftActionState = { error?: string; ok?: string } | null;
+
+/**
+ * Publish this one now, rather than at the hour the project publishes at.
+ *
+ * There is no hold-for-approval mode: an accepted article publishes on its own
+ * schedule, so this button exists for the owner who does not want to wait, and
+ * for the one whose article parked while they finished connecting their site.
+ */
+export async function approveDraft(draftId: string): Promise<DraftActionState> {
+  await assertAuthed();
+  await assertRowOwned("article_drafts", draftId);
+
+  const { data } = await db()
+    .from("article_drafts")
+    .select("id, status, rendered_html, project_id")
+    .eq("id", draftId)
+    .maybeSingle();
+  const draft = data as
+    | { id: string; status: string; rendered_html: string | null; project_id: string }
+    | null;
+  if (!draft) return { error: "That article no longer exists." };
+  if (draft.status === "published") return { error: "That article is already live." };
+  // Only a draft that is actually waiting may be pushed out - a discarded one
+  // stays discarded, and a submitted/rejected one has nothing to publish yet.
+  if (!["accepted", "blocked_setup", "finished"].includes(draft.status)) {
+    return {
+      error:
+        draft.status === "discarded"
+          ? "That article was discarded. Have your AI resubmit it if you changed your mind."
+          : "We have not finished preparing this one yet. Give it a few minutes.",
+    };
+  }
+  if (!draft.rendered_html) {
+    return { error: "We have not finished preparing this one yet. Give it a few minutes." };
+  }
+
+  // Refuse rather than queue a job that would immediately park itself. A
+  // button that reports success and changes nothing is the exact failure this
+  // codebase keeps banning.
+  const project = await getProjectById(draft.project_id);
+  const { publishRoute, blockedReason, publishDraftNow } = await import(
+    "@/lib/job-handlers/draft-status"
+  );
+  const route = project ? publishRoute(project) : "blocked";
+  if (!project || (route !== "wordpress" && route !== "repo")) {
+    return { error: project ? blockedReason(project) : "That site no longer exists." };
+  }
+
+  // Pulls an already-scheduled publish forward instead of silently deduping
+  // against it - see publishDraftNow.
+  await publishDraftNow(draft.project_id, draft.id);
+  revalidatePath("/drafts");
+  return {
+    ok:
+      route === "repo"
+        ? "Queued. The pull request opens within a few minutes."
+        : "Queued. It goes out within a few minutes.",
+  };
+}
+
+/** Throw it away. Kept as a row, not deleted: "why did that article never
+ *  appear" should stay answerable, and a discarded draft is the answer. */
+export async function discardDraft(draftId: string): Promise<DraftActionState> {
+  await assertAuthed();
+  await assertRowOwned("article_drafts", draftId);
+  const { error } = await db()
+    .from("article_drafts")
+    .update({ status: "discarded", updated_at: new Date().toISOString() })
+    .eq("id", draftId);
+  if (error) return { error: "We could not discard that one. Try again in a moment." };
+  revalidatePath("/drafts");
+  return { ok: "Discarded." };
 }

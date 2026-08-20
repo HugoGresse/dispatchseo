@@ -39,3 +39,12 @@
 # fine at this scale (one small POST each); jitter belongs in the sender if
 # that ever stops being true.
 23 5 * * * /bin/sh /usr/local/bin/hit.sh heartbeat >> /proc/1/fd/1 2>&1
+
+# Drains the background work queue (src/lib/jobs.ts, migration 0056) - the
+# site crawl, finishing an accepted draft, publishing it, and verifying it went
+# live. Mirrors .github/workflows/jobs.yml. Every 10 minutes because two of
+# these are user-visible waits: the crawl runs while an owner watches the setup
+# screen, and a scheduled article should appear at the hour they chose rather
+# than at the top of the next one. An empty queue exits in one indexed query,
+# so idle ticks are cheap.
+*/10 * * * * /bin/sh /usr/local/bin/hit.sh jobs >> /proc/1/fd/1 2>&1

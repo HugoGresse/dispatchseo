@@ -9,23 +9,78 @@ see yours, ask in the [Discord](/discord) or in
 
 ## Does this work with WordPress?
 
-No. Content ships as pull requests against a Git repository, so your
-site's source has to live in a GitHub repo. WordPress and other
-database-backed CMSes can't receive a pull request, so there's no
-realistic way to bolt this on - be honest with yourself here rather than
-finding out after an install. If your site is Next.js, Astro, Hugo,
-Jekyll, or anything else whose source lives in git, you're the intended
-user. See [what you need](/docs#before-you-start) before installing.
+Yes, if you host WordPress yourself. Connect it once from Settings with
+an application password - the sort WordPress generates for you under
+Users, then Profile, then Application Passwords - and finished articles
+are posted straight to the site: cover image uploaded, internal links to
+your existing pages inserted, meta description and FAQ markup in place.
+Nothing to install, no plugin, no repo.
+
+Two things to know. The user you connect needs the **Editor** role, or
+it can write drafts but not publish them. And if a security plugin has
+switched off the WordPress API entirely, the connect screen will say so
+by name rather than failing later.
+
+Sites on wordpress.com rather than your own hosting aren't supported
+yet - you'll find out at the connect screen, before anything is charged.
+
+The other way in is a **GitHub repo**, where articles arrive as pull
+requests you review: Next.js, Astro, Hugo, Jekyll, anything whose source
+lives in git. Wix, Squarespace, Shopify, Webflow, Framer and Ghost have
+neither door. See [what you need](/docs#before-you-start) before
+installing.
+
+## Do I need a coding agent?
+
+No. The ordinary Claude app at claude.ai drives this on any paid Claude
+plan. You add DispatchSEO as a custom connector under Settings, then
+Connectors, and your Claude does the research and the writing on your own
+subscription, then hands the finished article to us to check, finish and
+publish. Nothing to install, no terminal, and no key of yours ends up with
+us.
+
+A coding agent still does more: it can build interactive tools, open its
+own pull requests, and run overnight with nobody watching. The dashboard's
+**Connect your AI** screen has both sets of instructions.
+
+ChatGPT can't connect yet, and the Gemini app has no way to connect an
+outside tool at all. See [Do I need a Claude subscription?](#do-i-need-a-claude-subscription-which-plan)
+for which plans cover which path.
+
+## Why does Claude keep asking me to allow DispatchSEO?
+
+That is claude.ai's own safety prompt for tools that change something (propose
+an idea, hand in an article), not an error on our side. Choose **Always
+allow** when it asks and it stops asking for that tool. Reads (checking the
+site, search results, your queue) are marked read-only and normally don't
+prompt at all.
+
+## What do I actually do after connecting the Claude app?
+
+Home shows a "Your next step" list for Claude-app sites. In order: let Claude
+ask its three questions (paste the setup sentence), ask it for ideas, approve
+the ones you like on the **Queue** screen (nothing is written until you do),
+ask it to write, then watch the **Drafts** screen go Checking, Ready to
+publish, Posted, Live. After the first article you only repeat the last two.
+
+## Can the Claude app publish to a GitHub site?
+
+Yes. When your site's source lives in a GitHub repo, the article your
+Claude hands in is committed and opened as a pull request by DispatchSEO
+itself rather than by an agent on your machine - merged on its own in
+automatic mode, or waiting for your click in semi-automatic. So a
+code-built site doesn't need a coding agent either, and the Drafts screen
+links each pull request and shows when it is merged and live.
 
 ## Do I need to pay for anything?
 
 Not to run DispatchSEO itself. The free tier (Search Console only) costs
 $0 forever and self-hosting has no feature limits - see
 [Is the self-hosted version limited?](#is-the-self-hosted-version-limited-vs-the-cloud-one)
-below. You bring your own coding agent - a Claude subscription for Claude
-Code, an OpenAI key for Codex, or a Cursor plan's API key for Cursor (next
-question); beyond that, DispatchSEO never bills you for agent usage - it
-isn't a per-token service on top of your plan.
+below. You bring your own AI - a paid Claude plan for the Claude app, a
+Claude subscription for Claude Code, an OpenAI key for Codex, or a Cursor
+plan's API key for Cursor (next question); beyond that, DispatchSEO never
+bills you for AI usage - it isn't a per-token service on top of your plan.
 
 ## What does it cost to run?
 
@@ -50,10 +105,13 @@ the real numbers and how to avoid a surprise pause.
 
 ## Do I need a Claude subscription? Which plan?
 
-Only if Claude Code is your agent - Codex works too, on an OpenAI API key
-instead of a subscription (see [Use Codex instead](/docs/install-codex)),
-and so does Cursor, on its own plan's API key (see
-[Use Cursor](/docs/install-cursor)).
+Some paid Claude plan, if Claude is your AI at all - Codex works too, on an
+OpenAI API key instead of a subscription (see
+[Use Codex instead](/docs/install-codex)), and so does Cursor, on its own
+plan's API key (see [Use Cursor](/docs/install-cursor)).
+
+For the Claude app path: any paid plan can add a custom connector, and
+letting Claude repeat the run on a schedule of its own needs Pro or Max.
 
 For the Claude Code path: Claude Code isn't part of the free Claude plan.
 Pro, Max, Team, and current Enterprise plans all include it; Pro is the

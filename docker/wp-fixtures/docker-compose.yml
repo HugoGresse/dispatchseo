@@ -1,0 +1,114 @@
+# Five real WordPress installs to publish into, before a customer's site is
+# the first one we ever tried.
+#
+# WHY FIVE. Every one of these is a shape that has broken a WordPress
+# integration in the wild, and none of them is visible from a single vanilla
+# install:
+#
+#   vanilla    the baseline - if this fails, nothing else matters
+#   elementor  the most common page builder. It stores its own layout in post
+#              meta (_elementor_data) and our publisher deliberately never
+#              writes that, so the question this fixture answers is whether a
+#              plain REST-created post still renders inside the theme
+#   yoast      writes meta descriptions somewhere specific
+#   rankmath   writes them somewhere ELSE, which is why the plugin is detected
+#              at connect time and cached on the project
+#   hardened   a REST-blocking security plugin. The point is NOT that it works
+#              - it is that it fails with a named, plain-English reason instead
+#              of a crash or a hang
+#
+# Run:  docker compose -f docker/wp-fixtures/docker-compose.yml up -d
+# Then: node scripts/wp-fixture-e2e.mjs
+# Stop: docker compose -f docker/wp-fixtures/docker-compose.yml down -v
+#
+# These are test fixtures on a developer machine and nothing else: the
+# passwords below are fixed on purpose so the e2e script needs no setup, the
+# sites are served over plain HTTP, and none of this is ever deployed.
+
+name: dispatchseo-wp-fixtures
+
+x-wp-common: &wp-common
+  image: wordpress:6-php8.3-apache
+  restart: unless-stopped
+  depends_on:
+    db:
+      condition: service_healthy
+  environment: &wp-env
+    WORDPRESS_DB_HOST: db
+    WORDPRESS_DB_USER: wp
+    WORDPRESS_DB_PASSWORD: wp
+    # Application passwords are refused over plain HTTP unless WordPress is
+    # told the environment is local. This is exactly what wp-env and Studio
+    # do for local development, and it is the only reason the flag is here.
+    WORDPRESS_CONFIG_EXTRA: |
+      define('WP_ENVIRONMENT_TYPE', 'local');
+      // A fixture exposed through an https tunnel (cloudflared) reaches WordPress
+      // over plain http; without this, a site whose home/siteurl is the tunnel
+      // address redirects to https forever. Cloudflared sets the header.
+      if (isset($$_SERVER['HTTP_X_FORWARDED_PROTO']) && $$_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') { $$_SERVER['HTTPS'] = 'on'; }
+
+services:
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_USER: wp
+      MARIADB_PASSWORD: wp
+      MARIADB_DATABASE: wp_vanilla
+    volumes:
+      - ./init-databases.sql:/docker-entrypoint-initdb.d/00-databases.sql:ro
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  wp-vanilla:
+    <<: *wp-common
+    ports: ["8081:80"]
+    environment:
+      <<: *wp-env
+      WORDPRESS_DB_NAME: wp_vanilla
+    volumes: [vanilla:/var/www/html]
+
+  wp-elementor:
+    <<: *wp-common
+    ports: ["8082:80"]
+    environment:
+      <<: *wp-env
+      WORDPRESS_DB_NAME: wp_elementor
+    volumes: [elementor:/var/www/html]
+
+  wp-yoast:
+    <<: *wp-common
+    ports: ["8083:80"]
+    environment:
+      <<: *wp-env
+      WORDPRESS_DB_NAME: wp_yoast
+    volumes: [yoast:/var/www/html]
+
+  wp-rankmath:
+    <<: *wp-common
+    ports: ["8084:80"]
+    environment:
+      <<: *wp-env
+      WORDPRESS_DB_NAME: wp_rankmath
+    volumes: [rankmath:/var/www/html]
+
+  wp-hardened:
+    <<: *wp-common
+    ports: ["8085:80"]
+    environment:
+      <<: *wp-env
+      WORDPRESS_DB_NAME: wp_hardened
+    volumes: [hardened:/var/www/html]
+
+volumes:
+  db-data:
+  vanilla:
+  elementor:
+  yoast:
+  rankmath:
+  hardened:

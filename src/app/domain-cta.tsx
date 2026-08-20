@@ -74,11 +74,12 @@ export function DomainCta() {
       <button type="submit" className="btn btn-solid">
         Automate my SEO
       </button>
-      {/* The repo requirement, said at the very first touchpoint. The agent
-          requirement already sits in the hero sub line; this note carries the
-          one fact that twice sent a WordPress owner into a dead-end trial. */}
+      {/* Said at the very first touchpoint, because getting this wrong twice
+          sent a WordPress owner into a dead-end trial. WordPress joined the
+          list on 2026-08-19; the site builders genuinely still cannot work. */}
       <p className="domain-note">
-        7-day free trial. Your site needs to live in a GitHub repo - WordPress and site builders
+        7-day free trial. Works with WordPress you host yourself, or any site that lives in a
+        GitHub repo, driven by the Claude app or a coding agent. Wix, Squarespace and Shopify
         aren&apos;t supported.
       </p>
     </form>

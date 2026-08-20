@@ -39,7 +39,7 @@ const DOCS_URL = "/docs";
 export const metadata: Metadata = {
   title: "DispatchSEO - Automate your SEO with AI agents",
   description:
-    "Claude Code, Codex, or Cursor researches keywords, writes guides, builds interactive tools, and tracks your ranks automatically. Every piece is a pull request you approve. Open source, free to self-host.",
+    "The Claude app or a coding agent - Claude Code, Codex, Cursor - researches keywords, writes guides, and tracks your ranks automatically. Nothing goes live until you approve it. Open source, free to self-host.",
   // "/" is reachable as itself and as "?home=1" (the signed-in opt-out below),
   // so point both at the bare root rather than letting a crawler treat the
   // query string as a second copy of the landing page.
@@ -263,7 +263,7 @@ export default async function LandingPage({
           {/* .br-desk: the composed two-line break is a desktop luxury - phones
               drop it so the headline reflows to whatever fits. */}
           <h1>Automate your SEO<br className="br-desk" /> with <span className="hl">AI agents</span></h1>
-          <p className="sub">The agent that built your product now runs your SEO: keyword research, guides, interactive tools, rank tracking - all automatic.<br className="br-desk" /> Use your agent: Claude Code / Codex / Cursor</p>
+          <p className="sub">The agent that built your product now runs your SEO: keyword research, guides, interactive tools, rank tracking - all automatic.<br className="br-desk" /> Use your AI: Claude app / Claude Code / Codex / Cursor</p>
 
           <div className="cta-row" id="get-started">
             <DomainCta />
@@ -324,7 +324,7 @@ export default async function LandingPage({
             <div className="who-card">
               <svg className="who-doodle vio" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v5.5M12 15.5V21M3 12h5.5M15.5 12H21M5.64 5.64l3.89 3.89M14.47 14.47l3.89 3.89M18.36 5.64l-3.89 3.89M9.53 14.47l-3.89 3.89" /></svg>
               <h3>AI agent power users</h3>
-              <p>You already pay for Claude Code, Codex, or Cursor. DispatchSEO gives it memory, schedules, and a queue, so SEO stops being a weekend project.</p>
+              <p>You already pay for the Claude app, Claude Code, Codex, or Cursor. DispatchSEO gives it memory, schedules, and a queue, so SEO stops being a weekend project.</p>
             </div>
             <div className="who-card">
               <svg className="who-doodle blue" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M8.6 9.4v.6M15.4 9.4v.6" /><path d="M8.8 15.2h6.4" /></svg>
@@ -546,11 +546,11 @@ export default async function LandingPage({
             </details>
             <details>
               <summary>What do I need to run the free version?</summary>
-              <div className="a">A website that lives in a GitHub repo, an AI agent (Claude Code on your Claude subscription, Codex on an OpenAI key, or Cursor on your Cursor plan), free Google Search Console access, and a machine with Docker. Your laptop works for a test drive, but we highly recommend a machine that stays awake for real use - a $5 VPS or a Raspberry Pi - since schedules only run while it&apos;s on. Rank tracking works with a free SerpApi key; search volume data needs a DataForSEO account, which is the main gap the cloud version fills. The <a href={DOCS_URL}>docs</a> walk you through it.</div>
+              <div className="a">A self-hosted WordPress site or a website that lives in a GitHub repo, an AI (Claude Code on your Claude subscription, Codex on an OpenAI key, Cursor on your Cursor plan, or the ordinary Claude app once your install has a public address), free Google Search Console access, and a machine with Docker. Your laptop works for a test drive, but we highly recommend a machine that stays awake for real use - a $5 VPS or a Raspberry Pi - since schedules only run while it&apos;s on. Rank tracking works with a free SerpApi key; search volume data needs a DataForSEO account, which is the main gap the cloud version fills. The <a href={DOCS_URL}>docs</a> walk you through it.</div>
             </details>
             <details>
               <summary>Does it work with WordPress?</summary>
-              <div className="a">Not right now. DispatchSEO publishes by opening pull requests in your site&apos;s GitHub repo, so the site has to live in one - Next.js, Astro, Hugo, or anything else you deploy from code. WordPress, Wix, Squarespace and Shopify sites have no repo to publish into, so they aren&apos;t supported.</div>
+              <div className="a">Yes, if you host WordPress yourself. You connect it once from Settings with an application password - the kind WordPress generates for you under Users, then Profile - and finished articles get posted straight to the site, with the cover image, internal links to your other pages and the search-engine markup already in place. There&apos;s nothing to install on your side. The other way in is a GitHub repo, where articles arrive as pull requests instead: Next.js, Astro, Hugo, anything you deploy from code. Wix, Squarespace, Shopify, Webflow and Ghost have neither door, so they aren&apos;t supported.</div>
             </details>
             <details>
               <summary>Is this another AI content spammer?</summary>
@@ -562,7 +562,7 @@ export default async function LandingPage({
             </details>
             <details>
               <summary>Does it only work with Claude Code?</summary>
-              <div className="a">No - Codex is fully supported too, including the overnight builders. Every scheduled workflow carries every supported agent and asks the dashboard which one to run, so you can switch on Settings and it takes effect on the next build, no reinstall. The honest difference is billing: Claude Code runs on the subscription you already have, Codex is metered by OpenAI per run. Cursor works too, including the overnight builders - those need a Cursor API key (any plan can mint one), and builds draw on your Cursor plan's included usage. Beyond those three, the server speaks standard MCP, so any other client (Gemini CLI, Copilot) can connect to the same tools interactively.</div>
+              <div className="a">No - Codex is fully supported too, including the overnight builders. Every scheduled workflow carries every supported agent and asks the dashboard which one to run, so you can switch on Settings and it takes effect on the next build, no reinstall. The honest difference is billing: Claude Code runs on the subscription you already have, Codex is metered by OpenAI per run. Cursor works too, including the overnight builders - those need a Cursor API key (any plan can mint one), and builds draw on your Cursor plan's included usage. You can also skip coding agents entirely: the ordinary Claude app at claude.ai connects as a custom connector, researches and writes on the plan you already pay for, and hands the article to us to check, finish and publish. ChatGPT can&apos;t connect yet. Beyond that, the server speaks standard MCP, so any other client (Gemini CLI, Copilot) can connect to the same tools interactively.</div>
             </details>
             <details>
               <summary>What does DispatchSEO do with my Google data?</summary>

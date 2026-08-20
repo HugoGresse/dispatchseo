@@ -508,6 +508,79 @@ export function AddSiteDialog({
             </span>
           </label>
 
+          {/* The two answers that decide which setup this site walks - the same
+              questions as the wizard's step 1, because a second site is a first
+              site for that site: an owner adding a WordPress blog next to a
+              GitHub one must not be parked on "Connect GitHub". */}
+          {cloud ? (
+            <>
+              <fieldset className="block">
+                <legend className="mb-1.5 block text-sm font-medium text-neutral-300">
+                  Where should finished articles go?
+                </legend>
+                <div className="space-y-1.5">
+                  {(
+                    [
+                      ["wordpress", "WordPress", "I host it myself. We post articles straight into it."],
+                      ["github", "A GitHub repo", "My site is built from code. We open pull requests."],
+                      ["manual", "Neither yet", "Finish each article and I'll place it myself."],
+                    ] as const
+                  ).map(([value, label, hint]) => (
+                    <label
+                      key={value}
+                      className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-neutral-200 transition-colors hover:border-neutral-600 has-[:checked]:border-violet-500"
+                    >
+                      <input
+                        type="radio"
+                        name="publish_target"
+                        value={value}
+                        required
+                        defaultChecked={value === "github"}
+                        className="mt-0.5 h-4 w-4 accent-violet-500"
+                      />
+                      <span>
+                        <span className="block font-medium">{label}</span>
+                        <span className="block text-xs text-neutral-500">{hint}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <fieldset className="block">
+                <legend className="mb-1.5 block text-sm font-medium text-neutral-300">
+                  Which AI will do the writing?
+                </legend>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {(
+                    [
+                      ["claude-web", "Claude app"],
+                      ["claude-code", "Claude Code"],
+                      ["codex", "Codex"],
+                      ["cursor", "Cursor"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <label
+                      key={value}
+                      className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-neutral-200 transition-colors hover:border-neutral-600 has-[:checked]:border-violet-500"
+                    >
+                      <input
+                        type="radio"
+                        name="ai_choice"
+                        value={value}
+                        required
+                        className="h-4 w-4 accent-violet-500"
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+                <span className="mt-1.5 block text-xs text-neutral-500">
+                  ChatGPT isn&apos;t available yet.
+                </span>
+              </fieldset>
+            </>
+          ) : null}
+
           {/* Cloud picks the repo through the GitHub App later, so asking here
               would be a field the owner has to answer twice. */}
           {!cloud ? (

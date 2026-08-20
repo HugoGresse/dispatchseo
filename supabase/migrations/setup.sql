@@ -1560,3 +1560,454 @@ alter table suggestions
 -- and vanilla Postgres needs no guard block.
 alter table instance_settings add column if not exists builder_cursor_key text;
 
+-- ============ 0054_signup_qualifier.sql ============
+-- Pre-checkout qualifier answers (cloud only).
+--
+-- Why this table exists: four paid trials, four losses, none of which ever saw
+-- a published article. Two were WordPress sites that hit "Connect GitHub" - a
+-- screen no WordPress owner can ever pass - and one of those cancelled inside
+-- five minutes with the reason "unused". A fourth had no coding agent and
+-- stopped at "Connect your coding agent". Every one of those facts was
+-- knowable BEFORE the card was charged: the platform from one HTTP request
+-- (src/lib/site-platform.ts), the agent from one question.
+--
+-- So the answers are collected before checkout and kept, for two jobs:
+--   1. Gating: an owner we cannot serve today is told so instead of being
+--      charged and walked into a dead end.
+--   2. Counting: "how many WordPress owners did we turn away this week" is
+--      the number that sizes the audience the WordPress work is being built
+--      for. Without a row per attempt, that number does not exist.
+--
+-- Append-only by design (no unique index on user_id): someone who checks two
+-- domains produces two rows, and both are signal. The gate reads the newest
+-- row for the user.
+--
+-- Vanilla-Postgres safe: no auth schema reference outside the guarded DO block
+-- at the bottom, so docker's setup.sql replay works on a database that has no
+-- Supabase auth at all.
+
+create table if not exists signup_qualifiers (
+  id uuid primary key default gen_random_uuid(),
+  -- The signed-up cloud user. No FK here - see the guarded block below, which
+  -- adds one only where auth.users actually exists.
+  user_id uuid not null,
+  -- What they typed. Stored raw (bare host, no scheme) so a support question
+  -- can be answered from the row alone.
+  domain text not null,
+  -- Verdict inputs, straight from detectPlatform(): platform + how sure we
+  -- were + which signals fired. Keeping the signals makes a wrong call
+  -- debuggable months later instead of a mystery.
+  platform text not null,
+  confidence text,
+  signals jsonb not null default '[]'::jsonb,
+  -- WordPress specifics when present: version, elementor, seo plugin, whether
+  -- /wp-json/ answered, whether it is a decoupled front end.
+  wordpress jsonb,
+  -- Which AI they said they have. Free text from a fixed option list, not an
+  -- enum: the list of agents this product supports changes faster than a
+  -- migration cycle, and an unknown value must never reject a write.
+  ai_choice text not null,
+  -- What we told them: supported | unsupported | unknown, and which publishing
+  -- route they would take (repo | wordpress | null).
+  verdict text not null,
+  route text,
+  -- True once this answer let them through to checkout. A row with
+  -- proceeded=false is someone we turned away - the churn that did not happen.
+  proceeded boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+-- The gate reads "newest row for this user", and the weekly count reads
+-- "rows in a date range", so both directions are covered by one index.
+create index if not exists signup_qualifiers_user_created_idx
+  on signup_qualifiers (user_id, created_at desc);
+create index if not exists signup_qualifiers_created_idx
+  on signup_qualifiers (created_at desc);
+
+-- Same posture as every other table: RLS on, zero policies - service-role only.
+alter table signup_qualifiers enable row level security;
+
+comment on table signup_qualifiers is
+  'Pre-checkout platform/agent answers. One row per attempt; proceeded=false means we turned them away before charging.';
+
+-- Supabase-only: reference auth.users where that schema exists. Self-host on
+-- vanilla Postgres has no auth schema, and this must not break its first boot.
+do $$
+begin
+  if exists (
+    select 1 from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'auth' and c.relname = 'users'
+  ) then
+    if not exists (select 1 from pg_constraint where conname = 'signup_qualifiers_user_id_fkey') then
+      alter table signup_qualifiers
+        add constraint signup_qualifiers_user_id_fkey
+        foreign key (user_id) references auth.users (id) on delete cascade;
+    end if;
+  end if;
+end $$;
+
+-- ============ 0055_wordpress_publishing.sql ============
+-- WordPress as a second publishing route, plus the two tables the new
+-- article flow needs.
+--
+-- Until now there was exactly one way for an article to reach a customer's
+-- site: open a pull request in their GitHub repo. That works for a code-built
+-- site and is impossible to explain to someone whose site was built for them.
+-- Two paid trials died at "Connect GitHub" in August 2026, one of them inside
+-- five minutes. These columns are the other door.
+--
+-- Everything here is additive and defaulted, so in-flight code that knows
+-- nothing about WordPress keeps writing valid rows: publish_target defaults to
+-- 'github', which is exactly what every existing project is.
+
+-- --- projects: where does this site's content go, and how do we get in ------
+
+alter table projects
+  add column if not exists publish_target text not null default 'github';
+
+comment on column projects.publish_target is
+  'github = open a PR in the repo (the original route). wordpress = post through the site''s own API. manual = we finish the article and hand it over, for an owner who has neither.';
+
+-- The site's base address, kept separately from projects.domain: the WordPress
+-- install can live somewhere the public domain does not (a subdirectory, or a
+-- different host entirely behind a CDN), and guessing wrong means every write
+-- lands nowhere.
+alter table projects add column if not exists wp_url text;
+alter table projects add column if not exists wp_username text;
+
+-- Encrypted at rest with the same app-level AES-256-GCM used for the
+-- DataForSEO password (src/lib/crypto.ts, "enc:v1:" prefix). Never written
+-- plaintext, never logged, never returned by an MCP tool. A row written before
+-- encryption existed would read back as legacy plaintext, but there are none:
+-- this column is born encrypted.
+alter table projects add column if not exists wp_app_password text;
+
+alter table projects add column if not exists wp_connected_at timestamptz;
+
+-- Which SEO plugin the site runs (yoast | rankmath | seopress | null), read
+-- from the site's own API at connect time. It decides where a meta description
+-- has to be written, so caching it here saves a probe on every single publish.
+alter table projects add column if not exists wp_seo_plugin text;
+
+-- What the connected WordPress user is actually allowed to do
+-- (publish_posts / upload_files / edit_others_posts / edit_posts), captured at
+-- connect time. Publishing checks this BEFORE writing rather than discovering
+-- mid-flow that the owner connected a Subscriber - the failure then arrives as
+-- a setup card with a fix, not as a half-published article.
+alter table projects add column if not exists wp_capabilities jsonb;
+
+-- The hour (0-23, site-local) a finished draft is flipped live. Our cron does
+-- this, deliberately: WordPress's own scheduler only runs when someone loads a
+-- page, so a scheduled post on a quiet site publishes late - WordPress's own
+-- docs give a 2pm-scheduled/5pm-live example. Nullable = use the default.
+alter table projects add column if not exists publish_hour smallint;
+
+-- --- The site digest: what we know about a site, so their AI need not ------
+--
+-- Its own table rather than a projects column on purpose. Every projects query
+-- selects the full column list, and this blob is a few KB - putting it on the
+-- hot tenant-resolution path would tax every cron, every MCP call and every
+-- page load to serve something read only when an article is being written.
+
+create table if not exists site_digests (
+  project_id uuid primary key default '00000000-0000-4000-8000-000000000001'
+    references projects (id) on delete cascade,
+  -- The compact summary a chat AI reads INSTEAD of crawling the site itself
+  -- (src/lib/site-crawl.ts buildDigest). Budgeted to stay small enough to sit
+  -- inside a $20 plan's context without crowding out the article.
+  digest jsonb not null default '{}'::jsonb,
+  -- Plain-English observations for the owner: pages we could not read, a cap
+  -- we hit, a site that served us the same title for every address. Kept
+  -- because a digest built from a quarter of a site must say so.
+  notes jsonb not null default '[]'::jsonb,
+  page_count integer not null default 0,
+  -- wp-rest | sitemap | bfs - which door the crawl actually got in through.
+  source text,
+  crawled_at timestamptz not null default now()
+);
+
+alter table site_digests enable row level security;
+
+-- --- Article drafts: the handoff point between their AI and ours -----------
+--
+-- The customer's own AI writes an article and submits it here. Our server
+-- validates it (src/lib/article-validate.ts), finishes it (HTML, internal
+-- links, schema, cover) and publishes it. This table is where an article lives
+-- between "their AI said it is done" and "it is live on their site", which is
+-- also the only place a human can look at it before it goes out.
+
+create table if not exists article_drafts (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null default '00000000-0000-4000-8000-000000000001'
+    references projects (id) on delete cascade,
+  -- The queued idea this fulfils. Nullable: an owner can ask their AI to write
+  -- something that was never in the queue, and refusing that would make the
+  -- queue a cage rather than a plan.
+  suggestion_id uuid references suggestions (id) on delete set null,
+
+  title text not null,
+  slug text not null,
+  meta_description text,
+  primary_keyword text,
+  markdown text not null,
+  faq jsonb not null default '[]'::jsonb,
+  sources jsonb not null default '[]'::jsonb,
+  cover_brief text,
+
+  -- submitted -> rejected | accepted -> finished -> published (or discarded).
+  -- rejected is not terminal: the AI reads the reasons and resubmits.
+  status text not null default 'submitted',
+  -- The full ValidationReport, including every check that failed and the
+  -- exact instruction handed back. Kept so "why was my article rejected" is
+  -- answerable weeks later, and so rejection rates per client are measurable.
+  validation jsonb,
+
+  rendered_html text,
+  cover_url text,
+  -- WordPress's own post id, so the publish step can flip the draft it made
+  -- rather than creating a second one.
+  wp_post_id integer,
+  published_url text,
+
+  -- Which AI submitted it (claude-ai, chatgpt, claude-code, codex, cursor).
+  -- The whole promise of the server-side gate is that quality does not depend
+  -- on this value - which is only checkable if it is recorded.
+  client_kind text,
+  -- What the finishing steps cost US in model spend. Per-article, because a
+  -- margin you cannot see is a margin you find out about from a bill.
+  cost_usd numeric(10, 4) not null default 0,
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- The dashboard lists a project's drafts newest-first; the publisher looks for
+-- what is finished and due. Both are covered here.
+create index if not exists article_drafts_project_created_idx
+  on article_drafts (project_id, created_at desc);
+create index if not exists article_drafts_status_idx
+  on article_drafts (project_id, status);
+
+-- One live draft per suggestion. Without this, an AI that retries a submission
+-- instead of updating one leaves duplicates behind, and the publisher has no
+-- way to tell which is the real article. Partial, so discarded and rejected
+-- attempts can pile up harmlessly as history.
+create unique index if not exists article_drafts_active_suggestion_idx
+  on article_drafts (suggestion_id)
+  where suggestion_id is not null and status in ('submitted', 'accepted', 'finished', 'published');
+
+alter table article_drafts enable row level security;
+
+-- ============ 0056_jobs.sql ============
+-- Background work, off the request path.
+--
+-- Three things in the new article flow are too slow to do inside an HTTP
+-- request and too important to drop: crawling 150 pages of a site, turning an
+-- accepted draft into finished HTML with a cover image, and flipping a
+-- WordPress draft live at the hour the owner picked. All three now become rows
+-- here, and a cron drains them.
+--
+-- The claim semantics are lifted wholesale from serp_tasks (0042) because that
+-- pattern is already proven in this codebase: a row is "still to do" while its
+-- finished_at is null, a claim stamps claimed_at so a second worker skips it,
+-- and a claim old enough to be abandoned becomes claimable again. No locks, no
+-- queue service, no new dependency - the database row IS the lock.
+--
+-- Deliberately generic (kind + payload) rather than one table per job type:
+-- the alternative is three near-identical tables, three drain routes and three
+-- sets of the same retry bug.
+
+create table if not exists jobs (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null default '00000000-0000-4000-8000-000000000001'
+    references projects (id) on delete cascade,
+
+  -- crawl | finish | publish | verify. Text, not an enum: a new job type must
+  -- be a code change, never a migration that has to reach prod before the code
+  -- that needs it (migrations here are applied by hand, so code lands first).
+  kind text not null,
+  payload jsonb not null default '{}'::jsonb,
+
+  -- Not before this moment. Publishing at the owner's chosen hour and retrying
+  -- after a failure are the same mechanism: move run_after and let go.
+  run_after timestamptz not null default now(),
+
+  -- Claimed but not finished = in flight. A worker that dies leaves this set
+  -- and finished_at null, which the drain route treats as reclaimable after a
+  -- grace window rather than as a job stuck forever.
+  claimed_at timestamptz,
+  finished_at timestamptz,
+  attempts integer not null default 0,
+  -- Last failure, in the worker's own words. Populated even when the job is
+  -- later retried successfully, because "this kept failing for six hours and
+  -- then worked" is the shape of a problem worth seeing.
+  error text,
+
+  created_at timestamptz not null default now()
+);
+
+-- The drain query is "what is due for anyone", so the index leads with the
+-- pending predicate. Partial: finished rows are history and must not bloat the
+-- hot path.
+create index if not exists jobs_due_idx
+  on jobs (run_after, project_id)
+  where finished_at is null;
+
+create index if not exists jobs_project_created_idx
+  on jobs (project_id, created_at desc);
+
+-- Idempotency. A cron that fires twice, a webhook that retries, an owner who
+-- double-clicks: all three must produce ONE job. The key is chosen by the
+-- producer (e.g. "publish:<draft-id>", "crawl:<project>:<date>"), and the
+-- partial uniqueness means a finished job's key is free to be used again -
+-- tomorrow's crawl is not blocked by yesterday's.
+alter table jobs add column if not exists idempotency_key text;
+create unique index if not exists jobs_pending_key_idx
+  on jobs (project_id, kind, idempotency_key)
+  where finished_at is null and idempotency_key is not null;
+
+-- Same posture as every other table: RLS on, zero policies - service-role only.
+alter table jobs enable row level security;
+
+comment on table jobs is
+  'Generic background work queue drained by a cron. finished_at null = still to do; claimed_at set = in flight, reclaimable after a grace window.';
+
+-- ============ 0057_site_link_candidates.sql ============
+-- The crawled page inventory, kept apart from the digest it sits next to.
+--
+-- 0055 gave site_digests one jsonb column, `digest`, described there as "the
+-- compact summary a chat AI reads INSTEAD of crawling the site itself" - and
+-- that description is load-bearing: it is budgeted to stay small enough to fit
+-- inside a $20 ChatGPT or Claude plan's context without crowding out the
+-- article being written.
+--
+-- Internal linking needs something different: the full list of the site's
+-- pages with their titles, so the finisher can turn a phrase in a new article
+-- into a link to an existing page. That list is an order of magnitude larger
+-- than the digest and is read by our own server, never by the customer's AI.
+--
+-- Folding the two together would have quietly broken the thing the digest
+-- exists for. Hence a second column rather than a wrapper object inside the
+-- first one.
+
+alter table site_digests
+  add column if not exists link_candidates jsonb not null default '[]'::jsonb;
+
+comment on column site_digests.link_candidates is
+  'Crawled pages as [{url,title,keywords}] for the finisher to link into. Server-side only - never sent to a customer''s AI, which reads `digest` instead.';
+
+-- ============ 0058_research_notes.sql ============
+-- Research a chat session can hand to the next chat session.
+--
+-- On a coding agent, research and writing happen in one long run and the
+-- findings live in its context. A chat app has neither the window nor the
+-- continuity: a $20 plan cannot hold a SERP sweep, three competitor pages and
+-- a finished article in one conversation, and the owner closes the tab anyway.
+-- Splitting the work in two - one chat researches, another writes - is the
+-- only shape that fits, and it needs somewhere to put the findings in between.
+--
+-- The notes are free-form jsonb because the shape is the AI's business, not
+-- ours: SERP observations, competitor gaps, an outline, an angle. Our side
+-- stores and returns them; nothing here parses them.
+
+create table if not exists research_notes (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null default '00000000-0000-4000-8000-000000000001'
+    references projects (id) on delete cascade,
+  -- Which queued idea this research is for. Nullable: an owner can ask their
+  -- AI to look into something that was never in the queue, and a note with
+  -- nowhere to attach is still worth keeping.
+  suggestion_id uuid references suggestions (id) on delete cascade,
+  notes jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- One live note per idea, so a second research pass REPLACES the first rather
+-- than leaving the writing session to guess which of two versions is current.
+--
+-- NOT a partial index (`where suggestion_id is not null`), which is what this
+-- started as: PostgREST's upsert issues ON CONFLICT (project_id,
+-- suggestion_id), and Postgres will not use a partial index as the arbiter for
+-- that unless the statement carries the same predicate - so every upsert
+-- failed with "no unique or exclusion constraint matching the ON CONFLICT
+-- specification". A full index does the same job here anyway: Postgres treats
+-- NULLs as distinct, so the unattached notes above are each their own row and
+-- only the ones tied to an idea are deduped.
+create unique index if not exists research_notes_suggestion_idx
+  on research_notes (project_id, suggestion_id);
+
+-- The unattached notes, newest first: what the dashboard and get_research_notes
+-- list when no suggestion is named.
+create index if not exists research_notes_project_created_idx
+  on research_notes (project_id, created_at desc);
+
+alter table research_notes enable row level security;
+
+-- ============ 0059_blocked_setup_is_live.sql ============
+-- blocked_setup joins the statuses that make a draft "live".
+--
+-- 0055's one-live-draft-per-suggestion index enumerated the live statuses as
+-- submitted/accepted/finished/published - and missed blocked_setup, the draft
+-- that passed the gate, was rendered, and is parked only because the site has
+-- nowhere to publish yet. In every sense that matters it is an accepted
+-- article waiting to go out, so while one is parked a second submission for
+-- the same idea could slip past the index and become a second live draft -
+-- two articles for one idea the moment the owner connects their site. The
+-- code-side checks (submit_article's prior-draft lookup and dedupe corpus)
+-- were widened in the same change; this brings the constraint itself along.
+--
+-- Safe to apply on a live database: article_drafts is new (0055, 2026-08-18)
+-- and recreating a partial index on it is instant at this size. Vanilla-
+-- Postgres safe: no auth schema, nothing Supabase-specific.
+
+drop index if exists article_drafts_active_suggestion_idx;
+create unique index if not exists article_drafts_active_suggestion_idx
+  on article_drafts (suggestion_id)
+  where suggestion_id is not null
+    and status in ('submitted', 'accepted', 'blocked_setup', 'finished', 'published');
+
+-- ============ 0060_ai_choice_repo_publishing.sql ============
+-- The adaptive wizard and the second publishing route for chat clients.
+--
+-- Three small additions, all additive and nullable, so in-flight code that
+-- knows nothing about them keeps writing valid rows:
+--
+--   projects.ai_choice        which AI the owner said will do the writing - the
+--                             qualifier's answer carried onto the project so the
+--                             wizard, the Connect screen and the Home cards can
+--                             branch on it instead of asking again. One of the
+--                             qualifier's ids: claude-web, chatgpt, claude-code,
+--                             codex, cursor (src/lib/qualifier-options.ts).
+--                             Null = never said (created before 0060, or outside
+--                             the wizard). Distinct from `agent`, which names the
+--                             coding agent the repo builders run and has no
+--                             value for a chat app.
+--   projects.chat_last_seen_at  the last request that arrived on the MCP door
+--                             with ?client=chat. This is the "Connected" light
+--                             on the wizard's Claude-app step and on /connect:
+--                             evidence that the owner's chat app actually
+--                             reached us, rather than a button they press to
+--                             say so. Stamped at most every ten minutes.
+--   article_drafts.pr_*       a draft published through a GitHub repo rather
+--                             than WordPress: the pull request our server
+--                             opened, the file it committed, and when the PR
+--                             merged. Null on the WordPress route.
+
+alter table projects add column if not exists ai_choice text;
+alter table projects add column if not exists chat_last_seen_at timestamptz;
+
+comment on column projects.ai_choice is
+  'Which AI the owner said will write (qualifier id: claude-web, chatgpt, claude-code, codex, cursor). Null = never said.';
+comment on column projects.chat_last_seen_at is
+  'Last MCP request carrying ?client=chat - the "chat app connected" evidence. Stamped at most every 10 minutes.';
+
+alter table article_drafts add column if not exists pr_url text;
+alter table article_drafts add column if not exists pr_number integer;
+alter table article_drafts add column if not exists repo_path text;
+alter table article_drafts add column if not exists pr_merged_at timestamptz;
+
+comment on column article_drafts.repo_path is
+  'Repo-relative path of the committed article file when published through a GitHub repo (e.g. content/blog/my-slug.mdx).';
+

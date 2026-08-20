@@ -132,6 +132,19 @@ const PROBES: Probe[] = [
     table: "instance_settings",
     column: "builder_cursor_key",
   },
+  { migration: "0054_signup_qualifier", table: "signup_qualifiers" },
+  // 0055 adds several projects columns AND two tables; probe the column whose
+  // absence actually changes behaviour. Without publish_target every project
+  // silently reads as "publishes through GitHub", which is exactly the
+  // half-applied state that must be named rather than guessed at.
+  { migration: "0055_wordpress_publishing", table: "projects", column: "publish_target" },
+  { migration: "0056_jobs", table: "jobs" },
+  { migration: "0057_site_link_candidates", table: "site_digests", column: "link_candidates" },
+  { migration: "0058_research_notes", table: "research_notes" },
+  // 0060 adds two projects columns and four article_drafts columns; probe one
+  // of each so a half-applied migration is still caught.
+  { migration: "0060_ai_choice_repo_publishing", table: "projects", column: "ai_choice" },
+  { migration: "0060_ai_choice_repo_publishing", table: "article_drafts", column: "pr_url" },
 ];
 
 // Migrations that genuinely CANNOT be probed through this mechanism, with the
@@ -168,6 +181,12 @@ export const UNPROBEABLE: Record<string, string> = {
     "drops a CHECK constraint - artifact is an absence in pg_constraint, not queryable via PostgREST",
   "0052_refresh_source":
     "widens the suggestions_source_check CHECK constraint - constraints are not queryable via PostgREST",
+  // Recreates the one-live-draft-per-suggestion partial unique index so that
+  // blocked_setup counts as live. Artifact is in pg_indexes. Unapplied, the
+  // app-side checks in submit_article (which do the same test before every
+  // insert) still hold the line; this index only backstops the race.
+  "0059_blocked_setup_is_live":
+    "partial unique index rebuild - artifact is in pg_indexes, not queryable via PostgREST",
 };
 
 async function probeMissing(p: Probe): Promise<boolean> {

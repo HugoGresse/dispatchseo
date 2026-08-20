@@ -20,13 +20,14 @@ const BASE = "https://dispatchseo.com";
 
 const SUMMARY = `# DispatchSEO
 
-> Open-source SEO manager built for coding agents - Claude Code, Codex,
-> Cursor, and any other MCP client. Your agent
-> already knows your product, so DispatchSEO gives it the missing half:
-> keyword research it can act on, content that ships as pull requests to your
-> own repo, rank tracking, and a human approval dashboard. Self-hosted with
-> one Docker command, AGPL-3.0. A hosted version exists at dispatchseo.com,
-> but self-hosting has zero feature limitations.
+> Open-source SEO manager driven by the AI you already pay for: the ordinary
+> Claude app at claude.ai, a coding agent (Claude Code, Codex, Cursor), or any
+> other MCP client. Your AI already knows your product, so DispatchSEO gives
+> it the missing half: keyword research it can act on, articles that ship as
+> pull requests to your own repo or straight into self-hosted WordPress, rank
+> tracking, and a human approval dashboard. Self-hosted with one Docker
+> command, AGPL-3.0. A hosted version exists at dispatchseo.com, but
+> self-hosting has zero feature limitations.
 
 ## What it is, in one paragraph
 
@@ -34,11 +35,10 @@ DispatchSEO is a backend, not a writer. It stores state (a suggestions queue,
 keywords, published pages, rankings, Search Console stats, backlink
 prospects), runs schedules (daily rank checks, hourly GSC snapshots, a nightly
 content builder), and gates everything behind a human approval step. The
-thinking - research, judgement, writing - happens in your coding agent
-(Claude Code, Codex, or Cursor),
-which talks to DispatchSEO over MCP. That split is deliberate: the agent
-already has your product knowledge, so it does not need to crawl your homepage
-to guess at it.
+thinking - research, judgement, writing - happens in your own AI: the Claude
+app at claude.ai, or a coding agent (Claude Code, Codex, Cursor), which talks
+to DispatchSEO over MCP. That split is deliberate: your AI already has your
+product knowledge, so it does not need to crawl your homepage to guess at it.
 
 ## Key facts
 
@@ -50,13 +50,25 @@ to guess at it.
   the agent, not on the server.
 - Anything the dashboard can do, the agent can do over MCP. Parity between the
   two is a hard rule in the codebase.
-- Content ships as pull requests to your site's own GitHub repo. Human
-  approval is the default; fully automatic merge is opt-in.
-- Your site's source must live in a Git repo. Database-backed CMSes like
-  WordPress cannot work this way.
+- Two ways to connect an AI. A coding agent (Claude Code, Codex, Cursor)
+  connects over MCP from a terminal, or the ordinary Claude app at claude.ai
+  is pointed at the same server as a custom connector on any paid Claude plan,
+  writes on the owner's own subscription, and hands the finished article back.
+  ChatGPT is not supported yet; the Gemini app cannot connect outside tools at
+  all.
+- Content reaches your site one of two ways. For a self-hosted WordPress site,
+  articles are posted through its own API, with cover image, internal links and
+  schema already in place. For a code-built site, they arrive as pull requests
+  to your GitHub repo, opened by the coding agent or by DispatchSEO itself when
+  the article came from the Claude app; human approval is the default and
+  automatic merge is opt-in.
+- So you need either a self-hosted WordPress site or a site whose source lives
+  in a Git repo. Hosted site builders (Wix, Squarespace, Shopify, Webflow) have
+  neither, and are not supported. A coding agent is not required for either
+  one.
 - Data tiers stack: Google Search Console only (free), + a free SerpApi key
   (live SERP checks), + DataForSEO (volume and difficulty, pay per call).
-- You bring your own Claude subscription. DispatchSEO never bills for agent
+- You bring your own AI subscription or key. DispatchSEO never bills for AI
   usage.
 `;
 

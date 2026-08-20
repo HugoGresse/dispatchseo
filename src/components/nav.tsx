@@ -62,6 +62,28 @@ function QueueIcon({ className }: IconProps) {
   );
 }
 
+// Articles their AI handed in, waiting to go out: a page with a pen on it.
+function DraftsIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M19 12V8l-6-6H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h5" />
+      <path d="M13 2v6h6" />
+      <path d="M18.4 14.6a2 2 0 0 1 2.83 2.83L17.5 21.2 14 22l.8-3.5Z" />
+    </svg>
+  );
+}
+
+// Connecting an AI: a plug.
+function ConnectIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M9 2v6M15 2v6" />
+      <path d="M6 8h12v3a6 6 0 0 1-6 6 6 6 0 0 1-6-6V8Z" />
+      <path d="M12 17v5" />
+    </svg>
+  );
+}
+
 function PagesIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
@@ -230,6 +252,9 @@ const GROUPS: NavGroup[] = [
     links: [
       { href: "/trends", label: "Trends", Icon: TrendsIcon },
       { href: "/research", label: "Queue", Icon: QueueIcon },
+      // The stage between an approved idea and a published guide: what their
+      // AI has handed in and what our side did with it.
+      { href: "/drafts", label: "Drafts", Icon: DraftsIcon },
       { href: "/pages", label: "Guides", Icon: PagesIcon },
       { href: "/tools", label: "Tools", Icon: ToolsIcon },
     ],
@@ -241,6 +266,10 @@ const GROUPS: NavGroup[] = [
   {
     label: "System",
     links: [
+      // First in System: connecting an AI is the first thing a new owner does,
+      // and the page that explains the product should not be buried under the
+      // pages that assume it is already running.
+      { href: "/connect", label: "Connect your AI", Icon: ConnectIcon },
       { href: "/automations", label: "Automations", Icon: AutomationsIcon },
       { href: "/instructions", label: "Instructions", Icon: InstructionsIcon },
       { href: "/google", label: "Search Console", Icon: SearchConsoleIcon },

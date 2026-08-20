@@ -23,7 +23,7 @@ export async function assertProjectOwned(projectId: string): Promise<void> {
 }
 
 export async function assertRowOwned(
-  table: "suggestions" | "backlink_prospects" | "pages" | "trend_topics",
+  table: "suggestions" | "backlink_prospects" | "pages" | "trend_topics" | "article_drafts",
   id: string,
 ): Promise<void> {
   const owned = await ownedProjectIds();

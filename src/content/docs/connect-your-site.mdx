@@ -8,11 +8,19 @@ step where DispatchSEO stops being a dashboard and becomes a pipeline.
 
 ## What you need
 
-- Your site's source in a **GitHub repo**. The pipeline ships content as
-  pull requests, so git-based sites only - WordPress and other
-  database-backed CMSes won't work.
-- **A coding agent** - Claude Code, Codex, or Cursor. Your agent is the engine; it
-  runs on your existing plan or key.
+- Somewhere to publish: **self-hosted WordPress** (connected from Settings
+  with an application password, articles posted straight to it), or your
+  site's source in a **GitHub repo** (articles arrive as pull requests).
+  Hosted site builders like Wix and Squarespace have neither and won't work.
+- **An AI to drive it** - the ordinary Claude app at claude.ai, or a coding
+  agent: Claude Code, Codex, or Cursor. Your AI is the engine; it runs on your
+  existing plan or key. The steps below are the coding-agent path. For the
+  Claude app, the dashboard's **Connect your AI** screen gives you a connector
+  address to paste into claude.ai instead of a command to run, and Home shows
+  a "Your next step" list that ticks itself off as you go: connect, let Claude
+  ask its three questions, ask for ideas, approve them on the Queue screen,
+  ask it to write, watch Drafts. The first time Claude uses each tool,
+  claude.ai asks you to allow it - choose Always allow.
 
 ## The one command
 

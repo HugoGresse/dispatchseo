@@ -28,9 +28,35 @@ const API = "https://api.github.com";
 // picks the credential.
 export type RepoRef =
   | string
-  | { github_repo: string | null; github_installation_id?: number | null }
+  | { github_repo: string | null; github_installation_id?: number | null; slug?: string | null }
   | null
   | undefined;
+
+/**
+ * May this reference use the INSTANCE GitHub token (GH_MERGE_TOKEN, or the
+ * PAT the self-host wizard stores in instance_settings)?
+ *
+ * Self-host: always - one owner, one token, every project is theirs. Cloud:
+ * only the projects named in GH_MERGE_TOKEN_PROJECTS (comma-separated slugs),
+ * which are the operator's own sites from before the GitHub App existed. Every
+ * other tenant authenticates through its own App installation or not at all.
+ *
+ * This closes a real hole: a cloud tenant can set github_repo to any string
+ * (set_github_repo, or a hand-posted form field), and until this check the
+ * credential resolver fell through to the instance PAT for any project with
+ * no installation - which would have let them commit, dispatch and merge in
+ * whichever repos that PAT can reach. Fail closed: unset means nobody.
+ */
+export function instanceTokenAllowedFor(ref: RepoRef): boolean {
+  if (!isCloudMode()) return true;
+  const slug = typeof ref === "string" || !ref ? null : (ref.slug ?? null);
+  if (!slug) return false;
+  const allowed = (process.env.GH_MERGE_TOKEN_PROJECTS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return allowed.includes(slug);
+}
 
 function refRepo(ref: RepoRef): string | null {
   if (typeof ref === "string") return ref || null;
@@ -55,7 +81,10 @@ export async function tokenForRef(ref: RepoRef): Promise<string | null> {
       return null;
     }
   }
-  return mergeToken();
+  // The instance token is the single-owner credential. On cloud it never
+  // stands in for a tenant's missing App installation - see
+  // instanceTokenAllowedFor for why.
+  return instanceTokenAllowedFor(ref) ? mergeToken() : null;
 }
 
 // Not cached: a freshly pasted token must reach the very next poll (same

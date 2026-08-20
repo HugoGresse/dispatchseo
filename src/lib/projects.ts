@@ -107,8 +107,51 @@ export type Project = {
   // run 0045 and on the COLS_PRE_0045 fallback tier. Read it through
   // internalLinkingEnabled() below, which resolves absence to OFF.
   internal_linking: boolean | null;
+
+  // --- Where this site's content goes, and how we get in (migration 0055) ---
+  //
+  // Every field here is NULLABLE for the same reason as `agent` and
+  // `internal_linking`: absent both on a DB that hasn't run 0055 and on the
+  // COLS_PRE_0055 fallback tier. Read publish_target through publishTarget()
+  // below, which resolves absence to "github" - what every project was before
+  // WordPress existed.
+  publish_target: string | null;
+  wp_url: string | null;
+  wp_username: string | null;
+  /** Encrypted (src/lib/crypto.ts). Never render, log, or return this. */
+  wp_app_password: string | null;
+  wp_connected_at: string | null;
+  wp_seo_plugin: string | null;
+  /** What the connected WordPress user may do, captured at connect time:
+   *  { edit_posts, publish_posts, upload_files, edit_others_posts }. */
+  wp_capabilities: Record<string, boolean> | null;
+  /** Site-local hour (0-23) a finished draft is flipped live. Null = default. */
+  publish_hour: number | null;
+
+  // --- The adaptive wizard (migration 0060) ---
+  //
+  // Both NULLABLE for the same reason as the 0055 set: absent on a DB that
+  // hasn't run 0060 and on the COLS_PRE_0060 fallback tier.
+  /** Which AI the owner said will write - a qualifier id (claude-web, chatgpt,
+   *  claude-code, codex, cursor; src/lib/qualifier-options.ts). Null = never
+   *  said. Distinct from `agent`, which is the coding agent the repo builders
+   *  run and has no value for a chat app. */
+  ai_choice: string | null;
+  /** Last MCP request that arrived with ?client=chat - the "Connected" light
+   *  for the Claude/ChatGPT app, stamped at most every ten minutes. */
+  chat_last_seen_at: string | null;
+
   created_at: string;
 };
+
+/** Where a project's articles go. Absence - a DB pre-0055, the COLS_PRE_0055
+ *  fallback tier, or a project that never connected anything - resolves to
+ *  "github", which is what every project was before WordPress and the only
+ *  answer that cannot publish somewhere the owner did not intend. */
+export function publishTarget(p: Pick<Project, "publish_target">): "github" | "wordpress" | "manual" {
+  const t = p.publish_target;
+  return t === "wordpress" || t === "manual" ? t : "github";
+}
 
 // The five automations a project owner can toggle (migrations 0011 + 0028).
 // Locked automations - weekly research, rank checks, GSC snapshots, tool
@@ -190,6 +233,22 @@ const FALLBACK_PROJECT_SLUG = "default";
 
 // mcp_token deliberately excluded - only fetchProjectToken exposes it.
 const COLS =
+  "id, slug, name, domain, gsc_site_url, github_repo, content_mode, content_path_hint, dataforseo_login, dataforseo_password, keyword_source, serpapi_key, powerups_skipped, location_code, language_code, mode, auto_approve, auto_approve_tools, auto_build_guides, auto_build_tools, auto_merge, last_trend_scan_at, site_launched_at, pipeline_installed_at, pipeline_verified, content_prefs, gsc_oauth_refresh_token, github_installation_id, github_app_installed_at, install_progress, onboarding_screen, owner_user_id, agent, internal_linking, publish_target, wp_url, wp_username, wp_app_password, wp_connected_at, wp_seo_plugin, wp_capabilities, publish_hour, ai_choice, chat_last_seen_at, created_at";
+
+// COLS minus 0060's ai_choice + chat_last_seen_at, for a DB that hasn't run
+// that migration yet. Newest columns, so they are the FIRST thing dropped - a
+// DB lagging only 0060 keeps everything else and simply reads as "the owner
+// never said which AI" and "no chat app seen yet", both of which every
+// consumer already treats as the neutral default.
+const COLS_PRE_0060 =
+  "id, slug, name, domain, gsc_site_url, github_repo, content_mode, content_path_hint, dataforseo_login, dataforseo_password, keyword_source, serpapi_key, powerups_skipped, location_code, language_code, mode, auto_approve, auto_approve_tools, auto_build_guides, auto_build_tools, auto_merge, last_trend_scan_at, site_launched_at, pipeline_installed_at, pipeline_verified, content_prefs, gsc_oauth_refresh_token, github_installation_id, github_app_installed_at, install_progress, onboarding_screen, owner_user_id, agent, internal_linking, publish_target, wp_url, wp_username, wp_app_password, wp_connected_at, wp_seo_plugin, wp_capabilities, publish_hour, created_at";
+
+// COLS minus 0055's WordPress publishing columns, for a DB that hasn't run
+// that migration yet. Newest columns, so they are the FIRST thing dropped - a
+// DB lagging only 0055 keeps everything else and simply reads as "this project
+// publishes through GitHub", which is what every project was before WordPress
+// existed and is the safe default for any project that has not connected one.
+const COLS_PRE_0055 =
   "id, slug, name, domain, gsc_site_url, github_repo, content_mode, content_path_hint, dataforseo_login, dataforseo_password, keyword_source, serpapi_key, powerups_skipped, location_code, language_code, mode, auto_approve, auto_approve_tools, auto_build_guides, auto_build_tools, auto_merge, last_trend_scan_at, site_launched_at, pipeline_installed_at, pipeline_verified, content_prefs, gsc_oauth_refresh_token, github_installation_id, github_app_installed_at, install_progress, onboarding_screen, owner_user_id, agent, internal_linking, created_at";
 
 // COLS minus 0045's internal_linking, for a DB that hasn't run that migration
@@ -239,8 +298,17 @@ async function selectProjects<T>(
     Boolean(e && e.message.includes("does not exist"));
   const first = await run(COLS);
   if (!missingCol(first.error)) return first;
-  // Drop only the newest column (0045's internal_linking) first, so a DB that
-  // lags 0045 alone keeps everything else and simply reads as back-linking-off.
+  // Drop the newest columns (0060's wizard pair) first.
+  const choiceless = await run(COLS_PRE_0060);
+  if (!missingCol(choiceless.error)) return choiceless;
+  // Then 0055's WordPress publishing set, so a DB
+  // that lags 0055 alone keeps everything else and simply reads as "publishes
+  // through GitHub" - which is what every project was before WordPress, and
+  // the safe answer for any project that has not connected one.
+  const wpless = await run(COLS_PRE_0055);
+  if (!missingCol(wpless.error)) return wpless;
+  // Then 0045's internal_linking, so a DB that lags 0045 too keeps everything
+  // else and simply reads as back-linking-off.
   const linkless = await run(COLS_PRE_0045);
   if (!missingCol(linkless.error)) return linkless;
   // Then 0044's agent, so a DB that lags 0044 too keeps everything else and
@@ -310,6 +378,22 @@ function envFallbackProject(): Project {
     // "we couldn't read your settings" must never be the reason an agent starts
     // editing already-published pages.
     internal_linking: null,
+    // The env-backed operator project publishes the way it always has. This
+    // synthetic row stands in during a DB error, and "we couldn't read your
+    // settings" must never be the reason an article is posted to a WordPress
+    // site - or to anywhere else the owner didn't choose.
+    publish_target: "github",
+    wp_url: null,
+    wp_username: null,
+    wp_app_password: null,
+    wp_connected_at: null,
+    wp_seo_plugin: null,
+    wp_capabilities: null,
+    publish_hour: null,
+    // Never said, never seen: this synthetic row stands in during a DB error
+    // and must not claim the owner made a choice or that a chat app connected.
+    ai_choice: null,
+    chat_last_seen_at: null,
     created_at: new Date(0).toISOString(),
   };
 }
