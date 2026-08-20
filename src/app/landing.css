@@ -286,6 +286,8 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .plan .p-badge.soft { background: var(--card); color: var(--mut); border: 1px solid var(--line2); }
 .ld .plan h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
 .ld .plan .p-price { font-family: var(--disp); font-weight: 800; font-size: 36px; letter-spacing: -0.02em; margin: 8px 0 2px; color: #fff; }
+.ld .plan .p-annual { margin-top: 4px; font-size: 13px; font-weight: 500; color: var(--mut); }
+.ld .plan .p-annual b { font-weight: 700; color: var(--txt); }
 .ld .plan .p-price small { font-size: 14px; font-weight: 600; color: var(--dim); font-family: var(--body); }
 .ld .plan .p-sub { font-size: 13.5px; color: var(--dim); margin-bottom: 20px; }
 .ld .plan ul { list-style: none; margin-bottom: 26px; flex: 1; }
@@ -328,70 +330,6 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .ca-pill { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: var(--mut); background: var(--card); border: 1px solid var(--line2); border-radius: 8px; padding: 8px 14px; }
 .ld .ca-pill svg { width: 16px; height: 16px; color: var(--vio2); flex-shrink: 0; }
 
-/* ---------- pricing: founding offer ---------- */
-/* One bar, split by a dashed rule. The offer is two facts - the deal and its
-   deadline - so the divider separates them and the structure says what a third
-   sentence used to. One accent, deliberately: the page's violet.
-   An earlier pass used the mascot's clay to mark the offer as "Neo speaking,
-   not the product", but a second hue in the pricing block read as noise.
-   Clay stays the mascot's alone. */
-.ld .found { position: relative; display: flex; align-items: stretch; max-width: 660px; margin: 4px auto 46px; border: 1px solid var(--line2); border-radius: 14px; background: radial-gradient(120% 150% at 0% 0%, rgba(139, 92, 246, 0.14), transparent 60%), var(--card2); box-shadow: 0 18px 44px -30px rgba(139, 92, 246, 0.7); text-align: left; }
-.ld .found-main { flex: 1; min-width: 0; padding: 19px 24px 21px; }
-.ld .found-k { display: block; font-family: var(--disp); font-size: 11.5px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--vio2); }
-.ld .found-v { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 13px; margin-top: 10px; font-family: var(--disp); font-weight: 800; font-size: clamp(29px, 3.6vw, 40px); line-height: 1.04; letter-spacing: -0.035em; color: #fff; }
-/* The same highlight the hero puts behind "AI agents", same violet - the
-   offer reads as part of the page rather than a promo sticker on top of it. */
-.ld .found-hl { position: relative; z-index: 0; display: inline-block; white-space: nowrap; color: #fff; margin-left: 0.06em; }
-.ld .found-hl::before { content: ""; position: absolute; z-index: -1; top: 0.11em; bottom: 0.04em; left: -0.09em; right: -0.09em; background: var(--vio); border-radius: 0.07em; }
-/* The promise, kept to a caption: the padlock carries "locked" so the words
-   only have to say for how long. */
-.ld .found-note { display: inline-flex; align-items: center; gap: 5px; font-family: var(--body); font-size: 13.5px; font-weight: 500; letter-spacing: 0; color: var(--mut); }
-.ld .found-lock { width: 12px; height: 12px; flex-shrink: 0; color: var(--dim); }
-
-/* The deadline half. Its left border is the divider; the border flips to the
-   top edge on a phone, where the two halves stack. */
-.ld .found-stub { position: relative; flex-shrink: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 18px 22px; border-left: 1px dashed var(--line3); }
-/* --mut, not --dim: at 10.5px uppercase the dimmer grey drops under 4.5:1 on
-   the card, and this label is one of only two words on the stub. */
-.ld .found-stub-k { font-size: 10.5px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--mut); }
-.ld .found-stub-v { font-family: var(--disp); font-size: 15.5px; font-weight: 700; letter-spacing: -0.015em; color: var(--txt); white-space: nowrap; }
-/* Only rendered past 15 seats sold, so the stub is designed to work without it. */
-.ld .found-stub-n { font-size: 12.5px; color: var(--mut); white-space: nowrap; }
-/* The dispatcher, off-shift, sitting on the banner's top edge with its legs
-   over the front. Absolutely positioned so it costs the banner no width, and
-   parked at the stub end so it doesn't crowd the slab.
-   Clay, like the hero scene and the why-card tab: the offer's ACCENT is
-   violet (slab, strike, labels), but the character keeps its own colour -
-   recolouring it would read as a different mascot. */
-.ld .found-px { position: absolute; top: -27px; right: 30px; width: 36px; height: 33px; }
-.ld .found-px .px-b { fill: var(--clay); }
-.ld .found-px .px-s { fill: #b0563a; } /* the shared sprite palette's clay shade */
-.ld .found-px .px-e { fill: #1a1a1e; }
-
-/* The old price, struck by hand. The page's doodles are round-capped angled
-   strokes, so this is one too rather than a text-decoration hairline - a pen
-   through the number, not a spreadsheet cell. */
-.ld .p-was, .ld .pm-was { position: relative; text-decoration: none; font-family: var(--disp); font-weight: 700; color: var(--dim); letter-spacing: -0.02em; }
-.ld .p-was::after, .ld .pm-was::after { content: ""; position: absolute; left: -7%; right: -7%; top: 47%; border-radius: 2px; background: var(--vio2); transform: rotate(-7deg); }
-.ld .p-was { font-size: 20px; margin-right: 11px; }
-.ld .p-was::after { height: 2px; }
-.ld .plan .p-found { display: inline-flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 12.5px; font-weight: 700; letter-spacing: 0.005em; color: var(--vio2); }
-.ld .plan .p-found svg { width: 12px; height: 12px; flex-shrink: 0; }
-
-/* The saving, stated on the card itself. Same violet slab the founding banner
-   and the hero headline use, shrunk to card scale, so offer and page read as
-   one thing rather than a promo sticker on top of one.
-   Two deliberate differences from the "Most popular" cap it shares the Growth
-   card with: squared instead of a capsule, and near-black on violet instead of
-   white on violet. That is not only separation - white on --vio is 3.5:1,
-   which is fine at the headline's 70px and not fine at 12px, while the page
-   background on --vio is 5.7:1. Same move as .why-cta and .btn-solid.
-   It also sits INSIDE the card's content flow, between the plan name and the
-   number, so it cannot fight the cap: the cap straddles the card's top border,
-   this never leaves the padding box.
-   All spacing is on the tag itself, so no-offer leaves no gap behind. */
-.ld .plan .p-off { align-self: flex-start; margin-top: 9px; padding: 3px 8px 4px; font-family: var(--disp); font-size: 12px; font-weight: 800; line-height: 1.15; letter-spacing: 0.01em; color: var(--bg); background: var(--vio); border-radius: 5px; }
-.ld .plan .p-off + .p-price { margin-top: 4px; }
 
 /* ---------- pricing: mobile compare scoreboard (<=980px) ---------- */
 /* Desktop shows three full plan columns; a phone would show sixty near-identical
@@ -405,16 +343,7 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .pm-name { display: block; font-family: var(--disp); font-size: 13px; font-weight: 700; color: var(--mut); letter-spacing: 0.01em; }
 .ld .pm-price { display: block; font-family: var(--disp); font-size: clamp(22px, 6.4vw, 30px); font-weight: 800; letter-spacing: -0.03em; color: #fff; margin-top: 2px; }
 .ld .pm-price small { font-family: var(--body); font-size: 11px; font-weight: 600; color: var(--dim); letter-spacing: 0; }
-/* Founding variant: was / now / per stack on three lines. Inline "$74.50/mo"
-   overflows a third of a 320px screen, so /mo drops to its own line and the
-   number steps down a notch to buy back the two extra glyphs. */
-/* The same violet slab as the desktop card, sized for a third of a phone
-   screen. Its own line above the price block: beside the struck number it
-   would push "$149" out of a ~90px column at 320px. */
-.ld .pm-tag { display: block; width: fit-content; margin: 0 auto 4px; padding: 1px 5px 2px; font-family: var(--disp); font-size: 10px; font-weight: 800; line-height: 1.2; letter-spacing: 0.01em; color: var(--bg); background: var(--vio); border-radius: 4px; white-space: nowrap; }
-.ld .pm-was { display: inline-block; font-size: 12.5px; }
-.ld .pm-was::after { height: 1.5px; }
-.ld .pm-price-f { font-size: clamp(19px, 5.4vw, 26px); margin-top: 0; }
+.ld .pm-annual { display: block; margin-top: 3px; font-family: var(--body); font-size: 10.5px; font-weight: 600; color: var(--mut); white-space: nowrap; }
 .ld .pm-per { display: block; font-family: var(--body); font-size: 10.5px; font-weight: 600; color: var(--dim); margin-top: 1px; }
 /* Flat marker for the recommended column - a violet cap on the column plus
    small caps, deliberately not a floating pill. */
@@ -548,14 +477,6 @@ html:has(.ld) { scroll-behavior: smooth; }
   /* pricing: swap the three-column desktop grid for the compare scoreboard */
   .ld .plans { display: none; }
   .ld .plans-m { display: block; }
-  /* founding offer: the divider turns the other way. Side by side, the stub
-     would squeeze the number to nothing on a phone, so the dashed rule goes
-     horizontal and the deadline sits under the price. */
-  .ld .found { max-width: 470px; margin: 22px auto 32px; flex-direction: column; }
-  .ld .found-main { padding: 17px 20px 18px; }
-  .ld .found-v { margin-top: 8px; }
-  .ld .found-stub { flex-direction: row; justify-content: flex-start; align-items: baseline; flex-wrap: wrap; gap: 3px 9px; padding: 12px 20px 14px; border-left: 0; border-top: 1px dashed var(--line3); }
-  .ld .found-px { top: -25px; right: 22px; width: 33px; height: 30px; }
   .ld .plan li { white-space: normal; }
   /* the three pills repeat rows that live in "On every plan" below */
   .ld .cloud-adds { display: none; }
@@ -642,10 +563,6 @@ html:has(.ld) { scroll-behavior: smooth; }
   .ld .logo-mark { height: 24px; }
   .ld .pm-table th, .ld .pm-table td { padding: 9px 3px; }
   .ld .pm-table tfoot .btn { font-size: 12.5px; padding: 10px 2px; }
-  .ld .pm-was { font-size: 11.5px; }
-  .ld .found-main { padding: 15px 17px 16px; }
-  .ld .found-stub { padding: 11px 17px 13px; }
-  .ld .found-note { font-size: 13px; }
   .ld .who-card { padding: 26px 20px 28px; }
 }
 

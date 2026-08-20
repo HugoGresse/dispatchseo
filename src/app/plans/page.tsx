@@ -2,8 +2,20 @@ import { redirect } from "next/navigation";
 import { requireDashboard } from "@/lib/auth-gate";
 import { isCloudMode } from "@/lib/cloud";
 import { latestQualifier } from "@/lib/qualifier";
-import { getSubscription, isActive, polarConfigured, TIER_LIMITS, type Tier } from "@/lib/billing";
-import { foundingOffer, foundingPriceLabel, listPriceLabel } from "@/lib/founding";
+import {
+  annualBillingAvailable,
+  annualCharge,
+  annualSavingsPct,
+  getSubscription,
+  isActive,
+  isBillingInterval,
+  monthlyPrice,
+  polarConfigured,
+  priceLabel,
+  TIER_LIMITS,
+  type BillingInterval,
+  type Tier,
+} from "@/lib/billing";
 import { DispatchMark } from "@/components/logo";
 import { PixelDispatcher } from "@/components/pixel-dispatcher";
 
@@ -59,29 +71,11 @@ function Check({ className }: { className?: string }) {
   );
 }
 
-// The founding offer runs on the page's violet, same as everything else here.
-// An earlier pass gave it the mascot's clay to separate "Neo speaking" from
-// "the product", but a second hue in a pricing block reads as noise - the
-// offer is carried by weight and the struck price instead.
-function Lock({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      className={className}
-    >
-      <rect x="4" y="10.5" width="16" height="10.5" rx="2.5" />
-      <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
-    </svg>
-  );
-}
-
-export default async function PlansPage() {
+export default async function PlansPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const auth = await requireDashboard();
   if (!isCloudMode() || !auth.user) redirect("/dashboard");
   const sub = await getSubscription(auth.user.id);
@@ -104,9 +98,14 @@ export default async function PlansPage() {
   const qualifier = await latestQualifier(auth.user.id);
   if (!qualifier?.proceeded) redirect("/qualify");
 
-  // null = offer over (or billing unconfigured); every branch below then
-  // renders the plain list price with nothing left dangling.
-  const founding = await foundingOffer();
+  // Monthly or yearly. The yearly plan exists only once all three yearly Polar
+  // products are configured; a ?interval=year on a deployment without them
+  // falls back to monthly here so the page never shows a price the checkout
+  // route would then refuse (it 400s on a missing yearly product).
+  const annual = annualBillingAvailable();
+  const sp = await searchParams;
+  const requested = typeof sp.interval === "string" ? sp.interval : "month";
+  const interval: BillingInterval = annual && isBillingInterval(requested) ? requested : "month";
   const tiers = Object.keys(TIER_LIMITS) as Tier[];
 
   return (
@@ -140,40 +139,38 @@ export default async function PlansPage() {
             trial &mdash; cancel anytime.
           </p>
 
-          {/* One bar, same device as the landing page: the deal on the left,
-              the deadline past a dashed rule, no paragraph. No mascot here -
-              the animated one is right above it. */}
-          {founding ? (
-            <div className="mt-8 flex w-full max-w-xl flex-col rounded-2xl border border-neutral-800 bg-neutral-900/40 text-left sm:flex-row sm:items-stretch">
-              <div className="flex-1 px-5 py-4 sm:px-6 sm:py-5">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.13em] text-violet-300">
-                  Founding price
-                </span>
-                <p className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                  <span className="rounded-[4px] bg-violet-500 px-1.5 pb-0.5 text-3xl font-semibold tracking-tight text-white">
-                    {founding.discountPct}% off
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 text-[13px] text-neutral-400">
-                    <Lock className="h-3 w-3 shrink-0 text-neutral-500" />
-                    locked for life
-                  </span>
-                </p>
-              </div>
-              {/* The deadline, past a dashed rule: a top border on a phone, a
-                  left border once the two halves sit side by side. */}
-              <div className="relative flex shrink-0 flex-wrap items-baseline gap-x-2.5 gap-y-1 border-t border-dashed border-neutral-700 px-5 py-3 sm:flex-col sm:justify-center sm:gap-1 sm:border-l sm:border-t-0 sm:px-6 sm:py-5">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.13em] text-neutral-400">
-                  Ends
-                </span>
-                <b className="whitespace-nowrap text-[15px] font-semibold tracking-tight text-neutral-200">
-                  {founding.endsAtLabel}
-                </b>
-                {founding.showCount ? (
-                  <span className="whitespace-nowrap text-xs text-neutral-400">
-                    {`${founding.remaining} of ${founding.cap} left`}
-                  </span>
-                ) : null}
-              </div>
+          {/* Monthly / yearly. Two links, not a client toggle: the page is a
+              server component and the choice is a URL, so a refresh, a back
+              button and a shared link all land on the same prices. */}
+          {annual ? (
+            <div
+              role="group"
+              aria-label="Billing period"
+              className="mt-8 inline-flex items-center rounded-full border border-neutral-800 bg-neutral-900/60 p-1 text-sm"
+            >
+              {(["month", "year"] as const).map((opt) => {
+                const on = interval === opt;
+                return (
+                  <a
+                    key={opt}
+                    href={opt === "month" ? "/plans" : "/plans?interval=year"}
+                    aria-current={on ? "true" : undefined}
+                    className={[
+                      "rounded-full px-4 py-1.5 font-medium transition-colors",
+                      on ? "bg-white text-neutral-950" : "text-neutral-400 hover:text-white",
+                    ].join(" ")}
+                  >
+                    {opt === "month" ? "Monthly" : (
+                      <>
+                        Yearly{" "}
+                        <span className={on ? "text-violet-700" : "text-violet-300"}>
+                          save {annualSavingsPct("starter")}%
+                        </span>
+                      </>
+                    )}
+                  </a>
+                );
+              })}
             </div>
           ) : null}
         </div>
@@ -211,43 +208,23 @@ export default async function PlansPage() {
                 </div>
                 <p className="mt-1 text-sm text-neutral-400">{copy.tagline}</p>
 
-                {/* Three facts in reading order: the saving, the number, the
-                    promise. The tag is the same violet slab the offer ticket
-                    above uses, shrunk to card scale, and squared rather than a
-                    capsule so it doesn't compete with the "Most popular" badge
-                    on the row above.
-                    Struck list price sits on its own line above the number, not
-                    beside it: at the sm breakpoint a third of 640px cannot hold
-                    "$149 $74.50 /mo" on one row. */}
-                {founding ? (
-                  <>
-                    <p className="mt-5">
-                      <span className="inline-block rounded-[5px] bg-violet-500 px-1.5 pb-[3px] pt-px text-[11px] font-bold tracking-wide text-neutral-950">
-                        {founding.discountPct}% off
-                      </span>
-                    </p>
-                    <p className="mt-2 text-sm font-semibold tabular-nums text-neutral-600">
-                      <s className="decoration-violet-400 decoration-2">
-                        <span className="sr-only">Regular price </span>
-                        {listPriceLabel(tier)}
-                      </s>
-                    </p>
-                  </>
-                ) : null}
-                <div
-                  className={`flex flex-wrap items-baseline gap-x-1 ${founding ? "mt-0.5" : "mt-5"}`}
-                >
+                <div className="mt-5 flex flex-wrap items-baseline gap-x-1">
                   <span className="text-4xl font-semibold tracking-tight tabular-nums text-white">
-                    {founding ? foundingPriceLabel(tier) : listPriceLabel(tier)}
+                    {priceLabel(monthlyPrice(tier, interval))}
                   </span>
                   <span className="text-sm text-neutral-500">/mo</span>
                 </div>
-                {founding ? (
-                  <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-violet-300">
-                    <Lock className="h-3.5 w-3.5 shrink-0" />
-                    Locked for life
-                  </p>
-                ) : null}
+                {/* The whole truth under the number: what the card actually
+                    charges and when. A yearly plan shown as "$20/mo" without
+                    the $240 beside it is the kind of pricing page people
+                    screenshot. */}
+                <p className="mt-1 text-xs text-neutral-500 tabular-nums">
+                  {interval === "year"
+                    ? `${priceLabel(annualCharge(tier))} billed yearly`
+                    : annual
+                      ? `or ${priceLabel(TIER_LIMITS[tier].annual)}/mo billed yearly`
+                      : "billed monthly"}
+                </p>
                 {tier === "starter" ? (
                   <p className="mt-1.5 text-xs font-medium text-emerald-300">7-day free trial</p>
                 ) : (
@@ -278,7 +255,7 @@ export default async function PlansPage() {
                 ) : null}
 
                 <a
-                  href={`/api/polar/checkout?tier=${tier}`}
+                  href={`/api/polar/checkout?tier=${tier}&interval=${interval}`}
                   className={[
                     "mt-6 flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium transition-colors",
                     rec

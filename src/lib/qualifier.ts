@@ -1,15 +1,21 @@
 import { db } from "./db";
 import { detectPlatform, labelFor, qualifySite, type PlatformResult } from "./site-platform";
-import { type AiChoice } from "./qualifier-options";
+import { type AiChoice, type SiteKind } from "./qualifier-options";
 
-export type { AiChoice };
+export type { AiChoice, SiteKind };
 
 // The pre-checkout gate. Two questions, asked before the card is charged:
-// what is the site built on, and which AI will drive it. Both are structural -
+// what kind of site it is, and which AI will drive it. Both are structural -
 // a WordPress site has no repo to open a pull request against, and an owner
 // with no coding agent has nothing to run the builder - so both were already
 // deciding who churns. They were just being asked five minutes too late, on a
 // wizard screen that sits past checkout.
+//
+// Since 2026-08-20 the site question is a CHOICE (WordPress, or built with
+// code on GitHub) with the domain optional beside it. The owner's answer is
+// what the wizard branches on; the domain probe is the safety net - it still
+// refuses a Wix/Squarespace/... site behind a confident click, and it still
+// tells them what we saw.
 //
 // EVERYTHING THAT DECIDES "CAN WE SERVE THIS PERSON" LIVES IN THIS FILE, in
 // the two tables below. When WordPress publishing lands, one entry flips from
@@ -84,8 +90,43 @@ export type QualifierVerdict = {
   building: boolean;
 };
 
-export function verdictFor(platform: PlatformResult, ai: AiChoice): QualifierVerdict {
-  const site = qualifySite(platform);
+/** The platform record used when the owner gave no domain: nothing probed,
+ *  nothing to refuse on. */
+export const UNPROBED: PlatformResult = {
+  platform: "unknown",
+  confidence: "low",
+  url: null,
+  signals: [],
+};
+
+/** The owner's own words for the route their choice implies, used when the
+ *  probe has nothing more specific to say. */
+function messageForKind(kind: SiteKind): string {
+  return kind === "wordpress"
+    ? "WordPress it is - articles publish straight to your site with an application password, no repo or plugin needed."
+    : "A code-built site it is - articles arrive as pull requests in your GitHub repo, and nothing ships until you merge.";
+}
+
+export function verdictFor(
+  platform: PlatformResult,
+  ai: AiChoice,
+  siteKind: SiteKind | null = null,
+): QualifierVerdict {
+  const probed = qualifySite(platform);
+  // With an explicit choice the probe only matters when it contradicts the
+  // choice with a platform we can never publish to; otherwise the owner's
+  // answer wins and the probe's sentence is kept only when it adds something
+  // (a WordPress version, a REST heads-up).
+  const site =
+    siteKind && platform.platform !== "wordpress" && probed.verdict !== "unsupported"
+      ? { ...probed, message: messageForKind(siteKind) }
+      : siteKind && platform.platform === "wordpress" && siteKind === "code"
+        ? {
+            ...probed,
+            message:
+              "We found WordPress on that address. Publishing to a repo still works if that is really how the site is built - but if it is a WordPress site, pick WordPress above: it is the shorter path.",
+          }
+        : probed;
   const platformSupport = PLATFORM_SUPPORT[platform.platform] ?? "ready";
   const aiSupport = AI_SUPPORT[ai] ?? "no";
 
@@ -144,7 +185,10 @@ export function verdictFor(platform: PlatformResult, ai: AiChoice): QualifierVer
 export type QualifierRow = {
   id: string;
   user_id: string;
-  domain: string;
+  /** Null since 2026-08-20 when the owner skipped the optional domain. */
+  domain: string | null;
+  /** "wordpress" | "code" since 2026-08-20; null on older rows. */
+  site_kind: string | null;
   platform: string;
   confidence: string | null;
   signals: string[];
@@ -160,25 +204,28 @@ export type QualifierRow = {
  *  block a signup, so the verdict is still returned when the insert fails. */
 export async function runQualifier(
   userId: string,
-  domain: string,
+  domain: string | null,
   ai: AiChoice,
+  siteKind: SiteKind,
 ): Promise<{ platform: PlatformResult; verdict: QualifierVerdict }> {
-  const platform = await detectPlatform(domain);
-  const verdict = verdictFor(platform, ai);
-  const site = qualifySite(platform);
+  const platform = domain ? await detectPlatform(domain) : UNPROBED;
+  const verdict = verdictFor(platform, ai, siteKind);
+  // The route the WIZARD will take: the owner's choice, not the probe's guess.
+  const route = siteKind === "wordpress" ? "wordpress" : "repo";
   try {
     await db()
       .from("signup_qualifiers")
       .insert({
         user_id: userId,
-        domain: domain.trim().replace(/^https?:\/\//i, "").replace(/\/.*$/, ""),
+        domain: domain ? domain.trim().replace(/^https?:\/\//i, "").replace(/\/.*$/, "") : null,
+        site_kind: siteKind,
         platform: platform.platform,
         confidence: platform.confidence,
         signals: platform.signals,
         wordpress: platform.wordpress ?? null,
         ai_choice: ai,
         verdict: verdict.ok ? "supported" : verdict.building ? "building" : "unsupported",
-        route: site.route,
+        route,
         proceeded: verdict.ok,
       });
   } catch {

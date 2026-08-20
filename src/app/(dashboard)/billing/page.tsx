@@ -3,9 +3,11 @@ import { redirect } from "next/navigation";
 import { requireDashboard } from "@/lib/auth-gate";
 import { isCloudMode } from "@/lib/cloud";
 import {
+  annualBillingAvailable,
   getSubscription,
   isActive,
   polarConfigured,
+  priceLabel,
   TIER_LIMITS,
   type Tier,
 } from "@/lib/billing";
@@ -140,9 +142,14 @@ export default async function BillingPage({
             >
               <h3 className="font-semibold text-white">{TIER_COPY[tier].name}</h3>
               <p className="mt-1 text-2xl font-bold text-white">
-                ${limits.price}
+                {priceLabel(limits.price)}
                 <span className="text-sm font-normal text-neutral-500">/mo</span>
               </p>
+              {annualBillingAvailable() ? (
+                <p className="mt-0.5 text-xs text-neutral-500 tabular-nums">
+                  or {priceLabel(limits.annual)}/mo billed yearly
+                </p>
+              ) : null}
               <p className="mt-1 text-sm text-neutral-400">{TIER_COPY[tier].sub}</p>
               {!active ? (
                 tier === "starter" ? (

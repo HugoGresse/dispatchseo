@@ -13,12 +13,11 @@ import { availableAgents } from "@/lib/agents";
 import { dashboardAuth, maybeSignedIn } from "@/lib/auth-gate";
 import { hasConfiguredProject } from "@/lib/onboarding-gate";
 import {
-  foundingOffer,
-  foundingPriceLabel,
-  listPriceLabel,
-  type FoundingOffer,
-} from "@/lib/founding";
-import type { Tier } from "@/lib/billing";
+  TIER_LIMITS,
+  annualBillingAvailable,
+  priceLabel,
+  type Tier,
+} from "@/lib/billing";
 import "./landing.css";
 
 // Public landing page - cloud deployment only. Self-hosted installs never set
@@ -46,125 +45,40 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
 
-// A padlock, drawn in the same round-capped outline language as the doodles.
-// It carries "locked for life" visually so the label beside it only has to
-// name the number.
-function LockIc({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="4" y="10.5" width="16" height="10.5" rx="2.5" />
-      <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
-    </svg>
-  );
-}
-
-// The dispatcher, sitting on the top edge of the founding banner with its legs
-// hanging over the front. Same 12x11 grid as the animated hero scene
-// (components/pixel-dispatcher.tsx), redrawn as static rects: a canvas is
-// pointless for a single frame, and this keeps the banner a server component.
-// Colours live in landing.css (.found-px) - clay, same character as the hero.
-const SPRITE = [
-  "...bbbbbb...",
-  "..bbbbbbbb..",
-  ".bbbbbbbbbb.",
-  ".bbbbbbbbbb.",
-  ".bbbbebbbeb.",
-  ".bbbbebbbeb.",
-  ".bbbbbbbbbb.",
-  ".bssssssssb.",
-  "..ssssssss..",
-  "..ss....ss..",
-  "..ss....ss..",
-];
-
-function FoundingMascot() {
-  return (
-    <svg
-      className="found-px"
-      viewBox="0 0 12 11"
-      shapeRendering="crispEdges"
-      aria-hidden="true"
-    >
-      {SPRITE.flatMap((row, r) =>
-        row
-          .split("")
-          .map((ch, c) =>
-            ch === "." ? null : (
-              <rect key={`${r}-${c}`} className={`px-${ch}`} x={c} y={r} width="1" height="1" />
-            ),
-          ),
-      )}
-    </svg>
-  );
-}
-
-// Desktop plan card price. One component for all three cards so the founding
-// price can never drift between them - and so "no offer" is a single branch,
-// not three places to forget.
-//
-// Three facts, in the order a buyer reads them: the saving (tag), the number
-// (price), the promise (locked for life). The label under the price used to
-// read "Founding price", which after adding the tag said the same thing twice
-// - the tag names the deal, so the label was freed to carry the part that is
-// actually load-bearing and nowhere else on the card.
-function PlanPrice({ tier, founding }: { tier: Tier; founding: FoundingOffer | null }) {
-  if (!founding) {
-    return (
-      <div className="p-price">
-        {listPriceLabel(tier)}
-        <small>/mo</small>
-      </div>
-    );
-  }
+// Desktop plan card price. One component for all three cards so the two
+// numbers (monthly, and the yearly plan per month) can never drift between
+// them. The yearly line only renders once the yearly Polar products exist -
+// advertising a price the checkout cannot sell is the one thing this must
+// never do.
+function PlanPrice({ tier, annual }: { tier: Tier; annual: boolean }) {
   return (
     <>
-      <div className="p-off">{founding.discountPct}% off</div>
       <div className="p-price">
-        <s className="p-was">
-          <span className="ld-sr">Regular price </span>
-          {listPriceLabel(tier)}
-        </s>
-        {foundingPriceLabel(tier)}
+        {priceLabel(TIER_LIMITS[tier].price)}
         <small>/mo</small>
       </div>
-      <div className="p-found">
-        <LockIc />
-        Locked for life
-      </div>
+      {annual ? (
+        <div className="p-annual">
+          or <b>{priceLabel(TIER_LIMITS[tier].annual)}/mo</b> billed yearly
+        </div>
+      ) : null}
     </>
   );
 }
 
-// The same price, sized for a third of a phone screen. The founding variant
-// stacks (was / now / per) because "$74.50/mo" on one line overflows a 320px
-// three-column table.
-function PmPrice({ tier, founding }: { tier: Tier; founding: FoundingOffer | null }) {
-  if (!founding) {
-    return (
-      <span className="pm-price">
-        {listPriceLabel(tier)}
-        <small>/mo</small>
-      </span>
-    );
-  }
+// The same price, sized for a third of a phone screen: the yearly figure
+// drops to its own small line so "$29/mo" stays one glyph run in a ~90px
+// column at 320px.
+function PmPrice({ tier, annual }: { tier: Tier; annual: boolean }) {
   return (
     <>
-      <span className="pm-tag">{founding.discountPct}% off</span>
-      <s className="pm-was">
-        <span className="ld-sr">Regular price </span>
-        {listPriceLabel(tier)}
-      </s>
-      <span className="pm-price pm-price-f">{foundingPriceLabel(tier)}</span>
-      <span className="pm-per">/mo</span>
+      <span className="pm-price">
+        {priceLabel(TIER_LIMITS[tier].price)}
+        <small>/mo</small>
+      </span>
+      {annual ? (
+        <span className="pm-annual">{priceLabel(TIER_LIMITS[tier].annual)}/mo yearly</span>
+      ) : null}
     </>
   );
 }
@@ -217,10 +131,9 @@ export default async function LandingPage({
   // before any session or project lookup.
   const midSetup = signedIn && !(await hasConfiguredProject());
 
-  // null = no offer (self-host, billing unconfigured, past the end date, or
-  // the 50 seats are gone). Every founding surface below is gated on it, so
-  // expiry leaves plain list prices and no orphaned struck-through text.
-  const founding = await foundingOffer();
+  // The yearly plan is offered only once all three yearly Polar products are
+  // configured; until then the cards show the monthly price alone.
+  const annual = annualBillingAvailable();
 
   return (
     <div className={`ld ${jakarta.variable} ${dmSans.variable}`}>
@@ -341,34 +254,6 @@ export default async function LandingPage({
           <div className="sec-h">
             <h2>Pick your plan</h2>
           </div>
-          {/* One bar, two facts: the deal on the left, the deadline past a
-              dashed rule on the right. The divider does the work a third
-              sentence used to do, so the banner needs no paragraph. The "why
-              only 50" reasoning moved to the getting-started FAQ below. */}
-          {founding ? (
-            <div className="found">
-              <FoundingMascot />
-              <div className="found-main">
-                <span className="found-k">Founding price</span>
-                <p className="found-v">
-                  <span className="found-hl">{founding.discountPct}% off</span>
-                  <span className="found-note">
-                    <LockIc className="found-lock" />
-                    locked for life
-                  </span>
-                </p>
-              </div>
-              <div className="found-stub">
-                <span className="found-stub-k">Ends</span>
-                <b className="found-stub-v">{founding.endsAtLabel}</b>
-                {founding.showCount ? (
-                  <span className="found-stub-n">
-                    {`${founding.remaining} of ${founding.cap} left`}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
           <div className="cloud-adds">
             <span className="ca-label">Every plan includes</span>
             <span className="ca-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18" /><path d="M7 21v-5" /><path d="M12 21V9" /><path d="M17 21v-8" /></svg>bundled SERP + volume data, one bill</span>
@@ -378,11 +263,11 @@ export default async function LandingPage({
           <div className="plans">
             <div className="plan">
               <h3>Starter</h3>
-              <PlanPrice tier="starter" founding={founding} />
+              <PlanPrice tier="starter" annual={annual} />
               <div className="p-sub">One site on autopilot</div>
               <ul>
                 <li>Up to 1 site</li>
-                <li>Unlimited articles</li>
+                <li>One article a day, every day</li>
                 <li>Unlimited AI-built tools</li>
                 <li>SERP + search volume data</li>
                 <li>Daily rank tracking</li>
@@ -406,11 +291,11 @@ export default async function LandingPage({
             <div className="plan hero-plan">
               <span className="p-badge">Most popular</span>
               <h3>Growth</h3>
-              <PlanPrice tier="growth" founding={founding} />
+              <PlanPrice tier="growth" annual={annual} />
               <div className="p-sub">For a small portfolio</div>
               <ul>
                 <li>Up to 3 sites<span className="li-hint"><button type="button" aria-label="What this costs on GitHub">ⓘ GitHub cost</button><span className="li-pop" role="tooltip">Your first two sites are free on your own GitHub account. After that it&apos;s about $5 per site a month, paid to GitHub, not to us.<a href="/docs/publishing#github-actions-costs">See the cost table</a></span></span></li>
-                <li>Unlimited articles</li>
+                <li>One article a day, every day</li>
                 <li>Unlimited AI-built tools</li>
                 <li>SERP + search volume data</li>
                 <li>Daily rank tracking</li>
@@ -433,11 +318,11 @@ export default async function LandingPage({
             </div>
             <div className="plan">
               <h3>Scale</h3>
-              <PlanPrice tier="scale" founding={founding} />
+              <PlanPrice tier="scale" annual={annual} />
               <div className="p-sub">Portfolios and agencies</div>
               <ul>
                 <li>Up to 10 sites<span className="li-hint"><button type="button" aria-label="What this costs on GitHub">ⓘ GitHub cost</button><span className="li-pop" role="tooltip">Your first two sites are free on your own GitHub account. After that it&apos;s about $5 per site a month, paid to GitHub, not to us.<a href="/docs/publishing#github-actions-costs">See the cost table</a></span></span></li>
-                <li>Unlimited articles</li>
+                <li>One article a day, every day</li>
                 <li>Unlimited AI-built tools</li>
                 <li>SERP + search volume data</li>
                 <li>Daily rank tracking</li>
@@ -473,16 +358,16 @@ export default async function LandingPage({
                 <tr>
                   <th scope="col">
                     <span className="pm-name">Starter</span>
-                    <PmPrice tier="starter" founding={founding} />
+                    <PmPrice tier="starter" annual={annual} />
                   </th>
                   <th scope="col" className="pm-pick">
                     <span className="pm-flag">Most popular</span>
                     <span className="pm-name">Growth</span>
-                    <PmPrice tier="growth" founding={founding} />
+                    <PmPrice tier="growth" annual={annual} />
                   </th>
                   <th scope="col">
                     <span className="pm-name">Scale</span>
-                    <PmPrice tier="scale" founding={founding} />
+                    <PmPrice tier="scale" annual={annual} />
                   </th>
                 </tr>
               </thead>
@@ -510,7 +395,7 @@ export default async function LandingPage({
             <div className="pm-all">
               <h3>On every plan</h3>
               <ul>
-                <li>Unlimited articles</li>
+                <li>One article a day, every day</li>
                 <li>Unlimited AI-built tools</li>
                 <li>SERP + search volume data</li>
                 <li>Daily rank tracking</li>
@@ -570,7 +455,7 @@ export default async function LandingPage({
             </details>
             <details>
               <summary>How do I get started on cloud?</summary>
-              <div className="a">Sign up and start your 7-day free trial on Starter - you enter a card at checkout, nothing is charged until the trial ends, and you can cancel in one click before then. The setup wizard walks you through connecting your site, about ten minutes end to end. Need more sites right away? Pick Growth or Scale at checkout (billed today), or upgrade anytime.{founding ? <> Right now the first {founding.cap} sites get the founding price: {founding.discountPct}% off, locked for life, so Starter is {foundingPriceLabel("starter")}/mo instead of {listPriceLabel("starter")}. It ends {founding.endsAtLabel}. I&apos;m capping it at {founding.cap} because that&apos;s how many sites I can personally onboard and support while still building. When it&apos;s full, it&apos;s full.</> : null}</div>
+              <div className="a">Sign up and start your 7-day free trial on Starter - you enter a card at checkout, nothing is charged until the trial ends, and you can cancel in one click before then. The setup wizard walks you through connecting your site, about ten minutes end to end. Need more sites right away? Pick Growth or Scale at checkout (billed today), or upgrade anytime.{annual ? <> Paying for the year brings Starter down to {priceLabel(TIER_LIMITS.starter.annual)}/mo ({priceLabel(TIER_LIMITS.starter.annual * 12)} once a year) instead of {priceLabel(TIER_LIMITS.starter.price)}/mo.</> : null}</div>
             </details>
             <details>
               <summary>Are there any costs besides the subscription?</summary>

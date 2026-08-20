@@ -516,13 +516,24 @@ The Polar product id for the Scale tier.
 
 </Field>
 
-<Field name="POLAR_FOUNDING_DISCOUNT_ID" type="string" tag="Cloud only">
+<Field name="POLAR_PRODUCT_STARTER_ANNUAL" type="string" tag="Cloud only">
 
-The Polar discount id for the "50% off, locked for life" founding offer
-advertised on the pricing page. In the Polar dashboard: **Discounts → New**,
-type Percentage, 50%, duration **Forever** (not "Once" or "Repeating" - the
-promise is for life), applied to all three products, no redemption limit.
-Leave unset and checkout charges full list price with no discount applied.
+Optional. The Polar product id for the **yearly** Starter plan, priced at 12
+times the per-month figure in `TIER_LIMITS` (`src/lib/billing.ts`). Set all
+three `_ANNUAL` ids and the pricing page offers a monthly/yearly choice; leave
+them unset and only the monthly plans are sold.
+
+</Field>
+
+<Field name="POLAR_PRODUCT_GROWTH_ANNUAL" type="string" tag="Cloud only">
+
+Optional. The Polar product id for the yearly Growth plan.
+
+</Field>
+
+<Field name="POLAR_PRODUCT_SCALE_ANNUAL" type="string" tag="Cloud only">
+
+Optional. The Polar product id for the yearly Scale plan.
 
 </Field>
 

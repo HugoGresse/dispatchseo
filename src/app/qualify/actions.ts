@@ -2,11 +2,12 @@
 
 import { requireDashboard } from "@/lib/auth-gate";
 import { isCloudMode } from "@/lib/cloud";
-import { isAiChoice } from "@/lib/qualifier-options";
+import { isAiChoice, isSiteKind } from "@/lib/qualifier-options";
 import { runQualifier, type QualifierVerdict } from "@/lib/qualifier";
 import { labelFor } from "@/lib/site-platform";
 
 export type QualifyState = {
+  siteKind?: string;
   domain?: string;
   ai?: string;
   verdict?: QualifierVerdict;
@@ -24,31 +25,42 @@ export async function submitQualifier(_prev: QualifyState, formData: FormData): 
   const auth = await requireDashboard();
   if (!isCloudMode() || !auth.user) return { error: "Not available on this install." };
 
+  const siteKind = String(formData.get("site_kind") ?? "").trim();
   const domain = String(formData.get("domain") ?? "").trim();
   const ai = String(formData.get("ai") ?? "").trim();
 
-  if (!domain) return { domain, ai, error: "Enter your website address." };
-  if (!isAiChoice(ai)) return { domain, ai, error: "Pick which AI you use." };
-  // Cheap shape check before we spend a fetch on it. Deliberately loose: an
-  // exotic but real TLD must not be refused by a regex, so anything with a dot
-  // and no spaces gets through to the real probe.
-  const host = domain.replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
-  if (!/^[^\s/]+\.[^\s/]+$/.test(host)) {
-    return { domain, ai, error: "That doesn't look like a website address. Try something like yoursite.com" };
+  if (!isSiteKind(siteKind)) return { siteKind, domain, ai, error: "Pick what kind of site it is." };
+  if (!isAiChoice(ai)) return { siteKind, domain, ai, error: "Pick which AI you use." };
+  // The domain is optional. When given, a cheap shape check before we spend a
+  // fetch on it. Deliberately loose: an exotic but real TLD must not be
+  // refused by a regex, so anything with a dot and no spaces gets through to
+  // the real probe.
+  const host = domain ? domain.replace(/^https?:\/\//i, "").replace(/\/.*$/, "") : "";
+  if (host && !/^[^\s/]+\.[^\s/]+$/.test(host)) {
+    return {
+      siteKind,
+      domain,
+      ai,
+      error: "That doesn't look like a website address. Try something like yoursite.com, or leave it empty.",
+    };
   }
 
   try {
-    const { platform, verdict } = await runQualifier(auth.user.id, host, ai);
-    const bits: string[] = [labelFor(platform.platform)];
-    if (platform.wordpress?.version) bits.push(`version ${platform.wordpress.version}`);
-    if (platform.wordpress?.elementor) bits.push("Elementor");
-    if (platform.wordpress?.seoPlugin) bits.push(platform.wordpress.seoPlugin);
-    return { domain: host, ai, verdict, detected: bits.join(", ") };
+    const { platform, verdict } = await runQualifier(auth.user.id, host || null, ai, siteKind);
+    const bits: string[] = [];
+    if (host) {
+      bits.push(labelFor(platform.platform));
+      if (platform.wordpress?.version) bits.push(`version ${platform.wordpress.version}`);
+      if (platform.wordpress?.elementor) bits.push("Elementor");
+      if (platform.wordpress?.seoPlugin) bits.push(platform.wordpress.seoPlugin);
+    }
+    return { siteKind, domain: host, ai, verdict, detected: bits.length ? bits.join(", ") : undefined };
   } catch {
     // A probe failure must never strand someone mid-signup. Let them through
     // rather than blocking on our own outage - the gate exists to prevent a
     // doomed signup, and it must not become one.
     return {
+      siteKind,
       domain: host,
       ai,
       verdict: {

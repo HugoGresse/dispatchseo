@@ -6,6 +6,25 @@
 //
 // Nothing here may import anything server-only, ever.
 
+// What the owner says the site is. Two answers on purpose - these are the two
+// places we can publish to. Everything else (Wix, Squarespace, Shopify,
+// Webflow, Framer, Ghost) is refused by the domain probe, not offered here.
+export type SiteKind = "wordpress" | "code";
+
+export const SITE_KINDS: { value: SiteKind; label: string; hint: string }[] = [
+  { value: "wordpress", label: "WordPress", hint: "Self-hosted, any theme or builder" },
+  { value: "code", label: "Built with code", hint: "Next.js, Astro, Hugo… in a GitHub repo" },
+];
+
+export function isSiteKind(value: string): value is SiteKind {
+  return value === "wordpress" || value === "code";
+}
+
+// Grouped the way a buyer thinks about it, not the way the backend does:
+// "an AI app you chat with" vs "a coding agent". The values are the same
+// AiChoice ids the server validates; only the presentation is grouped.
+export type AiGroup = "chat" | "coding" | "other";
+
 export type AiChoice =
   | "claude-code"
   | "codex"
@@ -15,14 +34,19 @@ export type AiChoice =
   | "gemini"
   | "none";
 
-export const AI_OPTIONS: { value: AiChoice; label: string; hint: string }[] = [
-  { value: "claude-code", label: "Claude Code", hint: "Anthropic's terminal agent" },
-  { value: "codex", label: "Codex", hint: "OpenAI's coding agent" },
-  { value: "cursor", label: "Cursor", hint: "the agent inside the editor" },
-  { value: "chatgpt", label: "ChatGPT", hint: "the normal chat app, paid plan" },
-  { value: "claude-web", label: "Claude", hint: "the normal chat app, paid plan" },
-  { value: "gemini", label: "Gemini", hint: "Google's chat app" },
-  { value: "none", label: "None of these", hint: "I don't use an AI assistant" },
+export const AI_OPTIONS: { value: AiChoice; label: string; hint: string; group: AiGroup; soon?: boolean }[] = [
+  { value: "claude-web", label: "Claude", hint: "The Claude app, paid plan", group: "chat" },
+  { value: "chatgpt", label: "ChatGPT", hint: "The ChatGPT app, paid plan", group: "chat", soon: true },
+  { value: "claude-code", label: "Claude Code", hint: "Anthropic's terminal agent", group: "coding" },
+  { value: "codex", label: "Codex", hint: "OpenAI's coding agent", group: "coding" },
+  { value: "cursor", label: "Cursor", hint: "The agent inside the editor", group: "coding" },
+  { value: "gemini", label: "Gemini", hint: "Google's chat app", group: "other" },
+  { value: "none", label: "None of these", hint: "I don't use an AI assistant", group: "other" },
+];
+
+export const AI_GROUPS: { id: AiGroup; label: string; hint: string }[] = [
+  { id: "chat", label: "An AI app you chat with", hint: "You add DispatchSEO as a connector; it writes on your own plan." },
+  { id: "coding", label: "A coding agent", hint: "It runs in your repo on a schedule and opens pull requests." },
 ];
 
 export const AI_VALUES = AI_OPTIONS.map((o) => o.value);

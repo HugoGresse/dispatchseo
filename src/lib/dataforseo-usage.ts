@@ -19,10 +19,16 @@ import {
 // second, project-scoped cap (CHECK_SERP_DAILY_CAP) keeps the interactive
 // check_serp MCP tool from being used as a cheap unlimited SERP proxy.
 
+// Sized 2026-08-20 against what a site really spends (≈$1/site/mo measured on
+// prod after the task-queue migration) and against the plan prices: the old
+// $20/$40/$70 caps dated from before the queue and would have let a single
+// Starter site spend its entire yearly-plan price on SERP data. Five-plus
+// times real usage, and the pacing governor below thins tracking long before
+// a project ever reaches the wall.
 export const TIER_BUDGET_MICROUSD: Record<Tier, number> = {
-  starter: 20_000_000, // $20/mo
-  growth: 40_000_000, // $40/mo
-  scale: 70_000_000, // $70/mo
+  starter: 5_000_000, // $5/mo
+  growth: 12_000_000, // $12/mo
+  scale: 25_000_000, // $25/mo
 };
 
 // Interactive live-SERP checks (the check_serp MCP tool, billed-to-platform

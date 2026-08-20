@@ -19,11 +19,55 @@ import { REASON_LABELS, type CancellationReason } from "./cancellation-reasons";
 
 export type Tier = "starter" | "growth" | "scale";
 
-export const TIER_LIMITS: Record<Tier, { sites: number; price: number }> = {
-  starter: { sites: 1, price: 49 },
-  growth: { sites: 3, price: 99 },
-  scale: { sites: 10, price: 149 },
+// Billing interval. Monthly is the default everywhere a caller omits it, so
+// every pre-annual code path keeps behaving exactly as before.
+export type BillingInterval = "month" | "year";
+export const BILLING_INTERVALS: readonly BillingInterval[] = ["month", "year"];
+
+export function isBillingInterval(value: unknown): value is BillingInterval {
+  return value === "month" || value === "year";
+}
+
+// The price table - the ONLY place a number lives. `price` is the monthly
+// plan; `annual` is the yearly plan expressed per month (what the card shows),
+// and the yearly charge Polar takes is annual x 12 (annualCharge below). Both
+// products for a tier MUST be priced in the Polar dashboard to match these
+// numbers, because the page advertises this table and Polar charges its own.
+//
+// Why these numbers (2026-08-20): the customer's own coding agent does the
+// research and writing, so our per-site cost is DataForSEO (~$1/site/mo
+// measured on prod) plus the Polar fee - there is no token bill to pass on.
+// That is what lets Starter sit under every competitor that opens PRs (Lyra,
+// Edward ~$39 + the customer's API tokens) while keeping a wide margin. The
+// yearly plan is deliberately generous (~30% off) because annual billing is
+// the single strongest retention lever in this category.
+export const TIER_LIMITS: Record<Tier, { sites: number; price: number; annual: number }> = {
+  starter: { sites: 1, price: 29, annual: 20 },
+  growth: { sites: 3, price: 59, annual: 40 },
+  scale: { sites: 10, price: 99, annual: 69 },
 };
+
+/** What Polar charges once a year for the annual plan, in whole dollars. */
+export function annualCharge(tier: Tier): number {
+  return TIER_LIMITS[tier].annual * 12;
+}
+
+/** "31" for Starter: the yearly plan's saving against 12 monthly payments. */
+export function annualSavingsPct(tier: Tier): number {
+  const { price, annual } = TIER_LIMITS[tier];
+  return Math.round((1 - annual / price) * 100);
+}
+
+/** The per-month figure for the chosen interval - the number a card shows big. */
+export function monthlyPrice(tier: Tier, interval: BillingInterval = "month"): number {
+  return interval === "year" ? TIER_LIMITS[tier].annual : TIER_LIMITS[tier].price;
+}
+
+// $29 -> "$29", 24.5 -> "$24.50". Half-dollars are shown, never rounded: the
+// number on the page has to equal the number Polar charges.
+export function priceLabel(amount: number): string {
+  return Number.isInteger(amount) ? `$${amount}` : `$${amount.toFixed(2)}`;
+}
 
 // Display names for the badge in the dashboard chrome. Deliberately a map
 // rather than capitalizing the tier string: a tier id that isn't a single
@@ -35,19 +79,29 @@ export const TIER_NAMES: Record<Tier, string> = {
   scale: "Scale",
 };
 
-// Product ids come from the Polar dashboard once the three products exist.
-export function productIdForTier(tier: Tier): string | null {
-  const key = {
+// Product ids come from the Polar dashboard once the six products exist
+// (three tiers x monthly/yearly). The yearly ids are optional: a deployment
+// that has not created them yet simply never offers the yearly plan - the
+// pricing surfaces check productIdForTier(tier, "year") before showing one.
+export function productIdForTier(tier: Tier, interval: BillingInterval = "month"): string | null {
+  const base = {
     starter: "POLAR_PRODUCT_STARTER",
     growth: "POLAR_PRODUCT_GROWTH",
     scale: "POLAR_PRODUCT_SCALE",
   }[tier];
+  const key = interval === "year" ? `${base}_ANNUAL` : base;
   return process.env[key] ?? null;
+}
+
+export function annualBillingAvailable(): boolean {
+  return (["starter", "growth", "scale"] as const).every((t) => Boolean(productIdForTier(t, "year")));
 }
 
 export function tierForProductId(productId: string): Tier | null {
   for (const tier of ["starter", "growth", "scale"] as const) {
-    if (productIdForTier(tier) === productId) return tier;
+    for (const interval of BILLING_INTERVALS) {
+      if (productIdForTier(tier, interval) === productId) return tier;
+    }
   }
   return null;
 }

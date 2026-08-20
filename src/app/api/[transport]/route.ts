@@ -4390,8 +4390,8 @@ const mcpHandler = createMcpHandler(
         title: "Join the cloud waitlist",
         description:
           "Add an email to the DispatchSEO Cloud waitlist (the same list the " +
-          "public landing page feeds). Waitlist members get launch invites and " +
-          "founding-member pricing. Duplicate emails are fine - re-joining is a " +
+          "public landing page feeds). Waitlist members get launch invites. " +
+          "Duplicate emails are fine - re-joining is a " +
           "no-op, not an error.",
         inputSchema: {
           email: z.string().describe("Email address to add to the waitlist"),

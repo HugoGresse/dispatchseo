@@ -4,17 +4,19 @@ import { currentUser } from "@/lib/cloud-auth";
 import { isCloudMode } from "@/lib/cloud";
 import {
   getSubscription,
+  isBillingInterval,
   polar,
   polarConfigured,
   productIdForTier,
   type Tier,
 } from "@/lib/billing";
-import { foundingOffer } from "@/lib/founding";
 import { captureServer } from "@/lib/posthog-server";
 
-// GET /api/polar/checkout?tier=starter|growth|scale - sends the signed-in
-// user to a Polar checkout for that tier. externalCustomerId ties the Polar
-// customer to the Supabase user id, which is what the webhook maps back on.
+// GET /api/polar/checkout?tier=starter|growth|scale[&interval=month|year] -
+// sends the signed-in user to a Polar checkout for that tier. The interval
+// picks the monthly or the yearly Polar product (default monthly, so every
+// older link keeps working). externalCustomerId ties the Polar customer to the
+// Supabase user id, which is what the webhook maps back on.
 export async function GET(req: NextRequest) {
   if (!isCloudMode() || !polarConfigured()) {
     return NextResponse.json({ error: "billing not enabled" }, { status: 404 });
@@ -23,7 +25,15 @@ export async function GET(req: NextRequest) {
   if (!user) redirect("/login");
 
   const tier = (req.nextUrl.searchParams.get("tier") ?? "") as Tier;
-  const productId = productIdForTier(tier);
+  const rawInterval = req.nextUrl.searchParams.get("interval") ?? "month";
+  if (!isBillingInterval(rawInterval)) {
+    return NextResponse.json({ error: "unknown interval" }, { status: 400 });
+  }
+  const interval = rawInterval;
+  const productId = productIdForTier(tier, interval);
+  // A yearly link on a deployment whose yearly products are not configured is
+  // a 400, never a silent fallback to monthly: the page advertised one price
+  // and the checkout would charge another.
   if (!productId) return NextResponse.json({ error: "unknown tier" }, { status: 400 });
 
   // Last line of defence against a SECOND parallel subscription on one account.
@@ -42,26 +52,16 @@ export async function GET(req: NextRequest) {
     redirect("/api/polar/portal");
   }
 
-  // Founding offer: a "50% off, forever" discount created in the Polar
-  // dashboard. Advertising half price on the landing while checkout charges
-  // list price would overcharge every founding customer, so the same
-  // foundingOffer() the pricing UI reads also gates the discount here. The env
-  // var is checked FIRST so an unset var means zero extra work and byte-identical
-  // behaviour to before the offer existed.
-  const foundingDiscountId = process.env.POLAR_FOUNDING_DISCOUNT_ID;
-  const discountId = foundingDiscountId && (await foundingOffer()) ? foundingDiscountId : null;
-
   const origin = req.nextUrl.origin;
   const checkout = await polar().checkouts.create({
     products: [productId],
     externalCustomerId: user.id,
     customerEmail: user.email ?? undefined,
-    ...(discountId ? { discountId } : {}),
     // Straight into the wizard - the onboarding gate absorbs the webhook
     // race (checkout=success renders a confirming poll, never a bounce
     // back to /billing after the user just paid).
     successUrl: `${origin}/onboarding?new=1&checkout=success`,
   });
-  await captureServer(user.id, "checkout_started", { tier, discounted: Boolean(discountId) });
+  await captureServer(user.id, "checkout_started", { tier, interval });
   redirect(checkout.url);
 }

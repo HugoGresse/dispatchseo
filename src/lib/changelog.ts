@@ -75,6 +75,14 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
     kind: "improved",
     text:
+      "New prices. Starter is $29 a month, or $20 a month when you pay for the year ($240); " +
+      "Growth is $59 / $40 and Scale $99 / $69. Your coding agent does the writing on your " +
+      "own plan, so there is no token bill for us to pass on - which is what lets these sit " +
+      "well under every other tool that opens pull requests. The founding offer is retired.",
+  },
+  {
+    kind: "improved",
+    text:
       "The dashboard interrupts you a lot less. The red panel and the alert emails now fire " +
       "only for problems that are real: a failure that happened twice in a row, a job that " +
       "missed a whole schedule window, or something urgent like dead credentials or a broken " +
@@ -85,7 +93,11 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   },
   {
     kind: "new",
-    text: "Signing up now checks your site and your AI before you pay, so nobody gets charged for a setup that can't finish.",
+    text:
+      "Signing up now checks your site and your AI before you pay, so nobody gets charged for a " +
+      "setup that can't finish. It is two quick screens: what kind of site (WordPress, or built " +
+      "with code on GitHub), then which AI will write - a chat app or a coding agent - each with " +
+      "its own mark so you can pick by sight.",
   },
   {
     kind: "new",

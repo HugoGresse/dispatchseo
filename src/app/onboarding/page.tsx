@@ -364,11 +364,17 @@ export default async function OnboardingPage({
   if (!prefillDomain && qualified?.domain && isValidDomain(qualified.domain)) {
     prefillDomain = qualified.domain;
   }
-  // WordPress is the only platform we route away from GitHub: the detector's
-  // other answers (nextjs, static, unknown, unreachable) all reach checkout on
-  // the repo route, and "we could not tell" must keep today's default rather
-  // than guess someone onto a route they did not ask for.
-  const prefillPublish: PublishChoice = qualified?.platform === "wordpress" ? "wordpress" : "github";
+  // The owner's own answer first (site_kind, asked as a choice since
+  // 2026-08-20); older rows fall back to the detector, where WordPress is the
+  // only platform we route away from GitHub - its other answers (nextjs,
+  // static, unknown, unreachable) all reach checkout on the repo route, and
+  // "we could not tell" must keep today's default rather than guess someone
+  // onto a route they did not ask for.
+  const prefillPublish: PublishChoice =
+    qualified?.site_kind === "wordpress" ||
+    (!qualified?.site_kind && qualified?.platform === "wordpress")
+      ? "wordpress"
+      : "github";
   // Only the four the wizard can actually set up. gemini/none never get past
   // the qualifier, and chatgpt has no connector yet - preselecting any of them
   // would check a radio that cannot be submitted.

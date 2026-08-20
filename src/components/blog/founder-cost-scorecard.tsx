@@ -1,7 +1,7 @@
 // Real numbers, not list-price marketing copy - read from this repo's own
-// src/lib/billing.ts (TIER_LIMITS) and src/lib/founding.ts (the 50%-off,
-// first-50-sites offer, live through October 1, 2026) during the session
-// that wrote this guide. Self-hosting has no seat to price at all.
+// src/lib/billing.ts (TIER_LIMITS) during the session that wrote this guide
+// (re-read 2026-08-20 when the prices changed). Self-hosting has no seat to
+// price at all.
 
 const CARDS = [
   {
@@ -11,16 +11,16 @@ const CARDS = [
     note: "No seat, ever. You pay your own Vercel/Supabase/GitHub free tiers, the coding-agent subscription you already run, and DataForSEO metered to your own account.",
   },
   {
-    name: "Cloud Starter (founding price)",
-    price: "$24.50/mo",
-    barPct: 25,
-    note: "50% off, locked for life, for the first 50 sites through Oct 1, 2026 - one site included.",
+    name: "Cloud Starter (yearly)",
+    price: "$20/mo",
+    barPct: 20,
+    note: "Billed $240 once a year - one site, hosted and managed, SERP data bundled.",
   },
   {
-    name: "Cloud Starter (list price)",
-    price: "$49/mo",
-    barPct: 49,
-    note: "What Starter costs once the founding offer ends or its 50 seats are gone - still one site, hosted and managed.",
+    name: "Cloud Starter (monthly)",
+    price: "$29/mo",
+    barPct: 29,
+    note: "The same plan month to month, cancel anytime - one site, hosted and managed.",
   },
 ] as const;
 

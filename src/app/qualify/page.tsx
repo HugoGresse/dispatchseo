@@ -43,9 +43,9 @@ export default async function QualifyPage() {
           Two questions before you pay
         </h1>
         <p className="mt-2 text-[15px] leading-relaxed text-neutral-400">
-          DispatchSEO doesn&apos;t work with every kind of website, and it runs on your own AI rather
-          than ours. Both of those are easier to check now than to discover after you&apos;ve been
-          charged.
+          What your site is built with, and which AI will do the writing. DispatchSEO publishes to
+          two kinds of site and runs on your own AI rather than ours - both are easier to check now
+          than to discover after you&apos;ve been charged.
         </p>
 
         <QualifyForm />
