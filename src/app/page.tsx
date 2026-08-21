@@ -16,9 +16,11 @@ import { hasConfiguredProject } from "@/lib/onboarding-gate";
 import {
   TIER_LIMITS,
   annualBillingAvailable,
+  annualSavingsPct,
   priceLabel,
   type Tier,
 } from "@/lib/billing";
+import { PricingSwitch } from "./pricing-switch";
 import "./landing.css";
 
 // Public landing page - cloud deployment only. Self-hosted installs never set
@@ -51,40 +53,55 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
 
-// Desktop plan card price. One component for all three cards so the two
-// numbers (monthly, and the yearly plan per month) can never drift between
-// them. The yearly line only renders once the yearly Polar products exist -
-// advertising a price the checkout cannot sell is the one thing this must
-// never do.
+// Desktop plan card price. When the yearly products exist the card carries
+// BOTH prices and the PricingSwitch above the cards decides which one shows
+// (.pr-month / .pr-year, CSS-toggled by a data attribute - the cards stay
+// server-rendered). Yearly shows the per-month figure; the yearly total is
+// stated on /plans and at checkout, not on the card (Neo's call, 2026-08-21).
+// Without yearly products the card shows the monthly price alone.
 function PlanPrice({ tier, annual }: { tier: Tier; annual: boolean }) {
-  return (
-    <>
+  if (!annual) {
+    return (
       <div className="p-price">
         {priceLabel(TIER_LIMITS[tier].price)}
         <small>/mo</small>
       </div>
-      {annual ? (
-        <div className="p-annual">
-          or <b>{priceLabel(TIER_LIMITS[tier].annual)}/mo</b> billed yearly
-        </div>
-      ) : null}
+    );
+  }
+  return (
+    <>
+      <div className="p-price pr-year">
+        {priceLabel(TIER_LIMITS[tier].annual)}
+        <small>/mo</small>
+      </div>
+      <div className="p-price pr-month">
+        {priceLabel(TIER_LIMITS[tier].price)}
+        <small>/mo</small>
+      </div>
     </>
   );
 }
 
-// The same price, sized for a third of a phone screen: the yearly figure
-// drops to its own small line so "$29/mo" stays one glyph run in a ~90px
-// column at 320px.
+// The same price, sized for a third of a phone screen.
 function PmPrice({ tier, annual }: { tier: Tier; annual: boolean }) {
-  return (
-    <>
+  if (!annual) {
+    return (
       <span className="pm-price">
         {priceLabel(TIER_LIMITS[tier].price)}
         <small>/mo</small>
       </span>
-      {annual ? (
-        <span className="pm-annual">{priceLabel(TIER_LIMITS[tier].annual)}/mo yearly</span>
-      ) : null}
+    );
+  }
+  return (
+    <>
+      <span className="pm-price pr-year">
+        {priceLabel(TIER_LIMITS[tier].annual)}
+        <small>/mo</small>
+      </span>
+      <span className="pm-price pr-month">
+        {priceLabel(TIER_LIMITS[tier].price)}
+        <small>/mo</small>
+      </span>
     </>
   );
 }
@@ -238,21 +255,35 @@ export default async function LandingPage({
           <div className="sec-h">
             <h2>Who is DispatchSEO for?</h2>
           </div>
-          <div className="who">
+          {/* Five cards, 3 + 2 with the second row centred (.who-5 in
+              landing.css). Same person wearing different hats, so each card
+              argues from a different place: the product, the portfolio, the
+              stack, the budget, the procrastination. */}
+          <div className="who who-5">
             <div className="who-card">
               <svg className="who-doodle pink" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" /><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" /><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" /><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" /></svg>
-              <h3>Founders with a product to ship</h3>
-              <p>Your site lives in a git repo and your time is better spent on the product. Hand the content grind to your agent and keep the final say on everything.</p>
+              <h3>Founders</h3>
+              <p>You have a product to ship and SEO is the job that keeps sliding. Hand it to the agent you already run: it researches, writes one article a day and opens a pull request. You keep the final say.</p>
             </div>
             <div className="who-card">
               <svg className="who-doodle vio" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v5.5M12 15.5V21M3 12h5.5M15.5 12H21M5.64 5.64l3.89 3.89M14.47 14.47l3.89 3.89M18.36 5.64l-3.89 3.89M9.53 14.47l-3.89 3.89" /></svg>
-              <h3>AI agent power users</h3>
-              <p>You already pay for the Claude app, Claude Code, Codex, or Cursor. DispatchSEO gives it memory, schedules, and a queue, so SEO stops being a weekend project.</p>
+              <h3>Indie hackers</h3>
+              <p>Three side projects, no marketing time. Each one keeps publishing on a schedule, and you get one weekly note on what moved in Search Console. Distribution stops depending on your Saturday.</p>
+            </div>
+            <div className="who-card">
+              <svg className="who-doodle green" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17.5 9 12 4 6.5" /><path d="M12 19h8" /></svg>
+              <h3>Vibe coders</h3>
+              <p>You built the site with Claude Code or Cursor and it is live. Nobody vibe-coded the SEO. Point the same agent at it and merge what it opens.</p>
+            </div>
+            <div className="who-card">
+              <svg className="who-doodle amber" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v10" /><path d="M14.8 9.3c-.5-.9-1.6-1.4-2.8-1.4-1.7 0-2.9.9-2.9 2.1 0 2.7 5.8 1.3 5.8 4 0 1.2-1.2 2.1-2.9 2.1-1.3 0-2.4-.6-2.9-1.5" /></svg>
+              <h3>Bootstrapped entrepreneurs</h3>
+              <p>Agencies start at $2,000 a month. You already pay $20 for an agent. $29 on top turns it into your SEO manager, with no per-article meter and nothing going live until you say so.</p>
             </div>
             <div className="who-card">
               <svg className="who-doodle blue" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M8.6 9.4v.6M15.4 9.4v.6" /><path d="M8.8 15.2h6.4" /></svg>
               <h3>People who hate doing SEO</h3>
-              <p>You know it works. You still put it off every week. Now the research, the writing, and the rank checks happen on a schedule, whether you feel like it or not.</p>
+              <p>You know it works. You still put it off every week. Now the research, the writing and the rank checks happen on a schedule, whether you feel like it or not.</p>
             </div>
           </div>
         </div>
@@ -264,12 +295,10 @@ export default async function LandingPage({
           <div className="sec-h">
             <h2>Pick your plan</h2>
           </div>
-          <div className="cloud-adds">
-            <span className="ca-label">Every plan includes</span>
-            <span className="ca-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18" /><path d="M7 21v-5" /><path d="M12 21V9" /><path d="M17 21v-8" /></svg>bundled SERP + volume data, one bill</span>
-            <span className="ca-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22v-5" /><path d="M9 8V2" /><path d="M15 8V2" /><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z" /></svg>one-click Search Console connect</span>
-            <span className="ca-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3.5 2" /></svg>managed schedules + failure alerts</span>
-          </div>
+          {/* Yearly by default; the switch only exists once the yearly Polar
+              products are configured (annualBillingAvailable). Without them
+              the children render monthly-only and there is nothing to flip. */}
+          <PricingSwitch savingsPct={annualSavingsPct("starter")} enabled={annual}>
           <div className="plans">
             <div className="plan">
               <h3>Starter</h3>
@@ -425,6 +454,7 @@ export default async function LandingPage({
               </ul>
             </div>
           </div>
+          </PricingSwitch>
         </div>
       </section>
 

@@ -157,8 +157,12 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .domain-ic svg { width: 19px; height: 19px; }
 .ld .domain-ic img { width: 20px; height: 20px; border-radius: 4px; }
 .ld .domain-group input { border: 0; outline: 0; flex: 1; min-width: 0; padding: 9px 8px; font-family: var(--body); font-size: 15px; background: transparent; color: var(--txt); }
-.ld .domain-note { text-align: center; font-size: 13.5px; color: var(--dim); white-space: nowrap; }
-@media (max-width: 560px) { .ld .domain-note { white-space: normal; } }
+/* The form is 250px wide and the note is wider than that on purpose (one row).
+   Centre it on the form's midline rather than letting it start at the form's
+   left edge and spill right: shrink-to-fit, then pull it back by half its own
+   width from the centre. Under 560px it wraps inside the form instead. */
+.ld .domain-note { text-align: center; font-size: 13.5px; color: var(--dim); white-space: nowrap; width: max-content; max-width: 90vw; position: relative; left: 50%; transform: translateX(-50%); }
+@media (max-width: 560px) { .ld .domain-note { white-space: normal; width: auto; max-width: none; left: auto; transform: none; } }
 .ld .email-group input[type="email"] { border: 0; outline: 0; flex: 1; padding: 8px 14px; font-family: var(--body); font-size: 15.5px; background: transparent; color: var(--txt); min-width: 0; }
 .ld .email-group input[type="email"]::placeholder { color: var(--dim); }
 .ld .email-group .btn { border-radius: 8px; white-space: nowrap; }
@@ -205,6 +209,14 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .who-doodle.pink { color: #f472b6; }
 .ld .who-doodle.vio { color: var(--vio2); }
 .ld .who-doodle.blue { color: #60a5fa; }
+.ld .who-doodle.green { color: #34d399; }
+.ld .who-doodle.amber { color: #fbbf24; }
+/* Five cards: a 6-track grid, every card two tracks wide, so the first row
+   holds three and the two on the second row start one track in - centred,
+   not left-heavy. Collapses with .who to one column on phones. */
+.ld .who-5 { grid-template-columns: repeat(6, 1fr); }
+.ld .who-5 .who-card { grid-column: span 2; }
+.ld .who-5 .who-card:nth-child(4) { grid-column: 2 / span 2; }
 .ld .who-card h3 { font-size: 25px; font-weight: 800; margin-bottom: 14px; letter-spacing: -0.015em; }
 .ld .who-card p { font-size: 16.5px; color: var(--mut); line-height: 1.65; }
 
@@ -297,6 +309,15 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .plan h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
 .ld .plan .p-price { font-family: var(--disp); font-weight: 800; font-size: 36px; letter-spacing: -0.02em; margin: 8px 0 2px; color: #fff; }
 .ld .plan .p-annual { margin-top: 4px; font-size: 13px; font-weight: 500; color: var(--mut); }
+/* Monthly / yearly switch above the cards. Both prices are in the DOM; the
+   wrapper's data-interval decides which is shown. */
+.ld [data-interval="year"] .pr-month, .ld [data-interval="month"] .pr-year { display: none; }
+.ld .pt-switch { display: inline-flex; align-items: center; gap: 4px; margin: 0 auto 26px; padding: 4px; border: 1px solid var(--line2); border-radius: 999px; background: var(--card2); position: relative; left: 50%; transform: translateX(-50%); }
+.ld .pt-opt { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border: 0; border-radius: 999px; background: transparent; color: var(--mut); font-family: var(--body); font-size: 14.5px; font-weight: 600; cursor: pointer; transition: background 0.2s ease, color 0.2s ease; }
+.ld .pt-opt:hover { color: var(--txt); }
+.ld .pt-opt.on { background: #fff; color: var(--bg); }
+.ld .pt-tag { display: inline-block; padding: 2px 7px 3px; border-radius: 999px; background: var(--vio); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: 0.02em; line-height: 1.2; white-space: nowrap; }
+.ld .pt-opt.on .pt-tag { background: var(--vio); color: #fff; }
 .ld .plan .p-annual b { font-weight: 700; color: var(--txt); }
 .ld .plan .p-price small { font-size: 14px; font-weight: 600; color: var(--dim); font-family: var(--body); }
 .ld .plan .p-sub { font-size: 13.5px; color: var(--dim); margin-bottom: 20px; }
@@ -335,10 +356,6 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .plans > .plan:last-child li .li-pop { left: auto; right: 0; transform: none; }
 @media (max-width: 900px) { .ld .plan li .li-pop { width: 210px; } }
 .ld .plan .btn { width: 100%; }
-.ld .cloud-adds { display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 auto 46px; }
-.ld .cloud-adds .ca-label { font-size: 11.5px; font-weight: 700; letter-spacing: 0.11em; text-transform: uppercase; color: var(--dim); margin-right: 4px; }
-.ld .ca-pill { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: var(--mut); background: var(--card); border: 1px solid var(--line2); border-radius: 8px; padding: 8px 14px; }
-.ld .ca-pill svg { width: 16px; height: 16px; color: var(--vio2); flex-shrink: 0; }
 
 
 /* ---------- pricing: mobile compare scoreboard (<=980px) ---------- */
@@ -422,7 +439,8 @@ html:has(.ld) { scroll-behavior: smooth; }
   .ld section { padding: 76px 0; scroll-margin-top: calc(var(--nav-h) + 12px); }
   .ld section#features { padding-top: 88px; }
   .ld .steps { grid-template-columns: repeat(2, 1fr); }
-  .ld .who { grid-template-columns: 1fr; }
+  .ld .who, .ld .who-5 { grid-template-columns: 1fr; }
+  .ld .who-5 .who-card, .ld .who-5 .who-card:nth-child(4) { grid-column: auto; }
   .ld .oss-in { grid-template-columns: 1fr; gap: 44px; }
   .ld .nav-links { display: none; }
   .ld .nav-cta { display: none; }
@@ -489,7 +507,6 @@ html:has(.ld) { scroll-behavior: smooth; }
   .ld .plans-m { display: block; }
   .ld .plan li { white-space: normal; }
   /* the three pills repeat rows that live in "On every plan" below */
-  .ld .cloud-adds { display: none; }
 
   /* faq */
   .ld summary { padding: 17px 18px; font-size: 15.5px; gap: 12px; }

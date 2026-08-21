@@ -104,7 +104,10 @@ export default async function PlansPage({
   // route would then refuse (it 400s on a missing yearly product).
   const annual = annualBillingAvailable();
   const sp = await searchParams;
-  const requested = typeof sp.interval === "string" ? sp.interval : "month";
+  // Yearly is the default when it exists (it is the better deal and the
+  // landing defaults to it too); ?interval=month switches. Without yearly
+  // products there is only monthly.
+  const requested = typeof sp.interval === "string" ? sp.interval : "year";
   const interval: BillingInterval = annual && isBillingInterval(requested) ? requested : "month";
   const tiers = Object.keys(TIER_LIMITS) as Tier[];
 
@@ -153,7 +156,7 @@ export default async function PlansPage({
                 return (
                   <a
                     key={opt}
-                    href={opt === "month" ? "/plans" : "/plans?interval=year"}
+                    href={opt === "month" ? "/plans?interval=month" : "/plans"}
                     aria-current={on ? "true" : undefined}
                     className={[
                       "rounded-full px-4 py-1.5 font-medium transition-colors",
