@@ -130,7 +130,16 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .hero .hl::before { content: ""; position: absolute; z-index: -1; top: 0.11em; bottom: 0.04em; left: -0.08em; right: -0.08em; background: var(--vio); border-radius: 0.07em; transform-origin: left center; animation: ld-hl-in 0.5s 0.35s cubic-bezier(0.3, 0.9, 0.4, 1) both; }
 @keyframes ld-hl-in { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @media (prefers-reduced-motion: reduce) { .ld .hero .hl::before { animation: none; transform: scaleX(1); } }
-.ld .hero .sub { font-size: clamp(18px, 2.2vw, 22px); line-height: 1.3; color: var(--txt); opacity: 0.92; max-width: 760px; margin: 0 auto 34px; text-wrap: balance; }
+/* Rotating audience word inside the slab. The sizer (longest word, invisible)
+   holds the width; the visible word sits on top and fades/slides when it
+   changes, so the slab never jumps and the line never reflows. */
+.ld .hero .hl-rot { display: inline-block; position: relative; white-space: nowrap; text-align: left; vertical-align: baseline; transition: width 0.32s cubic-bezier(0.3, 0.9, 0.4, 1); }
+.ld .hero .rw-probes { position: absolute; left: 0; top: 0; visibility: hidden; pointer-events: none; white-space: nowrap; }
+.ld .hero .rw-probes > span { display: inline-block; margin-right: 2em; }
+.ld .hero .rw-word { display: inline-block; transition: opacity 0.24s ease, transform 0.24s ease; }
+.ld .hero .rw-out { opacity: 0; transform: translateY(-0.35em); }
+@media (prefers-reduced-motion: reduce) { .ld .hero .hl-rot, .ld .hero .rw-word { transition: none; } }
+.ld .hero .sub { font-size: clamp(18px, 2.2vw, 22px); line-height: 1.3; color: var(--txt); opacity: 0.92; max-width: 900px; margin: 0 auto 34px; text-wrap: balance; }
 /* The way back in: rendered only for a signed-in owner who left the wizard
    mid-setup (midSetup in page.tsx), in the announcement-pill spot above the
    headline. */
@@ -148,7 +157,8 @@ html:has(.ld) { scroll-behavior: smooth; }
 .ld .domain-ic svg { width: 19px; height: 19px; }
 .ld .domain-ic img { width: 20px; height: 20px; border-radius: 4px; }
 .ld .domain-group input { border: 0; outline: 0; flex: 1; min-width: 0; padding: 9px 8px; font-family: var(--body); font-size: 15px; background: transparent; color: var(--txt); }
-.ld .domain-note { text-align: center; font-size: 13.5px; color: var(--dim); }
+.ld .domain-note { text-align: center; font-size: 13.5px; color: var(--dim); white-space: nowrap; }
+@media (max-width: 560px) { .ld .domain-note { white-space: normal; } }
 .ld .email-group input[type="email"] { border: 0; outline: 0; flex: 1; padding: 8px 14px; font-family: var(--body); font-size: 15.5px; background: transparent; color: var(--txt); min-width: 0; }
 .ld .email-group input[type="email"]::placeholder { color: var(--dim); }
 .ld .email-group .btn { border-radius: 8px; white-space: nowrap; }

@@ -9,6 +9,7 @@ import { DomainCta } from "./domain-cta";
 import { LandingNav } from "./landing-nav";
 import { PixelDispatcher } from "@/components/pixel-dispatcher";
 import { WhyCard } from "@/components/why-card";
+import { RotatingWord } from "./rotating-word";
 import { availableAgents } from "@/lib/agents";
 import { dashboardAuth, maybeSignedIn } from "@/lib/auth-gate";
 import { hasConfiguredProject } from "@/lib/onboarding-gate";
@@ -33,12 +34,17 @@ const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakart
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm" });
 
 const GITHUB_URL = "https://github.com/NeoZi12/dispatchseo";
+// Who the hero speaks to, in the order the slab cycles them. Every entry must
+// fit on ONE line after "for" at the desktop size - the headline is two rows
+// ("SEO automation" / "for <word>") by design, and "bootstrapped founders"
+// was long enough to push "for" onto a row of its own. Hence "bootstrappers".
+const AUDIENCES = ["vibe coders", "indie hackers", "bootstrappers", "solo devs"] as const;
 const DOCS_URL = "/docs";
 
 export const metadata: Metadata = {
-  title: "DispatchSEO - Automate your SEO with AI agents",
+  title: "DispatchSEO - SEO automation for vibe coders and indie founders",
   description:
-    "The Claude app or a coding agent - Claude Code, Codex, Cursor - researches keywords, writes guides, and tracks your ranks automatically. Nothing goes live until you approve it. Open source, free to self-host.",
+    "Make your coding agent your SEO manager. It researches from Search Console, writes one article a day and opens a pull request - you merge. For sites built in code (Next.js, Astro, any repo) and WordPress. Open source.",
   // "/" is reachable as itself and as "?home=1" (the signed-in opt-out below),
   // so point both at the bare root rather than letting a crawler treat the
   // query string as a second copy of the landing page.
@@ -175,8 +181,12 @@ export default async function LandingPage({
           ) : null}
           {/* .br-desk: the composed two-line break is a desktop luxury - phones
               drop it so the headline reflows to whatever fits. */}
-          <h1>Automate your SEO<br className="br-desk" /> with <span className="hl">AI agents</span></h1>
-          <p className="sub">The agent that built your product now runs your SEO: keyword research, guides, interactive tools, rank tracking - all automatic.<br className="br-desk" /> Use your AI: Claude app / Claude Code / Codex / Cursor</p>
+          {/* The audience rotates inside the slab (vibe coders -> indie hackers
+              -> bootstrapped founders -> solo devs); the sentence around it and
+              the mechanism line below never move. The first word is what the
+              server renders, so the crawlable headline is one stable sentence. */}
+          <h1>SEO automation<br className="br-desk" /> for <RotatingWord words={AUDIENCES} /></h1>
+          <p className="sub">The agent that built your product now runs your SEO.<br className="br-desk" /> Use your AI: Claude app / Claude Code / Codex / Cursor</p>
 
           <div className="cta-row" id="get-started">
             <DomainCta />

@@ -6,6 +6,11 @@ const nextConfig: NextConfig = {
   // image); Vercel ignores standalone, but gating on DOCKER_BUILD keeps local
   // `pnpm build` output identical to what `pnpm start` expects.
   output: process.env.DOCKER_BUILD === "1" ? "standalone" : undefined,
+  // The landing's feature screenshots ask next/image for quality 90. Next 16
+  // only serves qualities that are declared here (default [75]) and flags any
+  // other request as a dev "issue" - declare both rather than downgrade the
+  // screenshots, which are the product's one visual proof on that page.
+  images: { qualities: [75, 90] },
   // The dashboard cookie lives 30 days and SameSite=Lax does not stop the
   // page being framed - without these an attacker can iframe the logged-in
   // dashboard and clickjack Approve/Merge/Delete buttons.

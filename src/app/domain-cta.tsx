@@ -77,10 +77,13 @@ export function DomainCta() {
       {/* Said at the very first touchpoint, because getting this wrong twice
           sent a WordPress owner into a dead-end trial. WordPress joined the
           list on 2026-08-19; the site builders genuinely still cannot work. */}
+      {/* One row, no wider than the button, by design: the hero is the
+          headline and the sub; this is the small print. What is NOT supported
+          (Wix, Squarespace, Shopify...) lives in the FAQ and in /qualify, which
+          everyone passes before paying - the builder names used to sit here
+          and made the line spill past the form on both sides. */}
       <p className="domain-note">
-        7-day free trial. Works with WordPress you host yourself, or any site that lives in a
-        GitHub repo, driven by the Claude app or a coding agent. Wix, Squarespace and Shopify
-        aren&apos;t supported.
+        7-day free trial &middot; WordPress or any GitHub repo
       </p>
     </form>
   );

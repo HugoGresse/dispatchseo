@@ -22,7 +22,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL("https://dispatchseo.com"),
   title: "DispatchSEO",
-  description: "Automate your SEO with AI agents - keywords, rankings, backlinks and automations, tracked daily",
+  description: "Make your coding agent your SEO manager - keyword research, one article a day as a pull request, rankings and Search Console tracked daily. For sites built in code.",
   twitter: {
     card: "summary_large_image",
   },
