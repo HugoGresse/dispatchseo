@@ -319,7 +319,7 @@ export default async function LandingPage({
             <div className="plan">
               <h3>Scale</h3>
               <PlanPrice tier="scale" annual={annual} />
-              <div className="p-sub">Portfolios and agencies</div>
+              <div className="p-sub">For a bigger portfolio</div>
               <ul>
                 <li>Up to 5 sites<span className="li-hint"><button type="button" aria-label="What this costs on GitHub">ⓘ GitHub cost</button><span className="li-pop" role="tooltip">Your first two sites are free on your own GitHub account. After that it&apos;s about $5 per site a month, paid to GitHub, not to us.<a href="/docs/publishing#github-actions-costs">See the cost table</a></span></span></li>
                 <li>One article a day, every day</li>
