@@ -76,7 +76,7 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
     kind: "improved",
     text:
       "New prices. Starter is $29 a month, or $20 a month when you pay for the year ($240); " +
-      "Growth is $59 / $40 and Scale $99 / $69. Your coding agent does the writing on your " +
+      "Growth is $59 / $40 for 3 sites and Scale $99 / $69 for 5 sites. Your coding agent does the writing on your " +
       "own plan, so there is no token bill for us to pass on - which is what lets these sit " +
       "well under every other tool that opens pull requests. The founding offer is retired.",
   },

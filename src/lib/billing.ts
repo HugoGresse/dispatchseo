@@ -44,7 +44,11 @@ export function isBillingInterval(value: unknown): value is BillingInterval {
 export const TIER_LIMITS: Record<Tier, { sites: number; price: number; annual: number }> = {
   starter: { sites: 1, price: 29, annual: 20 },
   growth: { sites: 3, price: 59, annual: 40 },
-  scale: { sites: 10, price: 99, annual: 69 },
+  // Scale was 10 sites until 2026-08-21. Cut to 5 so the ladder is a flat
+  // ~$20/site (Growth $59/3, Scale $99/5) instead of a 50% volume discount a
+  // bootstrapped founder never asked for - and because a 10-site buyer is an
+  // agency with agency-sized support needs. More than 5 is a conversation.
+  scale: { sites: 5, price: 99, annual: 69 },
 };
 
 /** What Polar charges once a year for the annual plan, in whole dollars. */

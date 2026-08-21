@@ -26,7 +26,7 @@ export const dynamic = "force-dynamic";
 const TIER_COPY: Record<Tier, { name: string; sub: string }> = {
   starter: { name: "Starter", sub: "One site on autopilot" },
   growth: { name: "Growth", sub: "For a small portfolio" },
-  scale: { name: "Scale", sub: "Portfolios and agencies" },
+  scale: { name: "Scale", sub: "For a bigger portfolio" },
 };
 
 export default async function BillingPage({

@@ -44,7 +44,7 @@ const TIER_COPY: Record<
   },
   scale: {
     name: "Scale",
-    tagline: "Portfolios and agencies",
+    tagline: "For a bigger portfolio",
     cta: "Choose Scale",
     recommended: false,
   },

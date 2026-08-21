@@ -321,7 +321,7 @@ export default async function LandingPage({
               <PlanPrice tier="scale" annual={annual} />
               <div className="p-sub">Portfolios and agencies</div>
               <ul>
-                <li>Up to 10 sites<span className="li-hint"><button type="button" aria-label="What this costs on GitHub">ⓘ GitHub cost</button><span className="li-pop" role="tooltip">Your first two sites are free on your own GitHub account. After that it&apos;s about $5 per site a month, paid to GitHub, not to us.<a href="/docs/publishing#github-actions-costs">See the cost table</a></span></span></li>
+                <li>Up to 5 sites<span className="li-hint"><button type="button" aria-label="What this costs on GitHub">ⓘ GitHub cost</button><span className="li-pop" role="tooltip">Your first two sites are free on your own GitHub account. After that it&apos;s about $5 per site a month, paid to GitHub, not to us.<a href="/docs/publishing#github-actions-costs">See the cost table</a></span></span></li>
                 <li>One article a day, every day</li>
                 <li>Unlimited AI-built tools</li>
                 <li>SERP + search volume data</li>
@@ -375,7 +375,7 @@ export default async function LandingPage({
                 <tr>
                   <td><b>1</b> site</td>
                   <td className="pm-pick"><b>3</b> sites</td>
-                  <td><b>10</b> sites</td>
+                  <td><b>5</b> sites</td>
                 </tr>
                 <tr>
                   <td>Email support</td>
