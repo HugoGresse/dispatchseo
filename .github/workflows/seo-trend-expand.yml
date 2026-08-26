@@ -21,6 +21,11 @@ concurrency:
 jobs:
   expand:
     runs-on: ubuntu-latest
+    # continue-on-error at JOB level: a failure still runs the failure() steps
+    # and still reports to the dashboard rails, but the RUN concludes green so
+    # GitHub never emails the repo owner "Run failed". The dashboard Home
+    # banner / get_cron_health are the alerting surface for these runs.
+    continue-on-error: true
     # SERP validation makes this a little longer than the scan; past 20
     # minutes it's a hang burning quota.
     timeout-minutes: 20

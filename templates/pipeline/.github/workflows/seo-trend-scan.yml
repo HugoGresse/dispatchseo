@@ -21,6 +21,11 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
+    # continue-on-error at JOB level: a failure still runs the failure() steps
+    # and still reports to the dashboard rails, but the RUN concludes green so
+    # GitHub never emails the repo owner "Run failed". The dashboard Home
+    # banner / get_cron_health are the alerting surface for these runs.
+    continue-on-error: true
     # Real runs take 3-6 minutes (Cursor's slower auto model can double
     # that); anything past 25 is a hang burning quota.
     timeout-minutes: 25

@@ -54,6 +54,11 @@ concurrency:
 
 jobs:
   merge:
+    # continue-on-error at JOB level: a failure still runs the failure() steps
+    # and still reports to the dashboard rails, but the RUN concludes green so
+    # GitHub never emails the repo owner "Run failed". The dashboard Home
+    # banner / get_cron_health are the alerting surface for these runs.
+    continue-on-error: true
     # COST GATE, at job level on purpose. GitHub bills every job that claims a
     # runner a minimum of one WHOLE minute, so a 10-second sweep that finds
     # nothing to do still costs a full minute. `status:` fires on EVERY commit

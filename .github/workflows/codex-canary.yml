@@ -40,6 +40,10 @@ permissions:
 jobs:
   canary:
     runs-on: ubuntu-latest
+    # continue-on-error at JOB level: failures report to the dashboard rails,
+    # so the RUN concluding green here just stops GitHub from also emailing
+    # "Run failed".
+    continue-on-error: true
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4

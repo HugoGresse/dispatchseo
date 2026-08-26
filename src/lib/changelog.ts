@@ -75,6 +75,15 @@ export const UNRELEASED: { kind: ChangeKind; text: string }[] = [
   {
     kind: "improved",
     text:
+      "GitHub stops emailing you \"Run failed\" for the SEO workflows. A failed run still " +
+      "shows up on your dashboard and in the run log - that has always been the real alerting " +
+      "surface - but the scheduled workflows in your repo now finish green as far as GitHub " +
+      "is concerned, so a broken overnight build no longer lands in your inbox once per job " +
+      "per day. Rolls out to connected repos with the next pipeline update.",
+  },
+  {
+    kind: "improved",
+    text:
       "New prices. Starter is $29 a month, or $20 a month when you pay for the year ($240); " +
       "Growth is $59 / $40 for 3 sites and Scale $99 / $69 for 5 sites. Your coding agent does the writing on your " +
       "own plan, so there is no token bill for us to pass on - which is what lets these sit " +

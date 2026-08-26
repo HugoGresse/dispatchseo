@@ -19,6 +19,10 @@ concurrency:
 jobs:
   ping:
     runs-on: ubuntu-latest
+    # continue-on-error at JOB level: the backend endpoint already logs any
+    # failure to cron_runs (banner + get_cron_health), so the RUN concluding
+    # green here just stops GitHub from also emailing "Run failed".
+    continue-on-error: true
     timeout-minutes: 5
     steps:
       - name: Trigger the hourly-gsc cron endpoint

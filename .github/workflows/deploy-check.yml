@@ -21,6 +21,10 @@ concurrency:
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    # continue-on-error at JOB level: failures already land on the dashboard
+    # rails (cron_runs -> Home banner + get_cron_health), so the RUN concluding
+    # green here just stops GitHub from also emailing "Run failed".
+    continue-on-error: true
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4

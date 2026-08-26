@@ -39,6 +39,11 @@ concurrency:
 jobs:
   research:
     runs-on: ubuntu-latest
+    # continue-on-error at JOB level: a failure still runs the failure() steps
+    # and still reports to the dashboard rails, but the RUN concludes green so
+    # GitHub never emails the repo owner "Run failed". The dashboard Home
+    # banner / get_cron_health are the alerting surface for these runs.
+    continue-on-error: true
     # 45, not 30: Cursor's auto model paces roughly half the speed of the
     # other agents on research-heavy runs (measured 2026-08-06), and this is
     # the heaviest workflow after setup.
