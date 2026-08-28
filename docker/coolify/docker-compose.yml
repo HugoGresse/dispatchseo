@@ -1,8 +1,15 @@
 # DispatchSEO on Coolify - the same stack as the root docker-compose.yml,
 # reshaped for a platform that owns TLS, domains, and secrets. This file is
-# Coolify-only: it uses Coolify compose extensions (exclude_from_hc, magic
-# SERVICE_* variables) that plain `docker compose` rejects - on your own
-# machine or a bare VPS, use the root docker-compose.yml via start.sh.
+# Coolify-only: the magic SERVICE_* variables below only resolve there - on
+# your own machine or a bare VPS, use the root docker-compose.yml via
+# start.sh.
+#
+# Everything else in this file is STANDARD compose schema on purpose:
+# Coolify validates the file with `docker compose config` before its own
+# parsing, and that validator rejects even Coolify's own documented
+# extensions (exclude_from_hc, content:, is_directory: - see
+# coollabsio/coolify#5494), so none of them may appear here or the resource
+# fails with "invalid format" at creation.
 #
 # Point a Coolify "Public Repository" resource at this repo with:
 #
@@ -64,13 +71,13 @@ services:
 
   # One-shot on every deploy: applies supabase/migrations/setup.sql
   # (idempotent - it is how upgrades pick up new tables), then tells a
-  # running PostgREST to reload its schema cache. exclude_from_hc keeps the
-  # normally-exited one-shot from marking the whole stack unhealthy in
-  # Coolify's eyes.
+  # running PostgREST to reload its schema cache. It exits 0 when done, so
+  # Coolify lists it as "Exited" - that is this container working as
+  # designed, not a failure. (Coolify's exclude_from_hc flag exists for
+  # exactly this, but its validator rejects it - see the header.)
   migrate:
     image: postgres:17-alpine
     restart: "no"
-    exclude_from_hc: true
     environment:
       - PGHOST=postgres
       - PGUSER=dispatch

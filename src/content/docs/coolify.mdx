@@ -62,6 +62,10 @@ optional overrides (`DASHBOARD_PASSWORD`, Search Console JSON, DataForSEO
 keys, ...), but every one of them is collected by the setup wizard in the
 browser, which stores them in the database. Leave them empty.
 
+One thing that looks wrong but isn't: once the deploy settles, the
+`migrate` service shows as **Exited**. It's a one-shot - it installs the
+schema and quits, on purpose, on every deploy.
+
 When the deploy finishes, the `app` service has a generated URL under your
 Coolify wildcard domain - click it and the dashboard loads over HTTPS.
 
